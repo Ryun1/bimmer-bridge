@@ -9,8 +9,8 @@ The `ediabas-bridge` MCP server lets you look into the Windows VM in UTM on Ryan
 runs BMW Standard Tools (INPA, Tool32, NCS Expert, WinKFP) over EDIABAS and a K+DCAN cable to
 his 2005 BMW E61 550i.
 
-This skill is guidance. The limits are enforced by the tools themselves, on the Mac and in the
-VM; nothing here is a way around them, and none is needed.
+This skill is guidance. The tools enforce the limits themselves, on the Mac and in the VM;
+nothing here is a way around them, and none is needed.
 
 ## What you can and cannot do
 
@@ -48,39 +48,41 @@ exists; see `references/errors.md`). Do not try to get the same result another w
 The car has a recurring battery-drain fault, so ignition-on time is the scarce resource. Do
 as much as you can before Ryan turns it on.
 
-1. **`vm_health` first**, every session and after any failure. If it lists a BMW tool as
-   running, name it, ask Ryan to close it when he is finished with it, and stop until he says
-   it is closed. If it is WinKFP or NCS Expert, add that it must never be closed mid-flash or
+1. **`vm_health` first, on its own**, every session and after any failure. Wait for its
+   answer before calling any other bridge tool; do not batch it with them. It is the gate: it says
+   whether the VM is reachable and whether a BMW tool holds the cable, so a call sent alongside
+   it goes out blind (and with a flashing tool open, that is the wrong moment to touch EDIABAS).
+   If it fails, stop and tell Ryan the fix from the message. If it lists a BMW tool as running,
+   name it, ask Ryan to close it when he is finished with it, and stop until he says it is
+   closed. If that is WinKFP or NCS Expert, add that it must never be closed mid-flash or
    mid-coding: an interrupted flash can brick an ECU. Do not poll while you wait.
 2. **Find the names.** Use `ediabas_list_ecus` (with a `filter`) and `ediabas_describe` to find
    the SGBD and the jobs. Never guess an SGBD or job name, from memory or the web: a wrong name
    wastes ignition time at best. `references/ecu-map.md` and `references/job-cookbook.md` hold
    names confirmed on this car; anything not in them is unconfirmed until a tool shows it.
    A job is runnable only if `ediabas_describe` shows it allowed and not "needs review".
-   `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD file, but EDIABAS
-   will not load a real SGBD unless the cable is connected to the VM: at the desk on
-   2026-11-21, with the cable unplugged, it failed with `cable_not_found`. Whether it also
-   needs the ignition on is not known yet. So ask Ryan to have the cable plugged in and passed
-   through to the VM, and try `ediabas_describe` before asking for the ignition. If it fails
-   with the cable connected and the ignition off, tell Ryan what the message said (that
-   answers the open question, and is worth recording), and fold a narrow, filtered describe
-   into the ignition-on plan instead.
+   `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD, which EDIABAS will
+   not load unless the cable is connected to the VM (at the desk on 2026-11-21, unplugged, it
+   failed with `cable_not_found`); whether it also needs the ignition on is not known yet. So
+   have Ryan plug the cable in and pass it through to the VM, and try `ediabas_describe` before
+   asking for the ignition. If it fails with the cable connected and the ignition off, tell
+   Ryan what the message said (that answers the open question and is worth recording), and
+   fold a narrow, filtered describe into the ignition-on plan instead.
 3. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask Ryan
    to switch the ignition on and say when it is.
 4. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` call for
    all ECUs wanted (up to 20), and any `ediabas_job` calls back to back with no pauses.
 5. **Report**, then say "ignition off" plainly at the end.
 
-Keep each session under 10 minutes of ignition-on time. Say so when that is getting close and
-offer to stop and continue another time rather than adding reads. Read only what the question
-needs; reading every job on every ECU drains the battery and buries the answer.
+Run anything that talks to the car only when Ryan has asked for it and is with the car. Keep
+each session under 10 minutes of ignition-on time. Say so when that is getting close and offer
+to stop and continue another time rather than adding reads. Read only what the question needs;
+reading every job on every ECU drains the battery and buries the answer.
 
 The agent unloads EDIABAS after a short idle spell (20 s by default), so the first `ediabas_*`
 call after a pause takes about 10 s longer (seen at the desk on 2026-11-21). That is normal:
 wait for it rather than retrying, and allow for it in the rough time. `vm_health` shows
 whether EDIABAS is loaded at the moment.
-
-Run anything that talks to the car only when Ryan has asked for it and is with the car.
 
 ## Refusals and errors
 

@@ -36,14 +36,14 @@ export const SERVER_VERSION: string = (() => {
 
 export const INSTRUCTIONS = [
   "ediabas-bridge reads BMW diagnostic information from a Windows VM (UTM) on this Mac that runs EDIABAS, INPA and related tools on a cable to Ryan's car.",
-  "Call vm_health first.",
+  "Call vm_health first and on its own; read its answer before any other tool, as it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
   "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job, ediabas_vehicle_status reads ignition and voltages.",
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car, and jobs that may do more than read are refused.",
   "Never retry a refusal or look for another way to do what was refused.",
   "A tool that reports agent_outdated is not installed in the VM yet: say so rather than offering it.",
-  "If a tool reports that the VM is not running or the agent is not answering, tell the user what to do (the message says how) rather than retrying.",
+  "If the VM or agent is unreachable, tell the user the fix the message gives rather than retrying.",
 ].join(" ");
 
 const READ_ONLY: ToolAnnotations = {

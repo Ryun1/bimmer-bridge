@@ -68,8 +68,8 @@ exactly what the refusal was guarding against.
 ## Coding and flashing
 
 Never present coding or flashing as routine, even for a popular change such as folding
-mirrors on lock. Explain what is involved, what can go wrong, and let Ryan decide. Point out
-before he starts:
+mirrors on lock. Explain what is involved, what can go wrong, and let Ryan decide. A coding or
+flashing answer tells him each of these before he starts:
 
 - **Back up first.** Read and save the module's current coding (NCS Expert can read it out)
   and keep the trace files, so the change can be reversed.
@@ -78,9 +78,10 @@ before he starts:
   A battery charger or power supply on the car is the usual precaution.
 - **Never interrupt.** Do not close NCS Expert or WinKFP, unplug the cable, switch off the
   ignition or let the VM or the Mac sleep in the middle of a job.
-- **The bridge stands aside.** While NCS Expert or WinKFP is open the bridge refuses the cable
-  (`cable_in_use`), on purpose. Do not ask Ryan to close either in a hurry so the bridge can
-  read; wait until he says the job is finished.
+- **You cannot read the car during the job.** Tell Ryan that while NCS Expert or WinKFP is
+  open the bridge refuses the cable (`cable_in_use`), on purpose, so you cannot read the car
+  until he closes it, and that you will not ask him to close it mid-job so the bridge can read.
+  Any reading waits until he says the job is finished.
 - **SP-Daten.** Changing the data files with BMW Coding Tool replaces the SGBDs everything
   else uses; do it only deliberately, with a copy of the old files.
 
