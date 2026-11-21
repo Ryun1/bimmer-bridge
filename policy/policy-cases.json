@@ -1,0 +1,959 @@
+{
+ "comment": "Shared fixture. Both test suites run every case. rule is the exact verdict rule; screen is true when the VM must screen the job description before running.",
+ "cases": [
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "INFO",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN_DETAIL",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IS_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "AIF_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "C_FG_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_JOBS",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_JOBCOMMENTS",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_ARGUMENTS",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_RESULTS",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_TABLE",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "Fs_Lesen",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "mixed case is upper-cased"
+  },
+  {
+   "ecu": "nve_65",
+   "job": "ident",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "lower case"
+  },
+  {
+   "ecu": "D_MOTOR",
+   "job": "IDENT",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "group name"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "_JOBCOMMENTS",
+   "args": "FS_LOESCHEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "args are data: asking for the description of a denied job is a read"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN_DETAIL",
+   "args": "0x4711",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_BORDNETZSPANNUNG",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_ZUENDUNG",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "pattern on a non-restricted ECU"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_NWGADAPTION",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "ADAPT only as a whole token"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_DKLERN_KT",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "LERN only as a whole token"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_SYSTEMCHECK_GRUNDADAPT",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "doubtful by name; the description screen catches it"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_STARTER",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "START only as a whole token"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_FEHLERSPEICHER",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "SPEICHER only as a whole token"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "INIT only as a whole token"
+  },
+  {
+   "ecu": "N62_TUE",
+   "job": "STATUS_IBS_MESSWERTE",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true
+  },
+  {
+   "ecu": "N62_TUE",
+   "job": "STATUS_BATTERIEINTEGRATOR",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true
+  },
+  {
+   "ecu": "N62_TUE",
+   "job": "STATUS_SYSTEMCHECK_PM_INFO_1",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "status_motordrehzahl",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "lower case"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_1",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true
+  },
+  {
+   "ecu": "TMODE",
+   "job": "INFO",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "LESE_INTERFACE_TYP",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "LESE_INTERFACE_VERSION",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "LESE_SPANNUNG_KL30",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "LESE_SPANNUNG_KL15",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "_JOBS",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "_JOBCOMMENTS",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMode",
+   "job": "info",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "ECU name is upper-cased before the restricted lookup"
+  },
+  {
+   "ecu": "tmode",
+   "job": "_jobs",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "INFO",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "STATUS_UBATT",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "exact name on a restricted ECU: no description screen"
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "STATUS_ZUENDUNG",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "exact name on a restricted ECU: no description screen"
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "_JOBS",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "global names do not apply to a restricted ECU"
+  },
+  {
+   "ecu": "TMODE",
+   "job": "STATUS_X",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "the STATUS_ pattern is off for a restricted ECU"
+  },
+  {
+   "ecu": "TMODE",
+   "job": "SETZE_INTERFACE_ZURUECK",
+   "allowed": false,
+   "rule": "deny.substring:SETZE",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "SENDE_TELEGRAMM",
+   "allowed": false,
+   "rule": "deny.substring:TELEGR",
+   "screen": false,
+   "note": "substrings are checked before tokens"
+  },
+  {
+   "ecu": "TMODE",
+   "job": "SETZE_PROGRAMMIERSPANNUNG",
+   "allowed": false,
+   "rule": "deny.substring:SETZE",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "LESE_PORT",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "TMODE",
+   "job": "HOLE_KEYBYTES",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "ABS_RELAIS",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "IF_RESET",
+   "allowed": false,
+   "rule": "deny.substring:RESET",
+   "screen": false
+  },
+  {
+   "ecu": "UTILITY",
+   "job": "STATUS_LEITUNG",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "utility",
+   "job": "abs_relais",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LOESCHEN",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IS_LOESCHEN",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "fs_loeschen",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_STEUERN_X",
+   "allowed": false,
+   "rule": "deny.substring:STEUER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "status_steuern_x",
+   "allowed": false,
+   "rule": "deny.substring:STEUER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STEUERN_LUEFTER",
+   "allowed": false,
+   "rule": "deny.substring:STEUER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STEUERGERAETE_RESET",
+   "allowed": false,
+   "rule": "deny.substring:STEUER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "C_FG_SCHREIBEN",
+   "allowed": false,
+   "rule": "deny.substring:SCHREIB",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_SCHREIBEN",
+   "allowed": false,
+   "rule": "deny.substring:SCHREIB",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "C_C_CODIERUNG",
+   "allowed": false,
+   "rule": "deny.substring:CODIER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FLASH_LOESCHEN",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FLASH_PROGRAMMIEREN",
+   "allowed": false,
+   "rule": "deny.substring:FLASH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_VORGEBEN",
+   "allowed": false,
+   "rule": "deny.substring:VORGEB",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_SETZEN",
+   "allowed": false,
+   "rule": "deny.substring:SETZE",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "ABGLEICH_LESEN",
+   "allowed": false,
+   "rule": "deny.substring:ABGLEICH",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_KALIBRIERUNG",
+   "allowed": false,
+   "rule": "deny.substring:KALIB",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "NORMIERTES_TELEGRAMM",
+   "allowed": false,
+   "rule": "deny.substring:TELEGR",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "C_AUFTRAG",
+   "allowed": false,
+   "rule": "deny.substring:AUFTRAG",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "AUTHENTISIERUNG_ZUFALLSZAHL_LESEN",
+   "allowed": false,
+   "rule": "deny.substring:AUTHENT",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_RESET_ZAEHLER",
+   "allowed": false,
+   "rule": "deny.substring:RESET",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "SLEEP_MODE",
+   "allowed": false,
+   "rule": "deny.substring:SLEEP",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_SLEEP_COUNTER",
+   "allowed": false,
+   "rule": "deny.substring:SLEEP",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "POWER_DOWN",
+   "allowed": false,
+   "rule": "deny.substring:POWER_DOWN",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_POWER_DOWN_X",
+   "allowed": false,
+   "rule": "deny.substring:POWER_DOWN",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_START_X",
+   "allowed": false,
+   "rule": "deny.token:START",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "START_SYSTEMCHECK",
+   "allowed": false,
+   "rule": "deny.token:START",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_STOP",
+   "allowed": false,
+   "rule": "deny.token:STOP",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "DIAGNOSE_ENDE",
+   "allowed": false,
+   "rule": "deny.token:ENDE",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_INIT",
+   "allowed": false,
+   "rule": "deny.token:INIT",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_LERN_X",
+   "allowed": false,
+   "rule": "deny.token:LERN",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_LERNEN",
+   "allowed": false,
+   "rule": "deny.token:LERNEN",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "ADAPT_LESEN",
+   "allowed": false,
+   "rule": "deny.token:ADAPT",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "PROG_SPANNUNG_EIN",
+   "allowed": false,
+   "rule": "deny.token:PROG",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "SPEICHER_LESEN",
+   "allowed": false,
+   "rule": "deny.token:SPEICHER",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "SENDE_X",
+   "allowed": false,
+   "rule": "deny.token:SENDE",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "status_start",
+   "allowed": false,
+   "rule": "deny.token:START",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "C_C_LESEN",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false,
+   "note": "coding read: not on the allowlist"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "LESE_SPANNUNG_KL30",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false,
+   "note": "TMODE-only name on another ECU"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false,
+   "note": "pattern needs at least one character after STATUS_"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "ENERGIESPARMODE",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "DIAGNOSE_MODE",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN_X",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "XFS_LESEN",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS__",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "double underscore still matches the pattern; the description screen decides"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT_X",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN;FS_LOESCHEN",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false,
+   "note": "no job chaining"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN ",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false,
+   "note": "trailing space"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": " FS_LESEN",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS LESEN",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN\n",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LESEN\u0000",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false,
+   "note": "65 characters"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "64 characters"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_\u017fTEUERN",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false,
+   "note": "long s; non-ASCII never reaches upper-casing"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "\uff26\uff33_LESEN",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false,
+   "note": "full-width letters"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS-X",
+   "allowed": false,
+   "rule": "shape.job",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65.PRG",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "../TMODE",
+   "job": "INFO",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "C:\\EDIABAS\\ECU\\TMODE",
+   "job": "INFO",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "NVE 65",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "",
+   "job": "",
+   "allowed": false,
+   "rule": "shape.ecu",
+   "screen": false,
+   "note": "ECU is checked first"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "allowed": false,
+   "rule": "shape.args",
+   "screen": false,
+   "note": "201 characters"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "200 characters"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "1\n2",
+   "allowed": false,
+   "rule": "shape.args",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "gr\u00fcn",
+   "allowed": false,
+   "rule": "shape.args",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "a\tb",
+   "allowed": false,
+   "rule": "shape.args",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "args": "1;2;0x3F; ~",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "results": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+   "allowed": false,
+   "rule": "shape.results",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "results": "X\u0000Y",
+   "allowed": false,
+   "rule": "shape.results",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "IDENT",
+   "results": "JOB_STATUS;ID_BMW_NR",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "FS_LOESCHEN",
+   "args": "\u0007",
+   "allowed": false,
+   "rule": "shape.args",
+   "screen": false,
+   "note": "shape is checked before the denylist"
+  }
+ ]
+}

@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "namePattern": "^[A-Za-z0-9_]{1,64}$",
+  "maxArgLength": 200,
+  "allow": {
+    "globalExact": [
+      "IDENT",
+      "INFO",
+      "FS_LESEN",
+      "FS_LESEN_DETAIL",
+      "IS_LESEN",
+      "IS_LESEN_DETAIL",
+      "AIF_LESEN",
+      "SERIENNUMMER_LESEN",
+      "ZIF_LESEN",
+      "ZIF_BACKUP_LESEN",
+      "PHYSIKALISCHE_HW_NR_LESEN",
+      "HARDWARE_REFERENZ_LESEN",
+      "DATEN_REFERENZ_LESEN",
+      "PRUEFSTEMPEL_LESEN",
+      "C_FG_LESEN",
+      "_JOBS",
+      "_JOBCOMMENTS",
+      "_ARGUMENTS",
+      "_RESULTS",
+      "_VERSIONINFO",
+      "_TABLES",
+      "_TABLE"
+    ],
+    "patterns": [
+      "^STATUS_[A-Z0-9_]+$"
+    ],
+    "restrictedEcus": {
+      "TMODE": [
+        "INFO",
+        "LESE_INTERFACE_TYP",
+        "LESE_INTERFACE_VERSION",
+        "LESE_SPANNUNG_KL30",
+        "LESE_SPANNUNG_KL15",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "UTILITY": [
+        "INFO",
+        "STATUS_UBATT",
+        "STATUS_ZUENDUNG",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ]
+    }
+  },
+  "deny": {
+    "substrings": [
+      "SCHREIB",
+      "LOESCH",
+      "STEUER",
+      "CODIER",
+      "FLASH",
+      "VORGEB",
+      "SETZE",
+      "ABGLEICH",
+      "KALIB",
+      "TELEGR",
+      "AUFTRAG",
+      "AUTHENT",
+      "RESET",
+      "SLEEP",
+      "POWER_DOWN"
+    ],
+    "tokens": [
+      "START",
+      "STOP",
+      "ENDE",
+      "INIT",
+      "LERN",
+      "LERNEN",
+      "ADAPT",
+      "PROG",
+      "SPEICHER",
+      "SENDE"
+    ]
+  },
+  "descriptionScreen": {
+    "terms": [
+      "start",
+      "ansteuer",
+      "aktivier",
+      "schreib",
+      "loesch",
+      "lösch",
+      "setz",
+      "programm",
+      "reset",
+      "lernen",
+      "abgleich",
+      "write",
+      "clear",
+      "erase",
+      "delete",
+      "activate",
+      "learn"
+    ]
+  }
+}
