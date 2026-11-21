@@ -25,3 +25,7 @@ discovery/
 ista-bridge-discovery*.txt
 
 .DS_Store
+
+# subagent workspace
+.superpowers/
+__pycache__/
