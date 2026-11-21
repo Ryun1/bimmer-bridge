@@ -1,403 +1,470 @@
-# ista-bridge — build plan
+# ediabas-bridge — build plan v2
 
-**Audience:** Claude Code, running on Ryan's Mac.
-**Goal:** let Claude (in the Claude desktop app and in cloud sessions linked to this Mac) see into the Windows VM running in UTM. Claude should be able to read ISTA's screen as text, take screenshots of ISTA, read ISTA/EDIABAS logs and run **read-only** EDIABAS diagnostic jobs against Ryan's car.
+**Audience:** Claude Code, running natively on Ryan's Mac.
+**Goal:** let Claude (Claude Code, the Claude desktop app, and cloud sessions linked to this
+Mac) see into the Windows VM in UTM that runs BMW Standard Tools. Claude should be able to
+run **read-only** EDIABAS diagnostic jobs against Ryan's car, take screenshots of the VM, and
+read EDIABAS / NCS Expert trace files.
+
+v2 replaces [the original plan](docs/plan-v1-original.md). The reasons for each change are in
+[docs/plan-review.md](docs/plan-review.md). The main differences:
+
+- The VM has **INPA and BMW Standard Tools, not ISTA**. The UI Automation reader is gone;
+  the EDIABAS runner is now the core and is built second.
+- **v1 has no write path.** Fault clearing is deferred (§10).
+- Job policy is one shared data file, default-deny, with a second check on job descriptions.
+- .NET 10, a testable project split, IP discovery by MAC address, a desk phase before the car.
+
+Facts are marked **[confirmed]** (checked on this Mac or in a cited source) or **(verify)**
+(to be settled by Phase 0 or at the desk). Don't hard-code anything marked (verify).
 
 ---
 
 ## 0. Context
 
 ### The machines
-- **Mac:** Apple Silicon (arm64), macOS. Node is installed via nvm. The Claude desktop app is installed and already runs one local stdio MCP server ("Control Chrome"). Local MCP servers configured in the desktop app are proxied into Claude's cloud sessions, so a new local server shows up there automatically.
-- **VM:** Windows in UTM, presumed Windows 11 on ARM, which runs x86/x64 programs under emulation. It has **ISTA** (BMW dealer diagnostics) and **INPA/EDIABAS** installed. A **K+DCAN USB cable** is passed through to the VM, and INPA already talks to the car through it, so the EDIABAS configuration is known to work.
-- Claude's own shell on the Mac is a sandboxed Linux VM that **cannot reach the UTM VM**. That is why the Mac-side part of this project must be a native macOS process started by the Claude desktop app, not something Claude runs in its sandbox.
+- **Mac:** Apple Silicon, macOS. Node v24.16.0 under nvm **[confirmed]**. No .NET SDK yet
+  **[confirmed]**. Claude Code runs natively here and can reach the UTM network directly.
+- **VM:** UTM VM named `Windows`, QEMU backend, aarch64, network mode **Shared**, MAC
+  `F2:E5:81:1E:82:07` **[confirmed from UTM's config]**. Windows on ARM runs the 32-bit
+  x86 BMW tools under emulation.
+- **Cable:** K+DCAN USB, passed through to the VM. INPA already talks to the car through it,
+  so the EDIABAS configuration is known to work.
+- `utmctl` is at `/Applications/UTM.app/Contents/MacOS/utmctl` (not on PATH) **[confirmed]**.
+
+### Software in the VM
+Seen on the VM desktop on 2026-11-21. Versions are those of BMW Standard Tools 2.12 and
+executable names are from memory; Phase 0 confirms both.
+
+| Tool | What it does | Uses the cable | Risk | Role here |
+|---|---|---|---|---|
+| **INPA** (`INPALOAD.exe`) | Diagnostics: fault memory, live values, activations, via scripts over EDIABAS | Yes | Low to medium (can activate components and clear faults) | Ryan's manual tool. Claude sees it through screenshots only |
+| **Tool32** (`TOOL32.EXE`) | Runs any single EDIABAS job from any SGBD | Yes | High (any job, including writes) | Reference: the agent does the same thing, restricted to read jobs |
+| **NCS Expert** (`NCSEXPER.EXE`) | Reads and writes ECU coding | Yes | High (wrong coding disables functions) | Never driven. Its trace files are readable as logs |
+| **WinKFP** (`WINKFPT.EXE`) | Flashes ECU firmware | Yes | **Very high (an interrupted flash can brick an ECU)** | Never driven. Agent refuses all cable use while it runs |
+| **NCS Dummy** | Offline viewer/editor for NCS Expert trace files | No | Low (edits files that NCS Expert later writes to the car) | None |
+| **BMW Coding Tool** | Copies SP-Daten files into the NCS Expert, WinKFP and EDIABAS folders | No | Medium (replaces SGBD files) | Agent refuses cable use while it runs |
+| **EDIABAS** (`api32.dll`) | The communication layer under all of the above | Yes | — | What the agent calls |
+| `VRRTuning…` (zip) | Unknown; nothing found under that name | — | — | Ignored. Phase 0 lists its name only |
+
+ISTA is **not** expected to be installed (verify in Phase 0).
 
 ### The car
-- 2005 BMW E61 550i M Sport (N62B48, pre-LCI E-series). The OBD diagnostics on this car run through EDIABAS SGBDs (`.prg`/`.grp`) via the K+DCAN cable.
-- Known SGBD from earlier INPA sessions: `NVE_65.PRG` (Night Vision). It has historic fault codes A752/A751, which make a good read-only acceptance test (Phase 5).
-- The car has a recurring battery-drain issue, so diagnostic sessions should be short. The tooling must not keep the bus busy or hold the interface open while idle.
+- 2005 BMW E61 550i M Sport (N62B48TU). Diagnostics run through EDIABAS SGBDs
+  (`.prg` / `.grp`) over the K-line side of the cable.
+- Known SGBD: `NVE_65.PRG` (Night Vision). Historic fault codes A752/A751 are the read-only
+  acceptance test at the car.
+- Engine ECU SGBD is probably `N62_TUE` (ME9.2.2 TUE) or `ME9N62_2` (verify with the
+  `D_MOTOR` group at the car).
+- **Recurring battery drain.** Sessions must be short; the tooling must not hold the
+  interface open while idle. Battery-related reads to look for on the engine ECU (verify):
+  `STATUS_IBS_MESSWERTE`, `STATUS_BATTERIEINTEGRATOR`, `STATUS_SYSTEMCHECK_PM_INFO_1/2`.
 
 ### Why the design looks like this
-- Anything started over SSH or as a Windows service runs in **session 0**. Session 0 cannot see the interactive desktop, so it can't take screenshots or read UI Automation of ISTA. The VM-side component must therefore run **inside Ryan's logged-in desktop session**, started by a Task Scheduler task at log-on.
-- ISTA is a .NET/WPF desktop app, so most of its UI is exposed through **Windows UI Automation (UIA)**. That gives fault lists, test-plan steps and measured values as text, without reading them from pixels. Screenshots are the fallback for anything UIA doesn't expose, such as graphs, wiring diagrams and embedded document viewers.
-- ISTA probably runs elevated ("Run as administrator"). Windows UIPI blocks a non-elevated process from reading an elevated window's UI, so the agent must run with highest privileges.
+- A process started over SSH or as a service runs in session 0 and cannot capture the
+  desktop. The agent therefore runs **in Ryan's logged-in session**, started by a Task
+  Scheduler task at log-on.
+- INPA draws its own screens, so its text is not expected to be machine-readable.
+  Screenshots are the only view of INPA. That is acceptable because INPA is a front-end over
+  EDIABAS jobs, and the agent can run the read jobs directly and get structured results.
+- `api32.dll` is a 32-bit DLL, so the agent is an x86 process.
 
 ---
 
 ## 1. Architecture
 
 ```
-Claude (desktop app or linked cloud session)
-   │  MCP over stdio (proxied by the Claude desktop app)
+Claude (Claude Code, desktop app, or linked cloud session)
+   │  MCP over stdio
    ▼
-mac-mcp/  "ista-bridge" — TypeScript MCP server, native macOS process
+mac-mcp/  "ediabas-bridge" — TypeScript MCP server, native macOS process
    │  HTTP, Authorization: Bearer <token>
-   │  UTM Shared Network only (host 192.168.64.1 → VM 192.168.64.x)
+   │  UTM Shared Network only (Mac = the VM's gateway)
    ▼
-vm-agent/  IstaAgent.exe — C# .NET 8, win-x86, runs in Ryan's interactive session (elevated)
-   ├─ UIA reader        → ISTA window text / structure
-   ├─ Window capture    → PNG/JPEG of ISTA window or whole desktop
-   ├─ Log access        → read-only, allowlisted folders
-   └─ EDIABAS runner    → api32.dll via P/Invoke, allowlisted read jobs only
+vm-agent/  EdiabasAgent.exe — C# .NET 10, win-x86, in Ryan's interactive session
+   ├─ EDIABAS runner   → api32.dll via P/Invoke, policy-checked read jobs only
+   ├─ Window capture   → JPEG/PNG of a window or the desktop
+   └─ Log access       → read-only, allowlisted folders
 ```
 
-### Why C# x86 for the agent
-- `api32.dll` (EDIABAS API) is a 32-bit x86 DLL. An x86 process can load it directly, and Windows 11 on ARM runs x86 under emulation.
-- UIA works across process bitness, so an x86 agent can read an x64/ARM64 ISTA.
-- Kestrel (ASP.NET Core) avoids the `netsh http urlacl` setup that `HttpListener` needs.
-- It builds on the Mac with the .NET 8 SDK (`EnableWindowsTargeting=true`) as a single self-contained exe, so nothing needs installing in the VM.
-- If Phase 0 shows a 64-bit `api64.dll` is present and preferable, x64 is acceptable. Record that decision in the README.
+- **.NET 10 (LTS).** .NET 8 left support on 10 Nov 2026.
+- **Not elevated by default.** Elevation was only needed to read ISTA's UI. Run elevated only
+  if Phase 0 shows the BMW tools are set to run as administrator.
+- Built on the Mac (`EnableWindowsTargeting=true`) as one self-contained exe.
 
 ---
 
 ## 2. Hard safety rules (non-negotiable)
 
-These are enforced **in code on both sides**, not just in tool descriptions.
+Enforced **in code on both sides**, not only in tool descriptions.
 
-1. **No input into the VM.** v1 has no click, keystroke, mouse or clipboard-write endpoints. Ryan drives ISTA himself; Claude only reads.
-2. **No ISTA service functions.** The agent never starts ISTA test plans, programming, coding, calibration (e.g. ACC alignment) or anything else in ISTA.
-3. **EDIABAS read-only by allowlist.** `ediabas_job` accepts only:
-   - exact names: `IDENT`, `INFO`, `FS_LESEN`, `FS_LESEN_DETAIL`, `IS_LESEN`, `IS_LESEN_DETAIL`, `AIF_LESEN`, `SERIENNUMMER_LESEN`, `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS`
-   - and `^STATUS_[A-Z0-9_]+$`
-
-   Then a **denylist that overrides the allowlist**. Reject any job name containing (case-insensitive) `SCHREIBEN`, `LOESCHEN`, `STEUERN`, `CODIER`, `FLASH`, `PROG`, `RESET`, `ADAPT`, `VORGEBEN`, `SPEICHER`, `ABGLEICH`, `KALIB`, `LERN`, `INIT`, `SETZEN`, `START`, `STOP`, `ENDE`, `DIAGNOSE_MODE`, `SLEEP`, `POWER_DOWN`, `ENERGIESPAR`.
-   Put the policy in one pure, unit-tested class (`JobPolicy`) and run it **in both the VM agent and the Mac server**. Arguments: max 200 chars; no control characters.
-4. **Fault clearing is the only write, and it needs a human.** `ediabas_clear_faults` (jobs `FS_LOESCHEN` / `IS_LOESCHEN` only) works like this:
-   - The Mac server first shows a **native macOS dialog** via `osascript`, naming the ECU and what will be cleared, with *Cancel* as the default button. It proceeds only if Ryan clicks *Clear*. Nothing in a tool argument can skip the dialog.
-   - The VM agent additionally refuses the clear endpoint unless `allowFaultClear: true` is set in its `config.json`. The default is `false`.
-5. **One user of the cable at a time.** The agent refuses all EDIABAS calls while any of these processes is running: ISTA's GUI process, `INPALOAD.exe`, `Tool32.exe`, or other EDIABAS clients (confirm exact process names in Phase 0). It returns a clear error ("close ISTA/INPA first"). There is no override flag.
-6. **Release the interface when idle.** For each request: `apiInit` → job(s) → `apiEnd`. Never keep an EDIABAS handle open between requests.
-7. **Network exposure:**
-   - The agent binds **only** to the VM's UTM Shared Network IPv4 address, never `0.0.0.0`.
-   - A Windows Firewall rule allows inbound only from `192.168.64.1`.
-   - Every request needs a Bearer token (≥ 32 random bytes) with constant-time comparison.
-   - On the Mac, the token is stored in the **macOS Keychain**, not in `claude_desktop_config.json`.
-8. **Read-only file access.** Log endpoints only read, only under configured root folders. Resolve real paths and reject `..`, symlink/junction escapes and alternate data streams. The agent writes nothing except its own log and audit files under `C:\ProgramData\IstaAgent\`.
-9. **Audit trail.** Both sides append one line per request (timestamp, endpoint/tool, ECU, job, outcome, duration) to an audit log:
-   - VM: `C:\ProgramData\IstaAgent\audit.log`
-   - Mac: `~/Library/Logs/ista-bridge/audit.log`
-10. **Never test against the car unattended.** Claude Code must not run EDIABAS jobs as part of automated tests. Car-facing tests are run by Ryan, at the car, with the ignition on, following the acceptance steps below.
+1. **No input into the VM.** No click, keystroke, mouse or clipboard endpoints.
+2. **No writes to the car in v1.** No fault clearing, coding, programming, activations or
+   adaptations. There is no endpoint that can run them.
+3. **EDIABAS is default-deny.** A job runs only if `JobPolicy` allows it (§6). The policy is
+   one data file, `policy/policy.json`, loaded by both the agent and the Mac server.
+4. **One user of the cable at a time.** The agent refuses every EDIABAS call with
+   `cable_in_use` while any of these is running: INPA, Tool32, NCS Expert, WinKFP, BMW Coding
+   Tool, or any other process that has `api32.dll` loaded. There is no override flag.
+   WinKFP and NCS Expert matter most: a job landing mid-flash can brick an ECU.
+5. **Release the interface when idle.** Per request: `apiInit` → job(s) → `apiEnd`. No handle
+   is kept between requests.
+6. **Network exposure.**
+   - Bind only to the VM's address on the UTM shared network, never `0.0.0.0`.
+   - Windows Firewall allows inbound only from the adapter's default gateway (the Mac).
+   - Every request needs a Bearer token (32 random bytes), compared in constant time.
+   - On the Mac the token lives in the Keychain, not in a config file.
+7. **Read-only file access.** Log endpoints only read, only under configured roots. Resolve
+   real paths; reject `..`, junction/symlink escapes and alternate data streams. The agent
+   writes only its own log and audit files under `C:\ProgramData\EdiabasBridge\`.
+8. **Never change EDIABAS configuration.** No edits to `EDIABAS.INI` or `obd.ini`, no
+   `apiSetConfig`.
+9. **Audit trail.** Both sides append one line per request (time, endpoint/tool, ECU, job,
+   outcome, duration; rejected job names included).
+   - VM: `C:\ProgramData\EdiabasBridge\audit.log`
+   - Mac: `~/Library/Logs/ediabas-bridge/audit.log`
+10. **Never test against the car unattended.** Claude Code may run *offline* jobs (`TMODE`,
+    and the `_JOBS` family, which read the SGBD file) after Ryan confirms the cable is
+    unplugged. Everything else is run by Ryan, at the car.
 
 ---
 
 ## 3. Repository layout
 
-Create at `~/projects/ista-bridge/`:
-
 ```
-ista-bridge/
-  README.md                 setup, usage, troubleshooting, safety rules (copy §2)
-  PLAN.md                   this file
+ediabas-bridge/
+  README.md
+  PLAN.md
+  docs/
+  policy/
+    policy.json             the job policy (single source for both sides)
+    policy-cases.json       shared test fixture: job name → expected verdict
   vm-agent/
-    IstaAgent.csproj        net8.0-windows, RuntimeIdentifier win-x86, OutputType WinExe,
-                            SelfContained, PublishSingleFile, EnableWindowsTargeting
-    Program.cs              Kestrel minimal API, auth middleware, routing, startup retry
-    Config.cs               loads C:\ProgramData\IstaAgent\config.json
-    Auth/TokenAuth.cs
-    Uia/ScreenReader.cs     FlaUI.UIA3 (fallback: System.Windows.Automation)
-    Capture/WindowCapture.cs
-    Logs/LogAccess.cs
-    Ediabas/Api32.cs        P/Invoke declarations
-    Ediabas/EdiabasRunner.cs  serialized, timeouts, init/end per request
-    Ediabas/JobPolicy.cs    allow/deny logic (shared semantics with mac side)
-    Proc/ConflictCheck.cs   detects ISTA/INPA/Tool32
-    Audit/AuditLog.cs
-  vm-agent.Tests/           xUnit — JobPolicy, path safety, result shaping (runs on the Mac)
+    EdiabasAgent.Core/      net10.0, no Windows APIs — runs and tests on the Mac
+      JobPolicy.cs          loads policy.json; pure
+      CommentScreen.cs      screens job descriptions (§6)
+      PathRules.cs          log path validation logic
+      ResultShaping.cs      EDIABAS result sets → JSON
+    EdiabasAgent/           net10.0-windows, win-x86, WinExe, self-contained single file
+      Program.cs            Kestrel minimal API, auth, routing, bind/rebind
+      Config.cs
+      Auth/TokenAuth.cs
+      Ediabas/Api32.cs      P/Invoke declarations
+      Ediabas/EdiabasRunner.cs
+      Proc/ConflictCheck.cs
+      Capture/WindowCapture.cs
+      Logs/LogAccess.cs
+      Audit/AuditLog.cs
+      SelfTest.cs           `EdiabasAgent.exe --selftest` (Windows-only checks, no cable)
+    EdiabasAgent.Tests/     xUnit against Core (dotnet test on the Mac)
   vm-setup/
-    discover.ps1            Phase 0 read-only discovery (below)
-    install.ps1             deploy exe, config, token, firewall rule, scheduled task
+    discover.ps1            Phase 0, read-only
+    install.ps1             idempotent; keeps token and config on upgrade
+    update.ps1              stop task → verify hash → swap exe → start task
     uninstall.ps1
   mac-mcp/
-    package.json            @modelcontextprotocol/sdk, zod
-    tsconfig.json
     src/index.ts            MCP server (stdio), tool registration
     src/agentClient.ts      HTTP client, timeouts, token from Keychain
-    src/policy.ts           same allow/deny rules as JobPolicy
-    src/confirm.ts          osascript confirmation dialog
-    src/format.ts           compact text renderings (fault tables, UIA text)
-    test/                   vitest — against a fake agent (no VM needed)
+    src/vmAddress.ts        find the VM's IP from its MAC address
+    src/policy.ts           loads policy/policy.json
+    src/format.ts           fault tables, km → miles
+    test/                   vitest against a fake agent
+  dev/
+    serve.sh                serves release/ and receives uploads, bound to the bridge IP
 ```
+
+No BMW binaries, SGBD files, `api.h` or discovery output are committed (`.gitignore`).
 
 ---
 
-## 4. Phase 0 — discovery (Ryan runs this in the VM)
+## 4. Phase 0 — discovery (Ryan runs one script in the VM)
 
-Write `vm-setup/discover.ps1` (read-only) and ask Ryan to run it in an **elevated** PowerShell in the VM. The first deploy method is in §5; for Phase 0, Ryan can paste the script into PowerShell. It writes `ista-bridge-discovery.txt` to the Desktop for Ryan to paste back. Starting point:
+`dev/serve.sh` starts a small server on the Mac's bridge address that serves `release/` and
+accepts uploads into `discovery/` (git-ignored). Ryan starts the VM and pastes one line into
+PowerShell; the script uploads its results, so nothing is pasted back.
 
-```powershell
-# ista-bridge discovery — read-only. Run elevated. Output: Desktop\ista-bridge-discovery.txt
-$out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'ista-bridge-discovery.txt'
-& {
-  '== OS =='
-  Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture | Format-List
-  "PROCESSOR_ARCHITECTURE=$env:PROCESSOR_ARCHITECTURE"
+`discover.ps1` is read-only and must report:
 
-  '== Network (IPv4) =='
-  Get-NetIPAddress -AddressFamily IPv4 | Where-Object IPAddress -notlike '127.*' |
-    Select-Object InterfaceAlias, IPAddress, PrefixLength, PrefixOrigin | Format-Table -AutoSize
-  Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory | Format-Table -AutoSize
+- OS version, architecture, and whether the user is an administrator.
+- IPv4 addresses, default gateway and network category of each adapter.
+- Install locations and file versions of `api32.dll`, `api.h`, `EDIABAS.INI`, `obd.ini`,
+  `INPALOAD.exe`, `TOOL32.EXE`, `NCSEXPER.EXE`, `WINKFPT.EXE`, NCS Dummy, BMW Coding Tool,
+  searched under `C:\EDIABAS`, `C:\INPA`, `C:\EC-APPS`, `C:\NCSEXPER`, `C:\NFS` and Program Files.
+- **Whether ISTA exists** (`ISTAGUI.exe`, `C:\Rheingold`, `C:\ProgramData\BMW`).
+- Every desktop shortcut's target and whether it is flagged "run as administrator".
+- `EDIABAS.INI` key settings (`Interface`, `EcuPath`, `TracePath`, `ApiTrace`, `IfhTrace`,
+  `Simulation`) and the whole of `obd.ini` (port, `UBATT`, hardware).
+- Presence of `TMODE.PRG`, `UTILITY.PRG`, `NVE_65.PRG`, `N62_TUE.PRG`, `ME9N62_2.PRG`,
+  `D_MOTOR.GRP`, and a count of SGBD files in the Ecu folder.
+- COM ports and USB serial devices (the cable).
+- Diagnostic processes running now, including `ebas32`-style EDIABAS host processes.
+- Recent files under the EDIABAS trace folder, `C:\NCSEXPER\WORK` and the WinKFP work folder.
+- Sleep and screen-lock settings.
 
-  '== Runtimes =='
-  foreach ($c in 'python','py','dotnet','pwsh') {
-    $p = Get-Command $c -ErrorAction SilentlyContinue
-    '{0}: {1}' -f $c, $(if ($p) { $p.Source } else { 'not found' })
-  }
-  Test-Path "$env:WINDIR\SysWOW64\WindowsPowerShell\v1.0\powershell.exe" | ForEach-Object { "x86 PowerShell present: $_" }
+It uploads the report, plus `api.h` if present. `api.h` is the source of truth for P/Invoke.
 
-  '== Key files (ISTA / EDIABAS / INPA) =='
-  $roots = @('C:\EDIABAS','C:\INPA','C:\ISTA','C:\Rheingold','C:\Program Files','C:\Program Files (x86)','C:\ProgramData\BMW') |
-    Where-Object { Test-Path $_ }
-  $names = 'api32.dll','api64.dll','api.h','EDIABAS.INI','obd.ini','ISTAGUI.exe','INPALOAD.exe','Tool32.exe','UTILITY.PRG'
-  foreach ($r in $roots) {
-    Get-ChildItem $r -Recurse -Depth 6 -File -ErrorAction SilentlyContinue |
-      Where-Object { $names -contains $_.Name } |
-      Select-Object FullName, Length, LastWriteTime, @{n='Version';e={$_.VersionInfo.FileVersion}}
-  } | Format-Table -AutoSize -Wrap
-  Get-ChildItem "$env:WINDIR\obd.ini" -ErrorAction SilentlyContinue | ForEach-Object { "== $($_.FullName) =="; Get-Content $_ }
-
-  '== EDIABAS.INI key settings =='
-  Get-ChildItem C:\EDIABAS -Recurse -Filter EDIABAS.INI -ErrorAction SilentlyContinue | ForEach-Object {
-    "-- $($_.FullName)"
-    Select-String -Path $_.FullName -Pattern '^\s*(Interface|EcuPath|TracePath|ApiTrace|IfhTrace|SimulationPath|Simulation)\s*=' |
-      ForEach-Object { $_.Line }
-  }
-
-  '== Serial / USB (cable) =='
-  Get-CimInstance Win32_PnPEntity | Where-Object Name -match 'COM\d+|FTDI|USB Serial' |
-    Select-Object Name, Manufacturer, Status | Format-Table -AutoSize
-
-  '== Diagnostic processes running now =='
-  Get-Process | Where-Object { $_.Name -match 'ISTA|INPA|Ediabas|Tool32|Rheingold|ICOM' } |
-    Select-Object Name, Id, Path | Format-Table -AutoSize -Wrap
-
-  '== Recent ISTA / EDIABAS logs =='
-  foreach ($r in @('C:\ProgramData\BMW','C:\EDIABAS\TRACE')) {
-    if (Test-Path $r) {
-      Get-ChildItem $r -Recurse -File -Include *.log,*.trc,*.txt -ErrorAction SilentlyContinue |
-        Sort-Object LastWriteTime -Descending | Select-Object -First 25 FullName, Length, LastWriteTime
-    }
-  } | Format-Table -AutoSize -Wrap
-
-  '== Power / lock =='
-  powercfg /query SCHEME_CURRENT SUB_SLEEP STANDBYIDLE | Select-String 'Current AC'
-} *>&1 | Tee-Object -FilePath $out
-"Saved to $out"
-```
-
-Also ask Ryan directly:
-- the UTM network mode for this VM (Settings → Network; want **Shared Network**);
-- whether ISTA is started "as administrator";
-- the ISTA version shown in ISTA's About/Info screen;
-- whether the VM screen locks on idle.
-
-**Resolve from Phase 0 before writing code:** the EDIABAS path; `api32.dll` vs `api64.dll`; whether `api.h` exists (use it as the source of truth for P/Invoke signatures, calling convention and constants); ISTA's process name and log folders; the VM's IP; and whether `UTILITY.PRG` exists (for the battery/ignition check).
+**Resolve before writing the runner:** EDIABAS path; exact process names for the conflict
+list; whether elevation is needed; log roots; the VM's gateway address; whether `TMODE.PRG`
+exists (it is the desk test).
 
 ---
 
-## 5. Deployment mechanics (Mac → VM)
+## 5. Deployment (Mac → VM)
 
-Claude Code builds on the Mac. To get files into the VM without extra software:
+1. Mac: `dev/serve.sh` builds `release/EdiabasAgent.zip`, prints its SHA-256 and serves it on
+   the bridge address only.
+2. VM, first install (one line, elevated PowerShell):
+   `irm http://<mac>:8000/install.ps1 | iex`
+3. VM, every later build: `irm http://<mac>:8000/update.ps1 | iex`
 
-1. On the Mac, serve the release folder on UTM's host address only:
-   `python3 -m http.server 8000 --bind 192.168.64.1 --directory ~/projects/ista-bridge/release`
-2. In the VM, download it (elevated PowerShell):
-   `Invoke-WebRequest http://192.168.64.1:8000/IstaAgent.zip -OutFile $env:TEMP\IstaAgent.zip`
-3. Unzip and run `install.ps1`.
-
-Stop the HTTP server afterwards. Put these steps in the README. Claude Code gives Ryan the exact commands to run; it cannot run anything inside the VM itself.
+Both scripts check the zip's SHA-256 against the value served beside it before unpacking.
+The server is stopped when not deploying. Claude Code gives Ryan the exact line each time.
 
 ---
 
 ## 6. VM agent specification
 
-### Config — `C:\ProgramData\IstaAgent\config.json`
+### Config — `C:\ProgramData\EdiabasBridge\config.json`
 ```json
 {
-  "bindAddress": "192.168.64.X",
+  "bindAddress": "auto",
   "port": 8765,
-  "tokenFile": "C:\\ProgramData\\IstaAgent\\token.txt",
-  "logRoots": ["C:\\ProgramData\\BMW\\ISPI\\logs", "C:\\EDIABAS\\TRACE"],
+  "tokenFile": "C:\\ProgramData\\EdiabasBridge\\token.txt",
   "ediabasDll": "C:\\EDIABAS\\BIN\\api32.dll",
-  "ediabasConfigOverride": "",
-  "conflictProcesses": ["ISTAGUI", "INPALOAD", "Tool32"],
+  "ecuPath": "C:\\EDIABAS\\ECU",
+  "logRoots": ["C:\\EDIABAS\\TRACE", "C:\\NCSEXPER\\WORK"],
+  "conflictProcesses": ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"],
+  "voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ],
+  "reviewedJobs": [],
   "jobTimeoutSeconds": 30,
-  "maxJobTimeoutSeconds": 60,
-  "allowFaultClear": false
+  "maxJobTimeoutSeconds": 60
 }
 ```
-Fill the values from Phase 0. If `bindAddress` is `"auto"`, pick the IPv4 address in `192.168.64.0/24`. Lock down `token.txt` with ACLs (Administrators + Ryan's user only).
-
-### Startup
-- If the bind address isn't up yet (VM networking still starting), retry every 5 s; never fall back to `0.0.0.0`.
-- Use the WinExe output type, so no console window appears.
+Values come from Phase 0. `auto` binds to the adapter whose default gateway is the Mac, and
+rebinds when that address changes. If no such adapter is up yet, retry every 5 s; never fall
+back to `0.0.0.0`. `token.txt` is ACL'd to Ryan's user and Administrators.
 
 ### Endpoints
-All require `Authorization: Bearer`. All responses are JSON unless noted, and errors use the shape `{ "error": { "code", "message" } }`.
+All need `Authorization: Bearer`. JSON responses; errors are `{ "error": { "code", "message" } }`.
 
 | Method & path | Purpose | Notes |
 |---|---|---|
-| `GET /health` | agent version, uptime, OS/arch, bind address, whether ISTA/INPA are running, whether the EDIABAS DLL loads, `allowFaultClear` | must never touch the cable |
-| `GET /windows` | top-level visible windows: handle, title, process name, PID, bounds, elevated? | |
-| `GET /screen/text?window=<handle\|title-substring\|ista>&format=text\|json&maxNodes=4000&includeOffscreen=false` | UIA dump | see "UIA reader" |
-| `GET /screen/capture?window=<…\|desktop>&maxEdge=1600&format=png\|jpeg&quality=85` | image bytes (`image/png` or `image/jpeg`) | see "Capture" |
-| `GET /logs?root=<index>&glob=*.log&since=<iso>&limit=50` | list files under one configured root, newest first | |
-| `GET /logs/read?path=<abs>&tailBytes=65536` or `&offset=&length=` and optional `&grep=<regex>` | read part of a file | cap 256 KB per response; text decoded as UTF-8, falling back to Windows-1252 |
-| `GET /ediabas/ecus?filter=<substr>` | list SGBD/group files (`*.prg`, `*.grp`) in the EDIABAS Ecu folder | no cable access |
-| `POST /ediabas/job` `{ ecu, job, args?, results?, timeoutSeconds? }` | run one allowlisted job | see "EDIABAS runner" |
-| `POST /ediabas/jobs` `{ items: [ {ecu, job, args?} ], timeoutSeconds? }` | up to 20 jobs in one init/end cycle (e.g. a sweep of `FS_LESEN` over many ECUs) | each item policy-checked; one failure doesn't abort the rest |
-| `GET /ediabas/vehicle` | battery voltage + ignition via `UTILITY` `STATUS_UBATT` / `STATUS_ZUENDUNG` (verify these job names with `_JOBS` first) | lets Claude check ignition on/battery OK before a sweep |
-| `POST /ediabas/clear` `{ ecu, scope: "FS"\|"IS"\|"both" }` | clear fault memory | 403 unless `allowFaultClear`; only `FS_LOESCHEN`/`IS_LOESCHEN` |
+| `GET /health` | version, uptime, OS/arch, bind address, elevated?, conflicting processes running, EDIABAS DLL found, `lastCableUseAt` | never touches the cable |
+| `GET /windows` | visible top-level windows: handle, title, process, PID, bounds, minimised? | |
+| `GET /screen/capture?window=<handle\|title-substring\|desktop>&maxEdge=1600&format=jpeg\|png` | image bytes | see Capture |
+| `GET /logs?root=<index>&glob=*.trc&since=<iso>&limit=50` | list files under one root, newest first | |
+| `GET /logs/read?path=<abs>&tailBytes=65536` or `&offset=&length=`, optional `&grep=<regex>` | read part of a file | 256 KB cap; UTF-8 then Windows-1252; files opened with `FileShare.ReadWrite\|Delete`; regex uses `NonBacktracking`, pattern ≤ 200 chars |
+| `GET /ediabas/ecus?filter=<substr>` | SGBD and group files in the Ecu folder | file listing only |
+| `GET /ediabas/describe?ecu=<name>&job=<name?>` | job list of an SGBD, or one job's description, arguments and results (`_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS`), each with its policy verdict | reads the SGBD file; conflict check still applies |
+| `POST /ediabas/job` `{ ecu, job, args?, results?, timeoutSeconds? }` | run one allowed job | |
+| `POST /ediabas/jobs` `{ items: [ {ecu, job, args?} ], timeoutSeconds? }` | up to 20 jobs in one init/end cycle | each item policy-checked; one failure doesn't abort the rest |
+| `GET /ediabas/vehicle` | ignition and voltage | see below |
 
-### UIA reader
-- Use **FlaUI.UIA3**. Run UIA on a dedicated worker thread with a wall-clock timeout (10 s default); if it times out, return what has been collected, with `truncated: true`.
-- `window=ista` resolves to the largest visible top-level window of ISTA's process.
-- Walk the Control View. For each element emit: `controlType`, `name`, `automationId`, `className`, `value` (ValuePattern), `toggleState`, `isSelected`, `isEnabled`, `isOffscreen`, `bounds`, children.
-- **Tables:** for elements supporting GridPattern/TablePattern (DataGrid, ListView), emit `columns` (header names) and `rows` (cell text arrays) instead of walking every cell as a node. ISTA's fault memory and test-plan lists are tables, so this matters most.
-- **`format=text` rendering:** indented lines like `[Button] Read fault memory` and `[Edit] Mileage = 195,712`. Render tables as pipe-separated rows under their header. Skip empty, offscreen and pure layout containers (Pane/Group/Custom with no name and a single child) to keep output compact.
-- Return `{ window: {title, pid, elevated}, nodeCount, truncated, text | tree }`.
-- If ISTA is elevated and the agent isn't, return a specific error that names UIPI and tells Ryan to fix the scheduled task.
-- If the desktop is locked or on the secure desktop, return a specific `desktop_unavailable` error.
+There is no clear, write or raw-telegram endpoint.
 
-### Capture
-- Window capture: use `PrintWindow` with `PW_RENDERFULLCONTENT` (2), falling back to `BitBlt` of the window rectangle from the screen DC if the result is blank. Handle per-monitor DPI by declaring the process DPI-aware in the manifest.
-- `desktop`: capture the primary screen.
-- Downscale so the longest edge ≤ `maxEdge` (default 1600). Default to JPEG q85 for screenshots; use PNG only when asked.
-- Include headers `X-Window-Title` and `X-Capture-Method`.
+### Job policy (`policy/policy.json`, class `JobPolicy`)
+Default-deny. A job runs only if all of these pass:
+
+1. **Shape.** ECU and job names match `^[A-Za-z0-9_]{1,64}$`. Arguments ≤ 200 chars, printable
+   ASCII only.
+2. **Allowed by name**, one of:
+   - global exact names: `IDENT`, `INFO`, `FS_LESEN`, `FS_LESEN_DETAIL`, `IS_LESEN`,
+     `IS_LESEN_DETAIL`, `AIF_LESEN`, `SERIENNUMMER_LESEN`, `ZIF_LESEN`, `ZIF_BACKUP_LESEN`,
+     `PHYSIKALISCHE_HW_NR_LESEN`, `HARDWARE_REFERENZ_LESEN`, `DATEN_REFERENZ_LESEN`,
+     `PRUEFSTEMPEL_LESEN`, `C_FG_LESEN`, `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS`,
+     `_VERSIONINFO`, `_TABLES`, `_TABLE`;
+   - the pattern `^STATUS_[A-Z0-9_]+$`;
+   - per-ECU exact names, for ECUs where the pattern is switched off:
+     - `TMODE`: `INFO`, `LESE_INTERFACE_TYP`, `LESE_INTERFACE_VERSION`, `LESE_SPANNUNG_KL30`,
+       `LESE_SPANNUNG_KL15`, plus the `_JOBS` family. `TMODE` also contains raw-telegram and
+       programming-voltage jobs, so nothing else on it is ever allowed.
+     - `UTILITY`: `INFO`, `STATUS_UBATT`, `STATUS_ZUENDUNG`, plus the `_JOBS` family.
+       `UTILITY` also contains `ABS_RELAIS` and `IF_RESET`.
+3. **Not denied by name.** The denylist overrides the allowlist:
+   - as a substring anywhere: `SCHREIB`, `LOESCH`, `STEUER`, `CODIER`, `FLASH`, `VORGEB`,
+     `SETZE`, `ABGLEICH`, `KALIB`, `SENDE`, `TELEGR`, `AUFTRAG`, `AUTHENT`, `RESET`, `SLEEP`,
+     `POWER_DOWN`;
+   - as a whole `_`-separated token: `START`, `STOP`, `ENDE`, `INIT`, `LERN`, `LERNEN`,
+     `ADAPT`, `PROG`, `SPEICHER`, `MODE`.
+
+   Token matching is what lets reads such as `STATUS_NWGADAPTION` and `STATUS_DKLERN_KT` through.
+4. **Description screen (VM side only, for jobs allowed by the `STATUS_` pattern).** A
+   `STATUS_` name does not guarantee a pure read. Before running such a job, the agent reads
+   its `_JOBCOMMENTS` from the SGBD and refuses with `job_needs_review` (returning the
+   description) if it mentions starting, activating, writing, clearing, setting,
+   programming, resetting or learning (`start`, `ansteuer`, `aktivier`, `schreib`, `loesch`,
+   `setz`, `programm`, `reset`, `lernen`, `abgleich`). Ryan can approve a specific job by
+   adding `ECU:JOB` to `reviewedJobs` in the VM's config.
+
+Rejections return 403 `job_not_allowed` with the rule that matched, and are audited.
+`policy-cases.json` holds every case both test suites run, including tricks such as
+`status_steuern_x`, `FS_LESEN;FS_LOESCHEN`, whitespace and mixed case. A policy change
+without a fixture change is a bug.
 
 ### EDIABAS runner
-- **P/Invoke:** derive signatures, calling convention and constants **from `api.h` if Phase 0 finds it**. Otherwise:
-  - find the exported names with a PE export reader (community bindings use names like `__apiInit`/`__apiInitExt`, `__apiJob`, `__apiState`, `__apiResultSets`, `__apiResultText`, `__apiResultFormat`, `__apiResultName`, `__apiResultNumber`, `__apiErrorCode`, `__apiErrorText`, `__apiBreak`, `__apiEnd`);
-  - verify every one against the actual DLL before relying on it.
-
-  Do not guess silently; document what was verified.
-- **Serialization:** one dedicated worker thread, a queue and one job at a time. Before each request, check for conflicting processes and return 409 `cable_in_use` if any are running.
-- **Per request:**
-  1. `apiInit`
-  2. For each job: `apiJob(ecu, job, args, results)`. Poll `apiState` every 50 ms until it is no longer busy or the timeout passes; on timeout call `apiBreak` and return `timeout`.
-  3. On error, return `{ errorCode, errorText }` from the API.
-  4. Read every result set: set 0 holds system results (e.g. `VARIANTE`, `JOB_STATUS`); sets 1..n are job results. For each result, read the name, format and value. Text formats are returned as strings, integers as numbers, reals as numbers and binary as hex.
-  5. Always call `apiEnd` in `finally`.
-- **Response shape:**
+- **P/Invoke.** Use `api.h` if Phase 0 finds it. The expected shape, taken from the MIT
+  `pydiabas` wrapper **[confirmed in its source]**, to be checked against the real DLL's
+  exports before use:
+  - stdcall; exports prefixed `__api`; handle is `unsigned int`, obtained from
+    `__apiInit(&handle)` and passed first to every other call;
+  - `__apiJob(handle, ecu, job, params, results)`, `__apiState(handle)` → 0 busy, 1 ready,
+    2 break, 3 error; `__apiBreak`, `__apiEnd`;
+  - `__apiResultSets(handle, ushort*)`, `__apiResultNumber(handle, ushort*, set)`,
+    `__apiResultName(handle, char*, index, set)`, `__apiResultFormat(handle, int*, name, set)`,
+    `__apiResultText(handle, char*, name, set, format)`, `__apiResultBinary…`;
+  - `__apiErrorCode(handle)`, `__apiErrorText(handle, char*, length)`;
+  - result formats 0–8: char, byte, integer, word, long, dword, text, binary, real;
+  - buffers: 1024 for text and binary, 256 for result names.
+- **Threading.** One dedicated worker thread owns every EDIABAS call; a queue feeds it one
+  request at a time.
+- **Per request:** conflict check → `apiInit` → for each job: policy → `apiJob` → poll
+  `apiState` every 50 ms until not busy or timeout (`apiBreak` on timeout) → read every
+  result set → `apiEnd` in `finally`.
+- **Results.** Set 0 holds system results (`VARIANTE`, `JOB_STATUS`, …); sets 1..n are job
+  results. Text as string, integers and reals as numbers, binary as hex.
   ```json
   { "ecu": "NVE_65", "job": "FS_LESEN", "variant": "NVE_65", "jobStatus": "OKAY",
-    "systemResults": { "...": "..." }, "sets": [ { "F_ORT_NR": 42834, "F_ORT_TEXT": "...", "...": "..." } ],
-    "durationMs": 812 }
+    "systemResults": { }, "sets": [ { "F_ORT_NR": 42834, "F_ORT_TEXT": "…" } ], "durationMs": 812 }
   ```
-- Allow group names (e.g. `D_MOTOR`) as well as SGBD names. Report the resolved variant.
-- `JobPolicy` runs before anything touches the DLL. Rejections return 403 `job_not_allowed` with the matched rule.
+- **Errors.** Return EDIABAS's `{ errorCode, errorText }`. Map interface errors that mean the
+  port is busy or missing to `cable_in_use` / `cable_not_found` (codes to confirm at the desk).
+- Group names (e.g. `D_MOTOR`) are accepted; the resolved variant is reported.
 
-### install.ps1 (elevated)
-1. Create `C:\ProgramData\IstaAgent\`, copy the exe, write `config.json` (detect the 192.168.64.x address) and generate the token with `RandomNumberGenerator` (32 bytes → base64url). ACL the token file.
-2. Add the firewall rule: `New-NetFirewallRule -DisplayName 'ista-bridge agent' -Direction Inbound -Protocol TCP -LocalPort 8765 -RemoteAddress 192.168.64.1 -Action Allow -Profile Any`.
-3. Register the scheduled task:
-   - trigger `-AtLogOn -User $env:USERNAME`;
-   - principal `-LogonType Interactive -RunLevel Highest`;
-   - settings `-ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`.
+### Conflict check
+- Named processes from `conflictProcesses`.
+- Plus any other process with `api32.dll` loaded (best effort; processes that can't be
+  inspected are judged by name only).
 
-   Then start the task immediately.
-4. Disable sleep on AC (`powercfg /change standby-timeout-ac 0`). **Ask Ryan before** turning off the idle screen lock, and explain that a locked screen blocks UIA and screenshots.
-5. Print the VM IP, port and token **once**, with instructions to put the token into the Mac Keychain (§7).
+### `/ediabas/vehicle`
+- Ignition: `UTILITY` `STATUS_ZUENDUNG`.
+- Voltage in volts: each entry in `voltageSources`. `NVE_65 STATUS_BORDNETZSPANNUNG` returns
+  volts **[confirmed in the SGBD documentation]**. Add the engine ECU's job once verified.
+- `UTILITY STATUS_UBATT` is reported as a presence flag only: its result has no unit, and
+  `obd.ini` can force it on (`UBATT=OFF`).
+- Cable-side readings from `TMODE` `LESE_SPANNUNG_KL30` / `KL15` (mV) are included if the
+  cable supports them (verify).
 
-`uninstall.ps1` reverses all of this.
+### Capture
+- Window: `PrintWindow` with `PW_RENDERFULLCONTENT`, falling back to a `BitBlt` of the window
+  rectangle from the screen. `desktop` captures the primary screen.
+- A minimised window is reported as minimised, never restored.
+- Process is per-monitor DPI-aware. Downscale to `maxEdge` (default 1600). JPEG q85 by default.
+- Headers `X-Window-Title` (percent-encoded) and `X-Capture-Method`.
+- Locked or secure desktop returns `desktop_unavailable`.
+
+### install.ps1
+1. Create `C:\ProgramData\EdiabasBridge\`, copy the exe, write `config.json` from detected
+   values. Generate the token only if none exists; ACL it.
+2. Firewall: allow inbound TCP 8765 from the adapter's default gateway only.
+3. Scheduled task: at log-on of the current user, interactive, no time limit, restart on
+   failure. `-Elevated` switch sets highest run level; default is off.
+4. Disable sleep on AC. Ask Ryan before changing the idle screen lock.
+5. Print the port and, on first install only, the token with the Keychain command (§7).
+
+Re-running it upgrades in place. `uninstall.ps1` reverses everything.
 
 ---
 
 ## 7. Mac MCP server specification
 
-- TypeScript, `@modelcontextprotocol/sdk`, stdio transport, `zod` schemas. Build output goes to `mac-mcp/dist/index.js`.
-- **Config:** env `ISTA_AGENT_URL` (e.g. `http://192.168.64.5:8765`). Read the token at startup with `security find-generic-password -s ista-bridge -a agent -w`, falling back to env `ISTA_AGENT_TOKEN` and warning to stderr.
-- HTTP timeout: 15 s by default and 75 s for EDIABAS calls. If the agent is unreachable, explain clearly: VM not running, UTM window closed or VM asleep, wrong IP, firewall.
-- Log to stderr only; stdout is the MCP channel. Write the audit log to `~/Library/Logs/ista-bridge/audit.log`.
+- TypeScript, `@modelcontextprotocol/sdk`, stdio, `zod`. Output `mac-mcp/dist/index.js`.
+- **Finding the VM.** `vmAddress.ts` looks up MAC `F2:E5:81:1E:82:07` in
+  `/var/db/dhcpd_leases`, then `arp -an`, then `utmctl ip-address Windows`. macOS prints MAC
+  bytes without leading zeros (`f2:e5:81:1e:82:7`), so compare numerically. Env
+  `EDIABAS_AGENT_URL` overrides.
+- **Token.** `security find-generic-password -s ediabas-bridge -a agent -w`; env
+  `EDIABAS_AGENT_TOKEN` as a fallback with a warning on stderr.
+- Timeouts: 15 s, and 75 s for EDIABAS calls. An unreachable agent gets a specific message:
+  VM not running, agent not started (nobody logged in), or firewall.
+- The Mac server runs `JobPolicy` from the same `policy.json` before any call leaves the Mac.
+- Logs to stderr only. Audit log at `~/Library/Logs/ediabas-bridge/audit.log`.
 
 ### Tools
-Every tool has a precise description and MCP annotations: `readOnlyHint: true` on all except clear, and `destructiveHint: true` on clear.
+All tools carry `readOnlyHint: true`. There is no destructive tool.
 
 | Tool | Args | Returns |
 |---|---|---|
-| `ista_health` | — | agent status, ISTA/INPA running, EDIABAS DLL OK, `allowFaultClear` |
+| `vm_health` | — | agent status, conflicting tools running, last cable use |
 | `vm_list_windows` | — | compact table |
-| `ista_read_screen` | `window?` (default `ista`), `format?` (`text` default), `maxNodes?`, `includeOffscreen?` | text rendering (default) or JSON |
-| `ista_screenshot` | `window?` (default `ista`; `desktop` allowed), `maxEdge?` | MCP **image** content (base64 JPEG/PNG) plus a one-line caption |
-| `vm_logs_list` | `root?`, `glob?`, `since?`, `limit?` | table of path/size/mtime |
+| `vm_screenshot` | `window?` (default `desktop`), `maxEdge?` | image plus a one-line caption |
+| `vm_logs_list` | `root?`, `glob?`, `since?`, `limit?` | path / size / modified |
 | `vm_logs_read` | `path`, `tailBytes?` or `offset?`/`length?`, `grep?` | text |
-| `ediabas_list_ecus` | `filter?` | SGBD/group names |
-| `ediabas_vehicle_status` | — | battery V, ignition state |
-| `ediabas_job` | `ecu`, `job`, `args?`, `results?` | formatted text + JSON (below) |
-| `ediabas_read_faults` | `ecus[]` (≤ 20), `includeInfoMemory?` | convenience: `FS_LESEN` (+ `IS_LESEN`) across ECUs in one `/ediabas/jobs` call; per-ECU fault tables |
-| `ediabas_clear_faults` | `ecu`, `scope` | **macOS dialog first** (below); then the agent call; then re-reads `FS_LESEN` and returns before/after |
+| `ediabas_list_ecus` | `filter?` | SGBD and group names |
+| `ediabas_describe` | `ecu`, `job?` | jobs with descriptions and policy verdicts; or one job's arguments and results |
+| `ediabas_vehicle_status` | — | ignition, voltage |
+| `ediabas_job` | `ecu`, `job`, `args?`, `results?`, `raw?` | formatted text; raw JSON only when `raw: true` |
+| `ediabas_read_faults` | `ecus[]` (≤ 20), `includeInfoMemory?` | `FS_LESEN` (+ `IS_LESEN`) per ECU in one init/end cycle, as fault tables |
 
-### Formatting (`format.ts`)
-- Fault tables: one row per set. Show the code as hex (from `F_ORT_NR`) with its text (`F_ORT_TEXT`), present/stored state, frequency count and logged mileage/conditions where the SGBD provides them. Field names vary by SGBD, so map the known ones and pass the rest through as `key=value`.
-- **Mileage:** wherever a result is in km (e.g. `F_UW_KM` or any field whose unit/name indicates km), show miles first with km in brackets, e.g. `121,609 mi (195,712 km)`. Ryan wants distances in miles.
-- Append the raw JSON after the text, truncated sensibly.
+### Formatting
+- Fault tables: one row per set — code in hex (`F_ORT_NR`), text (`F_ORT_TEXT`), present or
+  stored, frequency, logged conditions. Field names vary by SGBD: map the known ones and pass
+  the rest through as `key=value`.
+- **Distances in miles first**, km in brackets: `121,609 mi (195,712 km)`.
 
-### Confirmation dialog (`confirm.ts`)
-- Run `osascript -e 'display dialog "<text>" with title "ista-bridge" buttons {"Cancel","Clear faults"} default button "Cancel" cancel button "Cancel" with icon caution giving up after 60'`.
-- Pass the text safely: escape quotes and backslashes, or pass it via `argv` to a small AppleScript using `on run argv`.
-- Proceed only if the result is exactly `button returned:Clear faults` and not `gave up:true`. Anything else returns "cancelled by user".
-
-### Registering with the Claude desktop app
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (merge; don't clobber existing servers):
-```json
-{
-  "mcpServers": {
-    "ista-bridge": {
-      "command": "<absolute path to node, e.g. ~/.nvm/versions/node/vXX/bin/node, expanded>",
-      "args": ["<absolute path>/ista-bridge/mac-mcp/dist/index.js"],
-      "env": { "ISTA_AGENT_URL": "http://192.168.64.X:8765" }
-    }
-  }
-}
-```
-Use absolute paths: the desktop app doesn't load nvm's PATH. Store the token in the Keychain with:
-`security add-generic-password -s ista-bridge -a agent -w '<token>' -U`
-Then restart the Claude desktop app.
+### Registration
+- **Claude Code:** `claude mcp add ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`.
+- **Claude desktop app:** add an `mcpServers` entry to
+  `~/Library/Application Support/Claude/claude_desktop_config.json`. The file has no
+  `mcpServers` key today **[confirmed]**; create it without touching the other keys. Use
+  absolute paths, with `command` pointing at a stable Node symlink so an nvm upgrade doesn't
+  break it.
+- Token: `security add-generic-password -s ediabas-bridge -a agent -w '<token>' -U`.
 
 ---
 
-## 8. Build phases and acceptance tests
+## 8. Build phases and acceptance
 
-Work phase by phase. Stop at each acceptance gate and ask Ryan to confirm before moving on.
+Stop at each gate. "Claude" checks are run by Claude Code with `curl` from the Mac.
 
-| Phase | Build | Acceptance (Ryan confirms) |
+| Phase | Build | Acceptance |
 |---|---|---|
-| **0 Discovery** | `discover.ps1` | Output reviewed; open questions in §4 answered; decisions recorded in README |
-| **1 Agent skeleton** | Kestrel host, config, auth, `/health`, `/windows`, install/uninstall scripts, audit log | From the Mac: `curl -H "Authorization: Bearer …" http://<vm-ip>:8765/health` → 200; without the token → 401. The agent survives a VM reboot (starts at log-on). `netstat` in the VM shows it listening only on the 192.168.64.x address |
-| **2 Mac MCP** | MCP server with `ista_health` and `vm_list_windows`; Keychain token; desktop config | In a Claude chat, `ista_health` works and lists the ISTA window when ISTA is open |
-| **3 Screen** | `/screen/text`, `/screen/capture`, `ista_read_screen`, `ista_screenshot` | With ISTA open on a vehicle-identification or fault-memory screen, `ista_read_screen` returns the visible text, including table rows; `ista_screenshot` returns a readable image; elevated-ISTA case works |
-| **4 Logs** | `/logs`, `/logs/read`, Mac tools | Newest ISTA log listed and tail readable; `..`/junction escapes rejected (unit test + manual) |
-| **5 EDIABAS read** | P/Invoke, runner, policy, `/ediabas/*`, Mac tools, formatter | **At the car, ignition on, ISTA and INPA closed:** `ediabas_vehicle_status` shows battery V and ignition on; `ediabas_job` `IDENT` on the engine ECU returns a variant; `ediabas_read_faults` on the Night Vision SGBD shows the historic A752/A751 pair seen in INPA on 11/09/2026; a denied job (e.g. `STEUERN_…`) is refused by **both** sides; with ISTA open, any job returns `cable_in_use` |
-| **6 Fault clear** | `/ediabas/clear`, dialog, before/after re-read | With `allowFaultClear` false → refused. Set to true → dialog appears on the Mac; *Cancel* → nothing sent (audit log confirms); *Clear faults* on a chosen ECU (Ryan picks which) → after-read shows the result |
-| **7 Hardening** | README complete, troubleshooting section, version stamp in `/health`, `release/` zip script | Ryan can reinstall from the README alone |
+| **0 Discovery** | `dev/serve.sh`, `discover.ps1` | Report uploaded; every (verify) item needed for Phase 2 resolved and recorded in the README |
+| **1 Agent skeleton** | Core + host projects, config, auth, `/health`, `/windows`, bind/rebind, install/update/uninstall, audit | Claude: `/health` → 200 with the token, 401 without. `netstat` in the VM shows one listener on the shared-network address. Agent returns after a VM reboot. `--selftest` passes |
+| **2 EDIABAS at the desk** | P/Invoke, runner, policy, conflict check, `/ediabas/ecus`, `/ediabas/describe`, `/ediabas/job(s)` | **Cable unplugged, confirmed by Ryan.** Claude: `TMODE INFO` and `TMODE _JOBS` return results; `describe NVE_65` lists its jobs with verdicts; a denied job is refused with the matching rule; with INPA open every EDIABAS call returns `cable_in_use`; no EDIABAS process is left running after a call |
+| **3 Mac MCP** | MCP server, VM lookup, Keychain token, tools for everything built so far, registration | In Claude Code and in the desktop app: `vm_health` and `ediabas_describe` work. If cloud sessions matter, check one there too |
+| **4 Screenshots** | `/screen/capture`, `vm_screenshot` | With INPA open on any screen, `vm_screenshot` returns a readable image of it; a locked VM returns `desktop_unavailable` |
+| **5 Logs** | `/logs`, `/logs/read`, tools | Newest trace file listed and its tail readable; `..` and junction escapes rejected (`--selftest` plus one manual try) |
+| **6 At the car** | `/ediabas/vehicle`, `ediabas_read_faults`, formatter | **Ryan, ignition on, all BMW tools closed.** Ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the engine SGBD; `ediabas_read_faults` on `NVE_65` shows the A752/A751 pair from the INPA session of 11/09/2026; total ignition-on time under 10 minutes |
+| **7 Hardening** | README (setup, troubleshooting, safety rules), version stamp, release script | Ryan can reinstall from the README alone |
 
 ### Automated tests (no VM, no car)
-- `vm-agent.Tests` (xUnit, `dotnet test` on the Mac):
-  - `JobPolicy`: an allow/deny table covering every rule in §2.3, including case and prefix tricks such as `status_steuern_x`, `FS_LESEN;FS_LOESCHEN` and whitespace;
-  - path-safety cases;
-  - result-set shaping from a fake API.
-- `mac-mcp/test` (vitest):
-  - every tool against a stub HTTP agent;
-  - `policy.ts` parity with `JobPolicy`, using one shared JSON fixture of test cases that both test suites load;
-  - formatter output including km→miles;
-  - the confirm flow with `osascript` mocked for Cancel, Clear and timeout.
+- `EdiabasAgent.Tests` (xUnit, on the Mac): every case in `policy-cases.json`; the
+  description screen; path rules; result shaping from a fake API.
+- `mac-mcp/test` (vitest): every tool against a stub agent; the same `policy-cases.json`;
+  MAC-address matching; formatter output including km → miles.
+- `EdiabasAgent.exe --selftest` (in the VM, no cable): Windows path cases (junctions,
+  alternate data streams, 8.3 names, device names), token ACL, bind address, firewall rule.
 
 ---
 
-## 9. Out of scope for v1 (don't build)
-- Any keyboard/mouse/clipboard input into the VM or ISTA.
-- Driving ISTA test plans, service functions, coding, programming or calibration.
-- Any EDIABAS job outside the allowlist; raw `api*` access; changing `EDIABAS.INI`.
-- Exposing the agent beyond UTM's Shared Network; remote/internet access.
-- Moving the K+DCAN cable to the Mac (e.g. via EdiabasLib), which is possible later but not now.
+## 9. Out of scope for v1
+- Any input into the VM.
+- Any write to the car: fault clearing, coding, programming, activations, adaptations.
+- Driving INPA, Tool32, NCS Expert, WinKFP, NCS Dummy or BMW Coding Tool.
+- Raw `api*` access, raw telegrams, changing EDIABAS configuration.
+- Reading window text through UI Automation.
+- Exposing the agent beyond UTM's shared network.
 
-## 10. Possible v2 (note in README only)
-- An `ista_click_text` tool gated by the same macOS dialog, for stepping through ISTA screens when Ryan is at the car.
-- Auto-detect the VM's IP via UTM's `utmctl ip-address <vm>` on the Mac, if `utmctl` is available.
-- A saved "sweep" definition, i.e. a list of ECUs to read faults from, mirroring the 11/09/2026 INPA sweep.
+## 10. Possible later
+- **Fault clearing**, gated by Touch ID on the Mac (a button dialog can be clicked by a
+  Claude session with computer use) and by a flag in the VM's config.
+- UI Automation text for Tool32's result pane, if screenshots prove too coarse.
+- A saved sweep: the list of ECUs read in the INPA session of 11/09/2026.
+- GitHub Actions on `windows-latest` to run the Windows-only tests.
+- Packaging the Mac server as a desktop extension.
 
 ## 11. Working agreements for Claude Code
-- Ryan runs everything inside the VM. Give him copy-pasteable, elevated-PowerShell commands, one block at a time, and say what output to expect.
-- Don't run anything that talks to the car. Phase 5/6 car tests are Ryan's, at the car.
-- When a fact about ISTA/EDIABAS isn't confirmed by Phase 0 output or `api.h`, say so and verify it. Don't hard-code a guess.
-- Keep `JobPolicy` and `policy.ts` in lockstep through the shared fixture; a policy change without a fixture update is a bug.
+- Ryan runs everything inside the VM. Give him one line at a time and say what to expect.
+- Claude runs the `curl` checks for Phases 1–5 itself, and offline EDIABAS jobs only after
+  Ryan confirms the cable is unplugged.
+- Don't run anything that talks to the car. Phase 6 is Ryan's.
+- A fact marked (verify) stays out of the code until Phase 0 or a desk check settles it.
+- Policy changes go through `policy.json` and `policy-cases.json` together.
 - Commit after each phase with a short message naming the phase.
+
+## Sources
+- [pydiabas](https://github.com/BembelBytes/pydiabas) — api32.dll signatures, constants, `TMODE` offline jobs.
+- [EDIABAS SGBD documentation index](https://emdzej.github.io/ediabasx-docs-sgbd/) — `UTILITY`, `TMode`, `NVE_65`, `N62_TUE`, `ME9N62_2`, `d_motor` job lists.
+- [NCS Dummy thread, bimmerforums](https://www.bimmerforums.com/forum/showthread.php?p=19766272) — what NCS Dummy does.
+- [Updating SP-Daten with BMW Coding Tool](https://obdinnovations.freshdesk.com/support/solutions/articles/36000079519-how-to-update-sp-daten-files-with-bmw-coding-tool-2-50) — what BMW Coding Tool does.
+- [BMW Standard Tools 2.12 contents](https://blog.udn.com/obdtool/31604013) — tool versions.

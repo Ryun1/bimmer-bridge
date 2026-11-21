@@ -1,6 +1,11 @@
 # Plan review — 2026-11-21
 
-Review of [PLAN.md](../PLAN.md) before building. The architecture (elevated agent in the
+> **Status:** adopted. [PLAN.md](../PLAN.md) v2 incorporates this review, with the
+> recommended option taken for each decision at the end. See the addendum at the bottom for
+> what changed after the review was written. This review refers to the
+> [original plan](plan-v1-original.md).
+
+Review of the [original plan](plan-v1-original.md) before building. The architecture (elevated agent in the
 interactive session, UIA first, screenshots as fallback, two-sided job policy, init/end per
 request) is sound and stays. The items below are corrections, safety gaps and re-ordering.
 
@@ -138,3 +143,32 @@ is Windows on ARM under QEMU).
 
 Once these are settled, the changes get folded into PLAN.md as v2 and the build starts at
 Phase 0.
+
+## Addendum — after the review
+
+**The VM has BMW Standard Tools, not ISTA** (INPA, Tool32, NCS Expert, WinKFP, NCS Dummy,
+BMW Coding Tool on the desktop). Consequences taken into v2:
+
+- The UI Automation reader is dropped (items 9 and 19 no longer apply). INPA draws its own
+  screens, so screenshots are the only view of it.
+- The EDIABAS runner becomes the core and moves to Phase 2.
+- The conflict list grows to cover NCS Expert, WinKFP and BMW Coding Tool, plus any process
+  with `api32.dll` loaded.
+- The agent is no longer elevated by default.
+- The project is renamed from `ista-bridge` to `ediabas-bridge`.
+
+**Findings from looking up the installed software and SGBDs:**
+
+- `TMODE` is a simulated ECU that answers with no car and no cable, which gives a real desk
+  test for the P/Invoke layer. It also contains raw-telegram and programming-voltage jobs,
+  so it gets an exact-name allowlist.
+- `UTILITY` contains `ABS_RELAIS` and `IF_RESET` beside its two status jobs, so it also gets
+  an exact-name allowlist. Its `STATUS_UBATT` result has no unit.
+- `NVE_65 STATUS_BORDNETZSPANNUNG` returns volts, so a real voltage is available from a
+  known ECU.
+- Reads such as `STATUS_NWGADAPTION` and `STATUS_DKLERN_KT` exist on the N62 engine ECU and
+  would have been blocked by substring matching (item 6).
+- A `STATUS_` name is not a guarantee of a pure read (one N62 job's description reportedly
+  mentions starting a routine). v2 adds a screen on each job's description, with a
+  per-job approval list.
+- The `pydiabas` source gives the api32.dll signatures and constants to check against.

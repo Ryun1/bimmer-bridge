@@ -1,11 +1,13 @@
-# ista-bridge
+# ediabas-bridge
 
-Read-only bridge that lets Claude see into the Windows VM (UTM) running BMW ISTA / INPA / EDIABAS:
-ISTA screen text via UI Automation, screenshots, logs, and allowlisted read-only EDIABAS jobs.
+Read-only bridge that lets Claude see into the Windows VM (UTM) running BMW Standard Tools
+(INPA, Tool32, NCS Expert, WinKFP): allowlisted read-only EDIABAS jobs, screenshots, and
+EDIABAS / NCS Expert trace files.
 
 Status: planning. Nothing is built yet.
 
-- [PLAN.md](PLAN.md) — original build plan (v1, unmodified)
-- [docs/plan-review.md](docs/plan-review.md) — review of the plan and proposed changes
+- [PLAN.md](PLAN.md) — build plan v2
+- [docs/plan-review.md](docs/plan-review.md) — review of the original plan and why v2 differs
+- [docs/plan-v1-original.md](docs/plan-v1-original.md) — the original plan (ISTA-based)
 
 No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`).
