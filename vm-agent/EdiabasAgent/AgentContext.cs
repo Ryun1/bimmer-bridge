@@ -3,6 +3,7 @@ using EdiabasAgent.Audit;
 using EdiabasAgent.Core;
 using EdiabasAgent.Ediabas;
 using EdiabasAgent.Logging;
+using EdiabasAgent.Logs;
 using EdiabasAgent.Proc;
 
 namespace EdiabasAgent;
@@ -11,7 +12,7 @@ namespace EdiabasAgent;
 internal sealed class AgentContext : IDisposable
 {
     /// <summary>The endpoint groups this build has (docs/api.md /health <c>capabilities</c>).</summary>
-    public static readonly IReadOnlyList<string> Capabilities = ["ediabas"];
+    public static readonly IReadOnlyList<string> Capabilities = ["ediabas", "capture", "logs"];
 
     public AgentContext(AgentConfig config, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
     {
@@ -23,6 +24,7 @@ internal sealed class AgentContext : IDisposable
         SessionId = sessionId;
         Conflicts = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll);
         Policy = JobPolicy.Embedded;
+        Logs = new LogService(config.LogRoots, new LogAccess());
         Runner = new EdiabasRunner(
             () => new EdiabasService(
                 new Api32(config.EdiabasDll),
@@ -57,6 +59,9 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>Read-only access to the files under the config's <c>logRoots</c>.</summary>
+    public LogService Logs { get; }
 
     public EdiabasRunner Runner { get; }
 

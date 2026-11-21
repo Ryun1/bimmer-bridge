@@ -24,8 +24,9 @@ public sealed class AuditLog
         long durationMs,
         string? ecu = null,
         string? job = null,
-        string? rule = null)
+        string? rule = null,
+        string? target = null)
     {
-        _file.AppendLine(AuditLine.Format(time, remoteAddress, method, path, queryString, status, errorCode, durationMs, ecu, job, rule));
+        _file.AppendLine(AuditLine.Format(time, remoteAddress, method, path, queryString, status, errorCode, durationMs, ecu, job, rule, target));
     }
 }

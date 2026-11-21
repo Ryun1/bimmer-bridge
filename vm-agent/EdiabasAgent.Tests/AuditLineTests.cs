@@ -10,7 +10,7 @@ public class AuditLineTests
     public void Format_Basic()
     {
         var line = AuditLine.Format(T, "192.168.64.1", "GET", "/health", null, 200, null, 12);
-        Assert.Equal("2026-11-21T15:04:05.123Z\t192.168.64.1\tGET\t/health\t200\t-\t12\t-\t-\t-", line);
+        Assert.Equal("2026-11-21T15:04:05.123Z\t192.168.64.1\tGET\t/health\t200\t-\t12\t-\t-\t-\t-", line);
     }
 
     [Fact]
@@ -25,14 +25,14 @@ public class AuditLineTests
     public void Format_ErrorCode()
     {
         var line = AuditLine.Format(T, "192.168.64.1", "GET", "/nope", null, 404, "not_found", 1);
-        Assert.EndsWith("\t404\tnot_found\t1\t-\t-\t-", line);
+        Assert.EndsWith("\t404\tnot_found\t1\t-\t-\t-\t-", line);
     }
 
     [Fact]
-    public void Format_HasExactlyTenFields()
+    public void Format_HasExactlyElevenFields()
     {
         var line = AuditLine.Format(T, "a", "GET", "/x", "?a=1", 200, "c", 5);
-        Assert.Equal(10, line.Split('\t').Length);
+        Assert.Equal(11, line.Split('\t').Length);
     }
 
     [Theory]
@@ -114,7 +114,7 @@ public class AuditLineTests
     public void EcuJobRule()
     {
         var line = AuditLine.Format(T, "a", "POST", "/ediabas/job", null, 403, "job_not_allowed", 3, "NVE_65", "FS_LOESCHEN", "deny.substring:LOESCH");
-        Assert.EndsWith("\t403\tjob_not_allowed\t3\tNVE_65\tFS_LOESCHEN\tdeny.substring:LOESCH", line);
+        Assert.EndsWith("\t403\tjob_not_allowed\t3\tNVE_65\tFS_LOESCHEN\tdeny.substring:LOESCH\t-", line);
     }
 
     [Theory]
@@ -127,9 +127,27 @@ public class AuditLineTests
         AssertSingleSafeLine(line);
     }
 
+    [Fact]
+    public void Target_LastField()
+    {
+        var line = AuditLine.Format(T, "a", "GET", "/logs/read", "?path=x", 403, "path_not_allowed", 2, rule: "dot_segment", target: @"C:\EDIABAS\TRACE\..\x");
+        Assert.EndsWith("\t403\tpath_not_allowed\t2\t-\t-\tdot_segment\tC:\\EDIABAS\\TRACE\\..\\x", line);
+        Assert.Equal("/logs/read?path", line.Split('\t')[3]);
+    }
+
+    [Theory]
+    [InlineData("C:\\EDIABAS\\TRACE\\a.trc\tforged")]
+    [InlineData("C:\\x\r\n2026-01-01T00:00:00.000Z\t1.1.1.1\tGET\t/x")]
+    [InlineData("INPA\u2029x\u0085y")]
+    public void TargetInjection_Neutralised(string target)
+    {
+        var line = AuditLine.Format(T, "a", "GET", "/logs/read", null, 200, null, 1, target: target);
+        AssertSingleSafeLine(line);
+    }
+
     private static void AssertSingleSafeLine(string line)
     {
-        Assert.Equal(10, line.Split('\t').Length);
+        Assert.Equal(11, line.Split('\t').Length);
         foreach (var ch in line)
         {
             Assert.False(ch != '\t' && char.IsControl(ch), $"control char U+{(int)ch:X4} in line");

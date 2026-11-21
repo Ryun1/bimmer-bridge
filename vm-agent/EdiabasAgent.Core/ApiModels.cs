@@ -64,6 +64,12 @@ public static class ApiErrors
     public const string JobTimeout = "job_timeout";
     public const string NotRun = "not_run";
 
+    public const string PathNotAllowed = "path_not_allowed";
+    public const string FileNotFound = "file_not_found";
+    public const string WindowNotFound = "window_not_found";
+    public const string WindowMinimized = "window_minimized";
+    public const string DesktopUnavailable = "desktop_unavailable";
+
     public static ErrorBody Create(string code, string message, object? details = null) =>
         new(new ErrorDetail(code, message, details));
 
@@ -72,12 +78,12 @@ public static class ApiErrors
     {
         BadRequest => 400,
         Unauthorized => 401,
-        Forbidden or JobNotAllowed or JobNeedsReview => 403,
-        NotFound or EcuNotFound or JobNotFound => 404,
+        Forbidden or JobNotAllowed or JobNeedsReview or PathNotAllowed => 403,
+        NotFound or EcuNotFound or JobNotFound or FileNotFound or WindowNotFound => 404,
         MethodNotAllowed => 405,
-        CableInUse => 409,
+        CableInUse or WindowMinimized => 409,
         EdiabasError => 502,
-        EdiabasUnavailable or NotRun => 503,
+        EdiabasUnavailable or NotRun or DesktopUnavailable => 503,
         JobTimeout => 504,
         _ => 500,
     };

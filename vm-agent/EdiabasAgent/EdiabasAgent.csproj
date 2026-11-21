@@ -30,4 +30,10 @@
     <ProjectReference Include="..\EdiabasAgent.Core\EdiabasAgent.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- GDI+ (Windows' own gdiplus.dll) for scaling and JPEG/PNG encoding of screenshots.
+         First-party; the version matches the runtime the agent is built with. -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.15" />
+  </ItemGroup>
+
 </Project>

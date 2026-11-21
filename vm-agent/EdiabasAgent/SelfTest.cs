@@ -18,7 +18,7 @@ namespace EdiabasAgent;
 /// <c>--selftest</c>: local checks only (no network traffic, no cable). Prints PASS/FAIL/SKIP per
 /// check, writes the same report to <c>logs\selftest.txt</c>, and returns true when nothing failed.
 /// </summary>
-internal static class SelfTest
+internal static partial class SelfTest
 {
     public const string FirewallRuleName = "ediabas-bridge agent";
 
@@ -87,6 +87,11 @@ internal static class SelfTest
             checks.Add(Guard("listener", () => CheckListener(config.Port, selection)));
             checks.Add(Guard("EDIABAS DLL", () => CheckEdiabasDll(config)));
         }
+
+        // Log path rules against the real file system, and a desktop capture. Neither needs
+        // the config or the cable.
+        checks.AddRange(LogPathChecks());
+        checks.Add(Guard("capture", CheckCapture));
 
         var report = new StringBuilder();
         report.AppendLine(CultureInfo.InvariantCulture,

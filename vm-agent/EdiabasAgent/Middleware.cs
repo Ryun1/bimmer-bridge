@@ -78,7 +78,8 @@ internal sealed class RequestPipeline
                 sw.ElapsedMilliseconds,
                 detail?.Ecu,
                 detail?.Job,
-                detail?.Rule);
+                detail?.Rule,
+                http.Items.TryGetValue(HandlerSupport.AuditTargetKey, out var t) ? t as string : null);
         }
     }
 

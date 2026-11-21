@@ -30,6 +30,11 @@ public class ApiModelsTests
     [InlineData("ediabas_unavailable", 503)]
     [InlineData("job_timeout", 504)]
     [InlineData("internal_error", 500)]
+    [InlineData("path_not_allowed", 403)]
+    [InlineData("file_not_found", 404)]
+    [InlineData("window_not_found", 404)]
+    [InlineData("window_minimized", 409)]
+    [InlineData("desktop_unavailable", 503)]
     [InlineData("something_new", 500)]
     public void Status(string code, int status)
     {

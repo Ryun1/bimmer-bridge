@@ -5,8 +5,9 @@ namespace EdiabasAgent.Core;
 
 /// <summary>
 /// Formats one audit line: tab-separated
-/// <c>time  remote  method  path  status  errorCode  durationMs  ecu  job  rule</c>
-/// (<c>-</c> for an empty field; <c>rule</c> is written for refusals only).
+/// <c>time  remote  method  path  status  errorCode  durationMs  ecu  job  rule  target</c>
+/// (<c>-</c> for an empty field; <c>rule</c> is written for refusals only; <c>target</c> is
+/// what a log read or screen capture asked for: the path, or the <c>window</c> value).
 /// Query strings are reduced to their keys. Control characters (including tabs and every line
 /// break, also U+0085/U+2028/U+2029) are replaced so a request cannot forge or split a line.
 /// </summary>
@@ -25,20 +26,22 @@ public static class AuditLine
         long durationMs,
         string? ecu = null,
         string? job = null,
-        string? rule = null)
+        string? rule = null,
+        string? target = null)
     {
-        var target = ReduceTarget(path, queryString);
+        var request = ReduceTarget(path, queryString);
         var sb = new StringBuilder(128);
         sb.Append(time.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture)).Append('\t');
         sb.Append(Clean(remoteAddress)).Append('\t');
         sb.Append(Clean(method)).Append('\t');
-        sb.Append(Clean(target)).Append('\t');
+        sb.Append(Clean(request)).Append('\t');
         sb.Append(status.ToString(CultureInfo.InvariantCulture)).Append('\t');
         sb.Append(Clean(errorCode)).Append('\t');
         sb.Append(Math.Max(0, durationMs).ToString(CultureInfo.InvariantCulture)).Append('\t');
         sb.Append(Clean(ecu)).Append('\t');
         sb.Append(Clean(job)).Append('\t');
-        sb.Append(Clean(rule));
+        sb.Append(Clean(rule)).Append('\t');
+        sb.Append(Clean(target));
         return sb.ToString();
     }
 
