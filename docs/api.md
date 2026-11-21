@@ -169,6 +169,19 @@ Every one of these runs the conflict check first and returns `cable_in_use` if i
 including the ones that only read SGBD files. One `apiInit` … `apiEnd` cycle per request; no
 handle outlives the request. Requests are served one at a time.
 
+**Conflict check during a request.** The check runs again before every EDIABAS job the agent
+sends within a request: each batch item, the description screen's `_JOBCOMMENTS` and then the
+job itself, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and `_RESULTS`. A check
+less than 250 ms old is reused (the process scan is not free, and describe on a large SGBD sends
+hundreds of short jobs); each batch item after the first always scans afresh. Once a BMW tool is
+seen, no further job starts in that request:
+- `/ediabas/jobs` and `/ediabas/vehicle`: the item and every later item get `not_run`; items
+  already done are kept.
+- describe without `job`: the job list is kept, comments already read are kept, and the rest are
+  `not_checked`. If the tool appears before `_JOBS` runs, the request is `cable_in_use`.
+- `/ediabas/job` and describe with `job`: the whole request is `cable_in_use`, with the tools in
+  `details.processes`.
+
 **Idle release.** `apiEnd` alone leaves EDIABAS's host process `ebas32.exe` running for as long
 as the agent has `api32.dll` loaded (seen at the desk). So the agent unloads the DLL once no
 EDIABAS request has arrived for `ediabasIdleReleaseSeconds` (agent config, default 20, range
@@ -209,7 +222,9 @@ Without `job` — the job list. `comments` defaults to `true`; `filter` narrows 
   "durationMs": 412 }
 ```
 `review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (listed in
-`reviewedJobs`), or `not_checked` (`comments=false`). `comment` is `null` when not fetched or
+`reviewedJobs`), or `not_checked` (`comments=false`, or the comment was not fetched because the
+request's time budget ran out, an earlier job did not stop after `apiBreak`, or a BMW tool
+started during the request). `comment` is `null` when not fetched or
 absent. A job is runnable only when `allowed` is true and `review` is `not_required`,
 `passed` or `reviewed`.
 

@@ -27,7 +27,9 @@ public sealed class RequestAudit
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
 /// <para>Per request: conflict check → (lazily, at the first job that will really run) apiInit
-/// → per job: policy → Ecu file → description screen where required → apiJob → poll apiState
+/// → per job: policy → Ecu file → description screen where required → conflict check again
+/// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
+/// reused) → apiJob → poll apiState
 /// every 50 ms until not busy or timeout (apiBreak on timeout) → read every result set →
 /// apiEnd in <c>finally</c>. Nothing touches the API when the conflict check fails or when no
 /// job survives the policy.</para>
@@ -43,6 +45,11 @@ public sealed class EdiabasService
     public const int PollIntervalMs = 50;
     public const int BreakGraceMs = 2000;
     public const int MaxBatchItems = 20;
+
+    /// <summary>Within a request the conflict check runs again before every EDIABAS job, but a
+    /// check younger than this is reused: the process scan costs tens of milliseconds, and a
+    /// describe of a large SGBD sends hundreds of short jobs.</summary>
+    public const int ConflictRecheckMs = 250;
 
     private readonly IEdiabasApi _api;
     private readonly IConflictCheck _conflicts;
@@ -191,9 +198,12 @@ public sealed class EdiabasService
             return whole;
         }
 
-        return run.Item.Ok
-            ? run.Item.Result!
-            : new ApiFailure(ApiErrors.Status(run.Item.Error!.Code), run.Item.Error);
+        if (run.Item.Ok)
+        {
+            return run.Item.Result!;
+        }
+
+        return ToolStartedFailure(session) ?? new ApiFailure(ApiErrors.Status(run.Item.Error!.Code), run.Item.Error);
     }
 
     // ---------------------------------------------------------------- /ediabas/jobs
@@ -275,9 +285,11 @@ public sealed class EdiabasService
         var jobs = ReadJobList(session, ecu, audit, ct, out var variant, out var upperEcu);
         if (!jobs.Ok)
         {
-            return jobs.Failure!;
+            return ToolStartedFailure(session) ?? jobs.Failure!;
         }
 
+        // A BMW tool that starts during the list stops the comment fetches; what was read is
+        // kept and the rest stay not_checked, as when the time budget runs out.
         var timeout = _defaultTimeoutSeconds;
         var entries = new List<DescribeJobEntry>();
         foreach (var name in jobs.Value!)
@@ -290,7 +302,7 @@ public sealed class EdiabasService
             var verdict = _policy.Evaluate(upperEcu, name);
             string? comment = null;
             var fetch = DescriptionFetch.Skipped;
-            if (comments && !session.Poisoned && !ct.IsCancellationRequested && !OverBudget(start))
+            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && !OverBudget(start))
             {
                 var d = ReadDescription(session, upperEcu!, name, timeout, ct);
                 if (d.Ok)
@@ -298,7 +310,7 @@ public sealed class EdiabasService
                     comment = NullIfBlank(d.Value!.Text);
                     fetch = DescriptionFetch.Read;
                 }
-                else
+                else if (session.ToolStarted is null)
                 {
                     fetch = DescriptionFetch.Failed;
                 }
@@ -340,7 +352,7 @@ public sealed class EdiabasService
         var jobs = ReadJobList(session, verdict.Ecu, audit, ct, out var variant, out _);
         if (!jobs.Ok)
         {
-            return jobs.Failure!;
+            return ToolStartedFailure(session) ?? jobs.Failure!;
         }
 
         if (!jobs.Value!.Any(j => string.Equals(j, verdict.Job, StringComparison.OrdinalIgnoreCase)))
@@ -363,19 +375,20 @@ public sealed class EdiabasService
         }
         else
         {
-            return d.Failure!;
+            return ToolStartedFailure(session) ?? d.Failure!;
         }
 
+        // No partial answer here: a BMW tool that starts midway fails the request.
         var arguments = ReadParameterTable(session, verdict.Ecu, "_ARGUMENTS", verdict.Job, "ARG", "ARGTYPE", "ARGCOMMENT", timeout, ct);
         if (!arguments.Ok)
         {
-            return arguments.Failure!;
+            return ToolStartedFailure(session) ?? arguments.Failure!;
         }
 
         var results = ReadParameterTable(session, verdict.Ecu, "_RESULTS", verdict.Job, "RESULT", "RESULTTYPE", "RESULTCOMMENT", timeout, ct);
         if (!results.Ok)
         {
-            return results.Failure!;
+            return ToolStartedFailure(session) ?? results.Failure!;
         }
 
         return new DescribeJobResponse(
@@ -463,10 +476,11 @@ public sealed class EdiabasService
             return Fail(ApiFailure.Of(ApiErrors.EcuNotFound, $"There is no {verdict.Ecu}.prg or {verdict.Ecu}.grp in the Ecu folder.", new EcuDetails(verdict.Ecu!)));
         }
 
-        // A BMW tool started since the request began: start nothing more.
-        if (recheckConflicts && _conflicts.Running() is { Count: > 0 } running)
+        // A BMW tool started since the request began: start nothing more. Every batch item after
+        // the first scans again; Execute also checks before each job (the screen, then the job).
+        if (session.ToolStarted is not null || (recheckConflicts && ToolStartedSince(session, force: true) is not null))
         {
-            return Fail(NotRun($"A BMW tool started during the request ({Names(running)}); no further jobs are started."));
+            return Fail(ToolStartedNotRun(session.ToolStarted!));
         }
 
         if (session.EnsureInit() is { } initFailure)
@@ -632,6 +646,12 @@ public sealed class EdiabasService
             return NotRun($"The request reached its {_maxTimeoutSeconds} s limit before {job} started.");
         }
 
+        // Every EDIABAS job, not only the first: a BMW tool may have started since the last check.
+        if (ToolStartedSince(session, force: false) is { } running)
+        {
+            return ToolStartedNotRun(running);
+        }
+
         _api.Job(ecu, job, parameters, results);
         var started = _clock.ElapsedMs;
         var limitMs = Math.Min((long)timeoutSeconds * 1000, budgetLeftMs);
@@ -732,6 +752,48 @@ public sealed class EdiabasService
             : ApiFailure.Of(ApiErrors.CableInUse, $"A BMW tool is using EDIABAS ({Names(running)}). Close it and try again.", new ProcessesDetails(running));
     }
 
+    /// <summary>
+    /// The BMW tools that started since the request began, else null. Once seen, the answer sticks
+    /// for the rest of the request. Without <paramref name="force"/>, a check younger than
+    /// <see cref="ConflictRecheckMs"/> is reused.
+    /// </summary>
+    private IReadOnlyList<ConflictingProcess>? ToolStartedSince(Session session, bool force)
+    {
+        if (session.ToolStarted is { } seen)
+        {
+            return seen;
+        }
+
+        if (!force && _clock.ElapsedMs - session.LastConflictCheckMs < ConflictRecheckMs)
+        {
+            return null;
+        }
+
+        var running = _conflicts.Running();
+        session.LastConflictCheckMs = _clock.ElapsedMs;
+        if (running.Count == 0)
+        {
+            return null;
+        }
+
+        _log.Warn($"A BMW tool started during the request ({Names(running)}); no further EDIABAS jobs in this request");
+        session.ToolStarted = running;
+        return running;
+    }
+
+    private static ApiFailure ToolStartedNotRun(IReadOnlyList<ConflictingProcess> running) =>
+        NotRun($"A BMW tool started during the request ({Names(running)}); no further jobs are started.");
+
+    /// <summary><c>cable_in_use</c> for a request that cannot give a partial answer, when a BMW
+    /// tool started during it; null when none did.</summary>
+    private static ApiFailure? ToolStartedFailure(Session session) =>
+        session.ToolStarted is { } running
+            ? ApiFailure.Of(
+                ApiErrors.CableInUse,
+                $"A BMW tool started during the request ({Names(running)}); no further EDIABAS job was started. Close it and try again.",
+                new ProcessesDetails(running))
+            : null;
+
     private bool OverBudget(long requestStart) => _clock.ElapsedMs - requestStart >= (long)_maxTimeoutSeconds * 1000;
 
     private static ApiFailure Refused(string? ecu, string? job, string rule) =>
@@ -761,6 +823,7 @@ public sealed class EdiabasService
         {
             this.owner = owner;
             StartMs = owner._clock.ElapsedMs;
+            LastConflictCheckMs = StartMs;
 
             // Counted so the DLL is never released while a request is running.
             owner._openSessions++;
@@ -772,6 +835,13 @@ public sealed class EdiabasService
         public bool Initialised { get; private set; }
 
         public bool Poisoned { get; set; }
+
+        /// <summary>When the conflict check last ran: the request's own check just before the
+        /// session opened, then every recheck.</summary>
+        public long LastConflictCheckMs { get; set; }
+
+        /// <summary>BMW tools seen to start during the request; null while none has.</summary>
+        public IReadOnlyList<ConflictingProcess>? ToolStarted { get; set; }
 
         public ApiFailure? EnsureInit()
         {

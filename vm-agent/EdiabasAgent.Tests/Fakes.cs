@@ -289,8 +289,17 @@ public sealed class FakeConflicts : IConflictCheck
 
     public int Calls { get; private set; }
 
+    /// <summary>When set, answers instead of <see cref="Answers"/> (for example from the clock).</summary>
+    public Func<IReadOnlyList<ConflictingProcess>>? Answer { get; set; }
+
     public IReadOnlyList<ConflictingProcess> Running()
     {
+        if (Answer is { } answer)
+        {
+            Calls++;
+            return answer();
+        }
+
         var a = Answers[Math.Min(Calls, Answers.Count - 1)];
         Calls++;
         return a;
