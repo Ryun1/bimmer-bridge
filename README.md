@@ -31,7 +31,7 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 | 0 Discovery | done (2026-11-21) |
 | 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
 | 2 EDIABAS at the desk | done (2026-11-21): agent 0.2.0 deployed, every desk check passes |
-| 3 Mac MCP | done: all ten tools. Checked in Claude Code; the desktop-app check of `ediabas_describe` is open |
+| 3 Mac MCP | done: all ten tools. Checked in Claude Code and in the desktop app (`ediabas_describe` on `NVE_65`, 2026-11-21) |
 | 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
 | 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
 | 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
