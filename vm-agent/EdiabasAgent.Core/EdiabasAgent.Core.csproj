@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Platform-neutral logic: no Windows APIs, no ASP.NET. Unit-tested on any OS. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>EdiabasAgent.Core</RootNamespace>
+    <AssemblyName>EdiabasAgent.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>
