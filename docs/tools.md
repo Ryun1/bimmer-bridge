@@ -22,7 +22,9 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   leaves it. A refusal never reaches the VM. If the policy file is missing or invalid, every
   `ediabas_*` tool refuses with `policy_unavailable`.
 - `ediabas_read_faults` sends `FS_LESEN` per ECU, plus `IS_LESEN` per ECU with
-  `includeInfoMemory`, 20 items per request at most (so at most two requests).
+  `includeInfoMemory`, 20 items per request at most (so at most two requests). Every item is
+  policy-checked before anything is sent; if any ECU is refused, the whole call is refused and
+  nothing is sent.
 - Timeouts: 15 s; 75 s for `ediabas_*` calls.
 - No tool retries a refusal.
 
@@ -32,7 +34,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   present or stored, frequency, logged conditions. Field names differ between SGBDs, so known
   names are mapped and every other field is passed through as `key=value`. An ECU with no
   faults says so. A per-ECU error is shown in that ECU's place; the others still print.
-- **Distances are miles first**, km in brackets: `121,609 mi (195,712 km)`.
+- **Distances are miles first**, km in brackets: `121,609 mi (195,712 km)`. Miles are rounded down.
 - `ediabas_vehicle_status` prints each reading's result fields as returned (`key=value`); the
   field names are mapped to "ignition on/off" and volts once Phase 6 has confirmed them.
 
@@ -45,6 +47,9 @@ Codes (also the audit outcome):
 | `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | as before |
 | `agent_outdated` | Mac | the agent has no such endpoint; Ryan needs to run the Update line |
 | `policy_unavailable` | Mac | the policy file could not be loaded; nothing is sent |
+| `invalid_arguments` | Mac | arguments that cannot go together (`tailBytes` with `offset`/`length`); nothing is sent |
+| `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, or a fault in the server itself |
+| `not_run` | agent | a batch item was not started because the request's time budget ran out |
 | `job_not_allowed` | Mac or agent | refused by name; the message names the rule. Do not look for another way |
 | `job_needs_review` | agent | the job's description suggests it may not be a pure read; the message quotes it. Ryan decides |
 | `cable_in_use` | agent | a BMW tool is open; the message names it. Ask Ryan to close it. Do not retry in a loop |

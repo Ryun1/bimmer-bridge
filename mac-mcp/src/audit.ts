@@ -7,6 +7,11 @@ export interface AuditEntry {
   /** `ok` or the error code. */
   outcome: string;
   durationMs: number;
+  /** ediabas_* tools: the ECU(s) and job(s) asked for, refused ones included. */
+  ecu?: string | undefined;
+  job?: string | undefined;
+  /** For a policy refusal: the rule. */
+  rule?: string | undefined;
 }
 
 // eslint-disable-next-line no-control-regex
@@ -16,9 +21,23 @@ function field(s: string): string {
   return s.replace(CONTROL, "");
 }
 
-/** One tab-separated line: UTC time, tool, outcome, duration in ms. */
+const VALUE_MAX = 200;
+
+function value(s: string): string {
+  const t = field(s).replace(/\s+/g, " ");
+  return t.length > VALUE_MAX ? `${t.slice(0, VALUE_MAX - 1)}…` : t;
+}
+
+/**
+ * One tab-separated line: UTC time, tool, outcome, duration in ms; then, when present,
+ * `ecu=`, `job=` and `rule=` fields.
+ */
 export function formatAuditLine(e: AuditEntry): string {
-  return [e.time.toISOString(), field(e.tool), field(e.outcome), String(Math.round(e.durationMs))].join("\t") + "\n";
+  const fields = [e.time.toISOString(), field(e.tool), field(e.outcome), String(Math.round(e.durationMs))];
+  if (e.ecu !== undefined) fields.push(`ecu=${value(e.ecu)}`);
+  if (e.job !== undefined) fields.push(`job=${value(e.job)}`);
+  if (e.rule !== undefined) fields.push(`rule=${value(e.rule)}`);
+  return fields.join("\t") + "\n";
 }
 
 export interface AuditSink {

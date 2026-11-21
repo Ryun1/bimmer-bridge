@@ -1,0 +1,112 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, parsePolicy } from "../src/policy.js";
+import { BridgeError } from "../src/errors.js";
+
+const REPO_POLICY = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
+const CASES_PATH = fileURLToPath(new URL("../../policy/policy-cases.json", import.meta.url));
+
+interface Case {
+  ecu: string;
+  job: string;
+  args?: string;
+  results?: string;
+  allowed: boolean;
+  rule: string;
+  screen: boolean;
+  note?: string;
+}
+
+const policyText = readFileSync(REPO_POLICY, "utf8");
+const policy = parsePolicy(policyText);
+const cases = (JSON.parse(readFileSync(CASES_PATH, "utf8")) as { cases: Case[] }).cases;
+
+describe("policy/policy-cases.json (shared with the agent)", () => {
+  it("has cases", () => {
+    expect(cases.length).toBeGreaterThan(100);
+  });
+
+  it.each(cases.map((c, i) => [i, `${JSON.stringify(c.ecu)} ${JSON.stringify(c.job)}${c.note ? ` — ${c.note}` : ""}`, c] as const))(
+    "case %i: %s",
+    (_i, _name, c) => {
+      const v = evaluate(policy, { ecu: c.ecu, job: c.job, args: c.args, results: c.results });
+      expect(v).toEqual({ allowed: c.allowed, rule: c.rule, screen: c.screen });
+    },
+  );
+});
+
+describe("policy loading", () => {
+  it("resolves the repo's policy/policy.json by default", () => {
+    expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
+    const g = PolicyGuard.load();
+    expect(g.error).toBeNull();
+    expect(g.version).toBe(1);
+  });
+
+  const failing: [string, () => string][] = [
+    ["a missing file", () => {
+      throw Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+    }],
+    ["invalid JSON", () => "{ not json"],
+    ["a missing field", () => JSON.stringify({ ...JSON.parse(policyText), deny: undefined })],
+    ["a wrong type", () => JSON.stringify({ ...JSON.parse(policyText), version: "1" })],
+    ["an invalid pattern", () => JSON.stringify({ ...JSON.parse(policyText), namePattern: "([" })],
+    ["an empty file", () => ""],
+  ];
+
+  it.each(failing)("fails closed on %s: every check refuses with policy_unavailable", (_name, read) => {
+    const g = PolicyGuard.load("/x/policy.json", read);
+    expect(g.version).toBeNull();
+    expect(g.error).toContain("/x/policy.json");
+    for (const fn of [
+      () => g.require(),
+      () => g.check({ ecu: "NVE_65", job: "FS_LESEN" }),
+      () => g.evaluate({ ecu: "NVE_65", job: "IDENT" }),
+      () => g.checkShape("NVE_65"),
+    ]) {
+      let err: unknown;
+      try {
+        fn();
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(BridgeError);
+      expect((err as BridgeError).code).toBe("policy_unavailable");
+      expect((err as BridgeError).message).toMatch(/nothing was sent to the VM/);
+    }
+  });
+});
+
+describe("PolicyGuard", () => {
+  const g = PolicyGuard.fromPolicy(policy);
+
+  it("check() throws job_not_allowed naming the rule, without suggesting a workaround", () => {
+    try {
+      g.check({ ecu: "NVE_65", job: "FS_LOESCHEN" });
+      throw new Error("expected a refusal");
+    } catch (e) {
+      const err = e as BridgeError;
+      expect(err.code).toBe("job_not_allowed");
+      expect(err.rule).toBe("deny.substring:LOESCH");
+      expect(err.message).toContain("deny.substring:LOESCH");
+      expect(err.message).toMatch(/do not look for another/i);
+    }
+  });
+
+  it("check() returns the verdict for an allowed job", () => {
+    expect(g.check({ ecu: "NVE_65", job: "STATUS_X" })).toEqual({ allowed: true, rule: "allow.pattern", screen: true });
+  });
+
+  it("checkShape() checks names only: describing a denied job is allowed", () => {
+    expect(() => g.checkShape("NVE_65", "FS_LOESCHEN")).not.toThrow();
+    expect(() => g.checkShape("NVE_65")).not.toThrow();
+    expect(() => g.checkShape("../TMODE")).toThrow(/shape\.ecu/);
+    expect(() => g.checkShape("NVE_65", "FS_LESEN\n")).toThrow(/shape\.job/);
+  });
+
+  it("requires a full match even when the file's pattern is not anchored", () => {
+    const p = parsePolicy(JSON.stringify({ ...JSON.parse(policyText), namePattern: "[A-Z_]{1,64}" }));
+    expect(evaluate(p, { ecu: "NVE;X", job: "IDENT" }).rule).toBe("shape.ecu");
+  });
+});

@@ -17,6 +17,7 @@ import {
   windowsBody,
   type FakeAgent,
 } from "./fixtures.js";
+import { agentErr, jobResult, stubHandler } from "./stubAgent.js";
 
 const agents: FakeAgent[] = [];
 afterEach(async () => {
@@ -671,5 +672,125 @@ describe("stderr diagnostics", () => {
       expect(l.toLowerCase()).not.toContain("bearer");
       expect(l.toLowerCase()).not.toContain("authorization");
     }
+  });
+});
+
+describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
+  async function stubbed(overrides: Parameters<typeof stubHandler>[0] = {}) {
+    const a = await fake(stubHandler(overrides));
+    return { a, ...makeClient({ env: { EDIABAS_AGENT_URL: a.url } }) };
+  }
+
+  it("calls every endpoint with the documented method, path, query and body", async () => {
+    const { a, client } = await stubbed();
+    await client.capture({ window: "INPA - BMW", maxEdge: 800 });
+    await client.listLogs({ root: 1, glob: "*.trc" });
+    await client.readLog({ path: "C:\\EDIABAS\\TRACE\\api.trc", offset: 10, length: 20, grep: "ERR" });
+    await client.listEcus("nve");
+    await client.describeJobs({ ecu: "NVE_65", filter: "LESEN" });
+    await client.describeJob({ ecu: "NVE_65", job: "FS_LESEN" });
+    await client.vehicle();
+    await client.runJob({ ecu: "NVE_65", job: "IDENT", args: "1;2" });
+    await client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }]);
+    const seen = a.requests.filter((r) => r.path !== "/health").map((r) => `${r.method} ${r.path}${r.body ? ` ${r.body}` : ""}`);
+    expect(seen).toEqual([
+      "GET /screen/capture?window=INPA+-+BMW&maxEdge=800",
+      "GET /logs?root=1&glob=*.trc",
+      "GET /logs/read?path=C%3A%5CEDIABAS%5CTRACE%5Capi.trc&offset=10&length=20&grep=ERR",
+      "GET /ediabas/ecus?filter=nve",
+      "GET /ediabas/describe?ecu=NVE_65&filter=LESEN",
+      "GET /ediabas/describe?ecu=NVE_65&job=FS_LESEN",
+      "GET /ediabas/vehicle",
+      'POST /ediabas/job {"ecu":"NVE_65","job":"IDENT","args":"1;2"}',
+      'POST /ediabas/jobs {"items":[{"ecu":"NVE_65","job":"FS_LESEN"}]}',
+    ]);
+    expect(a.requests.every((r) => r.authorization === `Bearer ${AGENT_TOKEN}`)).toBe(true);
+  });
+
+  it("returns capture bytes and decoded headers", async () => {
+    const { client } = await stubbed();
+    const c = await client.capture({ window: "INPA" });
+    expect(c.mimeType).toBe("image/jpeg");
+    expect(Buffer.from(c.data)).toEqual(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]));
+    expect(c).toMatchObject({ title: "INPA - BMW Group ü", handle: "0x000A0B2C", method: "printwindow", width: 1280, height: 800 });
+  });
+
+  it("uses 75 s for /ediabas/* and 15 s for everything else", async () => {
+    const { client } = await stubbed();
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    await client.health(); // probe (3 s) + request
+    spy.mockClear();
+    await client.listWindows();
+    await client.capture();
+    await client.listLogs();
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([15_000, 15_000, 15_000]);
+    spy.mockClear();
+    await client.listEcus();
+    await client.vehicle();
+    await client.runJob({ ecu: "NVE_65", job: "IDENT" });
+    await client.runJobs([{ ecu: "NVE_65", job: "IDENT" }]);
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([75_000, 75_000, 75_000, 75_000]);
+  });
+
+  it("tolerates unknown extra fields everywhere", async () => {
+    const { client } = await stubbed({
+      "POST /ediabas/job": () => ({ status: 200, body: { ...jobResult("NVE_65", "IDENT", [{ A: 1 }]), newField: { x: 1 } } }),
+      "GET /health": () => ({ status: 200, body: { ...healthBody(), policyVersion: 1, capabilities: ["ediabas"], futureThing: true } }),
+    });
+    expect((await client.health()).capabilities).toEqual(["ediabas"]);
+    expect((await client.runJob({ ecu: "NVE_65", job: "IDENT" })).sets).toEqual([{ A: 1 }]);
+  });
+
+  it("accepts /health from an older agent without the new fields", async () => {
+    const { client } = await stubbed({ "GET /health": () => ({ status: 200, body: healthBody() }) });
+    const h = await client.health();
+    expect(h.policyVersion).toBeUndefined();
+    expect(h.capabilities).toBeUndefined();
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["null", null],
+  ])("handles error details %s", async (_n, details) => {
+    const { client } = await stubbed({ "POST /ediabas/job": () => agentErr(409, "cable_in_use", "busy", details) });
+    const e = await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }));
+    expect(e.code).toBe("cable_in_use");
+    expect(e.message).toMatch(/cable is in use by a BMW tool in the VM\. Ask Ryan to close it/);
+  });
+
+  it("tells the gateway 403 apart from the agent's policy 403s", async () => {
+    const { client } = await stubbed({
+      "POST /ediabas/job": () => agentErr(403, "job_not_allowed", "no", { ecu: "NVE_65", job: "X", rule: "default_deny" }),
+      "GET /logs/read": () => agentErr(403, "path_not_allowed", "no", { reason: "UNC path" }),
+      "GET /logs": () => agentErr(403, "forbidden", "Caller is not the gateway."),
+    });
+    const job = await errorOf(client.runJob({ ecu: "NVE_65", job: "X" }));
+    expect(job.code).toBe("job_not_allowed");
+    expect(job.rule).toBe("default_deny");
+    expect((await errorOf(client.readLog({ path: "\\\\x\\y" }))).code).toBe("path_not_allowed");
+    const fw = await errorOf(client.listLogs());
+    expect(fw.code).toBe("forbidden");
+    expect(fw.message).toMatch(/firewall/);
+  });
+
+  it("maps 404 not_found to agent_outdated, but keeps ecu_not_found", async () => {
+    const { client } = await stubbed({
+      "GET /ediabas/describe": () => agentErr(404, "ecu_not_found", "no", { ecu: "NOPE" }),
+    });
+    // contractHandler is the Phase 1 agent: it has only /health and /windows.
+    const a2 = await fake(contractHandler());
+    const c2 = makeClient({ env: { EDIABAS_AGENT_URL: a2.url } }).client;
+    const old = await errorOf(c2.capture());
+    expect(old.code).toBe("agent_outdated");
+    expect(old.message).toMatch(/does not know \/screen\/capture.*Update line/);
+    for (const p of [() => c2.listEcus(), () => c2.vehicle(), () => c2.runJobs([{ ecu: "A", job: "IDENT" }]), () => c2.listLogs(), () => c2.readLog({ path: "C:\\a" })]) {
+      expect((await errorOf(p())).code).toBe("agent_outdated");
+    }
+    expect((await errorOf(client.describeJobs({ ecu: "NOPE" }))).code).toBe("ecu_not_found");
+  });
+
+  it("rejects a malformed job result as bad_response", async () => {
+    const { client } = await stubbed({ "POST /ediabas/job": () => ({ status: 200, body: { ecu: "X", sets: "nope" } }) });
+    expect((await errorOf(client.runJob({ ecu: "X", job: "IDENT" }))).code).toBe("bad_response");
   });
 });

@@ -66,20 +66,24 @@ describe("MCP server", () => {
     expect(SERVER_VERSION).toBe("0.1.0");
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);
-    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(140);
-    expect(instr).toMatch(/Only vm_health and vm_list_windows exist so far/);
-    expect(instr).toMatch(/not built yet/);
-    expect(instr).toMatch(/say they are not available yet rather than offering them/);
+    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(180);
+    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_vehicle_status"]) {
+      expect(instr).toContain(tool);
+    }
+    expect(instr).toMatch(/Call vm_health first/);
+    expect(instr).toMatch(/agent_outdated is not installed in the VM yet/);
+    expect(instr).toMatch(/Never retry a refusal/);
+    expect(instr).toMatch(/never guess names/);
     expect(instr).toMatch(/read-only/i);
     expect(instr).toContain("vm_health");
     expect(instr).toMatch(/cannot click, type, clear faults, code or flash/i);
     expect(instr).toMatch(/rather than retrying|instead of retrying|do not retry/i);
   });
 
-  it("lists both tools with read-only annotations, titles and descriptions", async () => {
+  it("lists the tools with read-only annotations, titles and descriptions", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["vm_health", "vm_list_windows"]);
+    expect(tools).toHaveLength(10);
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.description && t.description.length).toBeGreaterThan(40);
@@ -91,7 +95,9 @@ describe("MCP server", () => {
         openWorldHint: false,
       });
       expect(t.inputSchema.type).toBe("object");
-      expect(Object.keys(t.inputSchema.properties ?? {})).toEqual([]);
+      if (["vm_health", "vm_list_windows", "ediabas_vehicle_status"].includes(t.name)) {
+        expect(Object.keys(t.inputSchema.properties ?? {})).toEqual([]);
+      }
     }
   });
 
@@ -159,7 +165,7 @@ describe("MCP server", () => {
 
   it("reports a missing token with the fix, and the server still serves tools/list", async () => {
     const { client } = await connect({ keychain: null });
-    expect((await client.listTools()).tools).toHaveLength(2);
+    expect((await client.listTools()).tools).toHaveLength(10);
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
     expect(textOf(r)).toContain("security add-generic-password -s ediabas-bridge -a agent -w");

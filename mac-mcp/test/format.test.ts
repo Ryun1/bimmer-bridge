@@ -35,7 +35,7 @@ describe("formatHealth", () => {
   it("warns that screenshots will not work in session 0", () => {
     const t = formatHealth(health({ sessionId: 0 }));
     expect(t).toMatch(/not .*interactive/i);
-    expect(t).toMatch(/screenshots, when built, will not work/i);
+    expect(t).toMatch(/screenshots will not work/i);
     expect(formatHealth(health())).not.toMatch(/screenshot/i);
   });
 
