@@ -309,9 +309,9 @@ one line at a time and say what to expect.
 1. On the Mac, with the VM running, start the deploy server from the repo:
    `python3 dev/serve.py --accept-token`
    (`--accept-token` lets the installer hand the agent's token straight to the Mac's Keychain.)
-   It prints the lines to paste into the VM, including **Install** and **Update** lines of the
-   form `$base='...'; $sha='...'; irm $base/install.ps1 | iex`. Copy them exactly from its
-   output; the hash in the line is what the script checks the download against, so do not
+   It prints the lines to paste into the VM, including long one-line **Install** and **Update**
+   lines that start `$base='...'; $sha='...';`. Copy the whole line exactly from its output;
+   the hashes in the line are what the script and the download are checked against, so do not
    type or reuse an old one. If it says `release/EdiabasAgent.zip` is not built, the agent has
    to be built first (`vm-agent/build.sh`).
 2. In the VM, open **Windows PowerShell** as administrator (not PowerShell 7) and paste the
