@@ -51,7 +51,7 @@ ISTA is **not** expected to be installed (verify in Phase 0).
 
 ### The car
 - 2005 BMW E61 550i M Sport (N62B48TU). Diagnostics run through EDIABAS SGBDs
-  (`.prg` / `.grp`) over the K-line side of the cable.
+  (`.prg` / `.grp`) over the K+DCAN cable.
 - Known SGBD: `NVE_65.PRG` (Night Vision). Historic fault codes A752/A751 are the read-only
   acceptance test at the car.
 - Engine ECU SGBD is probably `N62_TUE` (ME9.2.2 TUE) or `ME9N62_2` (verify with the
@@ -170,7 +170,7 @@ ediabas-bridge/
     src/format.ts           fault tables, km → miles
     test/                   vitest against a fake agent
   dev/
-    serve.sh                serves release/ and receives uploads, bound to the bridge IP
+    serve.py                serves release/ and receives uploads, bound to the bridge IP
 ```
 
 No BMW binaries, SGBD files, `api.h` or discovery output are committed (`.gitignore`).
@@ -179,8 +179,9 @@ No BMW binaries, SGBD files, `api.h` or discovery output are committed (`.gitign
 
 ## 4. Phase 0 — discovery (Ryan runs one script in the VM)
 
-`dev/serve.sh` starts a small server on the Mac's bridge address that serves `release/` and
-accepts uploads into `discovery/` (git-ignored). Ryan starts the VM and pastes one line into
+`dev/serve.py` is a small purpose-written server (Python's built-in `http.server` cannot
+receive files). It listens on the Mac's bridge address only, serves `release/` and accepts
+uploads into `discovery/` (git-ignored). Ryan starts the VM and pastes one line into
 PowerShell; the script uploads its results, so nothing is pasted back.
 
 `discover.ps1` is read-only and must report:
@@ -211,14 +212,15 @@ exists (it is the desk test).
 
 ## 5. Deployment (Mac → VM)
 
-1. Mac: `dev/serve.sh` builds `release/EdiabasAgent.zip`, prints its SHA-256 and serves it on
+1. Mac: `dev/serve.py` builds `release/EdiabasAgent.zip`, prints its SHA-256 and serves it on
    the bridge address only.
 2. VM, first install (one line, elevated PowerShell):
-   `irm http://<mac>:8000/install.ps1 | iex`
-3. VM, every later build: `irm http://<mac>:8000/update.ps1 | iex`
+   `$sha='<hash>'; irm http://<mac>:8000/install.ps1 | iex`
+3. VM, every later build: `$sha='<hash>'; irm http://<mac>:8000/update.ps1 | iex`
 
-Both scripts check the zip's SHA-256 against the value served beside it before unpacking.
-The server is stopped when not deploying. Claude Code gives Ryan the exact line each time.
+The expected hash travels in the line Ryan pastes, not from the server, and both scripts
+refuse to unpack a zip that doesn't match it. The server is stopped when not deploying.
+Claude Code gives Ryan the exact line each time.
 
 ---
 
@@ -265,8 +267,9 @@ There is no clear, write or raw-telegram endpoint.
 ### Job policy (`policy/policy.json`, class `JobPolicy`)
 Default-deny. A job runs only if all of these pass:
 
-1. **Shape.** ECU and job names match `^[A-Za-z0-9_]{1,64}$`. Arguments ≤ 200 chars, printable
-   ASCII only.
+1. **Shape.** ECU and job names match `^[A-Za-z0-9_]{1,64}$` and are then upper-cased; every
+   later rule works on the upper-cased name. `args` and `results` are each ≤ 200 chars,
+   printable ASCII only.
 2. **Allowed by name**, one of:
    - global exact names: `IDENT`, `INFO`, `FS_LESEN`, `FS_LESEN_DETAIL`, `IS_LESEN`,
      `IS_LESEN_DETAIL`, `AIF_LESEN`, `SERIENNUMMER_LESEN`, `ZIF_LESEN`, `ZIF_BACKUP_LESEN`,
@@ -282,19 +285,26 @@ Default-deny. A job runs only if all of these pass:
        `UTILITY` also contains `ABS_RELAIS` and `IF_RESET`.
 3. **Not denied by name.** The denylist overrides the allowlist:
    - as a substring anywhere: `SCHREIB`, `LOESCH`, `STEUER`, `CODIER`, `FLASH`, `VORGEB`,
-     `SETZE`, `ABGLEICH`, `KALIB`, `SENDE`, `TELEGR`, `AUFTRAG`, `AUTHENT`, `RESET`, `SLEEP`,
+     `SETZE`, `ABGLEICH`, `KALIB`, `TELEGR`, `AUFTRAG`, `AUTHENT`, `RESET`, `SLEEP`,
      `POWER_DOWN`;
    - as a whole `_`-separated token: `START`, `STOP`, `ENDE`, `INIT`, `LERN`, `LERNEN`,
-     `ADAPT`, `PROG`, `SPEICHER`, `MODE`.
+     `ADAPT`, `PROG`, `SPEICHER`, `SENDE`.
 
-   Token matching is what lets reads such as `STATUS_NWGADAPTION` and `STATUS_DKLERN_KT` through.
+   Token matching is what lets reads such as `STATUS_NWGADAPTION` and `STATUS_DKLERN_KT`
+   through. This rule set was run against the published job lists of `NVE_65`, `N62_TUE`,
+   `TMode` and `UTILITY`: every write, clear, flash, reset and activation job is denied, and
+   the only doubtful job it lets through by name is `STATUS_SYSTEMCHECK_GRUNDADAPT`, which
+   step 4 exists to catch.
 4. **Description screen (VM side only, for jobs allowed by the `STATUS_` pattern).** A
    `STATUS_` name does not guarantee a pure read. Before running such a job, the agent reads
    its `_JOBCOMMENTS` from the SGBD and refuses with `job_needs_review` (returning the
    description) if it mentions starting, activating, writing, clearing, setting,
-   programming, resetting or learning (`start`, `ansteuer`, `aktivier`, `schreib`, `loesch`,
-   `setz`, `programm`, `reset`, `lernen`, `abgleich`). Ryan can approve a specific job by
-   adding `ECU:JOB` to `reviewedJobs` in the VM's config.
+   programming, resetting or learning. Descriptions are German or English, so screen for
+   both: `start`, `ansteuer`, `aktivier`, `schreib`, `loesch`, `lösch`, `setz`, `programm`,
+   `reset`, `lernen`, `abgleich`, `write`, `clear`, `erase`, `delete`, `activate`, `learn`.
+   A job with no description is also refused. This will flag some harmless reads (for
+   example a description that says "Status Lernen"); that is the intended direction. Ryan
+   approves a specific job by adding `ECU:JOB` to `reviewedJobs` in the VM's config.
 
 Rejections return 403 `job_not_allowed` with the rule that matched, and are audited.
 `policy-cases.json` holds every case both test suites run, including tricks such as
@@ -369,9 +379,12 @@ Re-running it upgrades in place. `uninstall.ps1` reverses everything.
 
 - TypeScript, `@modelcontextprotocol/sdk`, stdio, `zod`. Output `mac-mcp/dist/index.js`.
 - **Finding the VM.** `vmAddress.ts` looks up MAC `F2:E5:81:1E:82:07` in
-  `/var/db/dhcpd_leases`, then `arp -an`, then `utmctl ip-address Windows`. macOS prints MAC
-  bytes without leading zeros (`f2:e5:81:1e:82:7`), so compare numerically. Env
-  `EDIABAS_AGENT_URL` overrides.
+  `/var/db/dhcpd_leases`, then `arp -an`, then `utmctl ip-address Windows`. Env
+  `EDIABAS_AGENT_URL` overrides. Details **[confirmed on this Mac]**:
+  - macOS prints MAC bytes without leading zeros (`f2:e5:81:1e:82:7`), so compare numerically.
+  - The lease file holds two entries for this MAC, `192.168.65.3` (2025) and `192.168.64.3`
+    (today), so the subnet has changed before. Take the entry with the latest expiry, and
+    accept an address only after `/health` answers there with the right token.
 - **Token.** `security find-generic-password -s ediabas-bridge -a agent -w`; env
   `EDIABAS_AGENT_TOKEN` as a fallback with a warning on stderr.
 - Timeouts: 15 s, and 75 s for EDIABAS calls. An unreachable agent gets a specific message:
@@ -418,9 +431,9 @@ Stop at each gate. "Claude" checks are run by Claude Code with `curl` from the M
 
 | Phase | Build | Acceptance |
 |---|---|---|
-| **0 Discovery** | `dev/serve.sh`, `discover.ps1` | Report uploaded; every (verify) item needed for Phase 2 resolved and recorded in the README |
+| **0 Discovery** | .NET 10 SDK (`brew install dotnet@10`), `dev/serve.py`, `discover.ps1` | Report uploaded; every (verify) item needed for Phase 2 resolved and recorded in the README |
 | **1 Agent skeleton** | Core + host projects, config, auth, `/health`, `/windows`, bind/rebind, install/update/uninstall, audit | Claude: `/health` → 200 with the token, 401 without. `netstat` in the VM shows one listener on the shared-network address. Agent returns after a VM reboot. `--selftest` passes |
-| **2 EDIABAS at the desk** | P/Invoke, runner, policy, conflict check, `/ediabas/ecus`, `/ediabas/describe`, `/ediabas/job(s)` | **Cable unplugged, confirmed by Ryan.** Claude: `TMODE INFO` and `TMODE _JOBS` return results; `describe NVE_65` lists its jobs with verdicts; a denied job is refused with the matching rule; with INPA open every EDIABAS call returns `cable_in_use`; no EDIABAS process is left running after a call |
+| **2 EDIABAS at the desk** | P/Invoke, runner, policy, conflict check, `/ediabas/ecus`, `/ediabas/describe`, `/ediabas/job(s)` | **Cable unplugged, confirmed by Ryan.** Claude: `TMODE INFO` and `TMODE _JOBS` return results; `describe NVE_65` lists its jobs with verdicts (verify that a non-`TMODE` SGBD loads with no cable; if not, repeat with the cable in the laptop but not in the car); a denied job is refused with the matching rule; with INPA open every EDIABAS call returns `cable_in_use`; no EDIABAS process is left running after a call |
 | **3 Mac MCP** | MCP server, VM lookup, Keychain token, tools for everything built so far, registration | In Claude Code and in the desktop app: `vm_health` and `ediabas_describe` work. If cloud sessions matter, check one there too |
 | **4 Screenshots** | `/screen/capture`, `vm_screenshot` | With INPA open on any screen, `vm_screenshot` returns a readable image of it; a locked VM returns `desktop_unavailable` |
 | **5 Logs** | `/logs`, `/logs/read`, tools | Newest trace file listed and its tail readable; `..` and junction escapes rejected (`--selftest` plus one manual try) |
