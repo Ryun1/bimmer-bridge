@@ -15,7 +15,8 @@ public sealed record OsInfo(string Description, string OsArchitecture, string Pr
 
 public sealed record ConflictingProcess(string Name, int Pid);
 
-public sealed record EdiabasInfo(string DllPath, bool DllFound);
+/// <summary><c>Loaded</c>: whether the agent has api32.dll loaded right now (docs/api.md, "Idle release").</summary>
+public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded);
 
 public sealed record HealthResponse(
     string Agent,
@@ -60,6 +61,7 @@ public static class ApiErrors
     public const string JobNotFound = "job_not_found";
     public const string CableInUse = "cable_in_use";
     public const string EdiabasError = "ediabas_error";
+    public const string CableNotFound = "cable_not_found";
     public const string EdiabasUnavailable = "ediabas_unavailable";
     public const string JobTimeout = "job_timeout";
     public const string NotRun = "not_run";
@@ -82,7 +84,7 @@ public static class ApiErrors
         NotFound or EcuNotFound or JobNotFound or FileNotFound or WindowNotFound => 404,
         MethodNotAllowed => 405,
         CableInUse or WindowMinimized => 409,
-        EdiabasError => 502,
+        EdiabasError or CableNotFound => 502,
         EdiabasUnavailable or NotRun or DesktopUnavailable => 503,
         JobTimeout => 504,
         _ => 500,

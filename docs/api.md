@@ -246,7 +246,7 @@ items. `timeoutSeconds` is per item. The whole request stops starting new items 
 ```
 Items come back in request order. Each item is policy-checked and screened on its own; one
 failure does not stop the rest. Per-item error codes: `job_not_allowed`, `job_needs_review`,
-`ecu_not_found`, `ediabas_error`, `job_timeout`, `not_run`. Whole-request failures
+`ecu_not_found`, `cable_not_found`, `ediabas_error`, `job_timeout`, `not_run`. Whole-request failures
 (`bad_request`, `cable_in_use`, `ediabas_unavailable`) are HTTP errors as above.
 
 ### `GET /ediabas/vehicle`

@@ -15,7 +15,8 @@ namespace EdiabasAgent.Ediabas;
 /// apiJobData, apiJobExt, apiTrace, apiCallBack and apiErrorHandler are deliberately absent and
 /// must not be added.</para>
 /// <para>The DLL is loaded from the configured full path only, never by bare name or search path,
-/// and only when the first EDIABAS request arrives (never by /health). It stays loaded.</para>
+/// and only when an EDIABAS request needs it (never by /health). EdiabasService unloads it again
+/// after the idle time (<see cref="Unload"/>) and the next request loads it afresh.</para>
 /// </summary>
 internal sealed class Api32 : IEdiabasApi
 {
@@ -114,6 +115,7 @@ internal sealed class Api32 : IEdiabasApi
     private static readonly byte[] EmptyCString = [0];
 
     private readonly string _dllPath;
+    private IntPtr _lib;
     private Functions? _f;
     private uint _handle;
     private bool _haveHandle;
@@ -195,8 +197,42 @@ internal sealed class Api32 : IEdiabasApi
             return false;
         }
 
+        _lib = lib;
         _f = new Functions(addresses);
         return true;
+    }
+
+    public void Unload()
+    {
+        if (_lib == IntPtr.Zero)
+        {
+            _f = null;
+            return;
+        }
+
+        if (Environment.CurrentManagedThreadId != _ownerThread)
+        {
+            throw new InvalidOperationException("api32.dll not unloaded: called from a thread other than the EDIABAS runner thread");
+        }
+
+        if (_haveHandle)
+        {
+            throw new InvalidOperationException("api32.dll not unloaded: a handle from apiInit is still open");
+        }
+
+        // Drop every delegate before the code they point at goes away; from here on Ready()
+        // refuses, and TryLoad loads and resolves the DLL again.
+        var lib = _lib;
+        _f = null;
+        _lib = IntPtr.Zero;
+        NativeLibrary.Free(lib);
+
+        // FreeLibrary only lowers a reference count. Say so if the DLL is still mapped, because
+        // then ebas32.exe will not exit either.
+        if (IsMapped())
+        {
+            throw new InvalidOperationException($"FreeLibrary returned, but {Path.GetFileName(_dllPath)} is still mapped in the agent process");
+        }
     }
 
     public bool Init()
@@ -380,6 +416,32 @@ internal sealed class Api32 : IEdiabasApi
         return File.Exists(path) ? null : $"{path} does not exist";
     }
 
+    /// <summary>Whether a module with the DLL's file name is mapped in this process. Best effort.</summary>
+    private bool IsMapped()
+    {
+        var name = Path.GetFileName(_dllPath);
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            foreach (System.Diagnostics.ProcessModule m in self.Modules)
+            {
+                using (m)
+                {
+                    if (string.Equals(m.ModuleName, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            // Cannot tell; the release is still reported as done.
+        }
+
+        return false;
+    }
+
     private static bool Word(int value, out ushort word)
     {
         word = 0;
@@ -405,7 +467,7 @@ internal sealed class Api32 : IEdiabasApi
     private uint Handle() =>
         _haveHandle ? _handle : throw new InvalidOperationException("EDIABAS call without a handle from apiInit");
 
-    /// <summary>Delegates for every export, created once. Held for the life of the process.</summary>
+    /// <summary>Delegates for every export, created at each load and dropped before each unload.</summary>
     private sealed class Functions(Dictionary<string, IntPtr> a)
     {
         public InitFn Init { get; } = Get<InitFn>(a, "__apiInit");

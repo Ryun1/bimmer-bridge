@@ -267,8 +267,8 @@ internal static partial class SelfTest
 
     /// <summary>
     /// Loads api32.dll and resolves every export the agent uses, then frees it. Calls nothing in
-    /// it, so no EDIABAS initialisation and no cable. Skipped while a BMW tool is running, so the
-    /// self-test never loads the DLL beside a tool that is using it.
+    /// it, so no EDIABAS initialisation and no cable. Skipped while a BMW tool or the running agent
+    /// has it loaded, so the self-test never loads the DLL beside another user of it.
     /// </summary>
     private static Check CheckEdiabasDll(AgentConfig config)
     {
@@ -276,8 +276,7 @@ internal static partial class SelfTest
         var running = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll).Running();
         if (running.Count > 0)
         {
-            return new Check(name, Outcome.Skip,
-                $"not loaded because a BMW tool is running ({string.Join(", ", running.Select(p => $"{p.Name} pid {p.Pid}"))}); close it and run the self-test again");
+            return new Check(name, Outcome.Skip, DllProbeSkip.Reason(running, config.EdiabasIdleReleaseSeconds));
         }
 
         var problem = Api32.Probe(config.EdiabasDll);

@@ -10,6 +10,9 @@ public class EdiabasServiceTests
     private readonly FakeLog _log = new();
     private readonly CableUse _cable = new();
     private readonly RequestAudit _audit = new();
+    private readonly DllLoadState _dll = new();
+
+    private const int IdleSeconds = 20;
 
     private EdiabasService Service(IEnumerable<string>? reviewed = null, int defaultTimeout = 30, int maxTimeout = 60, params string[] ecus) =>
         new(
@@ -21,8 +24,10 @@ public class EdiabasServiceTests
             _clock,
             _cable,
             _log,
+            _dll,
             defaultTimeout,
-            maxTimeout);
+            maxTimeout,
+            IdleSeconds);
 
     private static List<FakeResult> Set(params FakeResult[] r) => [.. r];
 
@@ -103,7 +108,7 @@ public class EdiabasServiceTests
     public void BrokenPolicy_RefusesAndNeverTouchesTheApi()
     {
         var broken = JobPolicy.Parse("{}");
-        var svc = new EdiabasService(_api, _conflicts, new FakeEcus("NVE_65"), broken, new CommentScreen(broken.ScreenTerms, []), _clock, _cable, _log, 30, 60);
+        var svc = new EdiabasService(_api, _conflicts, new FakeEcus("NVE_65"), broken, new CommentScreen(broken.ScreenTerms, []), _clock, _cable, _log, _dll, 30, 60, IdleSeconds);
 
         var r = svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
         Assert.Equal("job_not_allowed", r.Failure!.Error.Code);

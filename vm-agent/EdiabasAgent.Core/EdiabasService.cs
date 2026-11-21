@@ -33,6 +33,10 @@ public sealed class RequestAudit
 /// job survives the policy.</para>
 /// <para>Every job the agent sends, including its own <c>_JOBS</c> / <c>_JOBCOMMENTS</c> /
 /// <c>_ARGUMENTS</c> / <c>_RESULTS</c> calls, is checked by the policy first.</para>
+/// <para>Idle release: the DLL is loaded at the first request that needs it and unloaded once no
+/// such request has run for the configured idle time (<see cref="ReleaseIfIdle"/>), because
+/// <c>apiEnd</c> alone leaves EDIABAS's <c>ebas32.exe</c> running while the DLL is attached. The
+/// host's runner thread asks <see cref="MillisecondsUntilRelease"/> how long to wait for work.</para>
 /// </summary>
 public sealed class EdiabasService
 {
@@ -48,8 +52,16 @@ public sealed class EdiabasService
     private readonly IRunnerClock _clock;
     private readonly CableUse _cableUse;
     private readonly IEdiabasLog _log;
+    private readonly DllLoadState _dll;
     private readonly int _defaultTimeoutSeconds;
     private readonly int _maxTimeoutSeconds;
+    private readonly long _idleReleaseMs;
+
+    // Idle-release state. Touched only on the runner thread.
+    private bool _loaded;
+    private long _lastUseMs;
+    private int _openSessions;
+    private bool _handleMayBeOpen;
 
     public EdiabasService(
         IEdiabasApi api,
@@ -60,8 +72,10 @@ public sealed class EdiabasService
         IRunnerClock clock,
         CableUse cableUse,
         IEdiabasLog log,
+        DllLoadState dll,
         int defaultTimeoutSeconds,
-        int maxTimeoutSeconds)
+        int maxTimeoutSeconds,
+        int idleReleaseSeconds)
     {
         _api = api;
         _conflicts = conflicts;
@@ -71,9 +85,65 @@ public sealed class EdiabasService
         _clock = clock;
         _cableUse = cableUse;
         _log = log;
+        _dll = dll;
         _maxTimeoutSeconds = Math.Max(1, maxTimeoutSeconds);
         _defaultTimeoutSeconds = Math.Clamp(defaultTimeoutSeconds, 1, _maxTimeoutSeconds);
+        _idleReleaseMs = (long)Math.Clamp(idleReleaseSeconds, AgentConfig.MinIdleReleaseSeconds, AgentConfig.MaxIdleReleaseSeconds) * 1000;
     }
+
+    // ---------------------------------------------------------------- idle release
+
+    /// <summary>
+    /// How long the runner may wait for the next request before calling <see cref="ReleaseIfIdle"/>:
+    /// <see cref="Timeout.Infinite"/> (-1) when there is nothing to release.
+    /// </summary>
+    public int MillisecondsUntilRelease()
+    {
+        if (!CanRelease())
+        {
+            return Timeout.Infinite;
+        }
+
+        var left = _lastUseMs + _idleReleaseMs - _clock.ElapsedMs;
+        return (int)Math.Clamp(left, 0, int.MaxValue);
+    }
+
+    /// <summary>
+    /// Unloads api32.dll if it is loaded and no request has used it for the idle time. Never while
+    /// a request is running, and never after an <c>apiEnd</c> that failed (a handle may still be
+    /// open). A failed unload is logged; the next request loads the DLL again. True if it unloaded
+    /// (or tried to).
+    /// </summary>
+    public bool ReleaseIfIdle()
+    {
+        if (!CanRelease())
+        {
+            return false;
+        }
+
+        var idleMs = _clock.ElapsedMs - _lastUseMs;
+        if (idleMs < _idleReleaseMs)
+        {
+            return false;
+        }
+
+        // Forget the DLL first: whatever Unload does, the next request starts from a fresh load.
+        _loaded = false;
+        _dll.Loaded = false;
+        try
+        {
+            _api.Unload();
+            _log.Info($"api32.dll released after {idleMs / 1000} s without an EDIABAS request");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"api32.dll release did not complete ({ex.GetType().Name}: {ex.Message}); the next request loads it again");
+        }
+
+        return true;
+    }
+
+    private bool CanRelease() => _loaded && _openSessions == 0 && !_handleMayBeOpen;
 
     /// <summary>The request's <c>timeoutSeconds</c>, defaulted and clamped to the maximum.</summary>
     public int EffectiveTimeout(int? requested) =>
@@ -618,10 +688,9 @@ public sealed class EdiabasService
         var code = _api.ErrorCode();
         var text = _api.ErrorText();
 
-        // Which codes mean "port busy" or "no cable" is settled at the desk; until then every
-        // code is returned as it is and logged so it can be mapped later.
+        // Every code is logged, so codes not yet in the map can be added later.
         _log.Warn($"EDIABAS error {code} for {ecu} {job}: {text}");
-        return ApiFailure.Of(ApiErrors.EdiabasError, $"EDIABAS reported error {code}: {text}", new EdiabasErrorDetails(code, text));
+        return EdiabasErrorMap.Failure(code, text);
     }
 
     private JobVerdict ToJobVerdict(PolicyVerdict v, DescriptionFetch fetch, string? comment)
@@ -666,13 +735,23 @@ public sealed class EdiabasService
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
     /// <summary>One apiInit … apiEnd cycle. apiEnd is called exactly once if apiInit was called.</summary>
-    private sealed class Session(EdiabasService owner) : IDisposable
+    private sealed class Session : IDisposable
     {
+        private readonly EdiabasService owner;
         private bool _initCalled;
         private ApiFailure? _initFailure;
 
+        public Session(EdiabasService owner)
+        {
+            this.owner = owner;
+            StartMs = owner._clock.ElapsedMs;
+
+            // Counted so the DLL is never released while a request is running.
+            owner._openSessions++;
+        }
+
         /// <summary>When the request began, for its overall budget.</summary>
-        public long StartMs { get; } = owner._clock.ElapsedMs;
+        public long StartMs { get; }
 
         public bool Initialised { get; private set; }
 
@@ -690,6 +769,13 @@ public sealed class EdiabasService
                 owner._log.Warn($"EDIABAS unavailable: {reason}");
                 _initFailure = ApiFailure.Of(ApiErrors.EdiabasUnavailable, "EDIABAS cannot be used: " + reason, new ReasonDetails(reason ?? "unknown"));
                 return _initFailure;
+            }
+
+            if (!owner._loaded)
+            {
+                owner._loaded = true;
+                owner._dll.Loaded = true;
+                owner._log.Info("api32.dll loaded");
             }
 
             owner._cableUse.Mark(owner._clock.UtcNow);
@@ -710,19 +796,30 @@ public sealed class EdiabasService
 
         public void Dispose()
         {
-            if (!_initCalled)
-            {
-                return;
-            }
-
             try
             {
-                owner._api.End();
+                if (!_initCalled)
+                {
+                    return;
+                }
+
+                try
+                {
+                    owner._api.End();
+                }
+                catch (Exception ex)
+                {
+                    // A handle may still be open: the DLL must not be unloaded under it, ever.
+                    owner._handleMayBeOpen = true;
+                    owner._log.Warn($"apiEnd threw {ex.GetType().Name}: {ex.Message}; api32.dll stays loaded until the agent restarts");
+                    throw;
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                owner._log.Warn($"apiEnd threw {ex.GetType().Name}: {ex.Message}");
-                throw;
+                // The idle time counts from the end of the last request.
+                owner._lastUseMs = owner._clock.ElapsedMs;
+                owner._openSessions--;
             }
         }
     }

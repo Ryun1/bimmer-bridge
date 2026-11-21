@@ -12,6 +12,12 @@ public interface IEdiabasApi
     /// False, with a reason, when the DLL or an export is missing.</summary>
     bool TryLoad(out string? reason);
 
+    /// <summary>Drops every function resolved from the DLL, then unloads it, so that EDIABAS's
+    /// ebas32.exe can exit. Only called between requests, after <c>apiEnd</c>. Afterwards
+    /// <see cref="TryLoad"/> loads and resolves it again. Throws if something went wrong; the
+    /// caller logs it and loads afresh on the next request.</summary>
+    void Unload();
+
     /// <summary><c>apiInit</c>.</summary>
     bool Init();
 
@@ -117,6 +123,18 @@ public interface IEdiabasLog
     void Info(string message);
 
     void Warn(string message);
+}
+
+/// <summary>Whether api32.dll is loaded right now, for /health. Thread-safe.</summary>
+public sealed class DllLoadState
+{
+    private volatile bool _loaded;
+
+    public bool Loaded
+    {
+        get => _loaded;
+        set => _loaded = value;
+    }
 }
 
 /// <summary>When the runner last called <c>apiInit</c>, for /health. Thread-safe.</summary>

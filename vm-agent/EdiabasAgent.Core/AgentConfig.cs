@@ -51,6 +51,13 @@ public sealed class AgentConfig
     public int JobTimeoutSeconds { get; set; } = 30;
     public int MaxJobTimeoutSeconds { get; set; } = 60;
 
+    /// <summary>Seconds without an EDIABAS request after which api32.dll is unloaded, so that
+    /// EDIABAS's ebas32.exe can exit (docs/api.md, "Idle release").</summary>
+    public int EdiabasIdleReleaseSeconds { get; set; } = 20;
+
+    public const int MinIdleReleaseSeconds = 5;
+    public const int MaxIdleReleaseSeconds = 600;
+
     [JsonIgnore]
     public bool IsAutoBind => string.Equals(BindAddress, AutoBind, StringComparison.OrdinalIgnoreCase);
 
@@ -165,6 +172,11 @@ public sealed class AgentConfig
         if (JobTimeoutSeconds > 0 && MaxJobTimeoutSeconds > 0 && JobTimeoutSeconds > MaxJobTimeoutSeconds)
         {
             errors.Add($"jobTimeoutSeconds: must not exceed maxJobTimeoutSeconds ({JobTimeoutSeconds} > {MaxJobTimeoutSeconds})");
+        }
+
+        if (EdiabasIdleReleaseSeconds is < MinIdleReleaseSeconds or > MaxIdleReleaseSeconds)
+        {
+            errors.Add($"ediabasIdleReleaseSeconds: must be between {MinIdleReleaseSeconds} and {MaxIdleReleaseSeconds} (got {EdiabasIdleReleaseSeconds})");
         }
 
         return errors;

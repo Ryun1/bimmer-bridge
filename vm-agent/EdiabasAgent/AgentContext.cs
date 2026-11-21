@@ -35,8 +35,10 @@ internal sealed class AgentContext : IDisposable
                 new SystemRunnerClock(),
                 CableUse,
                 new EdiabasLogAdapter(log),
+                DllState,
                 config.JobTimeoutSeconds,
-                config.MaxJobTimeoutSeconds),
+                config.MaxJobTimeoutSeconds,
+                config.EdiabasIdleReleaseSeconds),
             log);
     }
 
@@ -59,6 +61,9 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>Whether the runner has api32.dll loaded right now, for /health.</summary>
+    public DllLoadState DllState { get; } = new();
 
     /// <summary>Read-only access to the files under the config's <c>logRoots</c>.</summary>
     public LogService Logs { get; }

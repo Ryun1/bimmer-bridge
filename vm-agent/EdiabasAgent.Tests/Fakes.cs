@@ -73,6 +73,14 @@ public sealed class FakeEdiabasApi : IEdiabasApi
 
     public bool InitOk { get; set; } = true;
 
+    public bool UnloadThrows { get; set; }
+
+    /// <summary>Run inside every apiJob call, to act while a request is in flight.</summary>
+    public Action? DuringJob { get; set; }
+
+    /// <summary>apiEnd throws (a native failure while closing the handle).</summary>
+    public bool EndThrows { get; set; }
+
     public FakeEdiabasApi On(string key, FakeJob job)
     {
         _jobs[key] = job;
@@ -105,6 +113,7 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     public void Job(string ecu, string job, string parameters, string results)
     {
         Calls.Add($"Job {ecu} {job} [{parameters}] [{results}]");
+        DuringJob?.Invoke();
         if (!_jobs.TryGetValue($"{ecu} {job} {parameters}", out var j) && !_jobs.TryGetValue($"{ecu} {job}", out j))
         {
             throw new Xunit.Sdk.XunitException($"unscripted job {ecu} {job} [{parameters}]");
@@ -150,7 +159,23 @@ public sealed class FakeEdiabasApi : IEdiabasApi
         _broken = true;
     }
 
-    public void End() => Calls.Add("End");
+    public void End()
+    {
+        Calls.Add("End");
+        if (EndThrows)
+        {
+            throw new InvalidOperationException("native failure in apiEnd");
+        }
+    }
+
+    public void Unload()
+    {
+        Calls.Add("Unload");
+        if (UnloadThrows)
+        {
+            throw new InvalidOperationException("FreeLibrary failed");
+        }
+    }
 
     public int ErrorCode()
     {

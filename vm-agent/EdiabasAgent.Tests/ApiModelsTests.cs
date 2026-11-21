@@ -99,7 +99,7 @@ public class ApiModelsTests
             Port: 8765,
             Gateway: null,
             ConflictingProcesses: [new ConflictingProcess("INPALOAD", 4312)],
-            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true),
+            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false),
             LastCableUseAt: null,
             PolicyVersion: 1,
             Capabilities: ["ediabas"]);
@@ -127,6 +127,8 @@ public class ApiModelsTests
         var ed = root.GetProperty("ediabas");
         Assert.Equal(@"C:\EDIABAS\BIN\api32.dll", ed.GetProperty("dllPath").GetString());
         Assert.True(ed.GetProperty("dllFound").GetBoolean());
+        Assert.Equal(["dllPath", "dllFound", "loaded"], ed.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
     }
 
     [Fact]

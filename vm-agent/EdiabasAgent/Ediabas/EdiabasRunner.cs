@@ -10,6 +10,9 @@ namespace EdiabasAgent.Ediabas;
 /// this thread, whatever happens to the HTTP client: a client that goes away only cancels the
 /// request's token, which makes the service stop starting jobs, break a running one, and still
 /// call apiEnd. A request still queued when its client has gone is dropped without running.
+/// <para>Between requests the thread waits only as long as the service says, then lets the
+/// service release api32.dll if it has been idle long enough; so the unload happens on this
+/// thread and never during a request.</para>
 /// </summary>
 internal sealed class EdiabasRunner : IDisposable
 {
@@ -86,8 +89,30 @@ internal sealed class EdiabasRunner : IDisposable
             return;
         }
 
-        foreach (var item in _queue.GetConsumingEnumerable())
+        while (true)
         {
+            Action<EdiabasService?>? item;
+            try
+            {
+                if (!_queue.TryTake(out item, WaitMs(service)))
+                {
+                    if (_queue.IsCompleted)
+                    {
+                        return;
+                    }
+
+                    // Waited the idle time with nothing to do.
+                    service.ReleaseIfIdle();
+                    continue;
+                }
+            }
+            catch (Exception ex)
+            {
+                // ReleaseIfIdle already logs its own failures; this keeps the thread alive.
+                _log.Error("EDIABAS runner idle release failed", ex);
+                continue;
+            }
+
             try
             {
                 item(service);
@@ -97,6 +122,19 @@ internal sealed class EdiabasRunner : IDisposable
                 // Item() already catches; this is only a last line so the thread never dies.
                 _log.Error("EDIABAS runner item failed", ex);
             }
+        }
+    }
+
+    private int WaitMs(EdiabasService service)
+    {
+        try
+        {
+            return service.MillisecondsUntilRelease();
+        }
+        catch (Exception ex)
+        {
+            _log.Error("EDIABAS runner could not work out the idle release time", ex);
+            return Timeout.Infinite;
         }
     }
 

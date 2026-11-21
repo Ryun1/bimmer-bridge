@@ -39,6 +39,7 @@ public class AgentConfigTests
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(30, c.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);
+        Assert.Equal(20, c.EdiabasIdleReleaseSeconds);
     }
 
     [Fact]
@@ -196,6 +197,26 @@ public class AgentConfigTests
     {
         var errors = LoadErrors($$"""{ "{{field}}": {{value}} }""");
         Assert.Contains(errors, e => e.Contains(field, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(20)]
+    [InlineData(600)]
+    public void IdleRelease_InRange_Loads(int value)
+    {
+        Assert.Equal(value, LoadOk($$"""{ "ediabasIdleReleaseSeconds": {{value}} }""").EdiabasIdleReleaseSeconds);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(601)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void IdleRelease_OutOfRange_IsAnError(int value)
+    {
+        var errors = LoadErrors($$"""{ "ediabasIdleReleaseSeconds": {{value}} }""");
+        Assert.Contains(errors, e => e.StartsWith("ediabasIdleReleaseSeconds:", StringComparison.Ordinal));
     }
 
     [Fact]
