@@ -561,6 +561,16 @@ Stop at each gate. "Claude" checks are run by Claude Code with `curl` from the M
 | **7 Skills** | `ediabas-bridge` and `bmw-standard-tools` skills, references filled from Phase 2 and 6 output, replay agent, evals, `install.sh`, proposed `bmw-e61` addition | Every scenario in §8 passes in a fresh Claude Code session against the replay agent, and fails or does worse without the skill. In the desktop app, a new chat asked to "read the night vision faults" runs the routine unprompted |
 | **8 Hardening** | README (setup, troubleshooting, safety rules), version stamp, release script | Ryan can reinstall from the README alone |
 
+### Settled since v2 was written (2026-11-21)
+- `api.h` has only the handle-less prototypes; the DLL exports `__api…` with the handle first,
+  as pydiabas calls them. Confirmed by running them in the VM.
+- A real SGBD does not load without the interface: `describe NVE_65` with no cable in the VM
+  gives EDIABAS error 28 (`IFH-0018`), reported as `cable_not_found`. `TMODE` and `UTILITY` load.
+- `ebas32.exe` stays up while the agent has `api32.dll` loaded, so the agent unloads the DLL
+  after 20 s idle (`ediabasIdleReleaseSeconds`). After that no EDIABAS process is left.
+- Vehicle-status result names and the engine SGBD are still (verify): Phase 6.
+- Registration uses `claude mcp add --scope user …` (see README).
+
 ### Automated tests (no VM, no car)
 - `EdiabasAgent.Tests` (xUnit, on the Mac): every case in `policy-cases.json`; the
   description screen; path rules; result shaping from a fake API.

@@ -1,10 +1,13 @@
 # Eval: Screenshot of an INPA menu
 
 ## Prompt
-> I've got INPA open on the night vision screen. What do I press to see the fault memory?
+> I've got INPA open. What do I press to get to my E61?
+
+(The recorded screen is INPA's loader menu, so the prompt asks about that screen. A prompt about
+a module screen needs a recording of that screen first.)
 
 ## Replay-agent scenario
-`inpa-screen` — `vm_list_windows` lists an INPA window; `vm_screenshot` returns a recorded INPA menu screenshot.
+`inpa-open` — `vm_list_windows` lists an INPA window; `vm_screenshot` returns a recorded INPA menu screenshot.
 
 ## How to run
 Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
