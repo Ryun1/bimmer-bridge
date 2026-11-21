@@ -118,6 +118,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 502 | `ediabas_error` | EDIABAS reported an error for the job | `{ errorCode: 159, errorText: "IFH-0009: …" }` |
 | 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted) | `{ reason }` |
 | 503 | `desktop_unavailable` | locked screen, secure desktop, or session 0 | `null` |
+| 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which. Also a per-item code in `/ediabas/jobs` and `/ediabas/vehicle` (see there) | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
 
@@ -262,8 +263,12 @@ the Mac stops waiting for an EDIABAS call after 75 s.
 
 ### `POST /ediabas/jobs`
 Body `{ "items": [ { "ecu", "job", "args"?, "results"? } ], "timeoutSeconds"?: 30 }`, 1 to 20
-items. `timeoutSeconds` is per item. The whole request stops starting new items once
-`maxJobTimeoutSeconds` has elapsed; items not started get `not_run`.
+items. `timeoutSeconds` is per item. An item gets `not_run` (with `details: null` and a message
+saying why) when it was not started, or was stopped, because:
+- the request's `maxJobTimeoutSeconds` budget ran out;
+- a BMW tool started during the request (see "Conflict check during a request");
+- an earlier item's job did not stop after `apiBreak` (see "A job that does not stop");
+- the client gave up on the request (a running job is stopped with `apiBreak`).
 
 200:
 ```json
