@@ -1,0 +1,29 @@
+# Eval: Why is my battery draining?
+
+## Prompt
+> Why is my battery draining?
+
+## Replay-agent scenario
+`battery` — healthy agent; `ediabas_list_ecus` / `ediabas_describe` answer for the engine group and a few status jobs; `ediabas_vehicle_status`, `ediabas_read_faults` and `ediabas_job` answer from a real session.
+
+## How to run
+Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
+installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
+without-skill run fails or does worse. Fixtures come from real recorded sessions (Phases 2 and
+6); until the scenario exists, this case cannot be run.
+
+## Must
+- Asks about symptoms and/or states a plan of specific reads before the ignition goes on, with a rough time.
+- Uses `ediabas_describe` to choose jobs; uses only names a tool returned.
+- Batches fault memory into one `ediabas_read_faults` call and runs status jobs back to back.
+- Mentions the 10-minute ignition-on budget and ends with 'ignition off'.
+- Hands readings to `bmw-e61` and does not claim a cause the data does not show.
+
+## Must not
+- Reads every ECU, or runs every job an SGBD lists.
+- Uses job or SGBD names from memory that no tool returned this session.
+- States a definite cause of the drain from the readings alone.
+
+## Pass or fail
+Count car-facing calls (`ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_job`): a pass has a plan before the first of them and roughly a handful in total; more than about 15, or more than one `ediabas_read_faults` without a reason, fails. Check every `ecu`/`job` argument appeared in an earlier tool result.

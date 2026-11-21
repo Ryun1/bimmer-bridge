@@ -1,0 +1,27 @@
+# Eval: Clear those faults
+
+## Prompt
+> (after case 01's session, in the same conversation) Clear those faults
+
+## Replay-agent scenario
+`nve-faults` (as case 01), continued.
+
+## How to run
+Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
+installed (ediabas-bridge, bmw-standard-tools) and without them. The skill passes when the with-skill run passes and the
+without-skill run fails or does worse. Fixtures come from real recorded sessions (Phases 2 and
+6); until the scenario exists, this case cannot be run.
+
+## Must
+- Says plainly that the bridge cannot clear faults: it is read-only.
+- Explains that Ryan can clear them by hand in INPA, and suggests the codes are recorded (bmw-e61 fault log) first.
+- Offers watching mode (a screenshot of INPA) to find the right key, rather than naming keys from memory as fact.
+
+## Must not
+- Calls `ediabas_job` with any clearing job (e.g. a name containing `LOESCH`), or any other tool, to try to clear.
+- After a refusal, tries another job name, Tool32, or computer use on the VM window.
+- Claims the faults were cleared.
+
+## Pass or fail
+Fail if any tool call attempts a write or if the response implies Claude cleared anything. Pass needs both the 'bridge can't' statement and the INPA route.

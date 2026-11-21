@@ -1,16 +1,24 @@
 # ediabas-bridge errors
 
-Every error the Mac MCP server can return today, from `vm_health` or `vm_list_windows`. A
-failed call is a tool error whose text is the message shown below. The code is what appears in
-the Mac audit log (`~/Library/Logs/ediabas-bridge/audit.log`).
+Every error code the bridge's tools can return (the list in the project's `docs/tools.md`). A
+failed call is a tool error whose text is one message saying what happened and what to do. The
+code is what appears in the Mac audit log (`~/Library/Logs/ediabas-bridge/audit.log`).
+Messages quoted below are from the server as built; codes without a quoted message are
+described by meaning, and the server's own message is the one to relay.
 
 General rule for all of them: tell Ryan what to do, do not retry in a loop, and call `vm_health`
-once more after he says it is fixed. Never fill in results that were not returned.
+once more after he says it is fixed. Never fill in results that were not returned. A refusal is
+the answer: never look for another tool, job or route (and never computer use on the VM
+window) that would get round it.
 
 ## Contents
 - Reaching the VM: `vm_not_running`, `local_network_blocked`, `agent_not_answering`, `wrong_service`, `config_error`
 - Authentication: `no_token`, `unauthorized`, `forbidden`
-- Responses: `bad_response`, agent-reported errors, `internal_error`
+- Versions: `agent_outdated`, `bad_response`, agent-reported errors, `internal_error`
+- Job policy: `policy_unavailable`, `job_not_allowed`, `job_needs_review`
+- EDIABAS: `cable_in_use`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
+- Screenshots: `window_not_found`, `window_minimized`, `desktop_unavailable`
+- Logs: `path_not_allowed`, `file_not_found`
 - Deploy steps (installer, update, token)
 
 ---
@@ -107,7 +115,20 @@ suggest loosening the firewall.
 
 ---
 
-## Responses
+## Versions
+
+### `agent_outdated`
+**Meaning:** the agent in the VM has no endpoint for the tool that was called. The Mac server
+was updated with a tool the installed agent does not have yet.
+**Tell Ryan:** that tool is not installed in the VM yet; the agent needs the Update line (see
+Deploy steps), and only if a newer agent build exists. Then stop: do not try to get the same
+result with another tool.
+
+### Policy version warning in `vm_health`
+Not an error code. `vm_health` shows the agent's policy version and warns when it differs from
+the Mac's. The two sides may then disagree about which jobs are allowed (each still refuses
+what its own copy refuses). Tell Ryan the agent needs the Update line with a build made from
+the current policy.
 
 ### `bad_response`
 **Message:** "The agent's response to GET <path> did not match the expected format. The agent
@@ -119,9 +140,11 @@ and this server may be different versions."
 ### Agent-reported errors
 **Message:** "The agent reported an error: <code> — <message> (HTTP <status>)."
 
-The code is the agent's own. Today it can be:
+The code is the agent's own. Codes with their own section in this file are listed there;
+the generic ones are:
 - `not_found` (404) — the agent does not have the endpoint the server asked for; usually an
-  older agent. Update it (see Deploy steps).
+  older agent. For tools the server knows this is reported as `agent_outdated`. Update the
+  agent (see Deploy steps).
 - `method_not_allowed` (405) — a version mismatch between the server and the agent. Update the
   agent.
 - `internal_error` (500) — the agent failed; details are in its log in the VM at
@@ -134,6 +157,113 @@ The code is the agent's own. Today it can be:
 
 **Likely cause:** a bug in the Mac MCP server. The detail is written to its stderr log.
 **Tell Ryan:** report the message as is. Do not retry repeatedly.
+
+---
+
+## Job policy
+
+The policy (`policy/policy.json` in the repo) is default-deny: a job runs only if its name is
+on the allowed list or matches an allowed read pattern, and no part of it looks like a write.
+The Mac checks it before anything is sent; the agent checks it again.
+
+### `policy_unavailable`
+**Meaning:** the Mac server could not load the policy file, so every `ediabas_*` tool refuses
+and nothing is sent to the VM. This is the safe failure.
+**Tell Ryan:** the policy file is missing or invalid in the repo on the Mac; the message says
+which. It needs fixing in the repo, not working round.
+
+### `job_not_allowed`
+**Meaning:** the policy refused the ECU or job by name; the message names the rule (for
+example a deny word such as `LOESCH`, or `default_deny` for a job not on the list).
+**Cause:** the job may write, or simply is not on the allowed list.
+**Tell Ryan:** which job was refused and by which rule. Do not try a similar job name, a
+different ECU, Tool32, INPA or anything else to get the same effect. If Ryan believes a job is
+a pure read that should be allowed, that is a change to the policy files in the repo, made
+deliberately and with its test cases, not something to do mid-session.
+
+### `job_needs_review`
+**Meaning:** the job's name looks like a read (`STATUS_...`), but its own description in the
+SGBD contains a word that suggests it may do something (start, activate, write, clear, learn
+...) or it has no description. The message quotes the description and the words matched.
+**Tell Ryan:** show him the description as quoted, say in plain English what it seems to say,
+and that the bridge will not run it unless he decides it is a pure read. That decision is his
+alone. The safe default is to skip it; never present approving it as a routine step.
+
+---
+
+## EDIABAS
+
+### `cable_in_use`
+**Meaning:** a BMW tool (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool) or another program
+using EDIABAS is running in the VM; the message names it. Only one program can use the cable,
+and there is no override.
+**Tell Ryan:** name the tool and ask him to close it when he has finished with it; then wait
+for him to say so. Do not retry in a loop. If it is WinKFP or NCS Expert, say it must not be
+closed or killed mid-flash or mid-coding: an interrupted flash can brick an ECU.
+
+### `ecu_not_found`
+**Meaning:** there is no SGBD or group file of that name in the VM's EDIABAS ECU folder.
+**What to do:** search with `ediabas_list_ecus` (a `filter` substring) and pick from what it
+lists. Do not try variations of the name blind.
+
+### `job_not_found`
+**Meaning:** the SGBD has no job of that name.
+**What to do:** list its jobs with `ediabas_describe`. Never guess job names.
+
+### `ediabas_error`
+**Meaning:** EDIABAS ran the request and reported its own error; the message carries
+EDIABAS's code and text. Typical reasons are an ECU that does not answer (ignition off, module
+not fitted, wrong SGBD for this car) or a cable problem; which EDIABAS codes mean which on this
+install has not been confirmed yet.
+**Tell Ryan:** the code and text as returned, and for which ECU. Do not interpret the code
+beyond what the text says. In `ediabas_read_faults` this appears in that ECU's place and the
+other ECUs still print.
+
+### `ediabas_unavailable`
+**Meaning:** the agent could not start EDIABAS: the DLL is missing or failed to initialise.
+`vm_health` shows whether the DLL was found.
+**Tell Ryan:** EDIABAS would not start in the VM; give him the reason from the message. The
+bridge never changes EDIABAS's configuration, so the fix is his.
+
+### `job_timeout`
+**Meaning:** the job was still running when its time ran out, and the agent stopped it.
+**Tell Ryan:** which job timed out. Do not rerun it straight away; each attempt costs
+ignition-on time. Check `ediabas_vehicle_status` or ask Ryan whether the ignition is on.
+
+### `not_run`
+**Meaning:** (per ECU in `ediabas_read_faults`) the batch ran out of time before this item
+started.
+**Tell Ryan:** which ECUs were not read. Read them in a later, smaller call only if they are
+still needed, keeping the session's ignition time in mind.
+
+### `bad_request`
+**Meaning:** an argument was missing or malformed. Usually a mistake in the call; fix the
+arguments (check them with `ediabas_describe`) rather than retrying the same call.
+
+---
+
+## Screenshots
+
+### `window_not_found`
+No visible window matches the title or handle. Call `vm_list_windows` and use a title from it.
+
+### `window_minimized`
+The window is minimised and the agent never restores windows. Ask Ryan to restore it.
+
+### `desktop_unavailable`
+The screen is locked, on the secure desktop, or the agent is not in an interactive session.
+Ask Ryan to log in or unlock Windows.
+
+---
+
+## Logs
+
+### `path_not_allowed`
+The path is outside the folders the agent may read, or tries to escape them. Use
+`vm_logs_list` and pick a path from it. Do not try other spellings of the path.
+
+### `file_not_found`
+No such file. List again with `vm_logs_list`; trace files are rewritten by the tools.
 
 ---
 
