@@ -56,18 +56,23 @@ security add-generic-password -s ediabas-bridge -a agent -w '<token>' -U
 ```
 
 If the Keychain has none, `EDIABAS_AGENT_TOKEN` is used (with one warning on stderr). With
-neither, the server still starts and each tool says how to store the token. After a 401 the
+neither, the server still starts and each tool says how to store the token.
+
+**With `EDIABAS_AGENT_URL` set, only `EDIABAS_AGENT_TOKEN` is used and the Keychain is never
+read**, so the VM agent's token is never sent to an address set by hand (the replay agent in
+`dev/`, or a mistyped URL). Without `EDIABAS_AGENT_TOKEN` every tool then fails with
+`no_token`, saying why. After a 401 the
 token is re-read once, so a newly stored token is picked up without a restart.
 
 ## Environment (all optional)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/health` agent check still applies) |
+| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/health` agent check still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
 | `EDIABAS_AGENT_PORT` | `8765` | port used with a discovered address |
 | `EDIABAS_VM_MAC` | `F2:E5:81:1E:82:07` | the VM's MAC address |
 | `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl` and messages |
-| `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none |
+| `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none; the only token used with `EDIABAS_AGENT_URL` |
 | `EDIABAS_AUDIT_LOG` | `~/Library/Logs/ediabas-bridge/audit.log` | audit log path |
 | `EDIABAS_RECORD_DIR` | — | record every agent exchange into this folder (see Recording) |
 

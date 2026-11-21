@@ -442,6 +442,8 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
   const tokens = new TokenProvider({
     execFile: deps.execFile,
     envToken: config.envToken,
+    // An overridden agent URL gets EDIABAS_AGENT_TOKEN only, never the Keychain's token.
+    envOnly: config.agentUrl !== undefined,
     warn: deps.log,
     service: config.keychainService,
     account: config.keychainAccount,

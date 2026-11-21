@@ -1,11 +1,17 @@
-import { noToken } from "./errors.js";
+import { BridgeError, noToken } from "./errors.js";
 import type { ExecFileFn } from "./vmAddress.js";
 
 export interface TokenProviderOptions {
   /** Runs a command without a shell; resolves with stdout. */
   execFile: ExecFileFn;
-  /** `EDIABAS_AGENT_TOKEN`, used only when the Keychain has none. */
+  /** `EDIABAS_AGENT_TOKEN`, used only when the Keychain has none (or alone, with `envOnly`). */
   envToken?: string | undefined;
+  /**
+   * True when EDIABAS_AGENT_URL overrides the agent's address: then only `envToken` is used and
+   * the Keychain is never read, so the VM agent's secret never goes to an address someone set
+   * by hand (a replay agent, or a mistake).
+   */
+  envOnly?: boolean | undefined;
   /** Writes one line to stderr. */
   warn: (message: string) => void;
   service: string;
@@ -13,6 +19,16 @@ export interface TokenProviderOptions {
 }
 
 const SECURITY = "/usr/bin/security";
+
+/** no_token when EDIABAS_AGENT_URL is set without EDIABAS_AGENT_TOKEN. */
+export function noTokenForOverride(): BridgeError {
+  return new BridgeError(
+    "no_token",
+    "EDIABAS_AGENT_URL is set, so this server needs EDIABAS_AGENT_TOKEN in its environment: the token of the agent at that address. " +
+      "The Keychain token (the VM agent's) is deliberately never sent to an overridden address. " +
+      "Set EDIABAS_AGENT_TOKEN, or unset EDIABAS_AGENT_URL to use the VM.",
+  );
+}
 
 /**
  * The agent token, read lazily from the Keychain with an env fallback. The token itself is
@@ -34,6 +50,12 @@ export class TokenProvider {
   /** Re-read the token (e.g. after a 401: it may have just been installed). */
   async refresh(): Promise<string> {
     this.cached = undefined;
+    if (this.opts.envOnly) {
+      if (!this.opts.envToken) throw noTokenForOverride();
+      this.seen.add(this.opts.envToken);
+      this.cached = this.opts.envToken;
+      return this.cached;
+    }
     const fromKeychain = await this.readKeychain();
     let token = fromKeychain;
     if (token === undefined && this.opts.envToken) {

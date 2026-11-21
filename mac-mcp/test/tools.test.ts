@@ -32,7 +32,7 @@ interface Setup {
 
 async function connect(s: Setup = {}) {
   const auditPath = join(dir, "logs", "audit.log");
-  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
+  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: AGENT_TOKEN, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
   const { config } = loadConfig(env, dir);
   const logs: string[] = [];
   const execFile = vi.fn<ExecFileFn>(async (file) => {
