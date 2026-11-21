@@ -67,7 +67,9 @@ function makeClient(o: Opts = {}) {
   });
   const networkInterfaces = vi.fn<NetworkInterfacesFn>(() => (o.ifaces ?? VM_BRIDGE) as never);
   const fetchFn = vi.fn<typeof fetch>(o.fetch ?? ((...a) => fetch(...a)));
+  const logs: string[] = [];
   const client = new AgentClient({
+    log: (m) => logs.push(m),
     config: config(o.env),
     tokens: o.tokens ?? staticTokens(),
     fetch: fetchFn,
@@ -75,7 +77,7 @@ function makeClient(o: Opts = {}) {
     requestTimeoutMs: o.requestTimeoutMs,
     probeTimeoutMs: o.probeTimeoutMs,
   });
-  return { client, readFile, execFile, networkInterfaces, fetchFn };
+  return { client, readFile, execFile, networkInterfaces, fetchFn, logs };
 }
 
 async function errorOf(p: Promise<unknown>): Promise<BridgeError> {
@@ -362,14 +364,20 @@ describe("AgentClient discovery", () => {
     expect(e.code).toBe("agent_not_answering");
   });
 
-  it("maps host unreachable at an on-link address to 'VM not running'", async () => {
-    const { client } = makeClient({
-      fetch: vi.fn(async () => {
-        throw connError("EHOSTDOWN");
-      }),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-    });
-    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+  it("maps unreachable-class errors at an on-link address to 'local_network_blocked'", async () => {
+    for (const code of ["EHOSTUNREACH", "EHOSTDOWN", "ENETUNREACH", "ENETDOWN", "EADDRNOTAVAIL"]) {
+      const { client, logs } = makeClient({
+        fetch: vi.fn(async () => {
+          throw connError(code);
+        }),
+        leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+      });
+      const e = await errorOf(client.health());
+      expect(e.code).toBe("local_network_blocked");
+      expect(e.message).toBe(MESSAGES.localNetworkBlocked);
+      expect(e.message).toContain("System Settings > Privacy & Security > Local Network");
+      expect(logs).toContain(`probe 192.168.64.3:8765 failed: unreachable (${code})`);
+    }
   });
 
   it("prefers the 401 message over other candidate failures", async () => {
@@ -490,5 +498,178 @@ describe("AgentClient discovery", () => {
     ];
     for (const o of cases) msgs.push((await errorOf(makeClient(o).client.health())).message);
     for (const m of msgs) expect(m).not.toContain(AGENT_TOKEN);
+  });
+});
+
+describe("local network blocked (macOS Local Network privacy)", () => {
+  const LEASES = leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 });
+
+  it("never contacts an off-link candidate, and blames the local network for the on-link one", async () => {
+    const { client, fetchFn } = makeClient({
+      fetch: vi.fn(async () => {
+        throw connError("EHOSTUNREACH");
+      }),
+      leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
+    });
+    expect((await errorOf(client.health())).code).toBe("local_network_blocked");
+    expect(calledUrls(fetchFn).some((u) => u.includes("192.168.65.3"))).toBe(false);
+  });
+
+  it("maps EHOSTUNREACH on a request right after discovery", async () => {
+    const { client, logs } = makeClient({
+      fetch: vi.fn(async (url) => {
+        if (String(url).endsWith("/health")) return okResponse();
+        throw connError("EHOSTUNREACH");
+      }),
+      leases: LEASES,
+    });
+    expect((await errorOf(client.listWindows())).code).toBe("local_network_blocked");
+    expect(logs).toContain("request 192.168.64.3:8765 GET /windows failed: unreachable (EHOSTUNREACH)");
+  });
+
+  it("maps EHOSTUNREACH on the cached-address path", async () => {
+    let blocked = false;
+    const { client, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        if (blocked && String(url).endsWith("/windows")) throw connError("EHOSTUNREACH");
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    await client.listWindows();
+    blocked = true;
+    const e = await errorOf(client.listWindows());
+    expect(e.code).toBe("local_network_blocked");
+    // cached request failed, cache cleared, re-resolved once, retried once
+    expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/windows",
+      "http://192.168.64.3:8765/health",
+      "http://192.168.64.3:8765/windows",
+    ]);
+  });
+
+  it("maps EHOSTUNREACH when the cached address and the re-probe are both blocked", async () => {
+    let blocked = false;
+    const { client } = makeClient({
+      fetch: vi.fn(async (url) => {
+        if (blocked) throw connError("EHOSTUNREACH");
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    await client.listWindows();
+    blocked = true;
+    expect((await errorOf(client.listWindows())).code).toBe("local_network_blocked");
+  });
+
+  it("still says 'VM not running' with no bridge interface", async () => {
+    const { client, fetchFn } = makeClient({ ifaces: NO_BRIDGE, leases: LEASES });
+    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("still says 'VM not running' for an unreachable explicit URL that is not on a bridge subnet", async () => {
+    const { client } = makeClient({
+      env: { EDIABAS_AGENT_URL: "http://10.9.9.9:8765" },
+      fetch: vi.fn(async () => {
+        throw connError("EHOSTUNREACH");
+      }),
+    });
+    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+  });
+
+  it("uses local_network_blocked for an unreachable explicit URL on a bridge subnet", async () => {
+    const { client } = makeClient({
+      env: { EDIABAS_AGENT_URL: "http://192.168.64.3:8765" },
+      fetch: vi.fn(async () => {
+        throw connError("EHOSTUNREACH");
+      }),
+    });
+    expect((await errorOf(client.health())).code).toBe("local_network_blocked");
+  });
+
+  it("keeps timeouts as 'agent not answering'", async () => {
+    const { client, logs } = makeClient({
+      fetch: vi.fn(async () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }),
+      leases: LEASES,
+    });
+    expect((await errorOf(client.health())).code).toBe("agent_not_answering");
+    expect(logs).toContain("probe 192.168.64.3:8765 failed: timeout (TimeoutError)");
+  });
+
+  describe("ranking among candidates", () => {
+    const TWO = leaseFile({ ip: "192.168.64.3", lease: 2 }, { ip: "192.168.64.4", lease: 1 });
+    const by = (a: () => Promise<Response>, b: () => Promise<Response>) =>
+      vi.fn<typeof fetch>(async (url) => (String(url).includes(".3:") ? a() : b()));
+    const unreachable = async (): Promise<Response> => {
+      throw connError("EHOSTUNREACH");
+    };
+    const refused = async (): Promise<Response> => {
+      throw connError("ECONNREFUSED");
+    };
+    const status = (n: number) => async () =>
+      new Response(JSON.stringify({ error: { code: n === 401 ? "unauthorized" : "forbidden", message: "m" } }), { status: n });
+
+    it("local_network_blocked beats agent_not_answering, in either order", async () => {
+      expect((await errorOf(makeClient({ fetch: by(unreachable, refused), leases: TWO }).client.health())).code).toBe("local_network_blocked");
+      expect((await errorOf(makeClient({ fetch: by(refused, unreachable), leases: TWO }).client.health())).code).toBe("local_network_blocked");
+    });
+
+    it("forbidden and unauthorized beat local_network_blocked", async () => {
+      expect((await errorOf(makeClient({ fetch: by(unreachable, status(403)), leases: TWO }).client.health())).code).toBe("forbidden");
+      expect((await errorOf(makeClient({ fetch: by(status(401), unreachable), leases: TWO }).client.health())).code).toBe("unauthorized");
+    });
+  });
+});
+
+describe("stderr diagnostics", () => {
+  it("logs the accepted address and its source", async () => {
+    const ok = vi.fn(async () => okResponse());
+    const viaLeases = makeClient({ fetch: ok, leases: leaseFile({ ip: "192.168.64.3", lease: 1 }) });
+    await viaLeases.client.health();
+    expect(viaLeases.logs).toContain("discovery accepted 192.168.64.3:8765 (source: leases)");
+
+    const viaArp = makeClient({ fetch: ok, leases: null, arp: "? (192.168.64.5) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]" });
+    await viaArp.client.health();
+    expect(viaArp.logs).toContain("discovery accepted 192.168.64.5:8765 (source: arp)");
+
+    const viaUtm = makeClient({ fetch: ok, leases: null, arp: "", utm: "192.168.64.6\n" });
+    await viaUtm.client.health();
+    expect(viaUtm.logs).toContain("discovery accepted 192.168.64.6:8765 (source: utmctl)");
+
+    const viaEnv = makeClient({ fetch: ok, env: { EDIABAS_AGENT_URL: "http://127.0.0.1:4567" } });
+    await viaEnv.client.health();
+    expect(viaEnv.logs).toContain("discovery accepted 127.0.0.1:4567 (source: env)");
+  });
+
+  it("logs refused connections and HTTP statuses, never the token", async () => {
+    const a = await fake(contractHandler("a-different-token"));
+    const http = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await errorOf(http.client.health());
+    expect(http.logs).toContain(`probe 127.0.0.1:${a.port} failed: HTTP 401`);
+
+    const port = await closedPort();
+    const refused = makeClient({ env: { EDIABAS_AGENT_URL: `http://127.0.0.1:${port}` } });
+    await errorOf(refused.client.health());
+    expect(refused.logs).toContain(`probe 127.0.0.1:${port} failed: refused (ECONNREFUSED)`);
+
+    const b = await fake();
+    const req = makeClient({ env: { EDIABAS_AGENT_URL: b.url } });
+    await req.client.health();
+    b.setHandler((r, res) => (r.url === "/windows" ? json(res, 500, { error: { code: "internal_error", message: AGENT_TOKEN } }) : contractHandler()(r, res)));
+    await errorOf(req.client.listWindows());
+    expect(req.logs).toContain(`request 127.0.0.1:${b.port} GET /windows failed: HTTP 500`);
+
+    const wrong = makeClient({ env: { EDIABAS_AGENT_URL: "http://127.0.0.1:1" }, fetch: vi.fn(async () => okResponse({ agent: "x" })) });
+    await errorOf(wrong.client.health());
+    expect(wrong.logs.join("\n")).toMatch(/probe 127\.0\.0\.1:1 failed: not the agent/);
+
+    for (const l of [...http.logs, ...refused.logs, ...req.logs, ...wrong.logs]) {
+      expect(l).not.toContain(AGENT_TOKEN);
+      expect(l.toLowerCase()).not.toContain("bearer");
+      expect(l.toLowerCase()).not.toContain("authorization");
+    }
   });
 });

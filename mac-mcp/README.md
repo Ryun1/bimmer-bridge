@@ -51,6 +51,23 @@ Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry firs
 with `"agent": "ediabas-bridge-agent"`. The accepted URL is cached; on a connection failure
 the cache is cleared and discovery runs once more.
 
+## Troubleshooting: macOS Local Network permission
+
+On recent macOS, connecting to an address on the local network (such as the VM's) needs
+Local Network permission. When the Claude desktop app launches the server, macOS treats the
+`node` binary as its own app and asks "node would like to find devices on your local
+network". Until that is allowed, connects fail at once and the tools report
+`local_network_blocked` ("This Mac could not reach the VM's address even though UTM's
+network is up..."). Fix: System Settings > Privacy & Security > Local Network, allow `node`,
+then ask again.
+
+The permission is tied to the path of the node binary. Upgrading or reinstalling node (for
+example a Homebrew upgrade that changes the path) can make macOS ask again.
+
+Every failed probe or request, and every accepted address with its source
+(leases / arp / utmctl / env), is logged to stderr, e.g.
+`probe 192.168.64.3:8765 failed: unreachable (EHOSTUNREACH)`. The token is never logged.
+
 ## Audit log
 
 One tab-separated line per tool call: UTC time, tool, outcome (`ok` or the error code),

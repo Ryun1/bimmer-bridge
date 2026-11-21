@@ -13,6 +13,8 @@ export const MESSAGES = {
     "The VM is up but the agent is not answering. Log in to Windows (the agent starts at log-on), or re-run the installer.",
   unauthorized: "The agent rejected the token. The Keychain token does not match the VM's.",
   forbidden: "The agent refused this Mac's address (firewall or gateway check).",
+  localNetworkBlocked:
+    "This Mac could not reach the VM's address even though UTM's network is up. macOS may be blocking it: open System Settings > Privacy & Security > Local Network and allow 'node' (or answer the 'node would like to find devices on your local network' prompt with Allow), then ask again. If that is already allowed, the VM may still be starting: log in to Windows and try again.",
   noToken: `No agent token found. ${TOKEN_FIX}`,
 } as const;
 
@@ -20,6 +22,7 @@ export const MESSAGES = {
 export type LocalErrorCode =
   | "vm_not_running"
   | "agent_not_answering"
+  | "local_network_blocked"
   | "unauthorized"
   | "forbidden"
   | "no_token"
@@ -45,6 +48,10 @@ export function vmNotRunning(vmName: string, detail?: string): BridgeError {
 
 export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
+}
+
+export function localNetworkBlocked(): BridgeError {
+  return new BridgeError("local_network_blocked", MESSAGES.localNetworkBlocked);
 }
 
 export function unauthorized(): BridgeError {

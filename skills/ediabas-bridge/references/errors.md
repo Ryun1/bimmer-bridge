@@ -8,7 +8,7 @@ General rule for all of them: tell Ryan what to do, do not retry in a loop, and 
 once more after he says it is fixed. Never fill in results that were not returned.
 
 ## Contents
-- Reaching the VM: `vm_not_running`, `agent_not_answering`, `wrong_service`, `config_error`
+- Reaching the VM: `vm_not_running`, `local_network_blocked`, `agent_not_answering`, `wrong_service`, `config_error`
 - Authentication: `no_token`, `unauthorized`, `forbidden`
 - Responses: `bad_response`, agent-reported errors, `internal_error`
 - Deploy steps (installer, update, token)
@@ -30,6 +30,21 @@ Sometimes followed by a detail in brackets:
 **Likely cause:** the VM is off, suspended, or still booting.
 **Tell Ryan:** start the `Windows` VM in UTM and log in to Windows. If the VM is plainly running
 and logged in, treat it like `agent_not_answering`.
+
+### `local_network_blocked`
+**Message:** "This Mac could not reach the VM's address even though UTM's network is up. macOS
+may be blocking it: open System Settings > Privacy & Security > Local Network and allow 'node'
+(or answer the 'node would like to find devices on your local network' prompt with Allow),
+then ask again. If that is already allowed, the VM may still be starting: log in to Windows
+and try again."
+
+**Likely cause:** macOS Local Network privacy. The Claude desktop app starts the server in a
+way that makes macOS treat `node` as its own app, so the first call shows a permission prompt
+and fails until Ryan answers it. The permission is tied to the `node` binary's path, so a
+Homebrew upgrade of node can bring the prompt back.
+**Tell Ryan:** allow `node` under System Settings > Privacy & Security > Local Network, then ask
+again. Do not say the VM is down. Only if that is already allowed: check the VM has finished
+starting and he is logged in to Windows.
 
 ### `agent_not_answering`
 **Message:** "The VM is up but the agent is not answering. Log in to Windows (the agent starts

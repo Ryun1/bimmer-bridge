@@ -35,14 +35,14 @@ describe("formatHealth", () => {
   it("warns that screenshots will not work in session 0", () => {
     const t = formatHealth(health({ sessionId: 0 }));
     expect(t).toMatch(/not .*interactive/i);
-    expect(t).toMatch(/screenshots will not work/i);
-    expect(formatHealth(health())).not.toMatch(/screenshots will not work/i);
+    expect(t).toMatch(/screenshots, when built, will not work/i);
+    expect(formatHealth(health())).not.toMatch(/screenshot/i);
   });
 
   it("says the cable is free when no BMW tools are running", () => {
     const t = formatHealth(health({ conflictingProcesses: [] }));
-    expect(t).toMatch(/BMW tools running: none/);
-    expect(t).not.toMatch(/unavailable/);
+    expect(t).toContain("BMW tools running: none.");
+    expect(t).not.toMatch(/unavailable|free for the bridge/);
   });
 
   it("reports a missing DLL, elevation and a last cable use", () => {

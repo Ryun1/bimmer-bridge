@@ -23,9 +23,10 @@ export const SERVER_VERSION: string = (() => {
 
 export const INSTRUCTIONS = [
   "ediabas-bridge reads BMW diagnostic information from a Windows VM (UTM) on this Mac that runs EDIABAS, INPA and related tools.",
-  "Tools: vm_health (agent status, which BMW tools are running and so hold the diagnostic cable, EDIABAS DLL, last cable use)",
-  "and vm_list_windows (the windows open in the VM).",
+  "Tools: vm_health (agent status, which BMW tools are running and so hold the cable, EDIABAS DLL)",
+  "and vm_list_windows (windows open in the VM).",
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
+  "Only vm_health and vm_list_windows exist so far: reading faults or live values from the car, screenshots and log reading are not built yet, so if the user asks for those, say they are not available yet rather than offering them.",
   "Call vm_health first.",
   "If a tool reports that the VM is not running or the agent is not answering, tell the user what to do (the message says how) rather than retrying.",
 ].join(" ");
@@ -81,7 +82,7 @@ export function buildServer(parts: ServerParts): McpServer {
       title: "VM agent health",
       description:
         "Check the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
-        "interactive session (needed for screenshots), elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
+        "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
         "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found, and last cable use. " +
         "Call this first in a session, and again when another tool fails. Read-only.",
       annotations: { title: "VM agent health", ...READ_ONLY },
@@ -128,6 +129,7 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     fetch: deps.fetch,
     requestTimeoutMs: deps.requestTimeoutMs,
     probeTimeoutMs: deps.probeTimeoutMs,
+    log: (m) => deps.log(tokens.redact(m)),
   });
   const audit = new AuditLog(config.auditLogPath, { warn: deps.log });
   return buildServer({ client, audit, redact: (t) => tokens.redact(t), log: deps.log });

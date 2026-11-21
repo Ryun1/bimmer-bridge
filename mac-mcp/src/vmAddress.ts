@@ -189,6 +189,16 @@ export function isOnLink(ip: string, subnets: Subnet[]): boolean {
   });
 }
 
+/** `host:port` of a base URL, for log lines (never includes credentials or paths). */
+export function hostPort(baseUrl: string): string {
+  try {
+    const u = new URL(baseUrl);
+    return `${u.hostname}:${u.port || (u.protocol === "https:" ? "443" : "80")}`;
+  } catch {
+    return "(invalid url)";
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Locator: picks and caches the agent's base URL
 // ---------------------------------------------------------------------------
@@ -208,8 +218,10 @@ export type ProbeFn = (baseUrl: string, ctx: CallContext) => Promise<void>;
 function rank(code: string): number {
   switch (code) {
     case "unauthorized":
-      return 6;
+      return 7;
     case "forbidden":
+      return 6;
+    case "local_network_blocked":
       return 5;
     case "agent_not_answering":
       return 4;
@@ -229,6 +241,7 @@ export class VmLocator {
     private readonly config: Config,
     private readonly sources: DiscoverySources,
     private readonly probe: ProbeFn,
+    private readonly log: (message: string) => void = () => {},
   ) {}
 
   /** The accepted base URL, from cache or by discovery. */
@@ -253,6 +266,7 @@ export class VmLocator {
         throw configError("EDIABAS_AGENT_URL is not a valid http(s) URL. Fix or unset it in the MCP server's environment.");
       }
       await this.probe(explicit, ctx);
+      this.log(`discovery accepted ${hostPort(explicit)} (source: env)`);
       return explicit;
     }
 
@@ -265,7 +279,7 @@ export class VmLocator {
     let sawCandidate = false;
     let best: BridgeError | undefined;
 
-    for (const source of this.candidateSources()) {
+    for (const [sourceName, source] of this.candidateSources()) {
       const candidates = await source();
       for (const ip of candidates) {
         if (tried.has(ip)) continue;
@@ -275,6 +289,7 @@ export class VmLocator {
         const baseUrl = `http://${ip}:${this.config.agentPort}`;
         try {
           await this.probe(baseUrl, ctx);
+          this.log(`discovery accepted ${ip}:${this.config.agentPort} (source: ${sourceName})`);
           return baseUrl;
         } catch (e) {
           if (!(e instanceof BridgeError) || e.code === "no_token") throw e;
@@ -291,17 +306,17 @@ export class VmLocator {
   }
 
   /** Lazy sources in priority order; a later source only runs if earlier ones found nothing usable. */
-  private candidateSources(): (() => Promise<string[]>)[] {
+  private candidateSources(): [string, () => Promise<string[]>][] {
     const { readFile, execFile } = this.sources;
     const mac = this.config.vmMac;
     return [
-      async () => leaseCandidates(await readFile(LEASES_PATH).catch(() => ""), mac),
-      async () => arpCandidates(await execFile(ARP_PATH, ["-an"], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""), mac),
-      async () =>
+      ["leases", async () => leaseCandidates(await readFile(LEASES_PATH).catch(() => ""), mac)],
+      ["arp", async () => arpCandidates(await execFile(ARP_PATH, ["-an"], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""), mac)],
+      ["utmctl", async () =>
         parseUtmctl(
           // Fails when the guest agent is absent, which is normal.
           await execFile(this.config.utmctlPath, ["ip-address", this.config.vmName], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""),
-        ),
+        )],
     ];
   }
 }

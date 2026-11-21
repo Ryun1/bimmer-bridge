@@ -19,7 +19,7 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 | 0 Discovery | done (2026-11-21) |
 | 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
 | 2 EDIABAS at the desk | not started |
-| 3 Mac MCP | done for Claude Code (`vm_health`, `vm_list_windows`, first cut of the skill). Still to check in the Claude desktop app |
+| 3 Mac MCP | done (2026-11-21): `vm_health`, `vm_list_windows` and a first cut of the skill, working in Claude Code and the Claude desktop app |
 | 4–8 | not started |
 
 ### Phase 1 and 3 acceptance results (2026-11-21)
@@ -36,10 +36,19 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 | token hand-off | installer stored it in the Mac's Keychain; nobody copied it |
 | MCP tools against the live VM | `vm_health` and `vm_list_windows` both correct |
 | fresh Claude Code session ("is the VM up?") | used the tools unprompted and answered correctly |
-| Claude desktop app | not yet checked (restart the app, then ask "is the BMW VM up?") |
+| Claude desktop app ("is the BMW VM up?") | called `vm_health` and answered correctly, after `node` was allowed under macOS Local Network |
 
-Found and fixed during acceptance: the self-test rejected the range form
-(`192.168.64.1-192.168.64.1`) in which Windows reports a single-address firewall rule.
+Found and fixed during acceptance:
+- The self-test rejected the range form (`192.168.64.1-192.168.64.1`) in which Windows reports
+  a single-address firewall rule.
+- **macOS Local Network permission.** The desktop app starts the server in a way that makes
+  macOS treat `node` as its own app, so the first call shows "node would like to find devices
+  on your local network" and fails until it is allowed (System Settings > Privacy & Security >
+  Local Network). The server used to report this as "VM not running"; it now reports
+  `local_network_blocked` with the fix, and logs the underlying failure to stderr. The
+  permission is tied to the `node` binary's path, so a Homebrew upgrade of node can prompt again.
+- With only the server's built-in notes (no skill), the desktop app offered screenshots and
+  car reads that are not built. The notes and the health text now say what does not exist yet.
 
 ## Layout
 

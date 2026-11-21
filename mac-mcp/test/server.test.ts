@@ -66,7 +66,10 @@ describe("MCP server", () => {
     expect(SERVER_VERSION).toBe("0.1.0");
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);
-    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(120);
+    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(140);
+    expect(instr).toMatch(/Only vm_health and vm_list_windows exist so far/);
+    expect(instr).toMatch(/not built yet/);
+    expect(instr).toMatch(/say they are not available yet rather than offering them/);
     expect(instr).toMatch(/read-only/i);
     expect(instr).toContain("vm_health");
     expect(instr).toMatch(/cannot click, type, clear faults, code or flash/i);
@@ -80,6 +83,7 @@ describe("MCP server", () => {
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.description && t.description.length).toBeGreaterThan(40);
+      expect(t.description).not.toMatch(/needed for screenshots/);
       expect(t.annotations).toMatchObject({
         readOnlyHint: true,
         destructiveHint: false,
@@ -137,6 +141,20 @@ describe("MCP server", () => {
     const audit = await readFile(auditPath, "utf8");
     expect(audit).toMatch(/\tvm_health\tunauthorized\t\d+\n$/);
     for (const s of [JSON.stringify(r), audit, logs.join("\n")]) expect(s).not.toContain(AGENT_TOKEN);
+  });
+
+  it("logs probe failures and acceptance to the injected stderr logger, without the token", async () => {
+    const { client, logs } = await connect({
+      env: { EDIABAS_AGENT_URL: "", EDIABAS_AGENT_PORT: String(agent.port) },
+      leases: leaseFile({ ip: "127.0.0.1", lease: 0x6b01baf4 }),
+    });
+    await client.callTool({ name: "vm_health", arguments: {} });
+    expect(logs).toContain(`discovery accepted 127.0.0.1:${agent.port} (source: leases)`);
+    agent.setHandler(contractHandler("other"));
+    const r = await client.callTool({ name: "vm_list_windows", arguments: {} });
+    expect(r.isError).toBe(true);
+    expect(logs).toContain(`request 127.0.0.1:${agent.port} GET /windows failed: HTTP 401`);
+    expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
   });
 
   it("reports a missing token with the fix, and the server still serves tools/list", async () => {

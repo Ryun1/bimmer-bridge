@@ -6,11 +6,12 @@ import {
   agentNotAnswering,
   badResponse,
   forbidden,
+  localNetworkBlocked,
   unauthorized,
   vmNotRunning,
   wrongService,
 } from "./errors.js";
-import { VmLocator, type CallContext, type DiscoverySources } from "./vmAddress.js";
+import { VmLocator, bridgeSubnets, hostPort, isOnLink, type CallContext, type DiscoverySources } from "./vmAddress.js";
 
 export const AGENT_ID = "ediabas-bridge-agent";
 
@@ -79,13 +80,19 @@ export interface AgentClientOptions {
   requestTimeoutMs?: number | undefined;
   /** Timeout for discovery probes. Default 3 s. */
   probeTimeoutMs?: number | undefined;
+  /** Diagnostics (stderr). Never receives the token. */
+  log?: ((message: string) => void) | undefined;
 }
 
 type FailureKind = "unreachable" | "refused" | "timeout";
 
 /** A transport-level failure (no HTTP response). */
 class ConnectionFailure extends Error {
-  constructor(readonly kind: FailureKind) {
+  constructor(
+    readonly kind: FailureKind,
+    /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
+    readonly detail: string,
+  ) {
     super(`connection failure: ${kind}`);
   }
 }
@@ -95,11 +102,13 @@ const UNREACHABLE = new Set(["EHOSTDOWN", "EHOSTUNREACH", "ENETUNREACH", "ENETDO
 function classify(e: unknown): ConnectionFailure {
   const err = e as { name?: string; code?: string; cause?: { code?: string; name?: string } } | undefined;
   const name = err?.name ?? "";
-  if (name === "TimeoutError" || name === "AbortError" || err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout");
-  const code = err?.cause?.code ?? err?.code ?? "";
-  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout");
-  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable");
-  return new ConnectionFailure("refused");
+  if (name === "TimeoutError" || name === "AbortError") return new ConnectionFailure("timeout", name);
+  if (err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout", "TimeoutError");
+  const code = String(err?.cause?.code ?? err?.code ?? "");
+  const detail = code || err?.cause?.name || name || "unknown";
+  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
+  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail);
+  return new ConnectionFailure("refused", detail);
 }
 
 /** HTTP client for the VM agent. Every method throws BridgeError with an actionable message. */
@@ -108,12 +117,14 @@ export class AgentClient {
   private readonly fetchFn: typeof fetch;
   private readonly requestTimeoutMs: number;
   private readonly probeTimeoutMs: number;
+  private readonly log: (message: string) => void;
 
   constructor(private readonly opts: AgentClientOptions) {
     this.fetchFn = opts.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 15_000;
     this.probeTimeoutMs = opts.probeTimeoutMs ?? 3_000;
-    this.locator = new VmLocator(opts.config, opts.sources, (baseUrl, ctx) => this.probe(baseUrl, ctx));
+    this.log = opts.log ?? (() => {});
+    this.locator = new VmLocator(opts.config, opts.sources, (baseUrl, ctx) => this.probe(baseUrl, ctx), this.log);
   }
 
   health(): Promise<Health> {
@@ -132,7 +143,7 @@ export class AgentClient {
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
-      if (!first.fromCache) throw this.connectionError(e);
+      if (!first.fromCache) throw this.connectionError(e, first.baseUrl);
     }
     // The cached address stopped answering: resolve once more, then give up.
     const second = await this.locator.resolve(ctx);
@@ -141,24 +152,43 @@ export class AgentClient {
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
-      throw this.connectionError(e);
+      throw this.connectionError(e, second.baseUrl);
     }
   }
 
-  private connectionError(e: ConnectionFailure): BridgeError {
-    return e.kind === "unreachable" ? vmNotRunning(this.opts.config.vmName) : agentNotAnswering();
+  /**
+   * Map a transport failure. "Unreachable" at an address that is on-link on an up bridge
+   * interface means UTM's network is up (a VM is running) yet the connect was refused locally:
+   * typically macOS Local Network privacy blocking this process, or the VM still starting.
+   */
+  private connectionError(e: ConnectionFailure, baseUrl: string): BridgeError {
+    if (e.kind !== "unreachable") return agentNotAnswering();
+    let host = "";
+    try {
+      host = new URL(baseUrl).hostname;
+    } catch {
+      /* invalid URL: treat as off-link */
+    }
+    let onLink = false;
+    try {
+      onLink = isOnLink(host, bridgeSubnets(this.opts.sources.networkInterfaces()));
+    } catch {
+      /* interface lookup failed: fall back */
+    }
+    return onLink ? localNetworkBlocked() : vmNotRunning(this.opts.config.vmName);
   }
 
   /** Discovery check: 200 from /health with exactly the agent's id. */
   private async probe(baseUrl: string, ctx: CallContext): Promise<void> {
     let res: { status: number; body: string; token: string };
     try {
-      res = await this.send(baseUrl, "/health", ctx, this.probeTimeoutMs);
+      res = await this.send(baseUrl, "/health", ctx, this.probeTimeoutMs, "probe");
     } catch (e) {
-      if (e instanceof ConnectionFailure) throw this.connectionError(e);
+      if (e instanceof ConnectionFailure) throw this.connectionError(e, baseUrl);
       throw e;
     }
     if (res.status !== 200) {
+      this.log(`probe ${hostPort(baseUrl)} failed: HTTP ${res.status}`);
       // A non-2xx without the agent's error shape came from some other service.
       if (res.status !== 401 && res.status !== 403 && !isAgentErrorBody(res.body)) throw wrongService(baseUrl);
       throw this.httpError(res.status, res.body, res.token);
@@ -167,23 +197,34 @@ export class AgentClient {
     try {
       parsed = JSON.parse(res.body);
     } catch {
+      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (200 without JSON)`);
       throw wrongService(baseUrl);
     }
     const id = AgentIdSchema.safeParse(parsed);
-    if (!id.success || id.data.agent !== AGENT_ID) throw wrongService(baseUrl);
+    if (!id.success || id.data.agent !== AGENT_ID) {
+      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (wrong or missing "agent" field)`);
+      throw wrongService(baseUrl);
+    }
   }
 
   private async request<T>(baseUrl: string, path: string, schema: z.ZodType<T>, ctx: CallContext): Promise<T> {
-    const res = await this.send(baseUrl, path, ctx, this.requestTimeoutMs);
-    if (res.status !== 200) throw this.httpError(res.status, res.body, res.token);
+    const res = await this.send(baseUrl, path, ctx, this.requestTimeoutMs, "request");
+    if (res.status !== 200) {
+      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: HTTP ${res.status}`);
+      throw this.httpError(res.status, res.body, res.token);
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(res.body);
     } catch {
+      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: response is not JSON`);
       throw badResponse(`GET ${path}`);
     }
     const result = schema.safeParse(parsed);
-    if (!result.success) throw badResponse(`GET ${path}`);
+    if (!result.success) {
+      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: response does not match the contract`);
+      throw badResponse(`GET ${path}`);
+    }
     return result.data;
   }
 
@@ -196,15 +237,27 @@ export class AgentClient {
     path: string,
     ctx: CallContext,
     timeoutMs: number,
+    label: "probe" | "request",
   ): Promise<{ status: number; body: string; token: string }> {
     let token = await this.opts.tokens.get();
-    let res = await this.fetchOnce(baseUrl + path, token, timeoutMs);
+    const attempt = async (t: string) => {
+      try {
+        return await this.fetchOnce(baseUrl + path, t, timeoutMs);
+      } catch (e) {
+        if (e instanceof ConnectionFailure) {
+          const what = label === "request" ? `request ${hostPort(baseUrl)} GET ${path}` : `probe ${hostPort(baseUrl)}`;
+          this.log(`${what} failed: ${e.kind} (${e.detail})`);
+        }
+        throw e;
+      }
+    };
+    let res = await attempt(token);
     if (res.status === 401 && !ctx.tokenRefreshed) {
       ctx.tokenRefreshed = true;
       const fresh = await this.opts.tokens.refresh();
       if (fresh !== token) {
         token = fresh;
-        res = await this.fetchOnce(baseUrl + path, token, timeoutMs);
+        res = await attempt(token);
       }
     }
     return { ...res, token };

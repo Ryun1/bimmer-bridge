@@ -40,8 +40,8 @@ Refer to tools by these base names; the prefix differs between Claude Code and t
 2. Read it, and tell Ryan only what matters:
    - **Session.** "Windows session 0 — NOT an interactive session" means the agent is not on
      the desktop. Ask Ryan to log in to Windows.
-   - **BMW tools running.** "none" means the cable is free for the bridge. If any are listed,
-     the bridge will not use the cable while they run (see below).
+   - **BMW tools running.** "none" means nothing else is holding the cable. If any are
+     listed, the bridge will not use the cable while they run (see below).
    - **EDIABAS DLL.** "NOT found" means EDIABAS is not where the agent was configured to look.
      Tell Ryan; car-facing reads will not work until it is fixed.
    - **Last cable use** is "never (since the agent started)" until the EDIABAS tools exist.
@@ -65,8 +65,10 @@ Coding Tool is running, the bridge will not use the cable, and there is no overr
 A failed tool call returns a message that already says what to do. Look up the code and the fix
 in `references/errors.md` when you need more than the message.
 
-- Tell Ryan plainly what he needs to do (start the VM, log in, store the token, re-run the
-  installer).
+- Tell Ryan plainly what he needs to do (start the VM, log in, allow `node` under macOS
+  Local Network, re-run the installer).
+- `local_network_blocked` means macOS stopped the connection, not that the VM is down. Do not
+  tell Ryan the VM is off; give him the Local Network fix from the message.
 - Do not retry in a loop. Call `vm_health` once more after Ryan says he has fixed it.
 - Never invent or guess results. If something could not be read, say so.
 

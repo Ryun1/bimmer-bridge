@@ -33,7 +33,7 @@ export function formatHealth(h: Health): string {
   );
   if (h.sessionId === 0) {
     lines.push(
-      "Windows session 0 — NOT an interactive session; screenshots will not work. Log in to Windows so the agent runs on the desktop.",
+      "Windows session 0 — NOT an interactive session; screenshots, when built, will not work. Log in to Windows so the agent runs on the desktop.",
     );
   } else {
     lines.push(`Windows session ${h.sessionId} (interactive)`);
@@ -42,7 +42,7 @@ export function formatHealth(h: Health): string {
   const bind = h.bindAddress ? `${clean(h.bindAddress)}${h.port !== null ? `:${h.port}` : ""}` : "unknown";
   lines.push(`Listening on: ${bind}${h.gateway ? ` (gateway ${clean(h.gateway)})` : ""}`);
   if (h.conflictingProcesses.length === 0) {
-    lines.push("BMW tools running: none — the diagnostic cable is free for the bridge.");
+    lines.push("BMW tools running: none.");
   } else {
     const list = h.conflictingProcesses.map((p) => `${clean(p.name)} (pid ${p.pid})`).join(", ");
     lines.push(`BMW tools running: ${list} — the diagnostic cable is unavailable to the bridge while they run.`);
