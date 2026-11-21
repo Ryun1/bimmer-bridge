@@ -22,6 +22,9 @@ SECOND_TOKEN = "Z" * 43
 class ServerTestCase(unittest.TestCase):
     accept_token = False
     upload_limit = 1000
+    upload_count_limit = 50
+    upload_total_limit = 100000
+    client = "127.0.0.1"
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -37,9 +40,11 @@ class ServerTestCase(unittest.TestCase):
         self.stored = []
         self.log = io.StringIO()
         self.config = serve.Config(
-            bind="127.0.0.1", port=0, setup_dir=self.setup_dir, release_dir=self.release_dir,
-            discovery_dir=self.discovery_dir, accept_token=self.accept_token,
-            store_token=self.stored.append, out=self.log, upload_limit=self.upload_limit)
+            bind="127.0.0.1", client=self.client, port=0, setup_dir=self.setup_dir,
+            release_dir=self.release_dir, discovery_dir=self.discovery_dir,
+            accept_token=self.accept_token, store_token=self.stored.append, out=self.log,
+            upload_limit=self.upload_limit, upload_count_limit=self.upload_count_limit,
+            upload_total_limit=self.upload_total_limit)
         self.server = serve.make_server(self.config)
         self.port = self.server.server_address[1]
         self.thread = threading.Thread(target=self.server.serve_forever,
@@ -188,6 +193,54 @@ class Uploads(ServerTestCase):
         self.assertEqual(self.request("PUT", "/discover.ps1", body=b"x")[0], 404)
         self.assertEqual(self.request("PUT", "/upload", body=b"x")[0], 404)
 
+    def test_default_run_caps(self):
+        c = serve.Config(bind="127.0.0.1")
+        self.assertEqual(c.upload_count_limit, serve.UPLOAD_COUNT_LIMIT)
+        self.assertEqual(c.upload_total_limit, serve.UPLOAD_TOTAL_LIMIT)
+        self.assertLessEqual(serve.UPLOAD_COUNT_LIMIT, 20)
+        self.assertLessEqual(serve.UPLOAD_TOTAL_LIMIT, 64 * 1024 * 1024)
+
+
+class UploadCaps(ServerTestCase):
+    upload_count_limit = 3
+    upload_total_limit = 2500
+
+    def test_count_cap(self):
+        for i in range(3):
+            self.assertEqual(self.request("PUT", "/upload/f%d.txt" % i, body=b"x")[0], 201)
+        status, _, body = self.request("PUT", "/upload/f3.txt", body=b"x")
+        self.assertEqual(status, 413)
+        self.assertIn(b"restart serve.py", body)
+        self.assertEqual(len(self.uploads()), 3)
+
+    def test_total_bytes_cap_checked_before_writing(self):
+        self.assertEqual(self.request("PUT", "/upload/a.bin", body=b"a" * 1000)[0], 201)
+        self.assertEqual(self.request("PUT", "/upload/b.bin", body=b"b" * 1000)[0], 201)
+        status, _ = self.raw_put("/upload/c.bin", content_length=501)
+        self.assertEqual(status, 413)
+        self.assertEqual(len(self.uploads()), 2)
+        # what is left still fits
+        self.assertEqual(self.request("PUT", "/upload/d.bin", body=b"d" * 500)[0], 201)
+
+    def short_put(self, path, declared, body):
+        """PUT that declares `declared` bytes, sends fewer, then closes its sending side."""
+        import socket
+        with socket.create_connection(("127.0.0.1", self.port), timeout=10) as sock:
+            sock.sendall(b"PUT %s HTTP/1.1\r\nHost: x\r\nContent-Length: %d\r\n\r\n"
+                         % (path.encode(), declared) + body)
+            sock.shutdown(socket.SHUT_WR)
+            reply = b""
+            while chunk := sock.recv(4096):
+                reply += chunk
+        return int(reply.split(b" ", 2)[1])
+
+    def test_failed_upload_still_counts(self):
+        # An upload that never completes uses its share of the cap: no endless retries.
+        self.assertEqual(self.short_put("/upload/a.bin", 1000, b"short"), 400)
+        self.assertEqual(self.short_put("/upload/b.bin", 1000, b"short"), 400)
+        self.assertEqual(self.raw_put("/upload/c.bin", content_length=501)[0], 413)
+        self.assertEqual(self.uploads(), [])
+
 
 class TokenDisabled(ServerTestCase):
     accept_token = False
@@ -239,23 +292,37 @@ class TokenEnabled(ServerTestCase):
             if p.is_file():
                 self.assertNotIn(GOOD_TOKEN.encode(), p.read_bytes())
 
-    def test_store_failure_is_500_and_allows_retry(self):
+    def test_store_failure_is_500_and_no_second_token_is_taken(self):
+        # Exactly one token per run: after a failed store, restart serve.py to try again.
         def boom(token):
             raise RuntimeError("no keychain")
         self.config.store_token = boom
         self.assertEqual(self.request("PUT", "/token", body=GOOD_TOKEN.encode())[0], 500)
         self.config.store_token = self.stored.append
+        status, _, body = self.request("PUT", "/token", body=GOOD_TOKEN.encode())
+        self.assertEqual(status, 403)
+        self.assertEqual(self.stored, [])
+
+    def test_malformed_token_does_not_use_up_the_run(self):
+        self.assertEqual(self.request("PUT", "/token", body=b"short")[0], 400)
         self.assertEqual(self.request("PUT", "/token", body=GOOD_TOKEN.encode())[0], 204)
+        self.assertEqual(self.stored, [GOOD_TOKEN])
 
 
 class KeychainCommand(unittest.TestCase):
-    def test_token_goes_to_stdin_not_argv(self):
+    @staticmethod
+    def fake_security(stored_value, add_rc=0, find_rc=0):
         calls = []
 
         def fake_run(argv, **kwargs):
             calls.append((argv, kwargs))
-            return mock.Mock(returncode=0, stdout="", stderr="")
+            if argv[1:2] == ["-i"]:
+                return mock.Mock(returncode=add_rc, stdout="", stderr="")
+            return mock.Mock(returncode=find_rc, stdout=stored_value, stderr="")
+        return calls, fake_run
 
+    def test_token_goes_to_stdin_not_argv(self):
+        calls, fake_run = self.fake_security(GOOD_TOKEN + "\n")
         with mock.patch.object(serve.subprocess, "run", side_effect=fake_run):
             serve.store_token_in_keychain(GOOD_TOKEN)
         argv, kwargs = calls[0]
@@ -265,9 +332,31 @@ class KeychainCommand(unittest.TestCase):
         for argv, _ in calls:
             self.assertNotIn(GOOD_TOKEN, " ".join(argv))
 
+    def test_reads_the_value_back(self):
+        calls, fake_run = self.fake_security(GOOD_TOKEN + "\n")
+        with mock.patch.object(serve.subprocess, "run", side_effect=fake_run):
+            serve.store_token_in_keychain(GOOD_TOKEN)
+        self.assertEqual(calls[1][0], ["/usr/bin/security", "find-generic-password",
+                                       "-s", "ediabas-bridge", "-a", "agent", "-w"])
+
+    def test_old_value_still_there_raises(self):
+        # security -i exited 0 but the add did not happen; an older item is still stored.
+        _, fake_run = self.fake_security(SECOND_TOKEN + "\n")
+        with mock.patch.object(serve.subprocess, "run", side_effect=fake_run):
+            with self.assertRaises(RuntimeError) as ctx:
+                serve.store_token_in_keychain(GOOD_TOKEN)
+        self.assertNotIn(GOOD_TOKEN, str(ctx.exception))
+        self.assertNotIn(SECOND_TOKEN, str(ctx.exception))
+
+    def test_item_missing_raises(self):
+        _, fake_run = self.fake_security("", find_rc=44)
+        with mock.patch.object(serve.subprocess, "run", side_effect=fake_run):
+            with self.assertRaises(RuntimeError):
+                serve.store_token_in_keychain(GOOD_TOKEN)
+
     def test_failure_raises(self):
-        with mock.patch.object(serve.subprocess, "run",
-                               return_value=mock.Mock(returncode=1, stdout="", stderr="")):
+        _, fake_run = self.fake_security(GOOD_TOKEN, add_rc=1)
+        with mock.patch.object(serve.subprocess, "run", side_effect=fake_run):
             with self.assertRaises(RuntimeError):
                 serve.store_token_in_keychain(GOOD_TOKEN)
 
@@ -281,7 +370,11 @@ class BindAndClients(unittest.TestCase):
 
     def test_make_server_refuses_wildcard(self):
         with self.assertRaises(ValueError):
-            serve.make_server(serve.Config(bind="0.0.0.0", port=0))
+            serve.make_server(serve.Config(bind="0.0.0.0", client="192.168.64.5", port=0))
+
+    def test_make_server_needs_the_vm_address(self):
+        with self.assertRaises(ValueError):
+            serve.make_server(serve.Config(bind="127.0.0.1", port=0))
 
     def test_main_refuses_wildcard(self):
         with mock.patch("sys.stderr", new=io.StringIO()):
@@ -293,6 +386,85 @@ class BindAndClients(unittest.TestCase):
                 mock.patch("sys.stderr", new=io.StringIO()) as err:
             self.assertEqual(serve.main([]), 1)
         self.assertIn("Start the VM first", err.getvalue())
+
+    def run_main(self, argv, leases="", env=None):
+        """main() up to the point it would serve; returns (code, config or None, stdout, stderr)."""
+        made = []
+
+        class Stop(serve.Server):
+            def __init__(self, config):
+                made.append(config)
+                self.server_address = (config.bind, 8000)
+
+            def serve_forever(self):
+                raise KeyboardInterrupt
+
+            def server_close(self):
+                pass
+
+        def make(config):
+            config.client = serve.validate_client(config.bind, config.client)
+            return Stop(config)
+
+        with mock.patch.object(serve, "detect_bridge_address", return_value="192.168.64.1"), \
+                mock.patch.object(serve, "read_leases", return_value=leases), \
+                mock.patch.object(serve, "make_server", side_effect=make), \
+                mock.patch.dict(os.environ, env or {}, clear=False), \
+                mock.patch("sys.stdout", new=io.StringIO()) as out, \
+                mock.patch("sys.stderr", new=io.StringIO()) as err:
+            code = serve.main(argv)
+        return code, (made[0] if made else None), out.getvalue(), err.getvalue()
+
+    LEASES = (
+        "{\n\tname=other\n\tip_address=192.168.64.9\n\thw_address=1,aa:bb:cc:0:0:1\n"
+        "\tidentifier=1,aa:bb:cc:0:0:1\n\tlease=0x7f000000\n}\n"
+        "{\n\tname=DESKTOP\n\tip_address=192.168.64.3\n\thw_address=1,f2:e5:81:1e:82:7\n"
+        "\tidentifier=1,f2:e5:81:1e:82:7\n\tlease=0x6b01baf4\n}\n"
+        "{\n\tname=DESKTOP\n\tip_address=192.168.64.4\n\thw_address=1,f2:e5:81:1e:82:7\n"
+        "\tlease=0x6b01baf5\n}\n"
+    )
+
+    def test_main_takes_the_vm_from_its_latest_lease(self):
+        code, cfg, out, _ = self.run_main([], leases=self.LEASES)
+        self.assertEqual(code, 0)
+        self.assertEqual(cfg.client, "192.168.64.4")
+        self.assertIn("192.168.64.4", out)
+
+    def test_main_vm_mac_from_the_environment(self):
+        code, cfg, _, _ = self.run_main([], leases=self.LEASES,
+                                        env={"EDIABAS_VM_MAC": "AA:BB:CC:00:00:01"})
+        self.assertEqual(code, 0)
+        self.assertEqual(cfg.client, "192.168.64.9")
+
+    def test_main_without_a_lease_refuses_to_start(self):
+        code, cfg, _, err = self.run_main([], leases="")
+        self.assertEqual(code, 1)
+        self.assertIsNone(cfg)
+        self.assertIn("--client", err)
+
+    def test_main_client_flag_wins(self):
+        code, cfg, _, _ = self.run_main(["--client", "192.168.64.7"], leases=self.LEASES)
+        self.assertEqual(code, 0)
+        self.assertEqual(cfg.client, "192.168.64.7")
+
+    def test_main_refuses_a_client_off_the_bridge(self):
+        for bad in ["192.168.65.7", "10.0.0.1", "127.0.0.1", "192.168.64.1", "0.0.0.0",
+                    "192.168.64.255", "x"]:
+            code, cfg, _, err = self.run_main(["--client", bad])
+            self.assertEqual(code, 2, bad)
+            self.assertIsNone(cfg, bad)
+
+    def test_vm_mac_default_matches_the_mcp_server(self):
+        config_ts = (Path(__file__).resolve().parent.parent / "mac-mcp" / "src" / "config.ts"
+                     ).read_text(encoding="utf-8")
+        self.assertIn('vmMac: "%s"' % serve.VM_MAC_DEFAULT, config_ts)
+
+    def test_lease_parsing(self):
+        self.assertEqual(serve.vm_lease_address(self.LEASES, "F2:E5:81:1E:82:07"), "192.168.64.4")
+        self.assertEqual(serve.vm_lease_address(self.LEASES, "f2-e5-81-1e-82-07"), "192.168.64.4")
+        self.assertIsNone(serve.vm_lease_address(self.LEASES, "F2:E5:81:1E:82:08"))
+        self.assertIsNone(serve.vm_lease_address(self.LEASES, "garbage"))
+        self.assertIsNone(serve.vm_lease_address("", "F2:E5:81:1E:82:07"))
 
     def test_valid_bind(self):
         self.assertEqual(serve.validate_bind(" 192.168.64.1 "), "192.168.64.1")
@@ -323,45 +495,137 @@ class BindAndClients(unittest.TestCase):
         )
         self.assertIsNone(serve.find_bridge_address(text))
 
-    def test_client_allowed(self):
-        self.assertTrue(serve.client_allowed("192.168.64.1", "192.168.64.5"))
-        self.assertTrue(serve.client_allowed("192.168.64.1", "::ffff:192.168.64.5"))
-        self.assertFalse(serve.client_allowed("192.168.64.1", "192.168.65.5"))
-        self.assertFalse(serve.client_allowed("192.168.64.1", "10.0.0.1"))
-        self.assertFalse(serve.client_allowed("192.168.64.1", "127.0.0.1"))
-        self.assertTrue(serve.client_allowed("127.0.0.1", "127.0.0.1"))
-        self.assertFalse(serve.client_allowed("127.0.0.1", "192.168.64.5"))
-        self.assertFalse(serve.client_allowed("192.168.64.1", "garbage"))
+    def test_client_allowed_is_one_address(self):
+        self.assertTrue(serve.client_allowed("192.168.64.5", "192.168.64.5"))
+        self.assertTrue(serve.client_allowed("192.168.64.5", "::ffff:192.168.64.5"))
+        self.assertFalse(serve.client_allowed("192.168.64.5", "192.168.64.6"))
+        self.assertFalse(serve.client_allowed("192.168.64.5", "192.168.65.5"))
+        self.assertFalse(serve.client_allowed("192.168.64.5", "127.0.0.1"))
+        self.assertFalse(serve.client_allowed("192.168.64.5", "garbage"))
+        self.assertFalse(serve.client_allowed(None, "192.168.64.5"))
+
+    def test_validate_client(self):
+        self.assertEqual(serve.validate_client("192.168.64.1", " 192.168.64.5 "), "192.168.64.5")
+        self.assertEqual(serve.validate_client("127.0.0.1", "127.0.0.2"), "127.0.0.2")
+        self.assertEqual(serve.validate_client("127.0.0.1", "127.0.0.1"), "127.0.0.1")
+        for bad in [None, "", "0.0.0.0", "192.168.64.1", "192.168.64.255", "192.168.65.5",
+                    "127.0.0.1", "224.0.0.1", "::1", "192.168.64.0/24", "vm"]:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                serve.validate_client("192.168.64.1", bad)
+        with self.assertRaises(ValueError):
+            serve.validate_client("127.0.0.1", "192.168.64.5")
 
 
 class ClientRejection(ServerTestCase):
-    def test_foreign_client_403(self):
-        with mock.patch.object(serve, "client_allowed", return_value=False):
-            status, _, _ = self.request("GET", "/discover.ps1")
-            self.assertEqual(status, 403)
-            status, _, _ = self.request("PUT", "/upload/x.txt", body=b"x")
-            self.assertEqual(status, 403)
+    # The server accepts only 127.0.0.2; these requests come from 127.0.0.1, like another VM
+    # on the same network would.
+    client = "127.0.0.2"
+    accept_token = True
+
+    def test_other_address_refused_everywhere(self):
+        status, _, _ = self.request("GET", "/discover.ps1")
+        self.assertEqual(status, 403)
+        status, _, _ = self.request("GET", "/install.ps1")
+        self.assertEqual(status, 403)
+        status, _, _ = self.request("PUT", "/upload/x.txt", body=b"x")
+        self.assertEqual(status, 403)
+        status, _, _ = self.request("PUT", "/token", body=GOOD_TOKEN.encode())
+        self.assertEqual(status, 403)
         self.assertEqual(self.uploads(), [])
+        self.assertEqual(self.stored, [])
 
 
 class Startup(unittest.TestCase):
-    def test_lines_without_zip(self):
-        with tempfile.TemporaryDirectory() as d:
-            lines = serve.startup_lines("192.168.64.1", 8000, d)
-        self.assertIn("  $base='http://192.168.64.1:8000'; irm $base/discover.ps1 | iex", lines)
-        self.assertFalse(any("install.ps1" in l for l in lines))
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.release = Path(self.tmp.name) / "release"
+        self.setup = Path(self.tmp.name) / "vm-setup"
+        self.release.mkdir()
+        self.setup.mkdir()
+        self.script_sha = {}
+        for name in serve.SCRIPT_NAMES:
+            data = ("# %s\r\nWrite-Host 'hi'\r\n" % name).encode("ascii")
+            (self.setup / name).write_bytes(data)
+            self.script_sha[name] = hashlib.sha256(data).hexdigest()
 
-    def test_lines_with_zip(self):
-        with tempfile.TemporaryDirectory() as d:
-            data = b"PK fake zip"
-            (Path(d) / "EdiabasAgent.zip").write_bytes(data)
-            sha = hashlib.sha256(data).hexdigest()
-            lines = serve.startup_lines("192.168.64.1", 8000, d)
-        self.assertIn("  $base='http://192.168.64.1:8000'; irm $base/discover.ps1 | iex", lines)
-        self.assertIn("  $base='http://192.168.64.1:8000'; $sha='%s'; irm $base/install.ps1 | iex"
-                      % sha, lines)
-        self.assertIn("  $base='http://192.168.64.1:8000'; $sha='%s'; irm $base/update.ps1 | iex"
-                      % sha, lines)
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def lines(self, **kw):
+        return serve.startup_lines("192.168.64.1", 8000, self.release, setup_dir=self.setup,
+                                   client="192.168.64.3", **kw)
+
+    def line_for(self, lines, script):
+        found = [l for l in lines if ("/%s" % script) in l]
+        self.assertEqual(len(found), 1, script)
+        return found[0]
+
+    def test_lines_without_zip(self):
+        lines = self.lines()
+        self.line_for(lines, "discover.ps1")
+        self.line_for(lines, "uninstall.ps1")
+        self.assertFalse(any("install.ps1" in l and "uninstall" not in l for l in lines))
+        self.assertFalse(any("update.ps1" in l for l in lines))
+
+    def test_exact_install_and_update_lines(self):
+        data = b"PK fake zip"
+        (self.release / "EdiabasAgent.zip").write_bytes(data)
+        sha = hashlib.sha256(data).hexdigest()
+        lines = self.lines()
+        for script in ("install.ps1", "update.ps1"):
+            expected = (
+                "  $base='http://192.168.64.1:8000'; $sha='%s'; "
+                "$ebFile=\"$env:TEMP\\ediabas-bridge-%s\"; "
+                "iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile; "
+                "$ebBytes=[IO.File]::ReadAllBytes($ebFile); "
+                "if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '%s') "
+                "{ iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } "
+                "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red }"
+                % (sha, script, script, self.script_sha[script], script))
+            self.assertEqual(self.line_for(lines, script), expected)
+
+    def test_every_line_pins_its_script_and_never_pipes_into_iex(self):
+        (self.release / "EdiabasAgent.zip").write_bytes(b"zip")
+        lines = self.lines()
+        for script in serve.SCRIPT_NAMES:
+            line = self.line_for(lines, script)
+            self.assertIn("-eq '%s')" % self.script_sha[script], line)
+            self.assertNotIn("| iex", line)
+            self.assertNotIn("irm", line)
+            line.encode("ascii")
+        self.assertIn("$KeepData=$true; ", "\n".join(lines))
+
+    def test_says_which_address_it_accepts(self):
+        self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
+
+    def test_no_line_for_a_missing_script(self):
+        (self.setup / "update.ps1").unlink()
+        (self.release / "EdiabasAgent.zip").write_bytes(b"zip")
+        self.assertFalse(any("/update.ps1" in l for l in self.lines()))
+
+    def test_printed_hash_is_what_the_server_serves(self):
+        cfg = serve.Config(bind="127.0.0.1", client="127.0.0.1", port=0, setup_dir=self.setup,
+                           release_dir=self.release, out=io.StringIO())
+        server = serve.make_server(cfg)
+        t = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05},
+                             daemon=True)
+        t.start()
+        try:
+            for script in serve.SCRIPT_NAMES:
+                conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
+                conn.request("GET", "/" + script)
+                body = conn.getresponse().read()
+                conn.close()
+                self.assertEqual(hashlib.sha256(body).hexdigest(), self.script_sha[script])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_real_scripts_are_ascii(self):
+        # The pasted line decodes the script as UTF-8; the scripts stay ASCII so no BOM or
+        # code page question arises.
+        for name in serve.SCRIPT_NAMES:
+            (serve.REPO_ROOT / "vm-setup" / name).read_bytes().decode("ascii")
 
     def test_default_paths_from_repo_root(self):
         c = serve.Config(bind="127.0.0.1")
