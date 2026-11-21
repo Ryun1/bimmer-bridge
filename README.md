@@ -16,11 +16,30 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 
 | Phase | State |
 |---|---|
-| 0 Discovery | done |
-| 1 Agent skeleton | built; VM acceptance in progress |
+| 0 Discovery | done (2026-11-21) |
+| 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
 | 2 EDIABAS at the desk | not started |
-| 3 Mac MCP | built (`vm_health`, `vm_list_windows`); acceptance needs the agent running |
+| 3 Mac MCP | done for Claude Code (`vm_health`, `vm_list_windows`, first cut of the skill). Still to check in the Claude desktop app |
 | 4–8 | not started |
+
+### Phase 1 and 3 acceptance results (2026-11-21)
+
+| Check | Result |
+|---|---|
+| `/health` from the Mac with the token | 200 |
+| without a token, or with a wrong one | 401 |
+| unknown path / wrong method (with token) | 404 / 405 |
+| listeners in the VM (`netstat`) | one, on `192.168.64.3:8765` |
+| `EdiabasAgent.exe --selftest` | PASS, 5 of 5 (config, token ACL, bind address, firewall rule, listener) |
+| `update.ps1` | replaced the exe and restarted the agent |
+| Windows restart | agent back about 30 s after going down, in session 1 |
+| token hand-off | installer stored it in the Mac's Keychain; nobody copied it |
+| MCP tools against the live VM | `vm_health` and `vm_list_windows` both correct |
+| fresh Claude Code session ("is the VM up?") | used the tools unprompted and answered correctly |
+| Claude desktop app | not yet checked (restart the app, then ask "is the BMW VM up?") |
+
+Found and fixed during acceptance: the self-test rejected the range form
+(`192.168.64.1-192.168.64.1`) in which Windows reports a single-address firewall rule.
 
 ## Layout
 
