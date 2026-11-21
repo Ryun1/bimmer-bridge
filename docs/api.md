@@ -338,10 +338,16 @@ Newest first.
 - A path outside the roots is always `path_not_allowed`, whether or not the file exists. A
   file under a root that exists but cannot be opened is 500 `internal_error`. Files with more
   than one hard link and paths with forward slashes are refused.
-- The path must resolve, after following links, to a file under a log root. Refused with
-  `path_not_allowed`: `..` segments, relative paths, UNC and device paths (`\\?\`, `\\.\`),
-  alternate data streams, DOS device names (`CON`, `NUL`, `COM1`, …), junction or symlink
-  escapes, and 8.3 short names that resolve outside the roots.
+- Two checks, both required. First, before anything is opened, the path as written must lie
+  under a log root, as configured or where that root resolves: a path on another drive (a
+  mapped network drive too), a link elsewhere that points into a root, or a short-name
+  spelling of the root itself (`C:\EDIABA~1\TRACE\…`) is refused as `outside_roots` without
+  being touched. Then, on the opened handle, the file must resolve, after following links, to a
+  file under a log root. A root configured on, or leading to, a drive that is not a local fixed
+  disk (network, removable, optical) grants nothing and is never opened (`/logs` shows it with
+  `exists: false`). Refused with `path_not_allowed`: `..` segments, relative paths, UNC and
+  device paths (`\\?\`, `\\.\`), alternate data streams, DOS device names (`CON`, `NUL`,
+  `COM1`, …), junction or symlink escapes, and 8.3 short names that resolve outside the roots.
 
 ```json
 { "path": "C:\\EDIABAS\\TRACE\\api.trc", "sizeBytes": 20480, "modifiedAt": "2026-11-21T16:40:02Z",

@@ -55,6 +55,15 @@ public sealed class FakeLogFileSystem : ILogFileSystem
 
     public List<string> Listed { get; } = [];
 
+    /// <summary>Folders passed to <see cref="ResolveDirectory"/>.</summary>
+    public List<string> Resolved { get; } = [];
+
+    /// <summary>Drive letters that are not a local fixed disk (network, removable, optical).</summary>
+    public HashSet<char> NonLocalDrives { get; } = [];
+
+    /// <summary>Every drive asked about in <see cref="IsLocalDisk"/>.</summary>
+    public List<char> DriveQueries { get; } = [];
+
     public FakeLogFileSystem Dir(string path, string? final = null)
     {
         Dirs[path] = final ?? path;
@@ -68,7 +77,17 @@ public sealed class FakeLogFileSystem : ILogFileSystem
         return f;
     }
 
-    public string? ResolveDirectory(string path) => Dirs.TryGetValue(path, out var final) ? @"\\?\" + final : null;
+    public string? ResolveDirectory(string path)
+    {
+        Resolved.Add(path);
+        return Dirs.TryGetValue(path, out var final) ? @"\\?\" + final : null;
+    }
+
+    public bool IsLocalDisk(char drive)
+    {
+        DriveQueries.Add(char.ToUpperInvariant(drive));
+        return !NonLocalDrives.Contains(char.ToUpperInvariant(drive));
+    }
 
     public IEnumerable<LogDirEntry>? ListDirectory(string path)
     {

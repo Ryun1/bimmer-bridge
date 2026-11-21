@@ -71,20 +71,87 @@ public class LogServiceTests
     }
 
     [Fact]
-    public void Read_ShortNameThatResolvesInside_Allowed()
+    public void Read_ShortNameOfTheRoot_RefusedWithoutOpening()
     {
+        // The path must be spelt under a root before anything is opened; a short-name spelling
+        // of the root is not, even though it would lead inside.
         var (svc, fs) = Make(Trace);
         fs.File(@"C:\EDIABA~1\TRACE\api.trc", "x", final: @"\\?\C:\EDIABAS\TRACE\api.trc");
-        Assert.True(svc.Read(Read(@"C:\EDIABA~1\TRACE\api.trc"), out _).Ok);
+        AssertRefused(svc.Read(Read(@"C:\EDIABA~1\TRACE\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
+        Assert.Empty(fs.Opened);
     }
 
     [Fact]
-    public void Read_LinkFromOutsideThatResolvesInside_Allowed()
+    public void Read_ShortNameBelowTheRoot_Allowed()
     {
-        // The contract judges where a path leads, not how it is spelt.
+        var (svc, fs) = Make(Trace);
+        fs.File(@"C:\EDIABAS\TRACE\NCSTRA~1.TRC", "x", final: @"\\?\C:\EDIABAS\TRACE\ncstrace-long.trc");
+        Assert.True(svc.Read(Read(@"C:\EDIABAS\TRACE\NCSTRA~1.TRC"), out _).Ok);
+    }
+
+    [Fact]
+    public void Read_LinkFromOutsideThatResolvesInside_RefusedWithoutOpening()
+    {
         var (svc, fs) = Make(Trace);
         fs.File(@"C:\Users\ryan\trace-link\api.trc", "x", final: @"\\?\C:\EDIABAS\TRACE\api.trc");
-        Assert.True(svc.Read(Read(@"C:\Users\ryan\trace-link\api.trc"), out _).Ok);
+        AssertRefused(svc.Read(Read(@"C:\Users\ryan\trace-link\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
+        Assert.Empty(fs.Opened);
+    }
+
+    [Theory]
+    [InlineData(@"Z:\x.trc")] // a mapped network drive, or any drive with no root on it
+    [InlineData(@"D:\EDIABAS\TRACE\api.trc")]
+    [InlineData(@"C:\Windows\win.ini")]
+    [InlineData(@"C:\EDIABAS\TRACE2\api.trc")]
+    public void Read_OutsideTheRootsByText_NeverTouchesTheFileSystem(string path)
+    {
+        var (svc, fs) = Make(Trace);
+        fs.File(path, "x");
+        AssertRefused(svc.Read(Read(path), out var refusal), refusal, PathRules.OutsideRoots);
+        Assert.Empty(fs.Opened);
+        Assert.DoesNotContain('Z', fs.DriveQueries);
+        Assert.DoesNotContain('D', fs.DriveQueries);
+    }
+
+    [Fact]
+    public void Read_RootOnANetworkDrive_GrantsNothingAndIsNotOpened()
+    {
+        // Z: is mapped to \\host\share: neither the root nor the file is opened.
+        var fs = new FakeLogFileSystem().Dir(@"Z:\traces");
+        fs.NonLocalDrives.Add('Z');
+        var svc = new LogService([@"Z:\traces"], fs);
+        fs.File(@"Z:\traces\api.trc", "x");
+
+        AssertRefused(svc.Read(Read(@"Z:\traces\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
+        Assert.Empty(fs.Opened);
+        Assert.Empty(fs.Resolved);
+    }
+
+    [Fact]
+    public void Read_RootThatResolvesToANetworkDrive_FileThereNotOpened()
+    {
+        // C:\EDIABAS\TRACE is a link to a folder on Z:, a network drive: the root itself is on
+        // a local disk, but a path spelt on Z: is not opened.
+        var fs = new FakeLogFileSystem().Dir(Trace, @"Z:\traces");
+        fs.NonLocalDrives.Add('Z');
+        var svc = new LogService([Trace], fs);
+        fs.File(@"Z:\traces\api.trc", "x");
+
+        AssertRefused(svc.Read(Read(@"Z:\traces\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
+        Assert.Empty(fs.Opened);
+    }
+
+    [Fact]
+    public void List_RootOnANetworkDrive_ShownMissingAndNotTouched()
+    {
+        var fs = new FakeLogFileSystem().Dir(@"Z:\traces");
+        fs.NonLocalDrives.Add('Z');
+        var svc = new LogService([@"Z:\traces"], fs);
+
+        var r = svc.List(new LogListQuery(null, null, null, 50));
+        Assert.False(r.Roots[0].Exists);
+        Assert.Empty(fs.Resolved);
+        Assert.Empty(fs.Listed);
     }
 
     [Fact]
@@ -176,6 +243,7 @@ public class LogServiceTests
         var secret = fs.File(@"C:\PROGRA~3\EDIABA~1\token.txt", "SECRET", final: @"\\?\C:\ProgramData\EdiabasBridge\token.txt");
         AssertRefused(svc.Read(Read(@"C:\PROGRA~3\EDIABA~1\token.txt"), out var refusal), refusal, PathRules.OutsideRoots);
         Assert.Equal(0, secret.Reads);
+        Assert.Empty(fs.Opened);
     }
 
     [Fact]
@@ -202,6 +270,7 @@ public class LogServiceTests
         AssertRefused(svc.Read(Read(@"C:\Windows\nothing-here.ini"), out var r2), r2, PathRules.OutsideRoots);
         AssertRefused(svc.Read(Read(@"C:\Windows\locked.dat"), out var r3), r3, PathRules.OutsideRoots);
         Assert.Equal(0, fs.Files[@"C:\Windows\win.ini"].Reads);
+        Assert.Empty(fs.Opened);
     }
 
     [Fact]

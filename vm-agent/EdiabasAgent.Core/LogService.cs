@@ -176,7 +176,7 @@ public sealed class LogService
         {
             var root = _roots[i];
             var usable = PathRules.Check(root) is null;
-            var exists = usable && _fs.ResolveDirectory(root) is not null;
+            var exists = usable && _fs.IsLocalDisk(root[0]) && _fs.ResolveDirectory(root) is not null;
             roots.Add(new LogRoot(i, root, exists));
             if (!exists || (query.Root is { } only && only != i))
             {
@@ -282,21 +282,22 @@ public sealed class LogService
 
         var roots = ResolvedRoots();
 
-        // Whether the text names a place under a root. Only then may the answer say that a file
-        // does not exist; for any other path every failure is path_not_allowed, so the endpoint
-        // cannot be used to probe what exists elsewhere on the disk.
-        var lexicallyInside = roots.Any(r => PathRules.IsUnder(path, r.Configured) || PathRules.IsUnder(path, r.Resolved));
+        // The text must name a place under a usable root (as configured, or where it resolves)
+        // before anything is opened. A path on another drive (a mapped network drive among
+        // them), a link from elsewhere into a root, or a short-name spelling of a root is
+        // refused here without being touched: opening it could make the agent, which runs
+        // elevated, connect to a share or spin up a drive. The handle check below still decides
+        // where an accepted path really leads.
+        if (!roots.Any(r => PathRules.IsUnder(path, r.Configured) || PathRules.IsUnder(path, r.Resolved)))
+        {
+            refusal = PathRules.OutsideRoots;
+            return NotAllowed(refusal);
+        }
 
         var status = _fs.OpenRead(path, out var file);
         if (status != LogOpenStatus.Opened || file is null)
         {
             file?.Dispose();
-            if (!lexicallyInside)
-            {
-                refusal = PathRules.OutsideRoots;
-                return NotAllowed(refusal);
-            }
-
             return status == LogOpenStatus.NotFound
                 ? ApiFailure.Of(ApiErrors.FileNotFound, "The log file does not exist.")
                 : ApiFailure.Of(ApiErrors.InternalError, "The log file exists but could not be opened for reading (in use or not readable).");
@@ -313,7 +314,7 @@ public sealed class LogService
 
             if (!roots.Any(r => PathRules.IsUnder(final, r.Resolved)))
             {
-                refusal = lexicallyInside ? PathRules.ResolvesOutsideRoots : PathRules.OutsideRoots;
+                refusal = PathRules.ResolvesOutsideRoots;
                 return NotAllowed(refusal);
             }
 
@@ -383,19 +384,23 @@ public sealed class LogService
 
     private sealed record ResolvedRoot(string Configured, string Resolved);
 
-    /// <summary>Roots as they resolve now (a root may be a link itself); unusable ones dropped.</summary>
+    /// <summary>
+    /// Roots as they resolve now (a root may be a link itself). Unusable ones, missing ones, and
+    /// any configured on or leading to a drive that is not a local fixed disk are dropped.
+    /// </summary>
     private List<ResolvedRoot> ResolvedRoots()
     {
         var list = new List<ResolvedRoot>();
         foreach (var root in _roots)
         {
-            if (PathRules.Check(root) is not null)
+            // A root on a network, removable or optical drive is not opened and grants nothing.
+            if (PathRules.Check(root) is not null || !_fs.IsLocalDisk(root[0]))
             {
                 continue;
             }
 
             var resolved = PathRules.NormalizeFinal(_fs.ResolveDirectory(root));
-            if (resolved is not null)
+            if (resolved is not null && _fs.IsLocalDisk(resolved[0]))
             {
                 list.Add(new ResolvedRoot(root, resolved));
             }

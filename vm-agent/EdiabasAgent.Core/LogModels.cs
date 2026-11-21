@@ -59,6 +59,13 @@ public interface ILogFile : IDisposable
 /// <summary>The Windows file system, reduced to what the log endpoints need. Read-only by design.</summary>
 public interface ILogFileSystem
 {
+    /// <summary>
+    /// True when the drive letter is a local fixed disk. False for a network (mapped), removable
+    /// or optical drive, or no drive at all. Answered from the drive's type alone: nothing on the
+    /// drive is opened and no server is contacted.
+    /// </summary>
+    bool IsLocalDisk(char drive);
+
     /// <summary>The final path of an existing folder after every link, else null.</summary>
     string? ResolveDirectory(string path);
 

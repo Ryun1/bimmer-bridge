@@ -12,6 +12,13 @@ namespace EdiabasAgent.Logs;
 /// </summary>
 internal sealed class LogAccess : ILogFileSystem
 {
+    public bool IsLocalDisk(char drive)
+    {
+        // GetDriveType reads the drive letter's type from the system's drive table; it does not
+        // open anything on the drive or contact the server behind a mapped drive.
+        return char.IsAsciiLetter(drive) && LogNative.GetDriveTypeW($"{drive}:\\") == LogNative.DRIVE_FIXED;
+    }
+
     public string? ResolveDirectory(string path)
     {
         // Attributes-only open of a folder (backup semantics is what lets CreateFile open a
@@ -166,6 +173,7 @@ internal static class LogNative
     internal const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
     internal const uint INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
     internal const uint FILE_TYPE_DISK = 1;
+    internal const uint DRIVE_FIXED = 3;
 
     // FILE_NAME_NORMALIZED (0: long names, 8.3 names expanded) with VOLUME_NAME_DOS (0: the
     // drive-letter form). Both are the zero value of their flag group.
@@ -217,6 +225,10 @@ internal static class LogNative
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     internal static extern uint GetFileAttributesW(string lpFileName);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    internal static extern uint GetDriveTypeW(string lpRootPathName);
 
     /// <summary>The handle's final path (<c>\\?\C:\...</c>), or null if it cannot be had in full.</summary>
     internal static string? FinalPath(SafeFileHandle h)
