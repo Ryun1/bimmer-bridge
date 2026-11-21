@@ -390,6 +390,50 @@ describe("ediabas_job", () => {
     expect((await auditLines())[0]).toContain(`\t${code}\t`);
   });
 
+  it.each([
+    [
+      "a BMW tool started during the request",
+      "A BMW tool started during the request (INPALOAD pid 4312); no further jobs are started.",
+      /^Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\); no further jobs are started\."/,
+    ],
+    [
+      "the time limit",
+      "The request reached its 60 s limit before IDENT started.",
+      /^Not run: the agent said: "The request reached its 60 s limit before IDENT started\."/,
+    ],
+    [
+      "an earlier job that ignored apiBreak",
+      "An earlier job did not stop after apiBreak; no further jobs are started.",
+      /^Not run: the agent said: "An earlier job did not stop after apiBreak/,
+    ],
+  ] as const)("passes the agent's reason through for a 503 not_run (%s)", async (_why, message, msg) => {
+    override("POST /ediabas/job", () => agentErr(503, "not_run", message, null));
+    const { call, auditLines } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(msg);
+    if (!/limit/.test(message)) expect(r.text).not.toMatch(/overall time limit/);
+    expect((await auditLines())[0]).toContain("\tnot_run\t");
+  });
+
+  it("says not_run without a reason when the agent gave none", async () => {
+    override("POST /ediabas/job", () => agentErr(503, "not_run", "", null));
+    const { call } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.text).toMatch(/^Not run: the agent did not start this job and gave no reason\./);
+  });
+
+  it("shows that the agent must be restarted when EDIABAS is stuck", async () => {
+    override("POST /ediabas/job", () =>
+      agentErr(503, "ediabas_unavailable", "EDIABAS cannot be used", {
+        reason: "an earlier job did not stop after apiBreak; the agent must be restarted",
+      }),
+    );
+    const { call } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.text).toMatch(/did not stop after apiBreak; the agent must be restarted/);
+  });
+
   it("maps a 404 not_found (an older agent without the endpoint) to agent_outdated", async () => {
     agent.setHandler((req, res) => {
       if (req.url === "/health") stubHandler()(req, res);
@@ -488,6 +532,31 @@ describe("ediabas_read_faults", () => {
     expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.");
     expect(r.text).toMatch(/BAD\n  Fault memory: error: EDIABAS reported error 19: IFH-0009/);
     expect(r.text).toMatch(/GONE\n  Fault memory: error: Not run/);
+  });
+
+  it("names the BMW tool that stopped a batch midway instead of blaming the time limit", async () => {
+    override("POST /ediabas/jobs", (q) => {
+      const items = (q.body as { items: { ecu: string; job: string }[] }).items;
+      return {
+        status: 200,
+        body: {
+          items: items.map((it, i) =>
+            i === 0
+              ? { ok: true, result: jobResult(it.ecu, it.job, [{ JOB_STATUS: "OKAY" }]), error: null }
+              : {
+                  ok: false,
+                  result: null,
+                  error: { code: "not_run", message: "A BMW tool started during the request (INPALOAD pid 4312); no further jobs are started.", details: null },
+                },
+          ),
+          durationMs: 5,
+        },
+      };
+    });
+    const { call } = await connect();
+    const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "D_MOTOR"] });
+    expect(r.text).toMatch(/D_MOTOR\n  Fault memory: error: Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\)/);
+    expect(r.text).not.toMatch(/overall time limit/);
   });
 
   it("shows cable_not_found as a per-ECU error, not as the ECU failing to answer", async () => {

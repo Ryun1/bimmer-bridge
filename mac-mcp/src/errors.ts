@@ -249,8 +249,15 @@ export function describeAgentError(code: string, message: string | undefined, de
     }
     case "file_not_found":
       return "There is no such file in the VM. Use vm_logs_list to see which log files exist.";
-    case "not_run":
-      return "Not run: the request reached its overall time limit before this item started. Ask again for this ECU on its own.";
+    case "not_run": {
+      // The agent says why: its time budget, a BMW tool that started during the request, an
+      // earlier job that ignored apiBreak, or an abandoned request. Pass that through.
+      const why = message?.trim() ? `the agent said: "${cleanText(message, 200)}"` : "the agent did not start this job and gave no reason.";
+      return (
+        `Not run: ${why} ` +
+        "If a BMW tool was opened in the VM, ask Ryan to close it before asking again. If the time limit was reached, ask again for this ECU on its own. Do not retry in a loop."
+      );
+    }
     case "bad_request": {
       const p = detailString(details, "parameter");
       return `The agent rejected the request as malformed${p ? ` (parameter ${cleanText(p, 60)})` : ""}.${agentSaid} Check the arguments.`;
