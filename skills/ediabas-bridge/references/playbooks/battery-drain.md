@@ -27,16 +27,23 @@ first.
 1. `vm_health`. If a BMW tool is running, name it, ask Ryan to close it when he has finished,
    and stop until he says so.
 2. Ask Ryan what he has seen (flat battery after how many days, warnings, recent work) and
-   whether the battery is on a charger. This decides which reads matter.
+   whether the battery is on a charger. This decides which reads matter. Ask him to have the
+   cable plugged in and passed through to the VM in UTM: the next step needs it.
 3. Discover the names: `ediabas_list_ecus` (filter for the candidates above), then
    `ediabas_describe` on the engine group or SGBD with a `filter` (for example `STATUS_`) to
    see which battery or power-management jobs exist and which are runnable. Use
    `ediabas_describe` with `job` to see each chosen job's arguments and result fields. Drop
    any job that is refused or marked "needs review"; show Ryan the description of any
    "needs review" job and let him decide, but do not hold the session for it.
+   `ediabas_describe` needs the cable connected to the VM: without it, it fails with
+   `cable_not_found` (seen at the desk on 2026-11-21). Whether it also needs the ignition on
+   is not known yet, so try it now, before asking for the ignition. If it fails with the cable
+   connected, tell Ryan what the message said (worth recording), and make a narrow, filtered
+   describe the first step of the ignition-on window instead, counted in the time.
 4. Pick a short list: fault memory of the modules involved plus a few status jobs. Tell Ryan
-   the plan, the number of calls and a rough time; ask him to switch the ignition on and say
-   when. Note the time.
+   the plan, the number of calls and a rough time (the first EDIABAS call after a pause takes
+   about 10 s longer while the agent loads EDIABAS again; that is normal); ask him to switch
+   the ignition on and say when. Note the time.
 
 ## With the ignition on
 

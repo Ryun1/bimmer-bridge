@@ -180,7 +180,10 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
     const e = await errorOf(client.health());
     expect(e.code).toBe("unauthorized");
-    expect(e.message).toContain("The agent rejected the token. The Keychain token does not match the VM's.");
+    // EDIABAS_AGENT_URL is set, so the token came from EDIABAS_AGENT_TOKEN: the Keychain is not to blame.
+    expect(e.message).toContain("The agent at EDIABAS_AGENT_URL rejected the token.");
+    expect(e.message).toContain("EDIABAS_AGENT_TOKEN");
+    expect(e.message).not.toMatch(/Keychain token|security add-generic-password/);
     expect(tokens.refresh).toHaveBeenCalledTimes(1);
     expect(e.message).not.toContain(AGENT_TOKEN);
   });
@@ -390,7 +393,11 @@ describe("AgentClient discovery", () => {
       ),
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 0x6b01ba00 }),
     });
-    expect((await errorOf(client.health())).code).toBe("unauthorized");
+    const e = await errorOf(client.health());
+    expect(e.code).toBe("unauthorized");
+    // Discovered VM, no override: the token came from the Keychain (or its env fallback).
+    expect(e.message).toContain("The agent rejected the token. The Keychain token does not match the VM's.");
+    expect(e.message).not.toContain("EDIABAS_AGENT_URL");
   });
 
   it("re-reads the token at most once per call across candidates", async () => {

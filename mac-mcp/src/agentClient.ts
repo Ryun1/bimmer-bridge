@@ -39,7 +39,8 @@ export const HealthSchema = z.object({
   port: z.number().int().nullable(),
   gateway: z.string().nullable(),
   conflictingProcesses: z.array(z.object({ name: z.string(), pid: z.number().int() })),
-  ediabas: z.object({ dllPath: z.string().nullable(), dllFound: z.boolean() }),
+  // `loaded`: whether the agent has the DLL loaded right now (idle release); older agents omit it.
+  ediabas: z.object({ dllPath: z.string().nullable(), dllFound: z.boolean(), loaded: z.boolean().nullable().optional() }),
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
@@ -539,7 +540,7 @@ export class AgentClient {
   }
 
   private httpError(status: number, body: string, token: string, spec: RequestSpec): BridgeError {
-    if (status === 401) return unauthorized();
+    if (status === 401) return unauthorized(this.opts.config.agentUrl !== undefined);
     let info: AgentErrorInfo | undefined;
     try {
       const parsed = ErrorBodySchema.safeParse(JSON.parse(body));

@@ -114,12 +114,12 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 404 | `file_not_found` | log file does not exist | `null` |
 | 409 | `cable_in_use` | a BMW tool or another `api32.dll` user is running. No override | `{ processes: [ { name, pid } ] }` |
 | 409 | `window_minimized` | the window is minimised; the agent never restores it | `{ handle, title }` |
+| 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
 | 502 | `ediabas_error` | EDIABAS reported an error for the job | `{ errorCode: 159, errorText: "IFH-0009: …" }` |
 | 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, or `apiInit` failed | `{ reason }` |
 | 503 | `desktop_unavailable` | locked screen, secure desktop, or session 0 | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
-| 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
 
 **Settled at the desk (2026-11-21, cable unplugged):** loading a real SGBD (`NVE_65`, even for
 `_JOBS`) with no cable in the VM fails with error 28, `IFH-0018: INITIALIZATION ERROR`; `TMODE`
@@ -133,6 +133,7 @@ caught by the conflict check before EDIABAS is called.
 - `policyVersion`: the `version` of the policy file built into the agent (integer).
 - `capabilities`: array of strings, the endpoint groups this build has:
   `"ediabas"`, `"capture"`, `"logs"`.
+- `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 
 ## Job policy
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server

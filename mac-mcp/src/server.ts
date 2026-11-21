@@ -152,7 +152,7 @@ export function buildServer(parts: ServerParts): McpServer {
       description:
         "Check the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
         "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
-        "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found, last cable use, " +
+        "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
         "which features the agent has, and its job policy version against this Mac's. " +
         "Call this first in a session, and again when another tool fails. Read-only.",
       annotations: { title: "VM agent health", ...READ_ONLY },

@@ -131,6 +131,12 @@ describe("vm_health", () => {
     expect(r.text).toMatch(/agent does not report one/);
   });
 
+  it("says whether EDIABAS is loaded when the agent reports it", async () => {
+    override("GET /health", () => ({ status: 200, body: healthBody({ ediabas: { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true, loaded: false } }) }));
+    const { call } = await connect();
+    expect((await call("vm_health")).text).toMatch(/EDIABAS: not loaded .*about 10 s longer/);
+  });
+
   it("says when the Mac's policy could not be loaded", async () => {
     const { call } = await connect({ policy: brokenPolicy() });
     expect((await call("vm_health")).text).toMatch(/Mac could not be loaded, so every EDIABAS tool refuses/);
@@ -284,6 +290,8 @@ describe("ediabas_describe", () => {
     ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /NVE_65 NOPE.*ediabas_describe/],
     ["cable_in_use", 409, { processes: [{ name: "INPALOAD", pid: 4312 }, { name: "NcsDummy", pid: 77 }] }, /in use by INPALOAD \(pid 4312\), NcsDummy \(pid 77\)\. Ask Ryan to close it/],
     ["ediabas_unavailable", 503, { reason: "api32.dll missing" }, /could not be started in the VM \(api32.dll missing\)/],
+    // As seen at the desk on 2026-11-21: describing a real SGBD with the cable unplugged.
+    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /\(EDIABAS error 28: IFH-0018: INITIALIZATION ERROR\): the K\+DCAN cable is not connected to the VM\..*pass it through to the Windows VM in UTM\. Do not retry until he says it is connected\./],
   ] as const)("maps %s", async (code, status, details, msg) => {
     override("GET /ediabas/describe", () => agentErr(status, code, "x", details));
     const { call } = await connect();
@@ -370,6 +378,8 @@ describe("ediabas_job", () => {
     ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /EDIABAS reported error 159: IFH-0009: NO RESPONSE/],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
     ["cable_in_use", 409, null, /in use by a BMW tool in the VM/],
+    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^(?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
+    ["cable_not_found", 502, null, /^EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
   ] as const)("maps the agent's %s", async (code, status, details, msg) => {
     override("POST /ediabas/job", () => agentErr(status, code, "agent message", details));
     const { call, auditLines } = await connect();
@@ -478,6 +488,28 @@ describe("ediabas_read_faults", () => {
     expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.");
     expect(r.text).toMatch(/BAD\n  Fault memory: error: EDIABAS reported error 19: IFH-0009/);
     expect(r.text).toMatch(/GONE\n  Fault memory: error: Not run/);
+  });
+
+  it("shows cable_not_found as a per-ECU error, not as the ECU failing to answer", async () => {
+    override("POST /ediabas/jobs", (q) => {
+      const items = (q.body as { items: { ecu: string; job: string }[] }).items;
+      return {
+        status: 200,
+        body: {
+          items: items.map(() => ({
+            ok: false,
+            result: null,
+            error: { code: "cable_not_found", message: "x", details: { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" } },
+          })),
+          durationMs: 5,
+        },
+      };
+    });
+    const { call } = await connect();
+    const r = await call("ediabas_read_faults", { ecus: ["NVE_65"] });
+    expect(r.text).toMatch(/NVE_65\n  Fault memory: error: EDIABAS could not initialise the diagnostic interface/);
+    expect(r.text).toMatch(/not connected to the VM/);
+    expect(r.text).not.toMatch(/ECU did not answer/);
   });
 
   it("returns isError when the first request fails as a whole (cable in use)", async () => {

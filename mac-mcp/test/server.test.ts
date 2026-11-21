@@ -148,7 +148,7 @@ describe("MCP server", () => {
     const { client, auditPath, logs } = await connect();
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("The agent rejected the token.");
+    expect(textOf(r)).toContain("rejected the token.");
     const audit = await readFile(auditPath, "utf8");
     expect(audit).toMatch(/\tvm_health\tunauthorized\t\d+\n$/);
     for (const s of [JSON.stringify(r), audit, logs.join("\n")]) expect(s).not.toContain(AGENT_TOKEN);

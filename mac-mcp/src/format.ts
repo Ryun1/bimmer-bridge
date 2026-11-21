@@ -70,6 +70,12 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null):
   }
   const dll = h.ediabas.dllPath ? clean(h.ediabas.dllPath) : "unknown path";
   lines.push(h.ediabas.dllFound ? `EDIABAS DLL: found at ${dll}` : `EDIABAS DLL: NOT found (looked for ${dll})`);
+  // Absent on agents without idle release: say nothing rather than guess.
+  if (h.ediabas.loaded === true) {
+    lines.push("EDIABAS: loaded now, so the next EDIABAS call starts straight away.");
+  } else if (h.ediabas.loaded === false) {
+    lines.push("EDIABAS: not loaded (released after idle); the next EDIABAS call loads it and takes about 10 s longer. That is normal, not a fault.");
+  }
   lines.push(`Last cable use: ${h.lastCableUseAt ? clean(h.lastCableUseAt) : "never (since the agent started)"}`);
   lines.push(...policyLines(h, macPolicyVersion));
   return lines.join("\n");

@@ -11,7 +11,7 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 
 | Tool | What it does |
 |---|---|
-| `vm_health` | agent status, BMW tools holding the cable, EDIABAS DLL, last cable use, agent features, job policy version (warns when the agent's differs from the Mac's) |
+| `vm_health` | agent status, BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's) |
 | `vm_list_windows` | windows open in the VM |
 | `vm_screenshot` | an image of the desktop or one window (`window`, `maxEdge`), then a one-line caption |
 | `vm_logs_list` / `vm_logs_read` | log files under the agent's allowed folders; read a tail or a range, optionally grep |
@@ -32,7 +32,12 @@ file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy
 `agent_outdated`: install the current agent with the Update line (see "Installing or updating the agent in the VM" in the repo README).
 
 **Timeouts.** 15 s per request, 75 s for `/ediabas/*`. An EDIABAS call that timed out is never
-sent a second time.
+sent a second time. The agent unloads EDIABAS after a short idle spell, so the first
+`ediabas_*` call after a pause takes about 10 s longer; that is expected.
+
+**No cable.** EDIABAS error 28 (`IFH-0018`) comes back as `cable_not_found`: the cable is not
+connected to the VM. Even `ediabas_describe` of a real SGBD needs it (seen at the desk on
+2026-11-21); the message asks Ryan to connect it and not to retry until he has.
 
 ## Build and test
 
@@ -61,7 +66,8 @@ neither, the server still starts and each tool says how to store the token.
 **With `EDIABAS_AGENT_URL` set, only `EDIABAS_AGENT_TOKEN` is used and the Keychain is never
 read**, so the VM agent's token is never sent to an address set by hand (the replay agent in
 `dev/`, or a mistyped URL). Without `EDIABAS_AGENT_TOKEN` every tool then fails with
-`no_token`, saying why. After a 401 the
+`no_token`, saying why, and a 401 says the `EDIABAS_AGENT_TOKEN` value is wrong (not the
+Keychain's). After a 401 the
 token is re-read once, so a newly stored token is picked up without a restart.
 
 ## Environment (all optional)

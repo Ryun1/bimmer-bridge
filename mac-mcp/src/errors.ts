@@ -12,6 +12,11 @@ export const MESSAGES = {
   agentNotAnswering:
     "The VM is up but the agent is not answering. Log in to Windows (the agent starts at log-on), or re-run the installer.",
   unauthorized: "The agent rejected the token. The Keychain token does not match the VM's.",
+  // With EDIABAS_AGENT_URL set the Keychain is never read (token.ts), so it cannot be to blame.
+  unauthorizedOverride:
+    "The agent at EDIABAS_AGENT_URL rejected the token. With EDIABAS_AGENT_URL set, the token comes from EDIABAS_AGENT_TOKEN " +
+    "(the Keychain is never used for an address set by hand), and it does not match that agent's. " +
+    "Set EDIABAS_AGENT_TOKEN to the token of the agent at that address, or unset EDIABAS_AGENT_URL to use the VM.",
   forbidden: "The agent refused this Mac's address (firewall or gateway check).",
   localNetworkBlocked:
     "This Mac could not reach the VM's address even though UTM's network is up. macOS may be blocking it: open System Settings > Privacy & Security > Local Network and allow 'node' (or answer the 'node would like to find devices on your local network' prompt with Allow), then ask again. If that is already allowed, the VM may still be starting: log in to Windows and try again.",
@@ -60,8 +65,9 @@ export function localNetworkBlocked(): BridgeError {
   return new BridgeError("local_network_blocked", MESSAGES.localNetworkBlocked);
 }
 
-export function unauthorized(): BridgeError {
-  return new BridgeError("unauthorized", `${MESSAGES.unauthorized} ${TOKEN_FIX}`);
+/** `agentUrlOverride`: EDIABAS_AGENT_URL is set, so the token came from EDIABAS_AGENT_TOKEN. */
+export function unauthorized(agentUrlOverride = false): BridgeError {
+  return new BridgeError("unauthorized", agentUrlOverride ? MESSAGES.unauthorizedOverride : `${MESSAGES.unauthorized} ${TOKEN_FIX}`);
 }
 
 export function forbidden(): BridgeError {
@@ -205,8 +211,20 @@ export function describeAgentError(code: string, message: string | undefined, de
       const text = detailString(details, "errorText");
       const what = n !== null || text ? `${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""}` : cleanText(message ?? "no details", 200);
       return (
-        `EDIABAS reported ${what}. This often means the ECU did not answer (ignition off, cable not connected, or that ECU is not fitted). ` +
+        `EDIABAS reported ${what}. This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ` +
         "Check ediabas_vehicle_status, and ask Ryan before trying again."
+      );
+    }
+    case "cable_not_found": {
+      // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.
+      // Not ediabas_error's "ECU did not answer": nothing reached the car at all.
+      const n = detailNumber(details, "errorCode");
+      const text = detailString(details, "errorText");
+      const said = n !== null || text ? ` (EDIABAS ${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""})` : "";
+      return (
+        `EDIABAS could not initialise the diagnostic interface${said}: the K+DCAN cable is not connected to the VM. ` +
+        "Even ediabas_describe needs it for a real SGBD. Ask Ryan to plug the cable into the Mac and pass it through to the " +
+        "Windows VM in UTM. Do not retry until he says it is connected."
       );
     }
     case "ediabas_unavailable": {

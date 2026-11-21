@@ -13,7 +13,8 @@ the sweep reads from there.
    finished with it, and stop until he says it is closed. Never hurry him out of WinKFP or NCS
    Expert.
 2. Agree the scope with Ryan: every module, or the systems behind a symptom. A narrower sweep
-   is quicker and drains less.
+   is quicker and drains less. Ask him to have the cable plugged in and passed through to the
+   VM in UTM: checking the ECU list below needs it.
 3. Build the ECU list:
    - If `../ecu-map.md` has entries, use those names.
    - Otherwise search with `ediabas_list_ecus` (use `filter`; the VM holds well over a
@@ -21,11 +22,18 @@ the sweep reads from there.
      SGBD variant when read, and the tool reports which `variant` they resolved to, so they
      help where the exact variant is not known. Confirm each candidate has a runnable
      fault-memory job with `ediabas_describe`.
+   - `ediabas_describe` needs the cable connected to the VM: without it, it fails with
+     `cable_not_found` (seen at the desk on 2026-11-21). Whether it also needs the ignition
+     on is not known yet, so try it now, before asking for the ignition. If it fails with the
+     cable connected, tell Ryan what the message said (worth recording), and leave the check
+     to the ignition-on window, keeping it to the candidates you most need.
    - If you cannot tell which name fits this car, ask Ryan rather than including guesses.
      Every wrong name is an error result that still costs time.
 4. Tell Ryan the plan: how many ECUs, one `ediabas_read_faults` call (two if more than 20, or
-   more than 10 with info memory), whether info memory is included, and a rough time. Ask him
-   to switch the ignition on and say when it is. Note the time.
+   more than 10 with info memory), whether info memory is included, and a rough time (the
+   first EDIABAS call after a pause takes about 10 s longer while the agent loads EDIABAS
+   again; that is normal). Ask him to switch the ignition on and say when it is. Note the
+   time.
 
 ## With the ignition on
 

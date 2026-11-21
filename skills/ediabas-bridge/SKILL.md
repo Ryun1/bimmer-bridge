@@ -27,7 +27,7 @@ is a decision, not an obstacle. Report it.
 
 | Tool | Use |
 |---|---|
-| `vm_health` | agent, Windows session, BMW tools running (they hold the cable), EDIABAS DLL, policy version |
+| `vm_health` | agent, Windows session, BMW tools running (they hold the cable), EDIABAS DLL and whether it is loaded now, policy version |
 | `vm_list_windows` | what is open in the VM, front first |
 | `vm_screenshot` | a picture of one window or the desktop |
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
@@ -46,7 +46,7 @@ exists; see `references/errors.md`). Do not try to get the same result another w
 ## Session routine
 
 The car has a recurring battery-drain fault, so ignition-on time is the scarce resource. Do
-everything that does not need the ignition before Ryan turns it on.
+as much as you can before Ryan turns it on.
 
 1. **`vm_health` first**, every session and after any failure. If it lists a BMW tool as
    running, name it, ask Ryan to close it when he is finished with it, and stop until he says
@@ -57,8 +57,14 @@ everything that does not need the ignition before Ryan turns it on.
    wastes ignition time at best. `references/ecu-map.md` and `references/job-cookbook.md` hold
    names confirmed on this car; anything not in them is unconfirmed until a tool shows it.
    A job is runnable only if `ediabas_describe` shows it allowed and not "needs review".
-   `ediabas_describe` reads the SGBD file rather than the car, so it can usually be done
-   before the ignition goes on.
+   `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD file, but EDIABAS
+   will not load a real SGBD unless the cable is connected to the VM: at the desk on
+   2026-11-21, with the cable unplugged, it failed with `cable_not_found`. Whether it also
+   needs the ignition on is not known yet. So ask Ryan to have the cable plugged in and passed
+   through to the VM, and try `ediabas_describe` before asking for the ignition. If it fails
+   with the cable connected and the ignition off, tell Ryan what the message said (that
+   answers the open question, and is worth recording), and fold a narrow, filtered describe
+   into the ignition-on plan instead.
 3. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask Ryan
    to switch the ignition on and say when it is.
 4. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` call for
@@ -68,6 +74,11 @@ everything that does not need the ignition before Ryan turns it on.
 Keep each session under 10 minutes of ignition-on time. Say so when that is getting close and
 offer to stop and continue another time rather than adding reads. Read only what the question
 needs; reading every job on every ECU drains the battery and buries the answer.
+
+The agent unloads EDIABAS after a short idle spell (20 s by default), so the first `ediabas_*`
+call after a pause takes about 10 s longer (seen at the desk on 2026-11-21). That is normal:
+wait for it rather than retrying, and allow for it in the rough time. `vm_health` shows
+whether EDIABAS is loaded at the moment.
 
 Run anything that talks to the car only when Ryan has asked for it and is with the car.
 
@@ -85,6 +96,9 @@ enough. The ones that need judgement:
   step to get the read done.
 - **`cable_in_use`** — a BMW tool is open; the message names it. Ask Ryan to close it (step 1)
   and wait. Do not retry in a loop.
+- **`cable_not_found`** — EDIABAS could not initialise the interface: the cable is not
+  connected to the VM. Ask Ryan to plug it into the Mac and pass it through to the VM in UTM,
+  and wait until he says it is connected; until then every retry fails the same way.
 - **`ecu_not_found`, `job_not_found`** — the name was wrong. Go back to `ediabas_list_ecus` /
   `ediabas_describe`; do not try variations of the name.
 - **`ediabas_error`** — EDIABAS's own code and text, for example an ECU that did not answer.

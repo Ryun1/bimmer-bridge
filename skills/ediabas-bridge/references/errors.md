@@ -16,7 +16,7 @@ window) that would get round it.
 - Authentication: `no_token`, `unauthorized`, `forbidden`
 - Versions: `agent_outdated`, `bad_response`, agent-reported errors, `internal_error`
 - Job policy: `policy_unavailable`, `job_not_allowed`, `job_needs_review`
-- EDIABAS: `cable_in_use`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
+- EDIABAS: the slow first call, `cable_in_use`, `cable_not_found`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
 - Screenshots: `window_not_found`, `window_minimized`, `desktop_unavailable`
 - Logs: `path_not_allowed`, `file_not_found`
 - Deploy steps (installer, update, token)
@@ -103,6 +103,12 @@ server already re-reads the Keychain once before reporting this.
 **Tell Ryan:** re-send the VM's current token: start `serve.py --accept-token` on the Mac and run
 the Install line in the VM again (see Deploy steps). It replaces the Keychain entry. No
 restart is needed; call `vm_health` again afterwards.
+
+**With `EDIABAS_AGENT_URL` set** the message starts "The agent at EDIABAS_AGENT_URL rejected the
+token." instead. The server then uses only `EDIABAS_AGENT_TOKEN` and never reads the Keychain, so
+the Keychain is not the problem: that environment variable holds the wrong token for the agent
+at that address. Tell Ryan to correct `EDIABAS_AGENT_TOKEN` in the MCP server's registration, or
+to unset `EDIABAS_AGENT_URL` to use the VM, and restart the server.
 
 ### `forbidden`
 **Message:** "The agent refused this Mac's address (firewall or gateway check)."
@@ -193,6 +199,13 @@ alone. The safe default is to skip it; never present approving it as a routine s
 
 ## EDIABAS
 
+### The first call after a pause is slow
+Not an error. The agent unloads EDIABAS after a short idle spell (20 s by default) so that it
+does not hold EDIABAS open between requests, and loads it again on the next `ediabas_*` call.
+That first call takes about 10 s longer (seen at the desk on 2026-11-21). It is normal and not
+a reason to retry. `vm_health` shows whether EDIABAS is loaded at the moment (older agents do
+not report it). Allow for it in the rough time you give Ryan before the ignition goes on.
+
 ### `cable_in_use`
 **Meaning:** a BMW tool (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool) or another program
 using EDIABAS is running in the VM; the message names it. Only one program can use the cable,
@@ -200,6 +213,24 @@ and there is no override.
 **Tell Ryan:** name the tool and ask him to close it when he has finished with it; then wait
 for him to say so. Do not retry in a loop. If it is WinKFP or NCS Expert, say it must not be
 closed or killed mid-flash or mid-coding: an interrupted flash can brick an ECU.
+
+### `cable_not_found`
+**Message:** begins "EDIABAS could not initialise the diagnostic interface (EDIABAS error 28:
+IFH-0018: INITIALIZATION ERROR): the K+DCAN cable is not connected to the VM." and asks Ryan to
+plug the cable into the Mac and pass it through to the Windows VM in UTM, and not to retry
+until he says it is connected.
+
+**Meaning:** EDIABAS could not open the interface, so nothing reached the car. Seen at the desk
+on 2026-11-21 with the cable unplugged: a real SGBD would not load at all, so even
+`ediabas_describe` failed this way. Only `TMODE` and `UTILITY` loaded without the cable. It
+can fail a whole call, or appear in each ECU's place in `ediabas_read_faults`. It is not the
+same as an ECU that did not answer (`ediabas_error`): there, the cable is connected and the
+car is silent.
+**Tell Ryan:** the cable is not connected to the VM; plug it into the Mac and pass it through
+to the VM in UTM, then say when it is done. Wait for him: until then every retry fails the
+same way. Then call `vm_health` once and carry on. Whether a real SGBD also needs the ignition
+on, with the cable connected, is not known yet; if a describe fails in that state, tell Ryan
+what it said so it can be recorded.
 
 ### `ecu_not_found`
 **Meaning:** there is no SGBD or group file of that name in the VM's EDIABAS ECU folder.
@@ -213,8 +244,9 @@ lists. Do not try variations of the name blind.
 ### `ediabas_error`
 **Meaning:** EDIABAS ran the request and reported its own error; the message carries
 EDIABAS's code and text. Typical reasons are an ECU that does not answer (ignition off, module
-not fitted, wrong SGBD for this car) or a cable problem; which EDIABAS codes mean which on this
-install has not been confirmed yet.
+not fitted, wrong SGBD for this car, or the cable not plugged into the car). A cable not
+connected to the VM is reported separately, as `cable_not_found`. Which other EDIABAS codes mean
+which on this install has not been confirmed yet.
 **Tell Ryan:** the code and text as returned, and for which ECU. Do not interpret the code
 beyond what the text says. In `ediabas_read_faults` this appears in that ECU's place and the
 other ECUs still print.
