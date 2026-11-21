@@ -1,17 +1,29 @@
 # ediabas-bridge
 
-Read-only bridge that lets Claude see into the Windows VM (UTM) running BMW Standard Tools
-(INPA, Tool32, NCS Expert, WinKFP): allowlisted read-only EDIABAS jobs, screenshots, and
-EDIABAS / NCS Expert trace files.
+A read-only bridge that lets Claude look into the Windows VM in UTM where BMW Standard Tools
+(INPA, Tool32, NCS Expert, WinKFP) and EDIABAS talk to the car over the K+DCAN cable. A small
+agent in the VM (`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes
+screenshots and reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds
+the VM, calls the agent and offers those as tools to Claude Code and the Claude desktop app.
+Skills in `skills/` teach Claude how to run a diagnostic session.
 
-- [PLAN.md](PLAN.md) — build plan v2
-- [docs/api.md](docs/api.md) — the agent's HTTP contract
-- [docs/deploy.md](docs/deploy.md) — how files and the token move between the Mac and the VM
-- [docs/plan-review.md](docs/plan-review.md) — review of the original plan and why v2 differs
-- [docs/plan-v1-original.md](docs/plan-v1-original.md) — the original plan (ISTA-based)
+**What it will never do.** v1 is read-only. There is no endpoint, tool, flag or setting that
+can click or type in the VM, clear faults, code, flash, run activations or adaptations, send
+raw telegrams or change the EDIABAS configuration. Anything that writes to the car is done by
+Ryan, by hand, in INPA or NCS Expert. See [Safety rules](#safety-rules).
 
 No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`).
 
+- [PLAN.md](PLAN.md) — build plan v2
+- [docs/api.md](docs/api.md) — the agent's HTTP contract
+- [docs/tools.md](docs/tools.md) — the MCP tools and their error codes
+- [docs/deploy.md](docs/deploy.md) — how files and the token move between the Mac and the VM
+- [mac-mcp/README.md](mac-mcp/README.md) — the MCP server: environment variables, discovery, recording
+- [dev/fixtures/README.md](dev/fixtures/README.md) — the replay agent and recorded fixtures
+- [docs/plan-review.md](docs/plan-review.md) — review of the original plan and why v2 differs
+- [docs/plan-v1-original.md](docs/plan-v1-original.md) — the original plan (ISTA-based)
+
+<!-- STATUS: maintained by the coordinator -->
 ## Status
 
 | Phase | State |
@@ -49,41 +61,354 @@ Found and fixed during acceptance:
   permission is tied to the `node` binary's path, so a Homebrew upgrade of node can prompt again.
 - With only the server's built-in notes (no skill), the desktop app offered screenshots and
   car reads that are not built. The notes and the health text now say what does not exist yet.
+<!-- /STATUS -->
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `vm-agent/` | the Windows agent (C#, .NET 10, win-x86). `build.sh` writes `release/EdiabasAgent.zip` |
-| `vm-setup/` | `discover.ps1`, `install.ps1`, `update.ps1`, `uninstall.ps1` — run in the VM |
-| `mac-mcp/` | the local MCP server Claude starts (TypeScript) |
-| `dev/serve.py` | Mac-side server that hands scripts and the agent to the VM and receives uploads |
-| `skills/` | Claude skills for using the tools |
+| `vm-agent/` | the Windows agent (C#, .NET 10, win-x86). `vm-agent/build.sh` writes `release/EdiabasAgent.zip` |
+| `vm-setup/` | `discover.ps1`, `install.ps1`, `update.ps1`, `uninstall.ps1`, run in the VM |
+| `mac-mcp/` | the local MCP server Claude starts (TypeScript); built to `mac-mcp/dist/index.js` |
+| `policy/` | `policy.json`, the job policy both sides load, and `policy-cases.json`, its test cases |
+| `dev/serve.py` | Mac-side server that hands the scripts and the agent to the VM and takes the token back |
+| `dev/replay-agent.ts` | a stand-in agent that answers from recorded fixtures (no VM, no car) |
+| `skills/` | Claude skills for using the tools; `skills/install.sh` installs them |
+| `release.sh` | checks versions, runs every test suite, builds the agent zip and the MCP server |
 
-## Building and testing (on the Mac)
+---
+
+## Setup from scratch
+
+What you start with: this repo on the Mac, UTM with the Windows VM named `Windows` (network
+mode **Shared Network**), BMW Standard Tools already installed in the VM, and a Windows user
+who is an administrator. Do the steps in order. Every command on the Mac is run from the repo
+root unless it says otherwise.
+
+### 1. Prerequisites on the Mac
 
 ```sh
-# agent: needs the .NET 10 SDK (brew install dotnet@10)
-export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec PATH=/opt/homebrew/opt/dotnet@10/bin:$PATH
-(cd vm-agent && dotnet test EdiabasAgent.Tests)
-vm-agent/build.sh                       # prints the SHA-256 of release/EdiabasAgent.zip
-
-# MCP server
-(cd mac-mcp && npm install && npm test && npm run build)
-
-# deploy server
-python3 -m unittest dev/test_serve.py
+brew install node          # Node 20 or later; also gives the stable path /opt/homebrew/bin/node
+brew install dotnet@10     # .NET 10 SDK, to build and test the agent
+python3 --version          # Python 3, for dev/serve.py (the macOS one is enough)
 ```
 
-## Installing or updating the agent in the VM
+`dotnet@10` is keg-only, so it is not on `PATH` by default. `release.sh` and `vm-agent/build.sh`
+find it in the Homebrew folder by themselves; to run `dotnet` by hand, add these to your shell
+profile:
 
-1. Start the `Windows` VM in UTM and log in.
-2. On the Mac: `python3 dev/serve.py --accept-token`. It prints the lines to paste.
-3. In the VM, in **Windows PowerShell run as administrator**, paste the Install line (first
-   time, or to repair) or the Update line (new build).
+```sh
+export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
+export PATH=/opt/homebrew/opt/dotnet@10/bin:$PATH
+```
+
+Install the MCP server's dependencies once (`release.sh` stops if they are missing):
+
+```sh
+(cd mac-mcp && npm ci)
+```
+
+### 2. Build and test
+
+```sh
+./release.sh
+```
+
+It checks that the versions agree, runs every test suite, builds `release/EdiabasAgent.zip`
+and `mac-mcp/dist/index.js`, and ends with `Release <version> built and tested.` and the zip's
+SHA-256. It stops at the first failure with `release.sh: FAILED: <reason>`. Details in
+[Releasing](#releasing). `./release.sh --dry-run` shows the steps without running them.
+
+### 3. Install the agent in the VM
+
+1. Start the `Windows` VM in UTM and log in to Windows. The agent runs in your logged-in
+   session, so someone must be logged in for it to work at all.
+2. On the Mac, start the deploy server so that it will accept the agent's token:
+
+   ```sh
+   python3 dev/serve.py --accept-token
+   ```
+
+   It binds to the Mac's UTM bridge address on port 8000 and prints the lines to paste,
+   with the address and the zip's SHA-256 filled in:
+
+   ```
+   Install:
+     $base='http://<Mac bridge address>:8000'; $sha='<sha256>'; irm $base/install.ps1 | iex
+   Update:
+     $base='http://<Mac bridge address>:8000'; $sha='<sha256>'; irm $base/update.ps1 | iex
+   ```
+
+   If it says `error: no UTM shared-network interface (bridge1xx) ... is up`, the VM is not
+   running yet. If it says `(release/EdiabasAgent.zip not built; install/update lines not
+   shown)`, run step 2 first. Start `serve.py` after the build: the hash it prints is that of
+   the zip at start-up.
+3. In the VM, open **Windows PowerShell** (not PowerShell 7) with **Run as administrator**,
+   and paste the **Install** line.
+4. Success looks like this (blue `==>` lines, no red `ERROR:`):
+   - `SHA-256 OK: ...`
+   - `Generating a new token` (first install) or `token.txt already exists; keeping it`
+   - `Firewall: inbound TCP 8765 from <gateway> only`
+   - `Agent is up.` Usually with the note that it answered 403 because the request came from
+     the VM itself; that is expected and proves the listener works.
+   - `token stored in the Mac's Keychain`
+   - `Done. ediabas-bridge agent <version> listens on port 8765.`
+
+   On the Mac, `serve.py` logs `PUT /token 204 token stored`. The token went straight into the
+   Keychain (service `ediabas-bridge`, account `agent`); nobody copies it.
+
+   If something else happens, see [Troubleshooting](#troubleshooting). The common ones at this
+   step are PowerShell 7 or a non-elevated window (the script refuses and changes nothing), a
+   `SHA-256 mismatch` (the zip was rebuilt after `serve.py` started), and `Could not send the
+   token to the Mac` (`serve.py` was started without `--accept-token`).
+5. Stop `serve.py` with Ctrl-C. It should not run when you are not deploying.
+
+What the installer did, so you know what to look for later: it created
+`C:\ProgramData\EdiabasBridge\` (exe, `config.json`, `token.txt`, `logs\`), a firewall rule
+and a scheduled task both named `ediabas-bridge agent` (at log-on, and every 5 minutes in case
+the agent crashed), and turned off sleep on AC power. It did not touch the screen lock.
+Re-running it is safe: it upgrades in place and keeps `config.json` and `token.txt`.
+
+Optional check in the VM (elevated Windows PowerShell), with the agent running:
+
+```powershell
+& 'C:\ProgramData\EdiabasBridge\EdiabasAgent.exe' --selftest
+Get-Content 'C:\ProgramData\EdiabasBridge\logs\selftest.txt'
+```
+
+It checks the config, the token's permissions, the bind address, the firewall rule and the
+listener, with no network traffic and no cable, and writes the same report to `selftest.txt`.
+
+### 4. Register the MCP server
+
+Use a stable Node path, `/opt/homebrew/bin/node`, not a path inside an nvm version folder, so
+that a Node upgrade does not break the registration. The server must stay at
+`mac-mcp/dist/index.js` inside the repo: it loads `policy/policy.json` from two folders up.
+
+**Claude Code** (all projects), from the repo root:
+
+```sh
+claude mcp add --scope user ediabas-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"
+```
+
+**Claude desktop app:** quit the app, then add an `ediabas-bridge` entry under `mcpServers` in
+`~/Library/Application Support/Claude/claude_desktop_config.json`. Keep every other key in the
+file as it is; create the `mcpServers` key if it is not there. `<repo>` is the absolute path of
+this repo (`pwd` in the repo root prints it):
+
+```json
+{
+  "mcpServers": {
+    "ediabas-bridge": {
+      "command": "/opt/homebrew/bin/node",
+      "args": ["<repo>/mac-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+Start the app again. The first time the desktop app's server reaches the VM, macOS asks "node
+would like to find devices on your local network": choose **Allow**. If you missed it, the
+tools report `local_network_blocked`; see [Troubleshooting](#troubleshooting).
+
+The token needs no configuration: the server reads it from the Keychain.
+
+### 5. Install the skills
+
+```sh
+skills/install.sh
+```
+
+It links each skill (`ediabas-bridge`, `bmw-standard-tools`) into `~/.claude/skills/` for
+Claude Code, so edits in the repo take effect at once, and builds `skills/dist/<skill>.zip`.
+It refuses, and leaves alone, anything already in `~/.claude/skills/` under the same name that
+is not its own link. Upload the two zips to claude.ai for the desktop app and cloud sessions
+(the exact upload menu was not recorded when this was written).
+
+`docs/bmw-e61-skill-addition.md` is a short section to paste into the separate `bmw-e61`
+skill by hand, so that it hands over to this bridge.
+
+### 6. First check
+
+Start a new Claude Code session (or a new chat in the desktop app) and ask "is the BMW VM up?".
+Claude should call `vm_health` and report the agent's version, the Windows session it runs in,
+any BMW tools that are open, whether the EDIABAS DLL was found, the agent's features and the
+job policy version on both sides. In Claude Code, `/mcp` shows whether `ediabas-bridge` is
+connected.
+
+If it reports an error, the message says what to do; the [Troubleshooting](#troubleshooting)
+table has the same cases.
+
+---
+
+## Updating
+
+After a code change, or to install a newer build:
+
+1. On the Mac: `./release.sh`. It prints the new SHA-256.
+2. Start the VM and log in if it is not running, then on the Mac: `python3 dev/serve.py`
+   (no `--accept-token` needed; the token does not change on an update).
+3. In the VM, in **Windows PowerShell run as administrator**, paste the **Update** line that
+   `serve.py` printed. It verifies the hash, stops the agent, replaces the exe, starts the
+   scheduled task and ends with `Updated to ediabas-bridge agent <version>`. It touches nothing
+   else (config, token, firewall, task settings). If it says the agent is not installed, use the
+   Install line instead.
 4. Stop `serve.py` with Ctrl-C.
+5. **Restart Claude** so it starts the new MCP server from the rebuilt `mac-mcp/dist`: quit and
+   reopen the desktop app, and start a new Claude Code session. An already-running server keeps
+   the old code.
+6. Skills: Claude Code sees changes at once through the links. For claude.ai, run
+   `skills/install.sh` again and upload the new zips.
+7. Check with `vm_health`: the agent's version should be the new one, with no policy-version
+   warning.
 
-The installer sends the agent's token to the Mac's Keychain itself. See `docs/deploy.md`.
+## Uninstalling
+
+In the VM, start `python3 dev/serve.py` on the Mac first, then in **Windows PowerShell run as
+administrator**, with the address `serve.py` printed:
+
+```powershell
+$base='http://<Mac bridge address>:8000'; irm $base/uninstall.ps1 | iex
+```
+
+It stops and removes the scheduled task, the firewall rule and `C:\ProgramData\EdiabasBridge`.
+To keep `config.json`, `token.txt` and `logs\` for a later reinstall, set `$KeepData` first:
+
+```powershell
+$KeepData=$true; $base='http://<Mac bridge address>:8000'; irm $base/uninstall.ps1 | iex
+```
+
+It leaves the sleep setting as the installer set it, and prints how to restore it
+(for example `powercfg /change standby-timeout-ac 30`).
+
+On the Mac:
+
+```sh
+claude mcp remove --scope user ediabas-bridge              # Claude Code
+rm ~/.claude/skills/ediabas-bridge ~/.claude/skills/bmw-standard-tools   # the skill links only
+security delete-generic-password -s ediabas-bridge -a agent # the token in the Keychain
+```
+
+For the desktop app, delete the `ediabas-bridge` entry from `mcpServers` in
+`~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. Remove
+the uploaded skills in claude.ai if you uploaded them. Keep the Keychain item if you uninstalled
+with `$KeepData=$true` and mean to reinstall: the kept `token.txt` still matches it.
+
+---
+
+## Troubleshooting
+
+Tool errors carry a code (in **bold** below) and a message that already says what to do. The
+codes are listed in [docs/tools.md](docs/tools.md#errors).
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| **vm_not_running**: "The VM does not appear to be running" | The VM is off, or UTM's shared network is not up on the Mac | Start the `Windows` VM in UTM and log in |
+| **agent_not_answering**: "The VM is up but the agent is not answering" | Nobody is logged in to Windows (the agent starts at log-on), or the agent is not installed or has stopped | Log in to Windows and wait about 30 s. If it persists, read `agent.log` in the VM (see logs below) and re-run the Install line |
+| **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
+| **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after a reinstall without `$KeepData`) | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a 401 |
+| **no_token** | Nothing in the Keychain (the first install's hand-off failed) | As for `unauthorized` |
+| **forbidden** | The agent or its firewall refused the Mac's address: requests are accepted only from the VM's default gateway | Re-run the Install line; it recreates the firewall rule for the VM's current gateway. `agent.log` in the VM shows the address and gateway the agent chose |
+| **agent_outdated**, or `vm_health` says "Agent features: not reported" | The agent in the VM is an older build that lacks that endpoint | [Updating](#updating): run the Update line |
+| `vm_health` warns that the agent's job policy differs from the Mac's | The agent and the Mac server were built from different versions of `policy/policy.json` | Run `./release.sh`, the Update line, and restart Claude |
+| **bad_response** | The agent and the MCP server are different versions | As above |
+| **policy_unavailable** | `policy/policy.json` could not be loaded by the Mac server; every `ediabas_*` tool refuses | Restore the file from git, then restart Claude |
+| **cable_in_use**, naming a process | A BMW tool that uses the cable is open in the VM (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool, or anything with `api32.dll` loaded). There is no override, by design | Close that tool in the VM, then ask once more. Do not retry in a loop |
+| **cable_not_found**: EDIABAS error 28, `IFH-0018: INITIALIZATION ERROR` | The K+DCAN cable is not connected to the VM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it | Plug the cable into the Mac and pass it through to the `Windows` VM in UTM (the USB button in the VM's toolbar), then ask again |
+| **ediabas_error** or **job_timeout** | EDIABAS reached the interface but the ECU did not answer: ignition off, cable not in the car, or that ECU is not fitted | Check `ediabas_vehicle_status`, then decide before trying again |
+| The first EDIABAS call after a pause takes about 10 s | Expected. The agent unloads EDIABAS after about 20 s with no EDIABAS request, so that nothing holds the interface open; the next call loads it again | Nothing. The Mac waits up to 75 s for EDIABAS calls |
+| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | Ryan decides. To allow that one job, add `"ECU:JOB"` (upper case) to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM, then restart Windows (the agent reads its config at start-up). Never make this routine |
+| **job_not_allowed** | The job policy refused the job by name | By design. Do not look for another job or tool that does the same; writes are done by hand in INPA or NCS Expert |
+| **desktop_unavailable** (screenshots) | Windows is locked, showing a secure desktop (for example a UAC prompt), or nobody is logged in | Log in to or unlock Windows. The installer does not change the screen lock |
+| **window_minimized** | The window asked for is minimised; the agent never restores windows | Restore it in the VM, then ask again |
+| Script says `This script must run in "Windows PowerShell" (5.1), not PowerShell 7` | The line was pasted into PowerShell 7 | Open **Windows PowerShell** as administrator and paste it again. Nothing was changed |
+| Script says `This script must run in an elevated PowerShell` | The window was not run as administrator | Right-click Windows PowerShell, Run as administrator, paste again |
+| Script says `SHA-256 mismatch` | The zip was rebuilt after `serve.py` printed its lines, or the line was mistyped | Stop and restart `serve.py` and paste the line it prints now. Nothing was changed |
+| `irm` cannot connect to the Mac | `serve.py` is not running, or the address in `$base` is wrong | Start `serve.py` and copy its line exactly |
+| Install prints `Could not send the token to the Mac (HTTP 403)` and a `security add-generic-password ...` command | `serve.py` was started without `--accept-token` | Either run the printed `security` command once on the Mac (it contains the token: do not paste it anywhere else), or restart `serve.py --accept-token` and run the Install line again |
+| Install prints `The agent did not answer within 20 s` | The agent could not start or bind | Read `agent.log` in the VM, and run the `--selftest` check from [step 3](#3-install-the-agent-in-the-vm) |
+| `serve.py` says `no UTM shared-network interface (bridge1xx) ... is up` | The VM is not running, so the Mac has no bridge address to bind | Start the VM, then `serve.py` |
+| A tool you expect (screenshots, logs, EDIABAS) is not offered, after an update | Claude is still running the old MCP server | Quit and reopen the desktop app; start a new Claude Code session |
+
+### Logs and audit files
+
+| Where | File | What |
+|---|---|---|
+| VM | `C:\ProgramData\EdiabasBridge\logs\agent.log` | the agent's start-up, bind decisions and errors |
+| VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | one line per request: endpoint, ECU, job, outcome, rule for refusals |
+| VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | the last `--selftest` report |
+| Mac | `~/Library/Logs/ediabas-bridge/audit.log` | one line per tool call: tool, outcome, duration, ECU and job |
+| Mac | `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log` | the MCP server's stderr when the desktop app runs it (discovery, failed probes; never the token) |
+| Mac | the terminal running `serve.py` | one line per request it served, including `PUT /token` |
+
+In Claude Code, `/mcp` shows whether the server is connected.
+
+---
+
+## Safety rules
+
+The ten rules of [PLAN.md section 2](PLAN.md#2-hard-safety-rules-non-negotiable), with where
+each is enforced. They are enforced in code, not only in tool descriptions or skills. Check any
+change against this list. **Anything that runs against the car is Ryan's, at the car**; Claude
+Code may run only offline jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is
+unplugged.
+
+| # | Rule | Enforced in |
+|---|---|---|
+| 1 | No input into the VM: no click, keystroke, mouse or clipboard | There is no such route: `vm-agent/EdiabasAgent/Endpoints.cs` (the route table). Capture never restores, focuses, moves or resizes a window (`vm-agent/EdiabasAgent/Capture/`). The Mac server registers only read-only tools (`mac-mcp/src/server.ts`) |
+| 2 | No writes to the car in v1: no clearing, coding, programming, activations or adaptations | No endpoint for them (`Endpoints.cs`); the job policy (rule 3) refuses them by name |
+| 3 | EDIABAS is default-deny | `policy/policy.json`, applied by `vm-agent/EdiabasAgent.Core/JobPolicy.cs` (plus the description screen in `CommentScreen.cs`) and by `mac-mcp/src/policy.ts` before anything leaves the Mac. Both test suites run every case in `policy/policy-cases.json`; a policy change without a case change is a bug |
+| 4 | One user of the cable at a time; no override | `vm-agent/EdiabasAgent/Proc/ConflictCheck.cs` and `vm-agent/EdiabasAgent.Core/ConflictMatcher.cs`, run before every EDIABAS call in `EdiabasService.cs`; the process list is `conflictProcesses` in the VM's `config.json` |
+| 5 | Release the interface when idle | One `apiInit` … `apiEnd` per request in `vm-agent/EdiabasAgent.Core/EdiabasService.cs`; the runner in `vm-agent/EdiabasAgent/Ediabas/` unloads EDIABAS after about 20 s idle |
+| 6 | Network exposure: bind to the shared-network address only, firewall to the Mac only, source-address check, Bearer token compared in constant time, token in the Keychain on the Mac | Bind: `vm-agent/EdiabasAgent.Core/BindAddressSelector.cs`. Firewall rule: `vm-setup/install.ps1`. Source check: `vm-agent/EdiabasAgent/Middleware.cs`. Token: `vm-agent/EdiabasAgent.Core/TokenAuth.cs`. Mac: `mac-mcp/src/token.ts` (Keychain) and `mac-mcp/src/vmAddress.ts` (only on-link addresses are contacted). `--selftest` checks bind, firewall and token permissions in the VM |
+| 7 | Read-only file access under configured roots; the agent writes only its own logs | `vm-agent/EdiabasAgent.Core/PathRules.cs`, `LogService.cs` and `vm-agent/EdiabasAgent/Logs/LogAccess.cs`. Folder and token permissions: `vm-setup/install.ps1` |
+| 8 | Never change the EDIABAS configuration: no edits to `EDIABAS.INI` or `obd.ini`, no `apiSetConfig` | `vm-agent/EdiabasAgent/Ediabas/Api32.cs` does not declare `apiSetConfig`; nothing in the agent writes those files |
+| 9 | Audit trail on both sides | VM: `vm-agent/EdiabasAgent/Audit/AuditLog.cs` (format in `vm-agent/EdiabasAgent.Core/AuditLine.cs`). Mac: `mac-mcp/src/audit.ts` |
+| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](PLAN.md#12-working-agreements-for-claude-code)), repeated in the skills. Ryan runs everything at the car |
+
+---
+
+## Releasing
+
+```sh
+./release.sh                 # everything
+./release.sh --no-build      # versions and tests only
+./release.sh --skip-dotnet   # without the .NET tests and agent build (not a release)
+./release.sh --dry-run       # check the versions and print the steps
+```
+
+`release.sh`:
+1. checks that these versions are the same and are `x.y.z`: `VERSION`, `<Version>` in
+   `vm-agent/Directory.Build.props`, and `version` in `mac-mcp/package.json` and
+   `mac-mcp/package-lock.json`. To bump a version, change all of them (for the lock file,
+   `npm --prefix mac-mcp version <x.y.z> --no-git-tag-version` updates both `mac-mcp` files);
+2. runs the agent tests (`dotnet test vm-agent/EdiabasAgent.Tests`), the MCP server's
+   typecheck and tests, the deploy server's tests (`python3 -m unittest dev/test_serve.py`) and
+   the dev tools' typecheck and tests;
+3. builds `release/EdiabasAgent.zip` and `release/EdiabasAgent.zip.sha256`
+   (`vm-agent/build.sh`) and `mac-mcp/dist` (`npm --prefix mac-mcp run build`);
+4. checks that the zip's `version.txt` is the release version and that the `.sha256` file
+   matches the zip, then prints the SHA-256 and the Update line.
+
+It stops at the first failure and never pushes, tags or deploys anything.
+
+To run one part by hand:
+
+```sh
+(cd vm-agent && dotnet test EdiabasAgent.Tests)
+vm-agent/build.sh
+(cd mac-mcp && npm test && npm run build)
+python3 -m unittest dev/test_serve.py
+(cd mac-mcp && npm run test:dev)
+```
+
+To exercise the MCP server and the skills with no VM and no car, use the replay agent:
+[dev/fixtures/README.md](dev/fixtures/README.md).
+
+`serve.py` also prints a **Discovery** line: it runs `vm-setup/discover.ps1`, which only reads,
+and uploads its report into `discovery/` (git-ignored). It was used once for Phase 0, below.
+
+---
 
 ## Phase 0 findings (VM discovery, 2026-11-21)
 

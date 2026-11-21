@@ -23,7 +23,7 @@ for arg in "$@"; do
     --no-build) NO_BUILD=1 ;;
     --skip-dotnet) SKIP_DOTNET=1 ;;
     --dry-run) DRY_RUN=1 ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "release.sh: unknown argument $arg (see --help)" >&2; exit 2 ;;
   esac
 done

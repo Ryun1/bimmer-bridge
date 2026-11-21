@@ -29,7 +29,7 @@ invalid, every `ediabas_*` tool refuses with `policy_unavailable` (fail closed);
 file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`.
 
 **Older agent.** A tool whose endpoint the agent does not have (404 `not_found`) reports
-`agent_outdated`: install the current agent with the Update line (see "Installing or updating the agent in the VM" in the repo README).
+`agent_outdated`: install the current agent with the Update line (see "Updating" in the repo README).
 
 **Timeouts.** 15 s per request, 75 s for `/ediabas/*`. An EDIABAS call that timed out is never
 sent a second time. The agent unloads EDIABAS after a short idle spell, so the first
