@@ -1,0 +1,28 @@
+{
+  "name": "ediabas-bridge-mcp",
+  "version": "0.1.0",
+  "description": "Local stdio MCP server that reads BMW diagnostic data from the ediabas-bridge VM agent (read-only).",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ediabas-bridge-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
