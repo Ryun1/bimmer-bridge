@@ -235,39 +235,19 @@ internal static class SelfTest
         }
 
         var remote = ((string?)r.RemoteAddresses ?? "").Trim();
-        var remoteHost = NormalizeRemote(remote);
         if (selection?.Gateway is null)
         {
             problems.Add($"remote address '{remote}' cannot be compared: no gateway resolved");
         }
-        else if (remoteHost is null || !remoteHost.Equals(selection.Gateway))
+        else if (!FirewallAddress.IsExactly(remote, selection.Gateway))
         {
             problems.Add($"remote address '{remote}', expected exactly {selection.Gateway}");
         }
 
         var program = (string?)r.ApplicationName ?? "(any program)";
         return problems.Count == 0
-            ? new Check(name, Outcome.Pass, $"enabled, inbound, TCP {port}, remote {remoteHost}, program {program}")
+            ? new Check(name, Outcome.Pass, $"enabled, inbound, TCP {port}, remote '{remote}' (= {selection?.Gateway}), program {program}")
             : new Check(name, Outcome.Fail, string.Join("; ", problems));
-    }
-
-    /// <summary>"192.168.64.1", "192.168.64.1/32" or "192.168.64.1/255.255.255.255" to an address; anything else null.</summary>
-    private static IPAddress? NormalizeRemote(string remote)
-    {
-        if (remote.Contains(',', StringComparison.Ordinal) || remote.Contains('-', StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var slash = remote.IndexOf('/');
-        var host = slash >= 0 ? remote[..slash] : remote;
-        var mask = slash >= 0 ? remote[(slash + 1)..] : "";
-        if (mask.Length > 0 && mask != "32" && mask != "255.255.255.255")
-        {
-            return null;
-        }
-
-        return BindAddressSelector.TryParseLiteral(host, out var ip) ? ip : null;
     }
 
     private static Check CheckListener(int port, BindSelection? selection)

@@ -79,8 +79,8 @@ Facts the later phases build on. Source: `discover.ps1` run in the VM.
 | Tool32 | 4.0.3, `C:\EDIABAS\Bin\Tool32.exe` |
 | NCS Expert | 4.0.1, `C:\NCSEXPER\BIN\NCSEXPER.exe` |
 | WinKFP | 5.3.1, `C:\EC-APPS\NFS\BIN\winkfpt.exe` |
-| NCS Dummy | installed in `C:\NCS Dummy\`; exe name not yet known |
-| BMW Coding Tool | installed in `C:\BMW Coding Tool v250\`; exe name not yet known |
+| NCS Dummy | `C:\NCS Dummy\NcsDummy.exe` (does not use the cable) |
+| BMW Coding Tool | `C:\BMW Coding Tool v250\BMW Coding Tool.exe` |
 | Shortcuts | none is flagged "run as administrator" (moot with UAC off) |
 | Desktop zip | `VRRTuning_2021_BMWTOOLPACK.zip`, the installer pack the tools came from |
 | Trace folders | `C:\EDIABAS\TRACE` holds one empty file; `C:\NCSEXPER\WORK` has no module trace yet |
@@ -92,8 +92,8 @@ Facts the later phases build on. Source: `discover.ps1` run in the VM.
 - **Elevation:** the plan's "not elevated by default" cannot hold on this VM while UAC is off.
   The agent's folder permissions therefore don't constrain it. This is a property of the VM,
   not something the bridge should change.
-- **Conflict list:** `INPALOAD`, `TOOL32`, `NCSEXPER` and `WINKFPT` are confirmed. The names
-  for NCS Dummy and BMW Coding Tool still need reading from their folders before Phase 2.
+- **Conflict list:** `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT` and `BMW Coding Tool` are all
+  confirmed process names, and match the installed config.
 - **Logs (Phase 5):** with EDIABAS tracing off there is little to read. Turning it on means
   editing `EDIABAS.INI`, which the safety rules forbid the bridge to do; it would be Ryan's choice.
 - **Phase 2 desk test:** `TMODE.PRG` is present, so the no-cable test is available.
