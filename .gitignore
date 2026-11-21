@@ -1,0 +1,27 @@
+# build output
+node_modules/
+dist/
+bin/
+obj/
+release/
+*.zip
+
+# secrets and machine-local data
+token.txt
+*.token
+.env
+config.local.json
+
+# never commit BMW proprietary files or VM discovery dumps
+*.prg
+*.grp
+*.PRG
+*.GRP
+api32.dll
+api64.dll
+api.h
+EDIABAS.INI
+discovery/
+ista-bridge-discovery*.txt
+
+.DS_Store
