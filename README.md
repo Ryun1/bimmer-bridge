@@ -161,20 +161,23 @@ SHA-256. It stops at the first failure with `release.sh: FAILED: <reason>`. Deta
    python3 dev/serve.py --accept-token
    ```
 
-   It binds to the Mac's UTM bridge address on port 8000 and prints the lines to paste,
-   with the address and the zip's SHA-256 filled in:
+   It binds to the Mac's UTM bridge address on port 8000, serves only the VM's address (the
+   latest DHCP lease for the VM's MAC, or `--client <VM IPv4>`), and prints the lines to
+   paste, with the address, the zip's SHA-256 and each script's SHA-256 filled in. Each line
+   downloads its script, checks the script's SHA-256 and only then runs it. The Install line
+   looks like this (one line; copy it from the terminal, do not type it):
 
    ```
    Install:
-     $base='http://<Mac bridge address>:8000'; $sha='<sha256>'; irm $base/install.ps1 | iex
-   Update:
-     $base='http://<Mac bridge address>:8000'; $sha='<sha256>'; irm $base/update.ps1 | iex
+     $base='http://<Mac bridge address>:8000'; $sha='<zip sha256>'; $ebFile="$env:TEMP\ediabas-bridge-install.ps1"; iwr "$base/install.ps1" -UseBasicParsing -OutFile $ebFile; $ebBytes=[IO.File]::ReadAllBytes($ebFile); if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '<install.ps1 sha256>') { iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } else { Write-Host 'install.ps1 is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red }
    ```
 
-   If it says `error: no UTM shared-network interface (bridge1xx) ... is up`, the VM is not
-   running yet. If it says `(release/EdiabasAgent.zip not built; install/update lines not
-   shown)`, run step 2 first. Start `serve.py` after the build: the hash it prints is that of
-   the zip at start-up.
+   The Update, Discovery and Uninstall lines have the same shape. If it says
+   `error: no UTM shared-network interface (bridge1xx) ... is up`, the VM is not running yet.
+   If it says `error: no DHCP lease for the VM's MAC`, start the VM, or pass `--client` with
+   the address `ipconfig` shows in the VM. If it says `(release/EdiabasAgent.zip not built;
+   install/update lines not shown)`, run step 2 first. Start `serve.py` after the build and
+   after any change to `vm-setup/`: the hashes it prints are those of the files at start-up.
 3. In the VM, open **Windows PowerShell** (not PowerShell 7) with **Run as administrator**,
    and paste the **Install** line.
 4. Success looks like this (blue `==>` lines, no red `ERROR:`):
@@ -296,19 +299,13 @@ After a code change, or to install a newer build:
 
 ## Uninstalling
 
-In the VM, start `python3 dev/serve.py` on the Mac first, then in **Windows PowerShell run as
-administrator**, with the address `serve.py` printed:
-
-```powershell
-$base='http://<Mac bridge address>:8000'; irm $base/uninstall.ps1 | iex
-```
+Start `python3 dev/serve.py` on the Mac first, then in the VM, in **Windows PowerShell run as
+administrator**, paste the **Uninstall** line `serve.py` printed (it checks `uninstall.ps1`'s
+SHA-256 before running it).
 
 It stops and removes the scheduled task, the firewall rule and `C:\ProgramData\EdiabasBridge`.
-To keep `config.json`, `token.txt` and `logs\` for a later reinstall, set `$KeepData` first:
-
-```powershell
-$KeepData=$true; $base='http://<Mac bridge address>:8000'; irm $base/uninstall.ps1 | iex
-```
+To keep `config.json`, `token.txt` and `logs\` for a later reinstall, put `$KeepData=$true; `
+at the start of that line.
 
 It leaves the sleep setting as the installer set it, and prints how to restore it
 (for example `powercfg /change standby-timeout-ac 30`).
@@ -356,10 +353,13 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | Script says `This script must run in "Windows PowerShell" (5.1), not PowerShell 7` | The line was pasted into PowerShell 7 | Open **Windows PowerShell** as administrator and paste it again. Nothing was changed |
 | Script says `This script must run in an elevated PowerShell` | The window was not run as administrator | Right-click Windows PowerShell, Run as administrator, paste again |
 | Script says `SHA-256 mismatch` | The zip was rebuilt after `serve.py` printed its lines, or the line was mistyped | Stop and restart `serve.py` and paste the line it prints now. Nothing was changed |
-| `irm` cannot connect to the Mac | `serve.py` is not running, or the address in `$base` is wrong | Start `serve.py` and copy its line exactly |
+| The line prints `... is not the file serve.py checked; it was NOT run` | The script in `vm-setup/` changed after `serve.py` started, or something other than `serve.py` answered on the Mac's address | Restart `serve.py` and paste the line it prints now. If it happens again, stop: something else is answering on port 8000. Nothing was run |
+| `iwr` cannot connect to the Mac | `serve.py` is not running, or the address in `$base` is wrong | Start `serve.py` and copy its line exactly |
+| `iwr` gets `403 Forbidden` (`only the VM's address is served`) | `serve.py` took a different address for the VM (an old DHCP lease) | Restart it with `python3 dev/serve.py --client <VM address>` (`ipconfig` in the VM shows it) |
 | Install prints `Could not send the token to the Mac (HTTP 403)` and a `security add-generic-password ...` command | `serve.py` was started without `--accept-token` | Either run the printed `security` command once on the Mac (it contains the token: do not paste it anywhere else), or restart `serve.py --accept-token` and run the Install line again |
 | Install prints `The agent did not answer within 20 s` | The agent could not start or bind | Read `agent.log` in the VM, and run the `--selftest` check from [step 3](#3-install-the-agent-in-the-vm) |
 | `serve.py` says `no UTM shared-network interface (bridge1xx) ... is up` | The VM is not running, so the Mac has no bridge address to bind | Start the VM, then `serve.py` |
+| `serve.py` says `no DHCP lease for the VM's MAC` | The VM has not taken an address yet, or `EDIABAS_VM_MAC` is not its MAC | Start the VM and log in, or pass `--client <VM address>` |
 | A tool you expect (screenshots, logs, EDIABAS) is not offered, after an update | Claude is still running the old MCP server | Quit and reopen the desktop app; start a new Claude Code session |
 
 ### Logs and audit files

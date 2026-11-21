@@ -136,9 +136,11 @@ if [ -f "$ZIP" ]; then
   fi
   echo "SHA-256:    $SHA"
   echo
+  # The same line serve.py prints: it checks update.ps1's SHA-256 before running it.
+  UPDATE_LINE="$(python3 -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import serve; print(serve.pinned_line("http://<Mac bridge address>:8000", "update.ps1", serve.sha256_file(sys.argv[2]), sys.argv[3]))' "$REPO/dev" "$REPO/vm-setup/update.ps1" "$SHA")"
   echo "Update line (paste into Windows PowerShell as administrator in the VM while"
   echo "'python3 dev/serve.py' runs; serve.py prints it with the Mac's address filled in):"
-  echo "  \$base='http://<Mac bridge address>:8000'; \$sha='$SHA'; irm \$base/update.ps1 | iex"
+  echo "  $UPDATE_LINE"
 else
   echo "Agent zip:  not built (no $ZIP)"
 fi
