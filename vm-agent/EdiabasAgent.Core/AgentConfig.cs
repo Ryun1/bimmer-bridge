@@ -51,6 +51,11 @@ public sealed class AgentConfig
     public int JobTimeoutSeconds { get; set; } = 30;
     public int MaxJobTimeoutSeconds { get; set; } = 60;
 
+    /// <summary>Upper bound of <see cref="MaxJobTimeoutSeconds"/>. The Mac gives up on an EDIABAS
+    /// call after 75 s; a request can last the maximum plus the 2 s apiBreak grace, so 60 keeps
+    /// it inside that with room for loading the DLL and reading results.</summary>
+    public const int MaxJobTimeoutLimitSeconds = 60;
+
     /// <summary>Seconds without an EDIABAS request after which api32.dll is unloaded, so that
     /// EDIABAS's ebas32.exe can exit (docs/api.md, "Idle release").</summary>
     public int EdiabasIdleReleaseSeconds { get; set; } = 20;
@@ -167,6 +172,10 @@ public sealed class AgentConfig
         if (MaxJobTimeoutSeconds <= 0)
         {
             errors.Add($"maxJobTimeoutSeconds: must be positive (got {MaxJobTimeoutSeconds})");
+        }
+        else if (MaxJobTimeoutSeconds > MaxJobTimeoutLimitSeconds)
+        {
+            errors.Add($"maxJobTimeoutSeconds: must be at most {MaxJobTimeoutLimitSeconds}, because the Mac stops waiting after 75 s (got {MaxJobTimeoutSeconds})");
         }
 
         if (JobTimeoutSeconds > 0 && MaxJobTimeoutSeconds > 0 && JobTimeoutSeconds > MaxJobTimeoutSeconds)

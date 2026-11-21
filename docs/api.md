@@ -214,7 +214,9 @@ With `job` — one job. The job name passes shape rules only; describing a denie
 ### `POST /ediabas/job`
 Body `{ "ecu": "NVE_65", "job": "FS_LESEN", "args": "", "results": "", "timeoutSeconds": 30 }`.
 `args`, `results` and `timeoutSeconds` are optional. `timeoutSeconds` defaults to the config's
-`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`.
+`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. The agent refuses to start with a
+`maxJobTimeoutSeconds` above 60: a request can last that long plus the 2 s `apiBreak` grace, and
+the Mac stops waiting for an EDIABAS call after 75 s.
 
 200:
 ```json
