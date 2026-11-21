@@ -62,12 +62,10 @@ as much as you can before Ryan turns it on.
    names confirmed on this car; anything not in them is unconfirmed until a tool shows it.
    A job is runnable only if `ediabas_describe` shows it allowed and not "needs review".
    `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD, which EDIABAS will
-   not load unless the cable is connected to the VM (at the desk on 2026-11-21, unplugged, it
-   failed with `cable_not_found`); whether it also needs the ignition on is not known yet. So
-   have Ryan plug the cable in and pass it through to the VM, and try `ediabas_describe` before
-   asking for the ignition. If it fails with the cable connected and the ignition off, tell
-   Ryan what the message said (that answers the open question and is worth recording), and
-   fold a narrow, filtered describe into the ignition-on plan instead.
+   not load unless the cable is connected to the VM (`cable_not_found` otherwise). It does not
+   need the car: on 2026-11-21 it worked with the cable in the Mac and not in the car. So have
+   Ryan plug the cable in and pass it through to the VM, and do all the looking-up before
+   asking for the ignition.
 3. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask Ryan
    to switch the ignition on and say when it is.
 4. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` call for

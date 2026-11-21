@@ -30,15 +30,15 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 |---|---|
 | 0 Discovery | done (2026-11-21) |
 | 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
-| 2 EDIABAS at the desk | built and deployed (agent 0.2.0). Desk checks pass except two that are open: `describe` of a real SGBD with the cable in the VM, and proof that `ebas32.exe` exits after the idle release |
+| 2 EDIABAS at the desk | done (2026-11-21): agent 0.2.0 deployed, every desk check passes |
 | 3 Mac MCP | done: all ten tools. Checked in Claude Code; the desktop-app check of `ediabas_describe` is open |
-| 4 Screenshots | built and deployed. Desktop and window capture pass; open: a screenshot of INPA, and the locked-screen refusal |
-| 5 Logs | built and deployed. Listing, reading and path refusals pass; open: the junction case in `--selftest` |
+| 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
+| 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
 | 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
-| 7 Skills | both skills, install script, eval scenarios and the replay agent are built. Reference files and most evals wait for recordings from Phase 6 |
+| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 pass with the skills. Evals 01, 03, 04, 06 and the reference files wait for recordings from Phase 6 |
 | 8 Hardening | this README, `VERSION`, `release.sh` |
 
-### Phase 2, 4 and 5 results so far (2026-11-21, no car)
+### Phase 2, 4 and 5 results (2026-11-21, no car)
 
 | Check | Result |
 |---|---|
@@ -48,9 +48,12 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 | batch of allowed + refused + unknown ECU | each item answered on its own, one init/end cycle |
 | with INPA open | every `/ediabas/*` call 409 `cable_in_use` naming `INPALOAD`; EDIABAS not touched |
 | `describe NVE_65`, cable not in the VM | 502 `cable_not_found` (EDIABAS error 28, `IFH-0018`): a real SGBD does not load without the interface |
-| idle release | agent unloads `api32.dll` 20 s after the last call and the next call works |
-| `--selftest` | PASS (config, policy, token ACL, bind address, firewall rule, listener) |
+| idle release | agent unloads `api32.dll` 20 s after the last call, `ebas32.exe` is then gone from the process list, and the next call works |
+| `describe NVE_65`, cable in the VM but not in the car | 200: 59 jobs, 22 runnable (15 by name, 7 `STATUS_` reads that passed the description screen), 37 refused |
+| `--selftest` | PASS, 19 of 19: config, policy, token ACL, bind address, firewall rule, listener, all 20 DLL exports, log-path cases (`..`, junction, symlink, alternate data stream, 8.3 names, device names, hard link), desktop capture |
 | screenshot of the desktop and of one window | readable image; bad size 400, unknown window 404 |
+| screenshot with INPA open | the INPA loader menu, readable |
+| screenshot with the VM locked | 503 `desktop_unavailable` |
 | logs | both roots listed newest first; `ABLAUF.TRC` read; `..`, other folders, the agent's own token file, alternate data streams, device names, `\\?\` paths and forward slashes all refused |
 | the same through the MCP tools | `vm_health`, `ediabas_list_ecus`, `ediabas_describe`, `ediabas_job`, refusals and `cable_in_use` messages all correct |
 
