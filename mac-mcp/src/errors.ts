@@ -21,6 +21,9 @@ export const MESSAGES = {
   localNetworkBlocked:
     "This Mac could not reach the VM's address even though UTM's network is up. macOS may be blocking it: open System Settings > Privacy & Security > Local Network and allow 'node' (or answer the 'node would like to find devices on your local network' prompt with Allow), then ask again. If that is already allowed, the VM may still be starting: log in to Windows and try again.",
   noToken: `No agent token found. ${TOKEN_FIX}`,
+  ediabasRequestLost:
+    "The connection to the VM agent broke or timed out after this EDIABAS request may already have reached it, so the job may have run in the VM. " +
+    "It was not sent again. Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
 } as const;
 
 /** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
@@ -59,6 +62,11 @@ export function vmNotRunning(vmName: string, detail?: string): BridgeError {
 
 export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
+}
+
+/** A request that runs an EDIABAS job failed after it may have reached the agent. Same code as a dead agent. */
+export function ediabasRequestLost(): BridgeError {
+  return new BridgeError("agent_not_answering", MESSAGES.ediabasRequestLost);
 }
 
 export function localNetworkBlocked(): BridgeError {

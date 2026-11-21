@@ -46,6 +46,7 @@ Codes (also the audit outcome):
 | Code | From | Meaning for Claude |
 |---|---|---|
 | `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | as before |
+| `agent_not_answering` (EDIABAS job lost) | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent. It is never sent a second time; only a refused connect (nothing sent) is retried. The message says the job may have run: check `vm_health` before asking again |
 | `agent_outdated` | Mac | the agent has no such endpoint; Ryan needs to run the Update line |
 | `policy_unavailable` | Mac | the policy file could not be loaded; nothing is sent |
 | `invalid_arguments` | Mac | arguments that cannot go together (`tailBytes` with `offset`/`length`); nothing is sent |

@@ -4,6 +4,7 @@ import {
   BridgeError,
   agentError,
   agentNotAnswering,
+  ediabasRequestLost,
   agentOutdated,
   badResponse,
   forbidden,
@@ -211,6 +212,8 @@ class ConnectionFailure extends Error {
     readonly kind: FailureKind,
     /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
     readonly detail: string,
+    /** The connection was never made, so the request cannot have reached the agent. */
+    readonly neverSent = false,
   ) {
     super(`connection failure: ${kind}`);
   }
@@ -226,8 +229,10 @@ function classify(e: unknown): ConnectionFailure {
   const code = String(err?.cause?.code ?? err?.code ?? "");
   const detail = code || err?.cause?.name || name || "unknown";
   if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
-  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail);
-  return new ConnectionFailure("refused", detail);
+  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
+  // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
+  // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
+  return new ConnectionFailure("refused", detail, code === "ECONNREFUSED");
 }
 
 type QueryValue = string | number | boolean | undefined;
@@ -240,6 +245,11 @@ interface RequestSpec {
   body?: unknown;
   /** /ediabas/*: the long timeout, and never re-sent after a timeout (the job may have run). */
   ediabas?: boolean;
+  /**
+   * Runs an EDIABAS job in the VM (job, jobs, vehicle, describe): re-sent only when the
+   * connection was never made, never after a failure that may have followed delivery.
+   */
+  runsJob?: boolean;
 }
 
 interface RawResponse {
@@ -343,24 +353,24 @@ export class AgentClient {
   }
 
   describeJobs(q: { ecu: string; filter?: string | undefined }): Promise<DescribeList> {
-    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true }, DescribeListSchema);
+    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeListSchema);
   }
 
   describeJob(q: { ecu: string; job: string }): Promise<DescribeJob> {
-    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true }, DescribeJobSchema);
+    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeJobSchema);
   }
 
   vehicle(): Promise<Vehicle> {
-    return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true }, VehicleSchema);
+    return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
   }
 
   runJob(body: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }): Promise<JobResult> {
-    return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true }, JobResultSchema);
+    return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true, runsJob: true }, JobResultSchema);
   }
 
   /** 1..20 items; the caller chunks. */
   runJobs(items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[]): Promise<JobsResponse> {
-    return this.json({ method: "POST", path: "/ediabas/jobs", body: { items }, ediabas: true }, JobsResponseSchema);
+    return this.json({ method: "POST", path: "/ediabas/jobs", body: { items }, ediabas: true, runsJob: true }, JobsResponseSchema);
   }
 
   private json<T>(spec: RequestSpec, schema: z.ZodType<T>): Promise<T> {
@@ -390,6 +400,8 @@ export class AgentClient {
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
+      // A job request that may have reached the agent may have run: never send it twice.
+      if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       // An EDIABAS call that timed out may still be running in the VM: never send it twice.
       if (!first.fromCache || (spec.ediabas && e.kind === "timeout")) throw this.connectionError(e, first.baseUrl);
     }
@@ -400,6 +412,7 @@ export class AgentClient {
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
+      if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       throw this.connectionError(e, second.baseUrl);
     }
   }

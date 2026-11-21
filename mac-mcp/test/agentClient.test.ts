@@ -632,6 +632,127 @@ describe("local network blocked (macOS Local Network privacy)", () => {
   });
 });
 
+describe("a request that runs an EDIABAS job is never sent twice", () => {
+  const LEASES = leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 });
+  const JOB = jobResult("NVE_65", "IDENT", [{ A: 1 }]);
+  const JOBS = { items: [{ ok: true, result: JOB }] };
+
+  type Call = { name: string; run: (c: AgentClient) => Promise<unknown>; path: string; ok: unknown };
+  const CALLS: Call[] = [
+    { name: "POST /ediabas/job", run: (c) => c.runJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/job", ok: JOB },
+    { name: "POST /ediabas/jobs", run: (c) => c.runJobs([{ ecu: "NVE_65", job: "IDENT" }]), path: "/ediabas/jobs", ok: JOBS },
+    { name: "GET /ediabas/vehicle", run: (c) => c.vehicle(), path: "/ediabas/vehicle", ok: {} },
+    { name: "GET /ediabas/describe", run: (c) => c.describeJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/describe", ok: {} },
+  ];
+
+  /** Health and windows answer; `path` fails with `fail()` while `failing` is set. */
+  function client(path: string, fail: () => never) {
+    const state = { failing: false, sent: 0 };
+    const c = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.includes(path)) {
+          state.sent++;
+          if (state.failing) fail();
+        }
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    return { ...c, state };
+  }
+
+  for (const call of CALLS) {
+    for (const code of ["ECONNRESET", "UND_ERR_SOCKET", "EPIPE"]) {
+      it(`${call.name}: after ${code} on the cached address it is not re-sent and says it may have run`, async () => {
+        const { client: c, state, fetchFn } = client(call.path, () => {
+          throw connError(code);
+        });
+        await c.listWindows(); // address cached
+        state.failing = true;
+        const e = await errorOf(call.run(c));
+        expect(state.sent).toBe(1);
+        expect(e.code).toBe("agent_not_answering");
+        expect(e.message).toBe(MESSAGES.ediabasRequestLost);
+        // nothing after the failed request: no re-probe, no second send
+        expect(calledUrls(fetchFn).at(-1)).toContain(call.path);
+      });
+    }
+
+    it(`${call.name}: a timeout on the cached address is not re-sent and says it may have run`, async () => {
+      const { client: c, state } = client(call.path, () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      });
+      await c.listWindows();
+      state.failing = true;
+      const e = await errorOf(call.run(c));
+      expect(state.sent).toBe(1);
+      expect(e.message).toBe(MESSAGES.ediabasRequestLost);
+    });
+
+    it(`${call.name}: a reset right after discovery also says it may have run`, async () => {
+      const { client: c, state } = client(call.path, () => {
+        throw connError("ECONNRESET");
+      });
+      state.failing = true;
+      const e = await errorOf(call.run(c));
+      expect(state.sent).toBe(1);
+      expect(e.message).toBe(MESSAGES.ediabasRequestLost);
+    });
+  }
+
+  it("POST /ediabas/job is re-sent once after ECONNREFUSED (the request never left)", async () => {
+    let refuse = false;
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.endsWith("/ediabas/job") && refuse) {
+          refuse = false;
+          throw connError("ECONNREFUSED");
+        }
+        if (u.endsWith("/ediabas/job")) return okResponse(JOB);
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    await c.listWindows();
+    refuse = true;
+    const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
+    expect(r.job).toBe("IDENT");
+    expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/ediabas/job", // refused
+      "http://192.168.64.3:8765/health",
+      "http://192.168.64.3:8765/ediabas/job",
+    ]);
+  });
+
+  it("plain GETs that do not touch the cable are still re-sent after a reset", async () => {
+    for (const [path, run] of [
+      ["/windows", (c: AgentClient) => c.listWindows()],
+      ["/logs", (c: AgentClient) => c.listLogs()],
+      ["/health", (c: AgentClient) => c.health()],
+    ] as const) {
+      let reset = false;
+      const { client: c, fetchFn } = makeClient({
+        fetch: vi.fn(async (url) => {
+          const u = String(url);
+          if (reset && u.endsWith(path)) {
+            reset = false;
+            throw connError("ECONNRESET");
+          }
+          if (u.endsWith("/logs")) return okResponse({ roots: [], files: [], truncated: false });
+          return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        }),
+        leases: LEASES,
+      });
+      await c.listWindows();
+      reset = true;
+      await run(c).catch(() => undefined); // body shape is not the point here
+      expect(calledUrls(fetchFn).slice(2).filter((u) => u.endsWith(path) || u.endsWith("/health")).length).toBeGreaterThanOrEqual(2);
+    }
+  });
+});
+
 describe("stderr diagnostics", () => {
   it("logs the accepted address and its source", async () => {
     const ok = vi.fn(async () => okResponse());

@@ -455,8 +455,26 @@ describe("ediabas_job", () => {
     await call("vm_health"); // cache the address
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
     expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/agent is not answering/);
+    expect(r.text).toMatch(/may have run in the VM\. It was not sent again/);
     expect(agent.requests.filter((q) => q.path === "/ediabas/job")).toHaveLength(1);
+  });
+
+  it("does not re-send an EDIABAS job when the agent drops the connection after receiving it", async () => {
+    agent.setHandler((req, res) => {
+      if (req.url === "/health") stubHandler()(req, res);
+      else req.socket.destroy(); // the agent died after reading the request
+    });
+    const { call } = await connect();
+    await call("vm_health");
+    for (const [tool, path] of [
+      ["ediabas_job", "/ediabas/job"],
+      ["ediabas_read_faults", "/ediabas/jobs"],
+    ] as const) {
+      const r = await call(tool, tool === "ediabas_job" ? { ecu: "NVE_65", job: "IDENT" } : { ecus: ["NVE_65"] });
+      expect(r.isError).toBe(true);
+      expect(r.text).toMatch(/may have run in the VM\. It was not sent again/);
+      expect(agent.requests.filter((q) => q.path === path)).toHaveLength(1);
+    }
   });
 });
 
