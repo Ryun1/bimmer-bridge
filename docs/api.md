@@ -116,7 +116,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 409 | `window_minimized` | the window is minimised; the agent never restores it | `{ handle, title }` |
 | 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
 | 502 | `ediabas_error` | EDIABAS reported an error for the job | `{ errorCode: 159, errorText: "IFH-0009: …" }` |
-| 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, or `apiInit` failed | `{ reason }` |
+| 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted) | `{ reason }` |
 | 503 | `desktop_unavailable` | locked screen, secure desktop, or session 0 | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
@@ -134,6 +134,8 @@ caught by the conflict check before EDIABAS is called.
 - `capabilities`: array of strings, the endpoint groups this build has:
   `"ediabas"`, `"capture"`, `"logs"`.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
+- `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
+  does not stop"). Stays true until the agent restarts.
 
 ## Job policy
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server
@@ -173,6 +175,15 @@ EDIABAS request has arrived for `ediabasIdleReleaseSeconds` (agent config, defau
 5..600), and loads it again on the next request. The first request after a release is slow
 (about 10 s in this VM). `/health` reports `ediabas.loaded` (boolean): whether the DLL is
 loaded right now.
+
+**A job that does not stop.** A job still busy at its timeout (or when the client gives up) is
+stopped with `apiBreak`. If `apiState` still says busy 2 s later, the agent starts no further
+job in that request and from then on leaves EDIABAS alone until it is restarted: no `apiEnd` on
+that handle (it could block for good), no idle release of `api32.dll` (it could unload code
+under the running job), and every later request that would use EDIABAS gets 503
+`ediabas_unavailable` with `reason` "an earlier job did not stop after apiBreak; the agent must
+be restarted". `/health` reports `ediabas.stuck: true`. Restarting Windows in the VM restarts
+the agent.
 
 ### `GET /ediabas/ecus?filter=<substr>`
 File listing of the Ecu folder; does not call EDIABAS. `filter` is a case-insensitive

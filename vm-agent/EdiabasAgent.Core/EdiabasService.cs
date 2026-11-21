@@ -63,6 +63,11 @@ public sealed class EdiabasService
     private int _openSessions;
     private bool _handleMayBeOpen;
 
+    // A job was still busy after apiBreak and its grace time. EDIABAS may still be working on it,
+    // so nothing touches the DLL again (no apiEnd, no unload, no new apiInit) until the agent
+    // restarts. Touched only on the runner thread; mirrored to DllLoadState for /health.
+    private bool _stuck;
+
     public EdiabasService(
         IEdiabasApi api,
         IConflictCheck conflicts,
@@ -674,8 +679,13 @@ public sealed class EdiabasService
         {
             if (_clock.ElapsedMs - since >= BreakGraceMs)
             {
-                _log.Warn($"{ecu} {job}: still busy {BreakGraceMs} ms after apiBreak; starting no further jobs in this request");
+                // apiEnd on a handle whose job never stopped may block for good, and unloading the
+                // DLL could pull code out from under the job: neither happens until a restart.
+                _log.Warn($"{ecu} {job}: still busy {BreakGraceMs} ms after apiBreak; no apiEnd, api32.dll stays loaded and EDIABAS is not used again until the agent restarts");
                 session.Poisoned = true;
+                _stuck = true;
+                _handleMayBeOpen = true;
+                _dll.Stuck = true;
                 return;
             }
 
@@ -734,6 +744,12 @@ public sealed class EdiabasService
 
     private static string? NullIfBlank(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
+    private const string StuckReason = "an earlier job did not stop after apiBreak; the agent must be restarted";
+
+    private const string StuckMessage =
+        "EDIABAS cannot be used: an earlier job did not stop after apiBreak, so the agent no longer touches EDIABAS. " +
+        "The agent must be restarted (restart Windows in the VM).";
+
     /// <summary>One apiInit … apiEnd cycle. apiEnd is called exactly once if apiInit was called.</summary>
     private sealed class Session : IDisposable
     {
@@ -761,6 +777,12 @@ public sealed class EdiabasService
         {
             if (_initCalled || _initFailure is not null)
             {
+                return _initFailure;
+            }
+
+            if (owner._stuck)
+            {
+                _initFailure = ApiFailure.Of(ApiErrors.EdiabasUnavailable, StuckMessage, new ReasonDetails(StuckReason));
                 return _initFailure;
             }
 
@@ -800,6 +822,12 @@ public sealed class EdiabasService
             {
                 if (!_initCalled)
                 {
+                    return;
+                }
+
+                if (Poisoned)
+                {
+                    // The job never stopped: an apiEnd now has no bound. Logged in BreakAndSettle.
                     return;
                 }
 

@@ -71,7 +71,12 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null):
   const dll = h.ediabas.dllPath ? clean(h.ediabas.dllPath) : "unknown path";
   lines.push(h.ediabas.dllFound ? `EDIABAS DLL: found at ${dll}` : `EDIABAS DLL: NOT found (looked for ${dll})`);
   // Absent on agents without idle release: say nothing rather than guess.
-  if (h.ediabas.loaded === true) {
+  if (h.ediabas.stuck === true) {
+    lines.push(
+      "EDIABAS: STUCK: a job did not stop after apiBreak, so the agent no longer touches EDIABAS and every EDIABAS call fails. " +
+        "Ryan needs to restart the agent (restart Windows in the VM).",
+    );
+  } else if (h.ediabas.loaded === true) {
     lines.push("EDIABAS: loaded now, so the next EDIABAS call starts straight away.");
   } else if (h.ediabas.loaded === false) {
     lines.push("EDIABAS: not loaded (released after idle); the next EDIABAS call loads it and takes about 10 s longer. That is normal, not a fault.");

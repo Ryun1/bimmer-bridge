@@ -64,6 +64,14 @@ describe("formatHealth", () => {
     expect(old).not.toMatch(/EDIABAS: (not )?loaded/);
   });
 
+  it("says when EDIABAS is stuck after a job ignored apiBreak, and that the agent must be restarted", () => {
+    const dll = { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true };
+    const t = formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: true } }));
+    expect(t).toMatch(/^EDIABAS: STUCK: .*did not stop after apiBreak.*restart/m);
+    expect(t).not.toMatch(/loaded now/);
+    expect(formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: false } }))).not.toMatch(/STUCK/);
+  });
+
   it("strips control characters from agent strings", () => {
     const t = formatHealth(health({ conflictingProcesses: [{ name: "EVIL\u001b[2J\nX", pid: 1 }] }));
     expect(t).not.toContain("\u001b");

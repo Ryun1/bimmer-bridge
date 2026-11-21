@@ -40,7 +40,13 @@ export const HealthSchema = z.object({
   gateway: z.string().nullable(),
   conflictingProcesses: z.array(z.object({ name: z.string(), pid: z.number().int() })),
   // `loaded`: whether the agent has the DLL loaded right now (idle release); older agents omit it.
-  ediabas: z.object({ dllPath: z.string().nullable(), dllFound: z.boolean(), loaded: z.boolean().nullable().optional() }),
+  // `stuck`: a job did not stop after apiBreak and the agent must be restarted; older agents omit it.
+  ediabas: z.object({
+    dllPath: z.string().nullable(),
+    dllFound: z.boolean(),
+    loaded: z.boolean().nullable().optional(),
+    stuck: z.boolean().nullable().optional(),
+  }),
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),

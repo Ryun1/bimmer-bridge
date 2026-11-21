@@ -5,7 +5,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 
 | Tool | Arguments | Agent call | Returns |
 |---|---|---|---|
-| `vm_health` | — | `GET /health` | status text: agent, session, BMW tools running, EDIABAS DLL and whether it is loaded, last cable use, policy version |
+| `vm_health` | — | `GET /health` | status text: agent, session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck until the agent restarts), last cable use, policy version |
 | `vm_list_windows` | — | `GET /windows` | table |
 | `vm_screenshot` | `window?` (handle, title substring, or `desktop`; default `desktop`), `maxEdge?` (200–4000, default 1600) | `GET /screen/capture` | an image, then one line: title, size, capture method |
 | `vm_logs_list` | `root?` (index), `glob?`, `since?` (ISO 8601), `limit?` (1–200) | `GET /logs` | the roots, then path / size / modified, newest first |
@@ -56,7 +56,7 @@ Codes (also the audit outcome):
 | `ecu_not_found`, `job_not_found` | agent | use `ediabas_list_ecus` / `ediabas_describe`; never guess names |
 | `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. Ryan plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |
 | `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU |
-| `ediabas_unavailable` | agent | DLL missing or EDIABAS would not start |
+| `ediabas_unavailable` | agent | DLL missing or EDIABAS would not start; or an earlier job did not stop after `apiBreak`, and the agent must be restarted (restart Windows in the VM) before EDIABAS can be used again |
 | `job_timeout` | agent | the job did not finish in time |
 | `window_not_found`, `window_minimized`, `desktop_unavailable` | agent | screenshots: wrong title, minimised window (Ryan restores it), locked screen |
 | `path_not_allowed`, `file_not_found` | agent | logs: outside the allowed folders, or no such file |

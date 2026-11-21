@@ -15,8 +15,9 @@ public sealed record OsInfo(string Description, string OsArchitecture, string Pr
 
 public sealed record ConflictingProcess(string Name, int Pid);
 
-/// <summary><c>Loaded</c>: whether the agent has api32.dll loaded right now (docs/api.md, "Idle release").</summary>
-public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded);
+/// <summary><c>Loaded</c>: whether the agent has api32.dll loaded right now (docs/api.md, "Idle release").
+/// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.</summary>
+public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck);
 
 public sealed record HealthResponse(
     string Agent,

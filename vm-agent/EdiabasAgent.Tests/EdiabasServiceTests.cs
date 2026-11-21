@@ -223,7 +223,7 @@ public class EdiabasServiceTests
     }
 
     [Fact]
-    public void ApiBreakIgnored_StopsFurtherJobs_AndEnds()
+    public void ApiBreakIgnored_StopsFurtherJobs_NoApiEnd()
     {
         _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true, IgnoresBreak = true });
         _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
@@ -232,7 +232,7 @@ public class EdiabasServiceTests
         Assert.Equal("job_timeout", r.Value!.Items[0].Error!.Code);
         Assert.Equal("not_run", r.Value.Items[1].Error!.Code);
         Assert.Single(_api.JobCalls);
-        Assert.Equal(1, _api.Count("End"));
+        Assert.Equal(0, _api.Count("End")); // the job never stopped: no unbounded apiEnd on it
     }
 
     // ---- description screen ----
@@ -542,7 +542,7 @@ public class EdiabasServiceTests
         Assert.Equal(Review.NeedsReview, r.Jobs[0].Verdict.Review);
         Assert.Equal(Review.NotChecked, r.Jobs[1].Verdict.Review);
         Assert.Equal(2, _api.JobCalls.Count());
-        Assert.Equal(1, _api.Count("End"));
+        Assert.Equal(0, _api.Count("End"));
     }
 
     [Fact]

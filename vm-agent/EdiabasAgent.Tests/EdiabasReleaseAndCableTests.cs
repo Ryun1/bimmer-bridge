@@ -245,6 +245,94 @@ public class EdiabasReleaseAndCableTests
         Assert.Equal(Timeout.Infinite, svc.MillisecondsUntilRelease());
     }
 
+    // ---------------------------------------------------------------- a job that ignored apiBreak
+
+    private static readonly FakeJob Hangs = new() { NeverFinishes = true, IgnoresBreak = true };
+
+    private Outcome<JobResult> IdentWithTimeout(EdiabasService svc) =>
+        svc.RunJob(new JobRequest("NVE_65", "IDENT"), 1, new RequestAudit(), default);
+
+    [Fact]
+    public void JobIgnoringBreak_NoApiEndOnTheStuckHandle()
+    {
+        _api.On("NVE_65 IDENT", Hangs);
+        var svc = Service();
+
+        Assert.Equal("job_timeout", IdentWithTimeout(svc).Failure!.Error.Code);
+
+        Assert.Equal(1, _api.Count("Break"));
+        Assert.Equal(0, _api.Count("End"));
+        Assert.True(_dll.Stuck);
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN", StringComparison.Ordinal) && l.Contains("agent restarts", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void JobIgnoringBreak_DllIsNeverReleased()
+    {
+        _api.On("NVE_65 IDENT", Hangs);
+        var svc = Service();
+        IdentWithTimeout(svc);
+        _clock.ElapsedMs += 100 * IdleMs;
+
+        Assert.Equal(Timeout.Infinite, svc.MillisecondsUntilRelease());
+        Assert.False(svc.ReleaseIfIdle());
+        Assert.Equal(0, _api.Count("Unload"));
+        Assert.True(_dll.Loaded);
+    }
+
+    [Fact]
+    public void JobIgnoringBreak_LaterRequestsAreUnavailable_UntilRestart()
+    {
+        _api.On("NVE_65 IDENT", Hangs);
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+        var svc = Service();
+        IdentWithTimeout(svc);
+        var callsBefore = _api.Calls.Count;
+
+        var single = Ident(svc).Failure!;
+        Assert.Equal("ediabas_unavailable", single.Error.Code);
+        Assert.Equal(503, single.Status);
+        Assert.Contains("restart", single.Error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("apiBreak", single.Error.Message, StringComparison.Ordinal);
+
+        Assert.Equal("ediabas_unavailable", svc.RunJobs([new("NVE_65", "IDENT")], null, new RequestAudit(), default).Failure!.Error.Code);
+        Assert.Equal("ediabas_unavailable", svc.Vehicle([], new RequestAudit(), default).Failure!.Error.Code);
+        Assert.Equal("ediabas_unavailable", svc.DescribeList("NVE_65", null, true, new RequestAudit(), default).Failure!.Error.Code);
+        Assert.Equal("ediabas_unavailable", svc.DescribeJob("NVE_65", "IDENT", new RequestAudit(), default).Failure!.Error.Code);
+
+        // Nothing at all reaches the DLL any more: no load, no apiInit, no job, no apiEnd.
+        Assert.Equal(callsBefore, _api.Calls.Count);
+        _clock.ElapsedMs += 100 * IdleMs;
+        Assert.False(svc.ReleaseIfIdle());
+    }
+
+    [Fact]
+    public void JobIgnoringBreak_InABatch_RestNotRun_NoApiEnd()
+    {
+        _api.On("NVE_65 IDENT", Hangs);
+        _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
+        var svc = Service();
+        var r = svc.RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "FS_LESEN")], 1, new RequestAudit(), default).Value!;
+
+        Assert.Equal("job_timeout", r.Items[0].Error!.Code);
+        Assert.Equal("not_run", r.Items[1].Error!.Code);
+        Assert.Equal(0, _api.Count("End"));
+        Assert.True(_dll.Stuck);
+    }
+
+    [Fact]
+    public void JobThatStopsAfterBreak_IsNotStuck()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true });
+        var svc = Service();
+        Assert.Equal("job_timeout", IdentWithTimeout(svc).Failure!.Error.Code);
+
+        Assert.Equal(1, _api.Count("End"));
+        Assert.False(_dll.Stuck);
+        _clock.ElapsedMs += IdleMs;
+        Assert.True(svc.ReleaseIfIdle());
+    }
+
     // ---------------------------------------------------------------- cable_not_found
 
     [Fact]

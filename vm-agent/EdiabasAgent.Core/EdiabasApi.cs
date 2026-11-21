@@ -125,15 +125,24 @@ public interface IEdiabasLog
     void Warn(string message);
 }
 
-/// <summary>Whether api32.dll is loaded right now, for /health. Thread-safe.</summary>
+/// <summary>Whether api32.dll is loaded right now, and whether EDIABAS is stuck, for /health. Thread-safe.</summary>
 public sealed class DllLoadState
 {
     private volatile bool _loaded;
+    private volatile bool _stuck;
 
     public bool Loaded
     {
         get => _loaded;
         set => _loaded = value;
+    }
+
+    /// <summary>A job was still busy after <c>apiBreak</c> and its grace time: EDIABAS is not
+    /// used again (no <c>apiEnd</c>, no unload, no new job) until the agent restarts.</summary>
+    public bool Stuck
+    {
+        get => _stuck;
+        set => _stuck = value;
     }
 }
 
