@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, parsePolicy } from "../src/policy.js";
+import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, parsePolicy } from "../src/policy.js";
 import { BridgeError } from "../src/errors.js";
 
 const REPO_POLICY = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
@@ -34,6 +34,46 @@ describe("policy/policy-cases.json (shared with the agent)", () => {
       expect(v).toEqual({ allowed: c.allowed, rule: c.rule, screen: c.screen });
     },
   );
+});
+
+const PARSE_CASES_PATH = fileURLToPath(new URL("../../policy/policy-parse-cases.json", import.meta.url));
+const parseCases = (JSON.parse(readFileSync(PARSE_CASES_PATH, "utf8")) as { cases: { name: string; valid: boolean; text: string }[] }).cases;
+
+describe("policy/policy-parse-cases.json (shared with the agent: both parsers accept and refuse the same texts)", () => {
+  it("has both kinds", () => {
+    expect(parseCases.some((c) => c.valid)).toBe(true);
+    expect(parseCases.filter((c) => !c.valid).length).toBeGreaterThan(30);
+  });
+
+  it.each(parseCases.map((c, i) => [i, c.name, c] as const))("case %i: %s", (_i, _name, c) => {
+    if (c.valid) {
+      expect(() => parsePolicy(c.text)).not.toThrow();
+    } else {
+      expect(() => parsePolicy(c.text)).toThrow();
+      const g = PolicyGuard.load("/x/policy.json", () => c.text);
+      expect(g.version).toBeNull();
+      expect(g.error).not.toBeNull();
+    }
+  });
+});
+
+describe("findDuplicateKey", () => {
+  it.each([
+    ['{"a":1,"b":2}', null],
+    ['{"a":1,"a":2}', "a"],
+    ['{"a":{"x":1},"b":{"x":2}}', null],
+    ['{"a":[{"x":1},{"x":2}]}', null],
+    ['{"a":[{"x":1,"x":2}]}', "x"],
+    ['{"a":"\\"}{,\\"b\\":","b":1}', null],
+    ['{"a":["a","a"]}', null],
+    ['{"\\u0061":1,"a":2}', "a"],
+    ['{"k":{"a":1},"k":2}', "k"],
+    ['{}', null],
+    ['[]', null],
+  ] as const)("%s → %s", (text, dup) => {
+    JSON.parse(text); // the cases are valid JSON
+    expect(findDuplicateKey(text)).toBe(dup);
+  });
 });
 
 describe("policy loading", () => {

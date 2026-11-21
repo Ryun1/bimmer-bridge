@@ -19,8 +19,9 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 ## Rules the server enforces
 - **Policy first.** `ediabas_job`, `ediabas_read_faults` and `ediabas_describe` (its `ecu`, and
   `job` for shape only) are checked against `policy/policy.json` on the Mac before any request
-  leaves it. A refusal never reaches the VM. If the policy file is missing or invalid, every
-  `ediabas_*` tool refuses with `policy_unavailable`.
+  leaves it. A refusal never reaches the VM. If the policy file is missing or invalid (including
+  unknown or duplicate keys, which the agent also refuses), every `ediabas_*` tool refuses with
+  `policy_unavailable`.
 - `ediabas_read_faults` sends `FS_LESEN` per ECU, plus `IS_LESEN` per ECU with
   `includeInfoMemory`, 20 items per request at most (so at most two requests). Every item is
   policy-checked before anything is sent; if any ECU is refused, the whole call is refused and

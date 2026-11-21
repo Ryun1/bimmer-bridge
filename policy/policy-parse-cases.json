@@ -1,0 +1,200 @@
+{
+ "comment": "Shared fixture: policy texts that both parsers must accept (valid true) or refuse (valid false). The agent (JobPolicy.Parse) and the Mac server (parsePolicy) run every case, so they cannot drift apart on what counts as a policy.",
+ "cases": [
+  {
+   "name": "a minimal valid policy",
+   "valid": true,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "empty lists and no restricted ECUs (terms still set)",
+   "valid": true,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":0,\"allow\":{\"globalExact\":[],\"patterns\":[],\"restrictedEcus\":{}},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "whitespace and key order do not matter",
+   "valid": true,
+   "text": "{\n  \"descriptionScreen\": { \"terms\": [ \"start\" ] },\n  \"deny\": { \"tokens\": [ \"START\" ], \"substrings\": [ \"LOESCH\" ] },\n  \"allow\": { \"restrictedEcus\": { \"TMODE\": [ \"INFO\" ] }, \"patterns\": [ \"^STATUS_[A-Z]+$\" ], \"globalExact\": [ \"IDENT\" ] },\n  \"maxArgLength\": 10, \"namePattern\": \"^[A-Z_]+$\", \"version\": 1\n}\n"
+  },
+  {
+   "name": "an unknown top-level key",
+   "valid": false,
+   "text": "{\"version\":1,\"comment\":\"x\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an unknown kind of deny rule",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"regex\":[\"^X\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an unknown key under allow",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"prefixes\":[\"READ_\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an unknown key under descriptionScreen",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"x\"]}}"
+  },
+  {
+   "name": "a duplicate top-level key (deny twice)",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a duplicate key written with an escape (\\u0064eny)",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"\\u0064eny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a duplicate key under allow",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"globalExact\":[\"FS_LOESCHEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a duplicate restricted ECU",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"],\"TMODE\":[\"INFO\",\"SENDE\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a duplicate key under deny",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "version 0",
+   "valid": false,
+   "text": "{\"version\":0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a negative version",
+   "valid": false,
+   "text": "{\"version\":-1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a fractional version",
+   "valid": false,
+   "text": "{\"version\":1.5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "version as a string",
+   "valid": false,
+   "text": "{\"version\":\"1\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "version beyond a 32-bit integer",
+   "valid": false,
+   "text": "{\"version\":2147483648,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a negative maxArgLength",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":-1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "maxArgLength beyond a 32-bit integer",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":2147483648,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty namePattern",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a namePattern that does not compile",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"([\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty string in globalExact",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty string in deny.substrings",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\",\"\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty string in deny.tokens",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty string in a restricted ECU list",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty restricted ECU name",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an empty pattern",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "no description screen terms",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[]}}"
+  },
+  {
+   "name": "an empty description screen term",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\",\"\"]}}"
+  },
+  {
+   "name": "a missing key",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]}}"
+  },
+  {
+   "name": "a list entry that is not a string",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",1],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a restricted ECU that is not a list",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":\"INFO\"}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "deny that is not an object",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":[],\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "null for a list",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":null,\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "a top level that is not an object",
+   "valid": false,
+   "text": "[{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}]"
+  },
+  {
+   "name": "a trailing comma",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]},}"
+  },
+  {
+   "name": "a comment",
+   "valid": false,
+   "text": "// policy\n{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "not JSON",
+   "valid": false,
+   "text": "{ not json"
+  },
+  {
+   "name": "an empty file",
+   "valid": false,
+   "text": ""
+  }
+ ]
+}

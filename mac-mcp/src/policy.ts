@@ -12,20 +12,61 @@ import { BridgeError, cleanText } from "./errors.js";
 /** policy/policy.json at the repo root: two levels above both src/ and dist/. */
 export const DEFAULT_POLICY_PATH = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
 
-const Names = z.array(z.string());
+// As strict as the agent's parser (JobPolicy.cs), checked by policy/policy-parse-cases.json:
+// unknown keys, duplicate keys, empty names and out-of-range numbers make the policy invalid,
+// so the Mac never silently ignores a rule the agent would refuse to load.
+const INT32_MAX = 2147483647;
+const Names = z.array(z.string().min(1));
 
-const PolicySchema = z.object({
-  version: z.number().int(),
+const PolicySchema = z.strictObject({
+  version: z.number().int().min(1).max(INT32_MAX),
   namePattern: z.string().min(1),
-  maxArgLength: z.number().int().nonnegative(),
-  allow: z.object({
+  maxArgLength: z.number().int().nonnegative().max(INT32_MAX),
+  allow: z.strictObject({
     globalExact: Names,
     patterns: Names,
-    restrictedEcus: z.record(z.string(), Names),
+    restrictedEcus: z.record(z.string().min(1), Names),
   }),
-  deny: z.object({ substrings: Names, tokens: Names }),
-  descriptionScreen: z.object({ terms: Names }),
+  deny: z.strictObject({ substrings: Names, tokens: Names }),
+  descriptionScreen: z.strictObject({ terms: Names.min(1) }),
 });
+
+/**
+ * The first key that appears twice in one object of `text`, else null. `JSON.parse` keeps the
+ * last of duplicate keys; the agent refuses them. `text` must already be valid JSON.
+ */
+export function findDuplicateKey(text: string): string | null {
+  // One entry per open object (its keys so far) or array (null).
+  const stack: (Set<string> | null)[] = [];
+  let expectKey = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (expectKey && top) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.has(key)) return key;
+        top.add(key);
+        expectKey = false;
+      }
+      i = j;
+    } else if (ch === "{") {
+      stack.push(new Set());
+      expectKey = true;
+    } else if (ch === "[") {
+      stack.push(null);
+      expectKey = false;
+    } else if (ch === "}" || ch === "]") {
+      stack.pop();
+      expectKey = false;
+    } else if (ch === ",") {
+      expectKey = !!stack[stack.length - 1];
+    }
+  }
+  return null;
+}
 
 export interface Policy {
   version: number;
@@ -54,7 +95,10 @@ export interface JobRequest {
 
 /** Parse and compile a policy. Throws on anything malformed (the caller fails closed). */
 export function parsePolicy(text: string): Policy {
-  const raw = PolicySchema.parse(JSON.parse(text));
+  const json: unknown = JSON.parse(text);
+  const duplicate = findDuplicateKey(text);
+  if (duplicate !== null) throw new Error(`it has the key "${duplicate}" twice in one object`);
+  const raw = PolicySchema.parse(json);
   const compile = (p: string) => new RegExp(p);
   return {
     version: raw.version,

@@ -141,6 +141,10 @@ caught by the conflict check before EDIABAS is called.
 ## Job policy
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server
 reads the same file. Both evaluate it the same way and both run `policy/policy-cases.json`.
+Both also load it the same way: a file with an unknown or duplicate key, a `version` below 1, an
+empty name, or no `descriptionScreen.terms` is invalid, the agent then refuses every job
+(`policy_unavailable`) and the Mac every `ediabas_*` tool. Both run
+`policy/policy-parse-cases.json`, which lists policy texts each side must accept or refuse.
 
 Evaluation, in this order. The first rule that decides wins; `rule` is the string returned.
 

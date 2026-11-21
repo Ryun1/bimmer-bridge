@@ -50,6 +50,42 @@ public class JobPolicyTests
         Assert.Equal(c.GetProperty("screen").GetBoolean(), verdict.Screen);
     }
 
+    public static TheoryData<int, string> ParseCases()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(PolicyDir(), "policy-parse-cases.json")));
+        var data = new TheoryData<int, string>();
+        var i = 0;
+        foreach (var c in doc.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            data.Add(i++, c.GetProperty("name").GetString()!);
+        }
+
+        return data;
+    }
+
+    /// <summary>policy/policy-parse-cases.json: the Mac's parser runs the same cases, so both
+    /// sides accept and refuse exactly the same policy texts.</summary>
+    [Theory]
+    [MemberData(nameof(ParseCases))]
+    public void ParseFixture(int index, string name)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(PolicyDir(), "policy-parse-cases.json")));
+        var c = doc.RootElement.GetProperty("cases")[index];
+
+        var p = JobPolicy.Parse(c.GetProperty("text").GetString()!);
+
+        Assert.True(c.GetProperty("valid").GetBoolean() == p.Loaded, $"{name}: {p.LoadError ?? "loaded"}");
+    }
+
+    [Fact]
+    public void ParseFixture_HasBothKinds()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(PolicyDir(), "policy-parse-cases.json")));
+        var valid = doc.RootElement.GetProperty("cases").EnumerateArray().Select(c => c.GetProperty("valid").GetBoolean()).ToList();
+        Assert.Contains(true, valid);
+        Assert.True(valid.Count(v => !v) > 30);
+    }
+
     [Fact]
     public void Fixture_IsNotEmpty()
     {
