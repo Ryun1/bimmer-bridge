@@ -22,18 +22,17 @@ the sweep reads from there.
      SGBD variant when read, and the tool reports which `variant` they resolved to, so they
      help where the exact variant is not known. Confirm each candidate has a runnable
      fault-memory job with `ediabas_describe`.
-   - `ediabas_describe` needs the cable connected to the VM: without it, it fails with
-     `cable_not_found` (seen at the desk on 2026-11-21). Whether it also needs the ignition
-     on is not known yet, so try it now, before asking for the ignition. If it fails with the
-     cable connected, tell Ryan what the message said (worth recording), and leave the check
-     to the ignition-on window, keeping it to the candidates you most need.
+   - `ediabas_describe` needs the cable passed through to the VM, but neither the car nor the
+     ignition: on 2026-11-21 it failed with `cable_not_found` without the cable, and worked
+     with the cable in the VM and not plugged into the car. So do all of this job discovery
+     now, before asking for the ignition. Use `filter` where you can: a full describe of
+     `NVE_65` with comments took about 15 s.
    - If you cannot tell which name fits this car, ask Ryan rather than including guesses.
      Every wrong name is an error result that still costs time.
 4. Tell Ryan the plan: how many ECUs, one `ediabas_read_faults` call (two if more than 20, or
    more than 10 with info memory), whether info memory is included, and a rough time (the
-   first EDIABAS call after a pause takes about 10 s longer while the agent loads EDIABAS
-   again; that is normal). Ask him to switch the ignition on and say when it is. Note the
-   time.
+   first EDIABAS call after a pause can take 10–15 s while the agent loads EDIABAS again;
+   that is normal). Ask him to switch the ignition on and say when it is. Note the time.
 
 ## With the ignition on
 

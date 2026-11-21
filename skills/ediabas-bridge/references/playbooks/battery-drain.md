@@ -35,15 +35,18 @@ first.
    `ediabas_describe` with `job` to see each chosen job's arguments and result fields. Drop
    any job that is refused or marked "needs review"; show Ryan the description of any
    "needs review" job and let him decide, but do not hold the session for it.
-   `ediabas_describe` needs the cable connected to the VM: without it, it fails with
-   `cable_not_found` (seen at the desk on 2026-11-21). Whether it also needs the ignition on
-   is not known yet, so try it now, before asking for the ignition. If it fails with the cable
-   connected, tell Ryan what the message said (worth recording), and make a narrow, filtered
-   describe the first step of the ignition-on window instead, counted in the time.
+   `ediabas_describe` needs the cable passed through to the VM, but neither the car nor the
+   ignition: on 2026-11-21 it failed with `cable_not_found` without the cable, and worked with
+   the cable in the VM and not plugged into the car. So do all of this discovery now, before
+   asking for the ignition, with a `filter` where you can (a full describe of `NVE_65` with
+   comments took about 15 s). `../job-cookbook.md` lists the jobs `ediabas_describe` has
+   shown as runnable on `NVE_65` and `TMODE` (for example `TMODE`'s `LESE_SPANNUNG_KL30`);
+   none has been run on the car yet, so check each one's arguments and results with
+   `ediabas_describe` and `job`.
 4. Pick a short list: fault memory of the modules involved plus a few status jobs. Tell Ryan
-   the plan, the number of calls and a rough time (the first EDIABAS call after a pause takes
-   about 10 s longer while the agent loads EDIABAS again; that is normal); ask him to switch
-   the ignition on and say when. Note the time.
+   the plan, the number of calls and a rough time (the first EDIABAS call after a pause can
+   take 10–15 s while the agent loads EDIABAS again; that is normal); ask him to switch the
+   ignition on and say when. Note the time.
 
 ## With the ignition on
 

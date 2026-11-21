@@ -202,8 +202,9 @@ alone. The safe default is to skip it; never present approving it as a routine s
 ### The first call after a pause is slow
 Not an error. The agent unloads EDIABAS after a short idle spell (20 s by default) so that it
 does not hold EDIABAS open between requests, and loads it again on the next `ediabas_*` call.
-That first call takes about 10 s longer (seen at the desk on 2026-11-21). It is normal and not
-a reason to retry. `vm_health` shows whether EDIABAS is loaded at the moment (older agents do
+That first call can take 10–15 s (seen at the desk on 2026-11-21), and a full
+`ediabas_describe` with comments can take about as long on its own (about 15 s for `NVE_65`).
+It is normal and not a reason to retry. `vm_health` shows whether EDIABAS is loaded at the moment (older agents do
 not report it). Allow for it in the rough time you give Ryan before the ignition goes on.
 
 ### `cable_in_use`
@@ -221,16 +222,17 @@ plug the cable into the Mac and pass it through to the Windows VM in UTM, and no
 until he says it is connected.
 
 **Meaning:** EDIABAS could not open the interface, so nothing reached the car. Seen at the desk
-on 2026-11-21 with the cable unplugged: a real SGBD would not load at all, so even
-`ediabas_describe` failed this way. Only `TMODE` and `UTILITY` loaded without the cable. It
-can fail a whole call, or appear in each ECU's place in `ediabas_read_faults`. It is not the
-same as an ECU that did not answer (`ediabas_error`): there, the cable is connected and the
-car is silent.
+on 2026-11-21 with the cable not passed through to the VM: a real SGBD would not load at all,
+so even `ediabas_describe` failed this way. Only `TMODE` and `UTILITY` loaded without the
+cable. The same day, with the cable passed through to the VM but not plugged into the car,
+`ediabas_describe` on `NVE_65` worked: describing a real SGBD needs the cable in the VM, not
+the car or the ignition. It can fail a whole call, or appear in each ECU's place in
+`ediabas_read_faults`. It is not the same as an ECU that did not answer (`ediabas_error`):
+there, the cable is connected and the car is silent.
 **Tell Ryan:** the cable is not connected to the VM; plug it into the Mac and pass it through
 to the VM in UTM, then say when it is done. Wait for him: until then every retry fails the
-same way. Then call `vm_health` once and carry on. Whether a real SGBD also needs the ignition
-on, with the cable connected, is not known yet; if a describe fails in that state, tell Ryan
-what it said so it can be recorded.
+same way. Then call `vm_health` once and carry on. Do all job discovery (`ediabas_list_ecus`,
+`ediabas_describe`) in that state, before asking for the ignition.
 
 ### `ecu_not_found`
 **Meaning:** there is no SGBD or group file of that name in the VM's EDIABAS ECU folder.

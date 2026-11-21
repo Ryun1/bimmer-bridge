@@ -78,7 +78,7 @@ to stop and continue another time rather than adding reads. Read only what the q
 reading every job on every ECU drains the battery and buries the answer.
 
 The agent unloads EDIABAS after a short idle spell (20 s by default), so the first `ediabas_*`
-call after a pause takes about 10 s longer (seen at the desk on 2026-11-21). That is normal:
+call after a pause can take 10–15 s (seen at the desk on 2026-11-21). That is normal:
 wait for it rather than retrying, and allow for it in the rough time. `vm_health` shows
 whether EDIABAS is loaded at the moment.
 
