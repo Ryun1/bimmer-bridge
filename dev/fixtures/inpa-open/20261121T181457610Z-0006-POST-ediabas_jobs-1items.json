@@ -1,0 +1,37 @@
+{
+  "recordedAt": "2026-11-21T18:14:57.610Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "NVE_65",
+          "job": "FS_LESEN"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "error": {
+        "code": "cable_in_use",
+        "message": "A BMW tool is using EDIABAS (INPALOAD pid 1236). Close it and try again.",
+        "details": {
+          "processes": [
+            {
+              "name": "INPALOAD",
+              "pid": 1236
+            }
+          ]
+        }
+      }
+    }
+  }
+}

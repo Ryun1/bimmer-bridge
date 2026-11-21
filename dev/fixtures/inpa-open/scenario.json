@@ -1,0 +1,16 @@
+{
+  "description": "INPA open on its loader menu (recorded 2026-11-21): /health lists INPALOAD and every EDIABAS call is refused with cable_in_use. Also serves the screenshot of the INPA menu.",
+  "base": "idle",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/screen/capture",
+      "recording": "20261121T181457517Z-0004-GET-screen_capture-INPA.json"
+    },
+    {
+      "method": "*",
+      "pathPrefix": "/ediabas/",
+      "recording": "20261121T181457643Z-0007-GET-ediabas_describe-NVE_65.json"
+    }
+  ]
+}

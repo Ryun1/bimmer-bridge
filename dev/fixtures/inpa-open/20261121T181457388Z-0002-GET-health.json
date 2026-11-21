@@ -1,0 +1,51 @@
+{
+  "recordedAt": "2026-11-21T18:14:57.388Z",
+  "request": {
+    "method": "GET",
+    "path": "/health",
+    "query": {},
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "agent": "ediabas-bridge-agent",
+      "version": "0.2.0",
+      "startedAt": "2026-11-21T18:08:02Z",
+      "uptimeSeconds": 414,
+      "os": {
+        "description": "Microsoft Windows 10.0.26100",
+        "osArchitecture": "Arm64",
+        "processArchitecture": "X86"
+      },
+      "user": "user",
+      "elevated": true,
+      "sessionId": 1,
+      "bindAddress": "192.168.64.3",
+      "port": 8765,
+      "gateway": "192.168.64.1",
+      "conflictingProcesses": [
+        {
+          "name": "INPALOAD",
+          "pid": 1236
+        }
+      ],
+      "ediabas": {
+        "dllPath": "C:\\EDIABAS\\BIN\\api32.dll",
+        "dllFound": true,
+        "loaded": false
+      },
+      "lastCableUseAt": "2026-11-21T18:10:18Z",
+      "policyVersion": 1,
+      "capabilities": [
+        "ediabas",
+        "capture",
+        "logs"
+      ]
+    }
+  }
+}
