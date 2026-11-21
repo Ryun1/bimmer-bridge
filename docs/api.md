@@ -21,12 +21,17 @@ Any non-2xx response has this body:
 
 | Status | `code` | When |
 |---|---|---|
+| 403 | `forbidden` | the request did not come from the VM's network gateway (the Mac). Checked first, before the token is looked at |
 | 401 | `unauthorized` | header missing, malformed, or token wrong. Sent before any routing, so an unauthenticated caller cannot tell which paths exist |
 | 404 | `not_found` | unknown path (authenticated callers only) |
 | 405 | `method_not_allowed` | known path, wrong method |
 | 500 | `internal_error` | unhandled failure; the message is generic, details go to the agent log |
 
 A 401 also carries `WWW-Authenticate: Bearer`.
+
+Order of checks: source address (403), token (401), path (404), method (405). Requests that
+Kestrel rejects itself (malformed HTTP, oversized headers, HTTP/2) never reach these checks
+and get Kestrel's own response.
 
 ## `GET /health`
 Never touches the cable and never loads the EDIABAS DLL.

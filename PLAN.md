@@ -114,15 +114,18 @@ Enforced **in code on both sides**, not only in tool descriptions.
    - Bind only to the VM's address on the UTM shared network, never `0.0.0.0`.
    - Windows Firewall allows inbound only from the adapter's default gateway (the Mac).
    - Every request needs a Bearer token (32 random bytes), compared in constant time.
+   - The agent itself also refuses any request whose source is not its gateway, before it
+     looks at the token.
    - On the Mac the token lives in the Keychain, not in a config file.
 7. **Read-only file access.** Log endpoints only read, only under configured roots. Resolve
    real paths; reject `..`, junction/symlink escapes and alternate data streams. The agent
-   writes only its own log and audit files under `C:\ProgramData\EdiabasBridge\`.
+   writes only its own log and audit files under `C:\ProgramData\EdiabasBridge\logs\`; the
+   rest of its folder, including its exe, config and token, is read-only to it.
 8. **Never change EDIABAS configuration.** No edits to `EDIABAS.INI` or `obd.ini`, no
    `apiSetConfig`.
 9. **Audit trail.** Both sides append one line per request (time, endpoint/tool, ECU, job,
    outcome, duration; rejected job names included).
-   - VM: `C:\ProgramData\EdiabasBridge\audit.log`
+   - VM: `C:\ProgramData\EdiabasBridge\logs\audit.log`
    - Mac: `~/Library/Logs/ediabas-bridge/audit.log`
 10. **Never test against the car unattended.** Claude Code may run *offline* jobs (`TMODE`,
     and the `_JOBS` family, which read the SGBD file) after Ryan confirms the cable is
@@ -378,9 +381,16 @@ without a fixture change is a bug.
    values. Generate the token only if none exists; ACL it.
 2. Firewall: allow inbound TCP 8765 from the adapter's default gateway only.
 3. Scheduled task: at log-on of the current user, interactive, no time limit, restart on
-   failure. `-Elevated` switch sets highest run level; default is off.
-4. Disable sleep on AC. Ask Ryan before changing the idle screen lock.
-5. Print the port and, on first install only, the token with the Keychain command (§7).
+   failure. `$Elevated=$true` on the pasted line sets highest run level; default is off.
+4. Disable sleep on AC. Leave the screen lock alone, and say that a locked screen blocks
+   screenshots.
+5. Hand the token to the Mac: `PUT` it to `dev/serve.py --accept-token`, which stores it in
+   the Keychain. If that fails on a first install, print the token once with the Keychain
+   command (§7).
+
+The task has a second trigger that repeats every 5 minutes, because Task Scheduler does not
+restart a process that exits with an error. The agent also keeps retrying a missing token
+or bad config itself. Details and paths are in `docs/deploy.md`.
 
 Re-running it upgrades in place. `uninstall.ps1` reverses everything.
 
