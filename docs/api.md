@@ -119,8 +119,14 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 503 | `desktop_unavailable` | locked screen, secure desktop, or session 0 | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
-Interface errors are **not** yet mapped to `cable_in_use` / `cable_not_found`: which EDIABAS
-codes mean "port busy" and "no cable" is settled at the desk (Phase 2), then added here.
+| 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
+
+**Settled at the desk (2026-11-21, cable unplugged):** loading a real SGBD (`NVE_65`, even for
+`_JOBS`) with no cable in the VM fails with error 28, `IFH-0018: INITIALIZATION ERROR`; `TMODE`
+and `UTILITY` load without the interface. The agent reports error 28 as `cable_not_found`,
+both as a request error and as a batch item error. Every other EDIABAS error stays
+`ediabas_error`. Which code a busy port gives is not known; a BMW tool holding the cable is
+caught by the conflict check before EDIABAS is called.
 
 ## `GET /health` additions
 - `lastCableUseAt`: UTC time the runner last called `apiInit`, else `null`.
@@ -159,6 +165,13 @@ rules.
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
 including the ones that only read SGBD files. One `apiInit` … `apiEnd` cycle per request; no
 handle outlives the request. Requests are served one at a time.
+
+**Idle release.** `apiEnd` alone leaves EDIABAS's host process `ebas32.exe` running for as long
+as the agent has `api32.dll` loaded (seen at the desk). So the agent unloads the DLL once no
+EDIABAS request has arrived for `ediabasIdleReleaseSeconds` (agent config, default 20, range
+5..600), and loads it again on the next request. The first request after a release is slow
+(about 10 s in this VM). `/health` reports `ediabas.loaded` (boolean): whether the DLL is
+loaded right now.
 
 ### `GET /ediabas/ecus?filter=<substr>`
 File listing of the Ecu folder; does not call EDIABAS. `filter` is a case-insensitive
@@ -257,7 +270,8 @@ does not interpret result names (they are confirmed at the car in Phase 6).
 - `maxEdge` 200..4000, default 1600: the image is scaled down so its longer edge is at most
   this. Never scaled up. `format` defaults to `jpeg` (quality 85).
 - 200: the image bytes, `Content-Type: image/jpeg` or `image/png`, with headers
-  `X-Window-Title` (UTF-8, percent-encoded; `desktop` for the screen), `X-Window-Handle`,
+  `X-Window-Title` (UTF-8, percent-encoded; `desktop` for the screen), `X-Window-Handle`
+  (`desktop` for the screen),
   `X-Capture-Method` (`printwindow`, `bitblt` or `screen`), `X-Image-Width`, `X-Image-Height`.
 - Errors: `bad_request`, `window_not_found`, `window_minimized`, `desktop_unavailable`.
 - The agent never restores, focuses, moves or resizes a window.
@@ -283,6 +297,9 @@ Newest first.
   is not disturbed (`FileShare.ReadWrite | Delete`).
 - `grep`: at most 200 characters, compiled with `RegexOptions.NonBacktracking`; only matching
   lines of the selected range are returned. A bad pattern is `bad_request`.
+- A path outside the roots is always `path_not_allowed`, whether or not the file exists. A
+  file under a root that exists but cannot be opened is 500 `internal_error`. Files with more
+  than one hard link and paths with forward slashes are refused.
 - The path must resolve, after following links, to a file under a log root. Refused with
   `path_not_allowed`: `..` segments, relative paths, UNC and device paths (`\\?\`, `\\.\`),
   alternate data streams, DOS device names (`CON`, `NUL`, `COM1`, …), junction or symlink
@@ -298,5 +315,6 @@ Newest first.
 `{ "pattern": "…", "matchedLines": 12 }`.
 
 ## Audit
-One line per request as before, now also carrying `ecu`, `job` and, for refusals, the policy
-`rule`. Batch requests write one line per item plus one for the request.
+One line per request as before, now also carrying `ecu`, `job`, for refusals the policy
+`rule` (or the path refusal reason), and `target` (the log path or window asked for). Batch
+requests write one line per item plus one for the request.

@@ -54,6 +54,7 @@ Codes (also the audit outcome):
 | `job_needs_review` | agent | the job's description suggests it may not be a pure read; the message quotes it. Ryan decides |
 | `cable_in_use` | agent | a BMW tool is open; the message names it. Ask Ryan to close it. Do not retry in a loop |
 | `ecu_not_found`, `job_not_found` | agent | use `ediabas_list_ecus` / `ediabas_describe`; never guess names |
+| `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. Ryan plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |
 | `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU |
 | `ediabas_unavailable` | agent | DLL missing or EDIABAS would not start |
 | `job_timeout` | agent | the job did not finish in time |
