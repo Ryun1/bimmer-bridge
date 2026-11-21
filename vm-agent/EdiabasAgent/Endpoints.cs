@@ -8,7 +8,10 @@ namespace EdiabasAgent;
 /// <summary>One route: exact path (case-insensitive) and method.</summary>
 internal sealed record Route(string Path, string Method, Func<HttpContext, Task> Handler);
 
-/// <summary>Handlers for <c>GET /health</c> and <c>GET /windows</c> (docs/api.md).</summary>
+/// <summary>
+/// The route table, the single list of what exists, plus the handlers for <c>GET /health</c> and
+/// <c>GET /windows</c> (docs/api.md). EDIABAS handlers are in EdiabasEndpoints.cs.
+/// </summary>
 internal sealed class Endpoints
 {
     private readonly AgentContext _ctx;
@@ -18,10 +21,16 @@ internal sealed class Endpoints
     {
         _ctx = ctx;
         _selection = selection;
+        var ediabas = new EdiabasEndpoints(ctx);
         Routes =
         [
             new Route("/health", HttpMethods.Get, Health),
             new Route("/windows", HttpMethods.Get, Windows),
+            new Route("/ediabas/ecus", HttpMethods.Get, ediabas.Ecus),
+            new Route("/ediabas/describe", HttpMethods.Get, ediabas.Describe),
+            new Route("/ediabas/job", HttpMethods.Post, ediabas.Job),
+            new Route("/ediabas/jobs", HttpMethods.Post, ediabas.Jobs),
+            new Route("/ediabas/vehicle", HttpMethods.Get, ediabas.Vehicle),
         ];
     }
 
@@ -60,7 +69,9 @@ internal sealed class Endpoints
             Gateway: _selection.Gateway?.ToString(),
             ConflictingProcesses: _ctx.Conflicts.Running(),
             Ediabas: new EdiabasInfo(dll, dllFound),
-            LastCableUseAt: null);
+            LastCableUseAt: _ctx.CableUse.LastInitAt is { } t ? ApiFormat.Timestamp(t) : null,
+            PolicyVersion: _ctx.Policy.Version,
+            Capabilities: AgentContext.Capabilities);
 
         return Responses.WriteJson(http, StatusCodes.Status200OK, body);
     }
@@ -88,4 +99,7 @@ internal static class Responses
 
     public static Task WriteError(HttpContext http, int status, string code, string message) =>
         WriteJson(http, status, ApiErrors.Create(code, message));
+
+    public static Task WriteFailure(HttpContext http, ApiFailure failure) =>
+        WriteJson(http, failure.Status, new ErrorBody(failure.Error));
 }

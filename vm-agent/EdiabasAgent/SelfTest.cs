@@ -7,8 +7,10 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using EdiabasAgent.Core;
+using EdiabasAgent.Ediabas;
 using EdiabasAgent.Logging;
 using EdiabasAgent.Net;
+using EdiabasAgent.Proc;
 
 namespace EdiabasAgent;
 
@@ -55,12 +57,19 @@ internal static class SelfTest
         var config = loaded.Config;
         BindSelection? selection = null;
 
+        // 2. Job policy: built in, so it needs no config.
+        var policy = JobPolicy.Embedded;
+        checks.Add(policy.Loaded
+            ? new Check("job policy", Outcome.Pass, $"version {policy.Version} loaded")
+            : new Check("job policy", Outcome.Fail, $"{policy.LoadError}; every EDIABAS job would be refused"));
+
         if (config is null)
         {
             checks.Add(new Check("token file", Outcome.Skip, "no valid config"));
             checks.Add(new Check("bind address", Outcome.Skip, "no valid config"));
             checks.Add(new Check("firewall rule", Outcome.Skip, "no valid config"));
             checks.Add(new Check("listener", Outcome.Skip, "no valid config"));
+            checks.Add(new Check("EDIABAS DLL", Outcome.Skip, "no valid config"));
         }
         else
         {
@@ -76,6 +85,7 @@ internal static class SelfTest
             }));
             checks.Add(Guard("firewall rule", () => CheckFirewall(config.Port, selection)));
             checks.Add(Guard("listener", () => CheckListener(config.Port, selection)));
+            checks.Add(Guard("EDIABAS DLL", () => CheckEdiabasDll(config)));
         }
 
         var report = new StringBuilder();
@@ -248,6 +258,27 @@ internal static class SelfTest
         return problems.Count == 0
             ? new Check(name, Outcome.Pass, $"enabled, inbound, TCP {port}, remote '{remote}' (= {selection?.Gateway}), program {program}")
             : new Check(name, Outcome.Fail, string.Join("; ", problems));
+    }
+
+    /// <summary>
+    /// Loads api32.dll and resolves every export the agent uses, then frees it. Calls nothing in
+    /// it, so no EDIABAS initialisation and no cable. Skipped while a BMW tool is running, so the
+    /// self-test never loads the DLL beside a tool that is using it.
+    /// </summary>
+    private static Check CheckEdiabasDll(AgentConfig config)
+    {
+        const string name = "EDIABAS DLL";
+        var running = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll).Running();
+        if (running.Count > 0)
+        {
+            return new Check(name, Outcome.Skip,
+                $"not loaded because a BMW tool is running ({string.Join(", ", running.Select(p => $"{p.Name} pid {p.Pid}"))}); close it and run the self-test again");
+        }
+
+        var problem = Api32.Probe(config.EdiabasDll);
+        return problem is null
+            ? new Check(name, Outcome.Pass, $"{config.EdiabasDll} loads and all {Api32.Exports.Length} exports resolve (nothing called)")
+            : new Check(name, Outcome.Fail, problem);
     }
 
     private static Check CheckListener(int port, BindSelection? selection)

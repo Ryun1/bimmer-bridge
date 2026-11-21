@@ -6,7 +6,8 @@ namespace EdiabasAgent.Core;
 
 // Response records for docs/api.md. Property order here is the JSON property order.
 
-public sealed record ErrorDetail(string Code, string Message);
+/// <summary><c>details</c> is null when there are none; otherwise one of the records in EdiabasModels.cs.</summary>
+public sealed record ErrorDetail(string Code, string Message, object? Details);
 
 public sealed record ErrorBody(ErrorDetail Error);
 
@@ -30,7 +31,9 @@ public sealed record HealthResponse(
     string? Gateway,
     IReadOnlyList<ConflictingProcess> ConflictingProcesses,
     EdiabasInfo Ediabas,
-    string? LastCableUseAt)
+    string? LastCableUseAt,
+    int? PolicyVersion,
+    IReadOnlyList<string> Capabilities)
 {
     public const string AgentName = "ediabas-bridge-agent";
 }
@@ -41,7 +44,7 @@ public sealed record WindowInfo(string Handle, string Title, string? ProcessName
 
 public sealed record WindowsResponse(IReadOnlyList<WindowInfo> Windows);
 
-/// <summary>Error codes and generic messages from docs/api.md (plus <c>forbidden</c>).</summary>
+/// <summary>Error codes from docs/api.md and their HTTP status.</summary>
 public static class ApiErrors
 {
     public const string Unauthorized = "unauthorized";
@@ -50,7 +53,34 @@ public static class ApiErrors
     public const string MethodNotAllowed = "method_not_allowed";
     public const string InternalError = "internal_error";
 
-    public static ErrorBody Create(string code, string message) => new(new ErrorDetail(code, message));
+    public const string BadRequest = "bad_request";
+    public const string JobNotAllowed = "job_not_allowed";
+    public const string JobNeedsReview = "job_needs_review";
+    public const string EcuNotFound = "ecu_not_found";
+    public const string JobNotFound = "job_not_found";
+    public const string CableInUse = "cable_in_use";
+    public const string EdiabasError = "ediabas_error";
+    public const string EdiabasUnavailable = "ediabas_unavailable";
+    public const string JobTimeout = "job_timeout";
+    public const string NotRun = "not_run";
+
+    public static ErrorBody Create(string code, string message, object? details = null) =>
+        new(new ErrorDetail(code, message, details));
+
+    /// <summary>HTTP status for a code; 500 for anything unknown.</summary>
+    public static int Status(string code) => code switch
+    {
+        BadRequest => 400,
+        Unauthorized => 401,
+        Forbidden or JobNotAllowed or JobNeedsReview => 403,
+        NotFound or EcuNotFound or JobNotFound => 404,
+        MethodNotAllowed => 405,
+        CableInUse => 409,
+        EdiabasError => 502,
+        EdiabasUnavailable or NotRun => 503,
+        JobTimeout => 504,
+        _ => 500,
+    };
 }
 
 /// <summary>Formatting rules shared by every response.</summary>

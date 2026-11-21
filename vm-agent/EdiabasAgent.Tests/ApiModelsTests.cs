@@ -9,7 +9,63 @@ public class ApiModelsTests
     public void Error_Shape()
     {
         var json = ApiJson.Serialize(ApiErrors.Create(ApiErrors.Unauthorized, "Missing or invalid bearer token."));
-        Assert.Equal("""{"error":{"code":"unauthorized","message":"Missing or invalid bearer token."}}""", json);
+        Assert.Equal("""{"error":{"code":"unauthorized","message":"Missing or invalid bearer token.","details":null}}""", json);
+    }
+
+    [Fact]
+    public void Error_WithDetails()
+    {
+        var json = ApiJson.Serialize(ApiErrors.Create(ApiErrors.JobNotAllowed, "m", new JobRefusalDetails("NVE_65", "FS_LOESCHEN", "deny.substring:LOESCH")));
+        Assert.Equal("""{"error":{"code":"job_not_allowed","message":"m","details":{"ecu":"NVE_65","job":"FS_LOESCHEN","rule":"deny.substring:LOESCH"}}}""", json);
+    }
+
+    [Theory]
+    [InlineData("bad_request", 400)]
+    [InlineData("job_not_allowed", 403)]
+    [InlineData("job_needs_review", 403)]
+    [InlineData("ecu_not_found", 404)]
+    [InlineData("job_not_found", 404)]
+    [InlineData("cable_in_use", 409)]
+    [InlineData("ediabas_error", 502)]
+    [InlineData("ediabas_unavailable", 503)]
+    [InlineData("job_timeout", 504)]
+    [InlineData("internal_error", 500)]
+    [InlineData("something_new", 500)]
+    public void Status(string code, int status)
+    {
+        Assert.Equal(status, ApiErrors.Status(code));
+    }
+
+    [Fact]
+    public void Batch_And_Vehicle_Shapes()
+    {
+        var item = new BatchItem(false, null, new ErrorDetail("not_run", "m", null));
+        Assert.Equal(
+            """{"items":[{"ok":false,"result":null,"error":{"code":"not_run","message":"m","details":null}}],"durationMs":3}""",
+            ApiJson.Serialize(new BatchResponse([item], 3)));
+
+        var v = new VehicleResponse(item, item, [new VehicleVoltage("NVE_65", "STATUS_BORDNETZSPANNUNG", false, null, null)], item, item, 9);
+        using var doc = JsonDocument.Parse(ApiJson.Serialize(v));
+        Assert.Equal(["ignition", "ubatt", "voltages", "cableKl30", "cableKl15", "durationMs"], doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(["ecu", "job", "ok", "result", "error"], doc.RootElement.GetProperty("voltages")[0].EnumerateObject().Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    public void Describe_Shapes()
+    {
+        var list = new DescribeListResponse("NVE_65", null, 1, [new DescribeJobEntry("FS_LESEN", null, new JobVerdict(true, "allow.global", Review.NotRequired))], 4);
+        Assert.Equal(
+            """{"ecu":"NVE_65","variant":null,"jobCount":1,"jobs":[{"name":"FS_LESEN","comment":null,"verdict":{"allowed":true,"rule":"allow.global","review":"not_required"}}],"durationMs":4}""",
+            ApiJson.Serialize(list));
+
+        var one = new DescribeJobResponse("NVE_65", "NVE_65", "FS_LESEN", "c", new JobVerdict(true, "allow.global", Review.NotRequired), [new JobParameterInfo("A", "int", null)], [], 5);
+        Assert.Equal(
+            """{"ecu":"NVE_65","variant":"NVE_65","job":"FS_LESEN","comment":"c","verdict":{"allowed":true,"rule":"allow.global","review":"not_required"},"arguments":[{"name":"A","type":"int","comment":null}],"results":[],"durationMs":5}""",
+            ApiJson.Serialize(one));
+
+        Assert.Equal(
+            """{"ecuPath":"C:\\EDIABAS\\ECU","count":1,"truncated":false,"files":[{"name":"NVE_65","type":"prg"}]}""",
+            ApiJson.Serialize(new EcusResponse(@"C:\EDIABAS\ECU", 1, false, [new EcuFile("NVE_65", "prg")])));
     }
 
     [Fact]
@@ -39,7 +95,9 @@ public class ApiModelsTests
             Gateway: null,
             ConflictingProcesses: [new ConflictingProcess("INPALOAD", 4312)],
             Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true),
-            LastCableUseAt: null);
+            LastCableUseAt: null,
+            PolicyVersion: 1,
+            Capabilities: ["ediabas"]);
 
         using var doc = JsonDocument.Parse(ApiJson.Serialize(h));
         var root = doc.RootElement;
@@ -47,6 +105,7 @@ public class ApiModelsTests
         [
             "agent", "version", "startedAt", "uptimeSeconds", "os", "user", "elevated", "sessionId",
             "bindAddress", "port", "gateway", "conflictingProcesses", "ediabas", "lastCableUseAt",
+            "policyVersion", "capabilities",
         ];
         Assert.Equal(expected, root.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal("ediabas-bridge-agent", root.GetProperty("agent").GetString());
