@@ -1,0 +1,251 @@
+{
+  "recordedAt": "2026-11-21T18:10:18.523Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/describe",
+    "query": {
+      "ecu": "TMODE"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "TMODE",
+      "variant": "TMODE",
+      "jobCount": 25,
+      "jobs": [
+        {
+          "name": "INFO",
+          "comment": "Information SGBD",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.ecu",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "INITIALISIERUNG",
+          "comment": "Es wird nur der Interfacetyp festgestellt",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_INTERFACE_ZURUECK",
+          "comment": "Versetzt das Interface in den Initialisierungszustand",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_SG_PARAM_ZURUECK",
+          "comment": "Ruecksetzen der im Interface gespeicherten SG-Parameter \nAbbruch einer gerade laufenden SG-Kommunikation         ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_SG_PARAMETER_ALLG",
+          "comment": "Es werden die fuer die Kommunikation notwendigen Parameter festgelegt",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_SG_PARAMETER_EIDBSS",
+          "comment": "Einstellen der Kommunikationsparameter nur fuer das EIDBSS und IDBSS",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_ANTWORTLAENGE",
+          "comment": "Setzen der Antwortlaenge",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "HOLE_KEYBYTES",
+          "comment": "Dieser Job liest die Keybytes aus einem Konzept 2,3,4 SG  \naus. Laeuft die Kommunikation mit dem SG noch nicht, wird \nautomatisch mit einem ACK-Telegramm gereizt.              ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SENDE_TELEGRAMM",
+          "comment": "Mit diesem Job wird ein Telegramm an ein SG geschickt \nund die Antwort empfangen                             ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:TELEGR",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SENDE_TELEGR_WIEDERHOLT",
+          "comment": "Mit diesem Job wird ein Telegramm im frequent Mode an \nein SG geschickt                                      ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:TELEGR",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "HOLE_ANTWORT_TELEGR",
+          "comment": "Mit diesem Job werden SG-Antworttelegramme vom Interface \nabgeholt, nachdem die Anforderung mit dem Job            \nSENDE_TELEGR_WIEDERHOLT gestartet wurde                  ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:TELEGR",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "STOPPE_WIEDERH_ANFORDERUNG",
+          "comment": "Diese Job stoppt die wiederholte SG-Abfrage ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LESE_INTERFACE_TYP",
+          "comment": "Dieser Job stellt den Interfacetyp fest ",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.ecu",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LESE_INTERFACE_VERSION",
+          "comment": "Dieser Job liest die Versionsnummer des Interface ",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.ecu",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LESE_SPANNUNG_KL30",
+          "comment": "Dieser Job stellt die Batteriespannung fest ",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.ecu",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LESE_SPANNUNG_KL15",
+          "comment": "Dieser Job stellt die Spannung an der Zuendung fest ",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.ecu",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LESE_PORT",
+          "comment": "Dieser Job liest das angegebene Port aus ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_PORT",
+          "comment": "Dieser Job setzt das angegebene Port mit dem \nuebergebenen Wert                            ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_PROGRAMMIERSPANNUNG",
+          "comment": "Mit diesem Job wird die Programmierspannung auf einen \nbestimmten Wert eingestellt                           ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_SIA_RELAIS",
+          "comment": "Schliesst das SIA Relais fuer die angegebene Zeit ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "TESTE_DIAGNOSELEITUNG",
+          "comment": "Dieser Job testet die Diagnoseleitung ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "HOLE_INTERFACE_STATUS",
+          "comment": "Dieser Job liest den Interfacestatus aus ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "REICHE_AN_INTERFACE_DURCH",
+          "comment": "Mit diesem Job werden Daten uninterpretiert an das Interface \ngeschickt. Auch die Antwort wird nicht interpretiert.        \nWird das BMW-Std-Interface erkannt, dann wird jedem          \nKommando wird als Kennung fuer das Interface das Byte 0x99   \nvorangestellt                                                ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SETZE_TRAP_MASK_REGISTER",
+          "comment": "Mit diesem Job wird das Trapmaskregister entsprechend \ndem uebergebenen Parameter gesetzt                    ",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:SETZE",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "LIES_TRAP_MASK_REGISTER",
+          "comment": "Mit diesem Job wird der aktuelle Wert des TMR ausgelesen ",
+          "verdict": {
+            "allowed": false,
+            "rule": "ecu_restricted",
+            "review": "not_required"
+          }
+        }
+      ],
+      "durationMs": 1201
+    }
+  }
+}

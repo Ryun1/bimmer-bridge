@@ -30,9 +30,38 @@ No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`
 |---|---|
 | 0 Discovery | done (2026-11-21) |
 | 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
-| 2 EDIABAS at the desk | not started |
-| 3 Mac MCP | done (2026-11-21): `vm_health`, `vm_list_windows` and a first cut of the skill, working in Claude Code and the Claude desktop app |
-| 4–8 | not started |
+| 2 EDIABAS at the desk | built and deployed (agent 0.2.0). Desk checks pass except two that are open: `describe` of a real SGBD with the cable in the VM, and proof that `ebas32.exe` exits after the idle release |
+| 3 Mac MCP | done: all ten tools. Checked in Claude Code; the desktop-app check of `ediabas_describe` is open |
+| 4 Screenshots | built and deployed. Desktop and window capture pass; open: a screenshot of INPA, and the locked-screen refusal |
+| 5 Logs | built and deployed. Listing, reading and path refusals pass; open: the junction case in `--selftest` |
+| 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
+| 7 Skills | both skills, install script, eval scenarios and the replay agent are built. Reference files and most evals wait for recordings from Phase 6 |
+| 8 Hardening | this README, `VERSION`, `release.sh` |
+
+### Phase 2, 4 and 5 results so far (2026-11-21, no car)
+
+| Check | Result |
+|---|---|
+| a refused job (`FS_LOESCHEN`, `TMODE SENDE_TELEGRAMM`) | 403 `job_not_allowed` with the rule; EDIABAS never started |
+| `TMODE INFO`, `TMODE _JOBS`, cable unplugged | 200. First call after boot about 10 s, later calls under 0.5 s |
+| `describe TMODE` | 25 jobs with verdicts: `INFO` and four `LESE_*` reads runnable, every set, send and raw-telegram job refused |
+| batch of allowed + refused + unknown ECU | each item answered on its own, one init/end cycle |
+| with INPA open | every `/ediabas/*` call 409 `cable_in_use` naming `INPALOAD`; EDIABAS not touched |
+| `describe NVE_65`, cable not in the VM | 502 `cable_not_found` (EDIABAS error 28, `IFH-0018`): a real SGBD does not load without the interface |
+| idle release | agent unloads `api32.dll` 20 s after the last call and the next call works |
+| `--selftest` | PASS (config, policy, token ACL, bind address, firewall rule, listener) |
+| screenshot of the desktop and of one window | readable image; bad size 400, unknown window 404 |
+| logs | both roots listed newest first; `ABLAUF.TRC` read; `..`, other folders, the agent's own token file, alternate data streams, device names, `\\?\` paths and forward slashes all refused |
+| the same through the MCP tools | `vm_health`, `ediabas_list_ecus`, `ediabas_describe`, `ediabas_job`, refusals and `cable_in_use` messages all correct |
+
+Found and fixed during these checks:
+- `ebas32.exe` (EDIABAS's host process) stayed running after `apiEnd` for as long as the agent
+  had `api32.dll` loaded. The agent now unloads the DLL after `ediabasIdleReleaseSeconds`
+  (default 20) without an EDIABAS request.
+- EDIABAS error 28 (`IFH-0018`) is now reported as `cable_not_found` with what to do.
+- A batch could run longer than the Mac's 75 s timeout; every job is now bounded by the
+  request's time budget.
+- The Mac server no longer sends the Keychain token to an address set with `EDIABAS_AGENT_URL`.
 
 ### Phase 1 and 3 acceptance results (2026-11-21)
 
