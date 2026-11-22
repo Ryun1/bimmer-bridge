@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | ignition, battery and cable-side voltage readings |
+| `ediabas_vehicle_status` | ignition, battery and cable-side voltage readings, and module voltages when the owner configured them (`voltageSources` in `config.local.json` on the Mac) |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 

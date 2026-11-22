@@ -67,7 +67,9 @@ car-session line and the longer idle time below are all untested there.
 
 - [ ] Switch the ignition on and note the time.
 - [ ] `ediabas_vehicle_status` first. Its field names are not confirmed yet: note what
-      ignition and voltage fields it returns, for the skill references.
+      ignition and voltage fields it returns, for the skill references. Voltages from a module
+      (e.g. `NVE_65` `STATUS_BORDNETZSPANNUNG` on an E60/E61 with night vision) need
+      `voltageSources` in `config.local.json` on the Mac, set before Claude starts.
 - [ ] On an E60/E61, the whole-car read: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` (which modules
       answer) and `FS_LESEN_FUNKTIONAL` (their faults in one job), and `C_FA_LESEN` on `CAS` or
       `LM_60` (the vehicle order).

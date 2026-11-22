@@ -1,10 +1,29 @@
 {
   "recordedAt": "2026-11-21T18:14:57.684Z",
   "request": {
-    "method": "GET",
-    "path": "/ediabas/vehicle",
+    "method": "POST",
+    "path": "/ediabas/jobs",
     "query": {},
-    "body": null
+    "body": {
+      "items": [
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_ZUENDUNG"
+        },
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_UBATT"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL30"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL15"
+        }
+      ]
+    }
   },
   "response": {
     "status": 409,

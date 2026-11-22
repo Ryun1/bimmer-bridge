@@ -248,46 +248,6 @@ public sealed class EdiabasService
         return new BatchResponse(batch.Items, _clock.ElapsedMs - start);
     }
 
-    // ---------------------------------------------------------------- /ediabas/vehicle
-
-    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
-    {
-        _approvals?.Refresh();
-        if (WaitedTooLong(queuedMs) is { } waited)
-        {
-            return waited;
-        }
-
-        if (ConflictFailure() is { } busy)
-        {
-            return busy;
-        }
-
-        var items = new List<JobRequest>
-        {
-            new("UTILITY", "STATUS_ZUENDUNG"),
-            new("UTILITY", "STATUS_UBATT"),
-        };
-        items.AddRange(voltageSources.Select(v => new JobRequest(v.Ecu, v.Job)));
-        items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL30"));
-        items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL15"));
-
-        var start = _clock.ElapsedMs;
-        using var session = new Session(this, queuedMs);
-        var batch = RunBatch(session, items, _defaultTimeoutSeconds, audit, ct);
-        if (batch.WholeRequest is { } whole)
-        {
-            return whole;
-        }
-
-        var r = batch.Items;
-        var n = voltageSources.Count;
-        var voltages = voltageSources
-            .Select((v, i) => new VehicleVoltage(v.Ecu, v.Job, r[2 + i].Ok, r[2 + i].Result, r[2 + i].Error))
-            .ToList();
-        return new VehicleResponse(r[0], r[1], voltages, r[2 + n], r[3 + n], _clock.ElapsedMs - start);
-    }
-
     // ---------------------------------------------------------------- /ediabas/describe
 
     public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct, long queuedMs = 0)

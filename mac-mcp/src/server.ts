@@ -5,11 +5,11 @@ import { z } from "zod";
 import { AgentClient, type Health } from "./agentClient.js";
 import { ApprovalWatch } from "./approvalWatch.js";
 import { AuditLog, type AuditSink } from "./audit.js";
-import type { Config } from "./config.js";
+import { type Config, type VoltageSource, voltageSourceErrors } from "./config.js";
 import { BridgeError, errorText, policyMismatch, toBridgeError } from "./errors.js";
-import { BATCH_MAX, readFaults, runJobBatch } from "./faults.js";
+import { BATCH_MAX, readFaults, runBatch, runJobBatch } from "./faults.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
-import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle } from "./formatEdiabas.js";
+import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle, vehicleBatch } from "./formatEdiabas.js";
 import { PolicyGuard } from "./policy.js";
 import { FolderRecorder } from "./recorder.js";
 import { CarSession } from "./carSession.js";
@@ -34,12 +34,12 @@ export const INSTRUCTIONS = [
   "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
-  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition and voltages.",
+  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition, and voltages when configured.",
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
   "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
   "[agent_outdated]: that tool is not installed in the VM yet; say so.",
   "[ediabas_request_lost]: the job may have run; do not repeat it unless the user asks.",
-  "If the VM or agent is unreachable, tell the user the fix the message gives rather than retrying.",
+  "If the VM or agent is unreachable, give the user the message's fix rather than retrying.",
 ].join(" ");
 
 const READ_ONLY: ToolAnnotations = {
@@ -69,7 +69,6 @@ type Client = Pick<
   | "listEcus"
   | "describeJobs"
   | "describeJob"
-  | "vehicle"
   | "runJob"
   | "runJobs"
 >;
@@ -83,6 +82,8 @@ export interface ServerParts {
   log: (message: string) => void;
   /** The clock (ms since the epoch); default Date.now. */
   now?: (() => number) | undefined;
+  /** Extra voltage readings for ediabas_vehicle_status (config.local.json); default none. */
+  voltageSources?: VoltageSource[] | undefined;
 }
 
 /** Per call: what run() adds to the result besides the tool's own text. */
@@ -130,6 +131,7 @@ const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{
 export function buildServer(parts: ServerParts): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
   const { client, policy } = parts;
+  const voltageSources = parts.voltageSources ?? [];
   const car = new CarSession(parts.now);
   const mac = { version: SERVER_VERSION, startedAt: new Date((parts.now ?? Date.now)()) };
   const onOk = (ecu: string) => car.record(ecu);
@@ -367,23 +369,32 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "Vehicle status",
       description:
-        "Read ignition state, battery voltage readings and the cable's own KL30/KL15 readings, in one EDIABAS cycle. " +
+        "Read ignition state, battery voltage readings, the voltage sources the owner configured on the Mac (if any) and the cable's own KL30/KL15 readings, in one EDIABAS request. " +
         "Each reading's result fields are shown as returned. Use it to check the car is awake before reading faults. Read-only.",
       annotations: { title: "Vehicle status", ...READ_ONLY },
     },
-    async () =>
-      run(
+    async () => {
+      const items = vehicleBatch(voltageSources);
+      return run(
         "ediabas_vehicle_status",
         async (ctx) => {
           policy.require();
-          ctx.notice = (await preflight()).notice;
-          const v = await client.vehicle();
-          // Only the voltage sources are modules in the car; the rest read the cable.
-          for (const s of v.voltages) if (s.ok && s.result && s.ecu) onOk(s.ecu);
-          return formatVehicle(v);
+          const bad = voltageSourceErrors(voltageSources, policy);
+          if (bad.length) {
+            const e = new BridgeError(
+              "job_not_allowed",
+              `${bad.join(" ")} Nothing was sent to the VM. Tell the user to fix voltageSources in config.local.json on the Mac and restart the MCP server (restart Claude).`,
+            );
+            e.rule = voltageSources.map((s) => policy.evaluate(s)).find((v) => !v.allowed)?.rule;
+            throw e;
+          }
+          const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
+          // TMODE and UTILITY read the cable; only a voltage source starts the car session.
+          return formatVehicle(await runBatch({ client, policy, onOk, beforeSend }, items), voltageSources);
         },
-        { ecu: "(vehicle)", job: "STATUS_ZUENDUNG,STATUS_UBATT,voltages,LESE_SPANNUNG_KL30,LESE_SPANNUNG_KL15" },
-      ),
+        { ecu: items.map((i) => i.ecu).join(","), job: items.map((i) => i.job).join(",") },
+      );
+    },
   );
 
   server.registerTool(
@@ -516,6 +527,7 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
   const log = (m: string) => deps.log(tokens.redact(m));
   const policy = deps.policy ?? PolicyGuard.load();
   if (policy.error) log(`warning: job policy not loaded (${policy.error}); every ediabas_* tool will refuse with policy_unavailable.`);
+  for (const e of voltageSourceErrors(config.voltageSources, policy)) log(`config error: ${e} ediabas_vehicle_status refuses until it is fixed.`);
   const recorder = config.recordDir ? new FolderRecorder(config.recordDir, { warn: log, redact: (t) => tokens.redact(t) }) : undefined;
   if (recorder) log(`recording every agent exchange to ${config.recordDir}`);
   const client = new AgentClient({
@@ -530,5 +542,5 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     recorder,
   });
   const audit = new AuditLog(config.auditLogPath, { warn: log });
-  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now });
+  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources });
 }

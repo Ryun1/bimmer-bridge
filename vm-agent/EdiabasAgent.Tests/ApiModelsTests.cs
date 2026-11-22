@@ -56,17 +56,12 @@ public class ApiModelsTests
     }
 
     [Fact]
-    public void Batch_And_Vehicle_Shapes()
+    public void Batch_Shape()
     {
         var item = new BatchItem(false, null, new ErrorDetail("not_run", "m", null));
         Assert.Equal(
             """{"items":[{"ok":false,"result":null,"error":{"code":"not_run","message":"m","details":null}}],"durationMs":3}""",
             ApiJson.Serialize(new BatchResponse([item], 3)));
-
-        var v = new VehicleResponse(item, item, [new VehicleVoltage("NVE_65", "STATUS_BORDNETZSPANNUNG", false, null, null)], item, item, 9);
-        using var doc = JsonDocument.Parse(ApiJson.Serialize(v));
-        Assert.Equal(["ignition", "ubatt", "voltages", "cableKl30", "cableKl15", "durationMs"], doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
-        Assert.Equal(["ecu", "job", "ok", "result", "error"], doc.RootElement.GetProperty("voltages")[0].EnumerateObject().Select(p => p.Name).ToArray());
     }
 
     [Fact]

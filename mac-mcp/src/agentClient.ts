@@ -116,16 +116,6 @@ export type BatchItem = z.infer<typeof BatchItemSchema>;
 export const JobsResponseSchema = z.object({ items: z.array(BatchItemSchema), durationMs: z.number().nullable().optional() });
 export type JobsResponse = z.infer<typeof JobsResponseSchema>;
 
-export const VehicleSchema = z.object({
-  ignition: BatchItemSchema,
-  ubatt: BatchItemSchema,
-  voltages: z.array(BatchItemSchema.extend({ ecu: z.string().nullable().optional(), job: z.string().nullable().optional() })),
-  cableKl30: BatchItemSchema,
-  cableKl15: BatchItemSchema,
-  durationMs: z.number().nullable().optional(),
-});
-export type Vehicle = z.infer<typeof VehicleSchema>;
-
 export const EcusSchema = z.object({
   ecuPath: z.string().nullable(),
   count: z.number().int(),
@@ -281,7 +271,7 @@ interface RequestSpec {
    */
   ediabas?: boolean;
   /**
-   * Runs an EDIABAS job in the VM (job, jobs, vehicle, describe): re-sent only when the
+   * Runs an EDIABAS job in the VM (job, jobs, describe): re-sent only when the
    * connection was never made, never after a failure that may have followed delivery.
    */
   runsJob?: boolean;
@@ -398,10 +388,6 @@ export class AgentClient {
 
   describeJob(q: { ecu: string; job: string }): Promise<DescribeJob> {
     return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeJobSchema);
-  }
-
-  vehicle(): Promise<Vehicle> {
-    return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
   }
 
   runJob(body: {

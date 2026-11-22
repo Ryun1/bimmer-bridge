@@ -27,16 +27,6 @@ public sealed record BatchItem(bool Ok, JobResult? Result, ErrorDetail? Error);
 
 public sealed record BatchResponse(IReadOnlyList<BatchItem> Items, long DurationMs);
 
-public sealed record VehicleVoltage(string Ecu, string Job, bool Ok, JobResult? Result, ErrorDetail? Error);
-
-public sealed record VehicleResponse(
-    BatchItem Ignition,
-    BatchItem Ubatt,
-    IReadOnlyList<VehicleVoltage> Voltages,
-    BatchItem CableKl30,
-    BatchItem CableKl15,
-    long DurationMs);
-
 /// <summary><c>review</c> values of a describe verdict.</summary>
 public static class Review
 {

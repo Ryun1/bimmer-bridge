@@ -33,7 +33,6 @@ public class AgentConfigTests
         Assert.Equal(@"C:\ProgramData\EdiabasBridge\logs", c.LogDirectory);
         Assert.Equal(new[] { @"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK" }, c.LogRoots);
         Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI" }, c.ConflictProcesses);
-        Assert.Empty(c.VoltageSources);
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(30, c.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);
@@ -67,7 +66,6 @@ public class AgentConfigTests
           "ecuPath": "C:\\EDIABAS\\ECU",
           "logRoots": ["C:\\EDIABAS\\TRACE", "C:\\NCSEXPER\\WORK"],
           "conflictProcesses": ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"],
-          "voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ],
           "reviewedJobs": [],
           "jobTimeoutSeconds": 30,
           "maxJobTimeoutSeconds": 60
@@ -125,9 +123,21 @@ public class AgentConfigTests
     [Fact]
     public void KnownKeys_AnyCase_NoWarnings()
     {
-        var r = AgentConfig.Parse("""{ "Port": 8765, "reviewedJobs": [], "EDIABASIDLERELEASESECONDS": 20, "voltageSources": [ { "ecu": "A", "job": "B", "extra": 1 } ] }""");
+        var r = AgentConfig.Parse("""{ "Port": 8765, "reviewedJobs": [], "EDIABASIDLERELEASESECONDS": 20 }""");
         Assert.True(r.Ok);
         Assert.Empty(r.Warnings);
+    }
+
+    [Theory]
+    [InlineData("""[ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ]""")]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("\"nonsense\"")]
+    public void Config_VoltageSourcesKey_IsWarningNotError(string value)
+    {
+        var r = AgentConfig.Parse($$"""{ "voltageSources": {{value}} }""");
+        Assert.True(r.Ok);
+        Assert.Equal(["voltageSources is no longer used; set it on the Mac"], r.Warnings);
     }
 
     [Fact]
@@ -326,7 +336,6 @@ public class AgentConfigTests
     [Theory]
     [InlineData("logRoots")]
     [InlineData("conflictProcesses")]
-    [InlineData("voltageSources")]
     [InlineData("reviewedJobs")]
     [InlineData("tokenFile")]
     public void NullValues_Rejected(string field)

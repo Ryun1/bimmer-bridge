@@ -9,7 +9,9 @@ import {
   formatJobRaw,
   formatJobResult,
   formatKm,
+  formatVehicle,
   itemErrorText,
+  vehicleBatch,
 } from "../src/formatEdiabas.js";
 import { faultSets, jobResult, phase2Health } from "./stubAgent.js";
 
@@ -267,5 +269,50 @@ describe("results that could not be read", () => {
     for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
       expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
     }
+  });
+});
+
+describe("vehicle status", () => {
+  const FIXED = [
+    { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+    { ecu: "UTILITY", job: "STATUS_UBATT" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+  ];
+
+  it("vehicleBatch: four readings in D10 order without voltage sources", () => {
+    expect(vehicleBatch([])).toEqual(FIXED);
+  });
+
+  it("vehicleBatch: a voltage source goes third, after ignition and battery", () => {
+    const b = vehicleBatch([{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }]);
+    expect(b).toHaveLength(5);
+    expect(b[2]).toEqual({ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" });
+    expect([b[0], b[1], b[3], b[4]]).toEqual(FIXED);
+  });
+
+  it("formatVehicle reads the items in that order", () => {
+    const ok = (ecu: string, job: string, set: Record<string, unknown>) => ({ ok: true, result: JobResultSchema.parse(jobResult(ecu, job, [set])) });
+    const sources = [{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }];
+    const items = [
+      ok("UTILITY", "STATUS_ZUENDUNG", { STAT_ZUENDUNG: 1, JOB_STATUS: "OKAY" }),
+      ok("UTILITY", "STATUS_UBATT", { STAT_UBATT: 12480 }),
+      ok("NVE_65", "STATUS_BORDNETZSPANNUNG", { STAT_SPANNUNG_WERT: 12.4 }),
+      ok("TMODE", "LESE_SPANNUNG_KL30", { SPANNUNG_KL30: 12510 }),
+      { ok: false, result: null, error: { code: "ediabas_error", message: "failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } } },
+    ];
+    const t = formatVehicle({ items }, sources).split("\n");
+    expect(t[0]).toBe("Vehicle status (each reading's result fields as returned; their meaning is confirmed at the car in Phase 6):");
+    expect(t[1]).toBe("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
+    expect(t[2]).toBe("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
+    expect(t[3]).toBe("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
+    expect(t[4]).toBe("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
+    expect(t[5]).toMatch(/^Cable KL15 \(TMODE LESE_SPANNUNG_KL15\): error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    expect(t).toHaveLength(6);
+  });
+
+  it("formatVehicle says where voltage sources are configured when there are none", () => {
+    const item = { ok: true, result: JobResultSchema.parse(jobResult("TMODE", "X", [])) };
+    expect(formatVehicle({ items: [item, item, item, item] }, [])).toContain("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
   });
 });

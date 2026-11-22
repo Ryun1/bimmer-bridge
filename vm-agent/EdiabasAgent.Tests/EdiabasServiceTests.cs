@@ -504,21 +504,6 @@ public class EdiabasServiceTests
     }
 
     [Fact]
-    public void Vehicle_IsBoundByTheBudget()
-    {
-        _api.On("UTILITY STATUS_ZUENDUNG", new FakeJob { BusyPolls = 60 }); // 3 s
-        _api.On("UTILITY STATUS_UBATT", new FakeJob { NeverFinishes = true });
-
-        var r = Service(defaultTimeout: 5, maxTimeout: 5).Vehicle([], _audit, default).Value!;
-
-        Assert.True(r.Ignition.Ok);
-        Assert.Equal("job_timeout", r.Ubatt.Error!.Code);
-        Assert.Equal("not_run", r.CableKl30.Error!.Code);
-        Assert.Equal("not_run", r.CableKl15.Error!.Code);
-        Assert.Equal(5_000, _clock.ElapsedMs);
-    }
-
-    [Fact]
     public void DescribeList_HangingCommentFetch_EndsAtTheBudget_RestNotChecked()
     {
         _api.On("NVE_65 _JOBS", FakeJob.Jobs("STATUS_A", "STATUS_B", "FS_LESEN", "STATUS_C"));
@@ -601,48 +586,6 @@ public class EdiabasServiceTests
         var r = Service().RunJobs([new("NVE_65", "FS_LOESCHEN"), new("NVE_65", "IDENT")], null, _audit, default);
         Assert.Equal("ediabas_unavailable", r.Failure!.Error.Code);
         Assert.Equal(1, _api.Count("End"));
-    }
-
-    // ---- vehicle ----
-
-    [Fact]
-    public void Vehicle_RunsTheFixedJobs_ThroughThePolicy()
-    {
-        _api.On("UTILITY STATUS_ZUENDUNG", FakeJob.Ok(Set(new FakeResult("STAT_ZUENDUNG", ApiResultFormat.Integer, (short)1))));
-        _api.On("UTILITY STATUS_UBATT", FakeJob.Ok());
-        _api.On("NVE_65 _JOBCOMMENTS STATUS_BORDNETZSPANNUNG", FakeJob.Comments("Bordnetzspannung"));
-        _api.On("NVE_65 STATUS_BORDNETZSPANNUNG", FakeJob.Ok());
-        _api.On("TMODE LESE_SPANNUNG_KL30", FakeJob.Ok());
-        _api.On("TMODE LESE_SPANNUNG_KL15", FakeJob.Error(20, "IFH-0010"));
-        _api.On("TMODE _JOBS", FakeJob.Jobs("LESE_SPANNUNG_KL30", "LESE_SPANNUNG_KL15"));
-
-        var sources = new List<VoltageSource>
-        {
-            new() { Ecu = "NVE_65", Job = "STATUS_BORDNETZSPANNUNG" },
-            new() { Ecu = "NVE_65", Job = "FS_LOESCHEN" },
-        };
-        var r = Service().Vehicle(sources, _audit, default).Value!;
-
-        Assert.True(r.Ignition.Ok);
-        Assert.Equal((short)1, r.Ignition.Result!.Sets[0]["STAT_ZUENDUNG"]);
-        Assert.True(r.Ubatt.Ok);
-        Assert.Equal(2, r.Voltages.Count);
-        Assert.True(r.Voltages[0].Ok);
-        Assert.Equal("NVE_65", r.Voltages[0].Ecu);
-        Assert.Equal("job_not_allowed", r.Voltages[1].Error!.Code);
-        Assert.True(r.CableKl30.Ok);
-        Assert.Equal("ediabas_error", r.CableKl15.Error!.Code);
-        Assert.Equal(1, _api.Count("Init"));
-        Assert.Equal(1, _api.Count("End"));
-        Assert.Equal(6, _audit.Items.Count);
-    }
-
-    [Fact]
-    public void Vehicle_ConflictFails_NothingCalled()
-    {
-        _conflicts.Answers[0] = [new ConflictingProcess("NCSEXPER", 1)];
-        Assert.Equal("cable_in_use", Service().Vehicle([], _audit, default).Failure!.Error.Code);
-        Assert.Empty(_api.Calls);
     }
 
     // ---- describe ----

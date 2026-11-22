@@ -139,26 +139,6 @@ internal sealed class EdiabasEndpoints
         }
     }
 
-    public async Task Vehicle(HttpContext http)
-    {
-        var audit = Audit(http);
-        if (!await NoQuery(http, audit))
-        {
-            return;
-        }
-
-        var sources = _ctx.Config.VoltageSources;
-        try
-        {
-            var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.Vehicle(sources, audit, ct, queuedMs), http.RequestAborted);
-            await Answer(http, audit, outcome);
-        }
-        finally
-        {
-            WriteItemLines(http, audit);
-        }
-    }
-
     // ---- helpers ----
 
     private static RequestAudit Audit(HttpContext http)
@@ -173,7 +153,7 @@ internal sealed class EdiabasEndpoints
             http.Request.Query.Select(kv => new KeyValuePair<string, IReadOnlyList<string?>>(kv.Key, kv.Value.ToArray())),
             allowed);
 
-    /// <summary>POST bodies and /vehicle take no query parameters.</summary>
+    /// <summary>POST bodies take no query parameters.</summary>
     private static async Task<bool> NoQuery(HttpContext http, RequestAudit audit)
     {
         var q = Query(http);

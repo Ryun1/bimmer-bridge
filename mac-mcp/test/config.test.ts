@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_LOCAL_CONFIG_PATH, loadConfig } from "../src/config.js";
+import { DEFAULT_LOCAL_CONFIG_PATH, loadConfig, voltageSourceErrors } from "../src/config.js";
+import { PolicyGuard } from "../src/policy.js";
 
 describe("loadConfig", () => {
   it("uses the documented defaults when nothing is set", () => {
@@ -18,6 +19,7 @@ describe("loadConfig", () => {
       keychainService: "ediabas-bridge",
       keychainAccount: "agent",
       utmctlPath: "/Applications/UTM.app/Contents/MacOS/utmctl",
+      voltageSources: [],
     });
     expect(warnings).toEqual([]);
   });
@@ -139,9 +141,54 @@ describe("config.local.json", () => {
     expect(config.vmMac).toBeUndefined();
     expect(config.agentPort).toBe(8765);
     expect(warnings).toEqual([
-      `${path}: unknown key "vmname" is ignored (known keys: vmName, vmMac, agentPort).`,
+      `${path}: unknown key "vmname" is ignored (known keys: vmName, vmMac, agentPort, voltageSources).`,
       `${path}: vmMac must be a non-empty string; it is ignored.`,
       `${path}: agentPort must be a whole number from 1 to 65535; it is ignored.`,
     ]);
+  });
+
+  it("reads voltageSources as {ecu, job} entries, default none", () => {
+    write({ voltageSources: [{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }] });
+    const { config, warnings } = loadConfig({}, "/h", path);
+    expect(warnings).toEqual([]);
+    expect(config.voltageSources).toEqual([{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }]);
+    write({});
+    expect(loadConfig({}, "/h", path).config.voltageSources).toEqual([]);
+  });
+
+  it("a voltageSources entry without a non-empty ecu and job is a warning naming it, and is not used", () => {
+    write({ voltageSources: [{ ecu: "A", job: "B" }, { ecu: "", job: "B" }, { ecu: "A" }, "A B", { ecu: "A", job: "B", extra: 1 }] });
+    const { config, warnings } = loadConfig({}, "/h", path);
+    expect(config.voltageSources).toEqual([{ ecu: "A", job: "B" }]);
+    expect(warnings).toEqual([1, 2, 3, 4].map((i) => `${path}: voltageSources[${i}] must be an object with only a non-empty "ecu" and "job"; it is ignored.`));
+  });
+
+  it("voltageSources that is not an array, or has more than 16 entries, is a warning and not used", () => {
+    write({ voltageSources: { ecu: "A", job: "B" } });
+    let r = loadConfig({}, "/h", path);
+    expect(r.config.voltageSources).toEqual([]);
+    expect(r.warnings).toEqual([`${path}: voltageSources must be an array of at most 16 {"ecu", "job"} entries; it is ignored.`]);
+    write({ voltageSources: Array.from({ length: 17 }, () => ({ ecu: "A", job: "B" })) });
+    r = loadConfig({}, "/h", path);
+    expect(r.config.voltageSources).toEqual([]);
+    expect(r.warnings).toHaveLength(1);
+  });
+});
+
+describe("voltageSourceErrors", () => {
+  const policy = PolicyGuard.load();
+
+  it("is empty for entries the job policy allows", () => {
+    expect(voltageSourceErrors([{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }], policy)).toEqual([]);
+  });
+
+  it("names each entry the job policy refuses, with the rule", () => {
+    expect(voltageSourceErrors([{ ecu: "NVE_65", job: "STATUS_X" }, { ecu: "NVE_65", job: "STEUERN_X" }], policy)).toEqual([
+      "config.local.json voltageSources[1] (NVE_65 STEUERN_X) is refused by the job policy (rule deny.substring:STEUER).",
+    ]);
+  });
+
+  it("says nothing when the policy did not load (that is reported on its own)", () => {
+    expect(voltageSourceErrors([{ ecu: "NVE_65", job: "STEUERN_X" }], PolicyGuard.load("/nonexistent/policy.json"))).toEqual([]);
   });
 });

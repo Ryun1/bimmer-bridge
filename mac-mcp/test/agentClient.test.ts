@@ -716,7 +716,6 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
   const CALLS: Call[] = [
     { name: "POST /ediabas/job", run: (c) => c.runJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/job", ok: JOB },
     { name: "POST /ediabas/jobs", run: (c) => c.runJobs([{ ecu: "NVE_65", job: "IDENT" }]), path: "/ediabas/jobs", ok: JOBS },
-    { name: "GET /ediabas/vehicle", run: (c) => c.vehicle(), path: "/ediabas/vehicle", ok: {} },
     { name: "GET /ediabas/describe", run: (c) => c.describeJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/describe", ok: {} },
   ];
 
@@ -959,13 +958,11 @@ describe("one EDIABAS request at a time", () => {
       client.runJob({ ecu: "A", job: "IDENT" }),
       client.describeJob({ ecu: "B", job: "IDENT" }),
       client.listEcus("C"),
-      client.vehicle(),
     ]);
     expect(a.requests.filter((r) => r.path.startsWith("/ediabas/")).map((r) => r.path.split("?")[0])).toEqual([
       "/ediabas/job",
       "/ediabas/describe",
       "/ediabas/ecus",
-      "/ediabas/vehicle",
     ]);
   });
 
@@ -1075,7 +1072,6 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     await client.listEcus("nve");
     await client.describeJobs({ ecu: "NVE_65", filter: "LESEN" });
     await client.describeJob({ ecu: "NVE_65", job: "FS_LESEN" });
-    await client.vehicle();
     await client.runJob({ ecu: "NVE_65", job: "IDENT", args: "1;2" });
     await client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }]);
     const seen = a.requests.filter((r) => r.path !== "/health").map((r) => `${r.method} ${r.path}${r.body ? ` ${r.body}` : ""}`);
@@ -1086,7 +1082,6 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
       "GET /ediabas/ecus?filter=nve",
       "GET /ediabas/describe?ecu=NVE_65&filter=LESEN",
       "GET /ediabas/describe?ecu=NVE_65&job=FS_LESEN",
-      "GET /ediabas/vehicle",
       'POST /ediabas/job {"ecu":"NVE_65","job":"IDENT","args":"1;2"}',
       'POST /ediabas/jobs {"items":[{"ecu":"NVE_65","job":"FS_LESEN"}]}',
     ]);
@@ -1112,10 +1107,9 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     expect(spy.mock.calls.map((c) => c[0])).toEqual([15_000, 15_000, 15_000]);
     spy.mockClear();
     await client.listEcus();
-    await client.vehicle();
     await client.runJob({ ecu: "NVE_65", job: "IDENT" });
     await client.runJobs([{ ecu: "NVE_65", job: "IDENT" }]);
-    expect(spy.mock.calls.map((c) => c[0])).toEqual([75_000, 75_000, 75_000, 75_000]);
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([75_000, 75_000, 75_000]);
   });
 
   it("tolerates unknown extra fields everywhere", async () => {
@@ -1169,7 +1163,7 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     const old = await errorOf(c2.capture());
     expect(old.code).toBe("agent_outdated");
     expect(old.message).toMatch(/does not know \/screen\/capture.*Update line/);
-    for (const p of [() => c2.listEcus(), () => c2.vehicle(), () => c2.runJobs([{ ecu: "A", job: "IDENT" }]), () => c2.listLogs(), () => c2.readLog({ path: "C:\\a" })]) {
+    for (const p of [() => c2.listEcus(), () => c2.runJobs([{ ecu: "A", job: "IDENT" }]), () => c2.listLogs(), () => c2.readLog({ path: "C:\\a" })]) {
       expect((await errorOf(p())).code).toBe("agent_outdated");
     }
     expect((await errorOf(client.describeJobs({ ecu: "NOPE" }))).code).toBe("ecu_not_found");

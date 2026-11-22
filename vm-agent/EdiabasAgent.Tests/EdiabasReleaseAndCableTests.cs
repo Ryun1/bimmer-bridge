@@ -312,7 +312,6 @@ public class EdiabasReleaseAndCableTests
         Assert.Contains("apiBreak", single.Error.Message, StringComparison.Ordinal);
 
         Assert.Equal("ediabas_unavailable", svc.RunJobs([new("NVE_65", "IDENT")], null, new RequestAudit(), default).Failure!.Error.Code);
-        Assert.Equal("ediabas_unavailable", svc.Vehicle([], new RequestAudit(), default).Failure!.Error.Code);
         Assert.Equal("ediabas_unavailable", svc.DescribeList("NVE_65", null, true, new RequestAudit(), default).Failure!.Error.Code);
         Assert.Equal("ediabas_unavailable", svc.DescribeJob("NVE_65", "IDENT", new RequestAudit(), default).Failure!.Error.Code);
 
@@ -411,21 +410,6 @@ public class EdiabasReleaseAndCableTests
         Assert.Equal(28, Assert.IsType<EdiabasErrorDetails>(items[0].Error!.Details).ErrorCode);
         Assert.True(items[1].Ok);
         Assert.Equal("cable_not_found", audit.Items[0].ErrorCode);
-    }
-
-    [Fact]
-    public void Vehicle_Error28_IsCableNotFound()
-    {
-        _api.On("UTILITY STATUS_ZUENDUNG", CableMissing);
-        _api.On("UTILITY STATUS_UBATT", CableMissing);
-        _api.On("TMODE LESE_SPANNUNG_KL30", FakeJob.Ok());
-        _api.On("TMODE LESE_SPANNUNG_KL15", FakeJob.Ok());
-
-        var r = Service().Vehicle([], new RequestAudit(), default).Value!;
-
-        Assert.Equal("cable_not_found", r.Ignition.Error!.Code);
-        Assert.Equal("cable_not_found", r.Ubatt.Error!.Code);
-        Assert.True(r.CableKl30.Ok);
     }
 
     [Fact]

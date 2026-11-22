@@ -12,14 +12,14 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 | `vm_logs_read` | `path`, then `tailBytes?` (default 16384) or `offset?` + `length?`, `grep?`; at most 65536 bytes per call | `GET /logs/read` | header line (path, range, encoding, truncated) then the text |
 | `ediabas_list_ecus` | `filter?` | `GET /ediabas/ecus` | names with type (`prg` / `grp`); at most 500 names, then "N more; use filter to narrow the list." |
 | `ediabas_describe` | `ecu`, `job?`, `filter?` (ignored with `job`), `namesOnly?` (job list only; sent as `comments=false`) | `GET /ediabas/describe` | job list with description and whether each is runnable; or one job's description, arguments and results |
-| `ediabas_vehicle_status` | — | `GET /ediabas/vehicle` | ignition, battery presence, voltages, cable-side readings |
+| `ediabas_vehicle_status` | — | `POST /ediabas/jobs` (one batch, built on the Mac) | ignition, battery presence, voltages when configured, cable-side readings |
 | `ediabas_job` | `ecu`, `job`, `args?`, `results?`, `raw?`, `timeoutSeconds?` (1–60) | `POST /ediabas/job` | formatted result sets; the agent's JSON when `raw: true` |
 | `ediabas_jobs` | `jobs` (1–20 of `{ecu, job, args?, results?}`), `raw?`, `timeoutSeconds?` (1–60, for each job) | `POST /ediabas/jobs` | header "N of M ran.", then one block per job in request order; a failed job as `ECU JOB: [code] …` |
 | `ediabas_read_faults` | `ecus` (1–20 names), `includeInfoMemory?` | `POST /ediabas/jobs` | one fault table per ECU |
 
 ## Rules the server enforces
-- **Policy first.** `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and `ediabas_describe`
-  (its `ecu`, and `job` for shape only) are checked against `policy/policy.json` on the Mac
+- **Policy first.** `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`
+  (every reading) and `ediabas_describe` (its `ecu`, and `job` for shape only) are checked against `policy/policy.json` on the Mac
   before any request leaves it. A refusal never reaches the VM. If the policy file is missing or
   invalid (including unknown or duplicate keys, which the agent also refuses), every `ediabas_*`
   tool refuses with `policy_unavailable`. Each `ediabas_*` call also reads the agent's `/health`
@@ -48,8 +48,19 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   still print. An `IS_LESEN` that fails with `ediabas_error` shows "Info memory: not read (...). Many
   modules have no info memory (no IS_LESEN job); ediabas_describe <ECU> shows whether this one has it."
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
-- `ediabas_vehicle_status` prints each reading's result fields as returned (`key=value`); the
-  field names are mapped to "ignition on/off" and volts once Phase 6 has confirmed them.
+- <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
+  order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then
+  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. Voltage sources are car-specific
+  extra readings in the Mac's git-ignored `config.local.json`, e.g.
+  `"voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ]` (the E60/E61
+  night-vision module's supply voltage); none by default, and the result then says "Voltage
+  sources: none configured (voltageSources in config.local.json on the Mac)." At most 16 entries,
+  each only `ecu` and `job`; a malformed entry is a start-up warning and is not used. An entry the
+  job policy refuses is a start-up `config error` in the server's log, and the tool then refuses
+  with `job_not_allowed` naming the entry, sending nothing, until it is fixed. The server reads
+  the file at start-up: restart Claude after changing it. It prints each reading's result fields
+  as returned (`key=value`); the field names are mapped to "ignition on/off" and volts once
+  Phase 6 has confirmed them. A failed reading shows its `[code]` in its place.
 - `ediabas_describe` with `namesOnly` adds the line "(names only: not screened, verdicts by
   name)". With `job`, for a screened job (review is not `not_required`) it prints
   `Description hash: <hash>` under the description, and when the job needs review also:

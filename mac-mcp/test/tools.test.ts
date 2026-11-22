@@ -29,12 +29,16 @@ interface Setup {
   fetch?: typeof fetch;
   ediabasTimeoutMs?: number;
   now?: () => number;
+  voltageSources?: { ecu: string; job: string }[];
 }
+
+const NVE_VOLTAGE = [{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }];
 
 async function connect(s: Setup = {}) {
   const auditPath = join(dir, "logs", "audit.log");
   const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: AGENT_TOKEN, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
-  const { config } = loadConfig(env, dir);
+  const { config: loaded } = loadConfig(env, dir);
+  const config = { ...loaded, voltageSources: s.voltageSources ?? [] };
   const logs: string[] = [];
   const execFile = vi.fn<ExecFileFn>(async (file) => {
     if (file === "/usr/bin/security") return AGENT_TOKEN + "\n";
@@ -457,8 +461,8 @@ describe("ediabas_describe text", () => {
 });
 
 describe("ediabas_vehicle_status", () => {
-  it("prints each reading's fields as returned, and per-reading errors", async () => {
-    const { call } = await connect();
+  it("sends one POST /ediabas/jobs and prints each reading's fields as returned, and per-reading errors", async () => {
+    const { call, auditLines } = await connect({ voltageSources: NVE_VOLTAGE });
     const r = await call("ediabas_vehicle_status");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
@@ -466,6 +470,43 @@ describe("ediabas_vehicle_status", () => {
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
     expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
     expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    const sent = toolRequests();
+    expect(sent.map((q) => `${q.method} ${q.path}`)).toEqual(["POST /ediabas/jobs"]);
+    expect(JSON.parse(sent[0]!.body).items).toEqual([
+      { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+      { ecu: "UTILITY", job: "STATUS_UBATT" },
+      { ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" },
+      { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+      { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+    ]);
+    expect((await auditLines())[0]).toMatch(/\tediabas_vehicle_status\tok\t\d+\tecu=UTILITY,UTILITY,NVE_65,TMODE,TMODE\tjob=STATUS_ZUENDUNG,STATUS_UBATT,STATUS_BORDNETZSPANNUNG,LESE_SPANNUNG_KL30,LESE_SPANNUNG_KL15$/);
+  });
+
+  it("without voltage sources sends the four fixed readings and says none are configured", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_vehicle_status");
+    expect(r.text).toContain("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
+    expect(JSON.parse(toolRequests()[0]!.body).items).toHaveLength(4);
+  });
+
+  it("a voltage source the policy refuses is logged at start-up, and the call is refused with nothing sent", async () => {
+    const { call, logs } = await connect({ voltageSources: [{ ecu: "NVE_65", job: "STEUERN_X" }] });
+    expect(logs).toContain(
+      "config error: config.local.json voltageSources[0] (NVE_65 STEUERN_X) is refused by the job policy (rule deny.substring:STEUER). ediabas_vehicle_status refuses until it is fixed.",
+    );
+    const r = await call("ediabas_vehicle_status");
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[job_not_allowed\] config\.local\.json voltageSources\[0\] \(NVE_65 STEUERN_X\) is refused by the job policy \(rule deny\.substring:STEUER\)\. Nothing was sent to the VM\./);
+    expect(r.text).toMatch(/fix voltageSources in config\.local\.json on the Mac/);
+    expect(agent.requests.filter((q) => q.path.startsWith("/ediabas/"))).toEqual([]);
+  });
+
+  it("a whole-request failure is the tool's error", async () => {
+    override("POST /ediabas/jobs", () => agentErr(409, "cable_in_use", "INPA holds the cable.", { processes: ["INPALOAD"] }));
+    const { call } = await connect();
+    const r = await call("ediabas_vehicle_status");
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[cable_in_use\]/);
   });
 });
 
@@ -1036,7 +1077,7 @@ describe("car session line", () => {
 
   it("ends every car-facing result once a read from the car succeeded, and no other", async () => {
     const clock = { t: 0 };
-    const { call } = await connect({ now: () => clock.t });
+    const { call } = await connect({ now: () => clock.t, voltageSources: NVE_VOLTAGE });
     const first = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
     expect(first.text).toMatch(/\n\nCar session: 0 s since the first read from the car \(aim to finish within 10 min\)\.$/);
     clock.t = 250_000;
@@ -1054,7 +1095,7 @@ describe("car session line", () => {
   });
 
   it("is not started by TMODE or UTILITY, or by a failed read", async () => {
-    const { call } = await connect({ now: () => 0 });
+    const { call } = await connect({ now: () => 0, voltageSources: NVE_VOLTAGE });
     expect((await call("ediabas_job", { ecu: "TMODE", job: "LESE_INTERFACE_TYP" })).text).not.toMatch(/Car session/);
     expect((await call("ediabas_job", { ecu: "UTILITY", job: "STATUS_UBATT" })).text).not.toMatch(/Car session/);
     override("POST /ediabas/job", () => agentErr(502, "ediabas_error", "x", { errorCode: 19, errorText: "IFH-0009" }));

@@ -2,12 +2,23 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cleanText } from "./errors.js";
+import type { PolicyGuard } from "./policy.js";
 
 /** config.local.json at the repo root (git-ignored): two levels above both src/ and dist/. */
 export const DEFAULT_LOCAL_CONFIG_PATH = fileURLToPath(new URL("../../config.local.json", import.meta.url));
 
 /** Keys config.local.json may set. Keys starting with "_" are comments and ignored. */
-const LOCAL_KEYS = ["vmName", "vmMac", "agentPort"] as const;
+const LOCAL_KEYS = ["vmName", "vmMac", "agentPort", "voltageSources"] as const;
+
+/** One extra voltage reading for ediabas_vehicle_status (config.local.json `voltageSources`). */
+export interface VoltageSource {
+  ecu: string;
+  job: string;
+}
+
+/** The most voltage sources: with the four fixed readings they fill one /ediabas/jobs batch (20). */
+export const VOLTAGE_SOURCES_MAX = 16;
 
 /** All runtime configuration, read once from the environment. */
 export interface Config {
@@ -35,6 +46,8 @@ export interface Config {
   utmctlPath: string;
   /** Folder to record every agent exchange into (fixtures). Off when undefined. */
   recordDir: string | undefined;
+  /** Extra voltage readings ediabas_vehicle_status runs, in order (config.local.json only). */
+  voltageSources: VoltageSource[];
 }
 
 export const DEFAULTS = {
@@ -67,6 +80,45 @@ interface LocalConfig {
   vmName?: string;
   vmMac?: string;
   agentPort?: number;
+  voltageSources?: VoltageSource[];
+}
+
+function readVoltageSources(path: string, value: unknown, warnings: string[]): VoltageSource[] {
+  if (!Array.isArray(value) || value.length > VOLTAGE_SOURCES_MAX) {
+    warnings.push(`${path}: voltageSources must be an array of at most ${VOLTAGE_SOURCES_MAX} {"ecu", "job"} entries; it is ignored.`);
+    return [];
+  }
+  const out: VoltageSource[] = [];
+  value.forEach((entry: unknown, i) => {
+    const e = entry as Record<string, unknown>;
+    const ok =
+      typeof entry === "object" &&
+      entry !== null &&
+      !Array.isArray(entry) &&
+      Object.keys(e).every((k) => k === "ecu" || k === "job") &&
+      typeof e.ecu === "string" &&
+      e.ecu.trim() !== "" &&
+      typeof e.job === "string" &&
+      e.job.trim() !== "";
+    if (ok) out.push({ ecu: (e.ecu as string).trim(), job: (e.job as string).trim() });
+    else warnings.push(`${path}: voltageSources[${i}] must be an object with only a non-empty "ecu" and "job"; it is ignored.`);
+  });
+  return out;
+}
+
+/**
+ * The voltageSources entries the job policy refuses, one message each. These are config errors:
+ * ediabas_vehicle_status refuses while any is left. Empty when the policy did not load (that is
+ * reported on its own, and every ediabas_* tool refuses then).
+ */
+export function voltageSourceErrors(sources: VoltageSource[], policy: PolicyGuard): string[] {
+  if (policy.error) return [];
+  const out: string[] = [];
+  sources.forEach((s, i) => {
+    const v = policy.evaluate(s);
+    if (!v.allowed) out.push(`config.local.json voltageSources[${i}] (${cleanText(s.ecu, 80)} ${cleanText(s.job, 80)}) is refused by the job policy (rule ${v.rule}).`);
+  });
+  return out;
 }
 
 /**
@@ -104,6 +156,10 @@ export function readLocalConfig(path: string, warnings: string[]): LocalConfig {
     if (key === "agentPort") {
       if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535) out.agentPort = value;
       else warnings.push(`${path}: agentPort must be a whole number from 1 to 65535; it is ignored.`);
+      continue;
+    }
+    if (key === "voltageSources") {
+      out.voltageSources = readVoltageSources(path, value, warnings);
       continue;
     }
     const text = typeof value === "string" ? value.trim() : "";
@@ -179,6 +235,7 @@ export function loadConfig(
       keychainAccount: DEFAULTS.keychainAccount,
       utmctlPath: DEFAULTS.utmctlPath,
       recordDir,
+      voltageSources: local.voltageSources ?? [],
     },
     warnings,
   };

@@ -124,7 +124,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 500 | `capture_failed` | the desktop was available but the copy failed or the screen size could not be read | `null` |
 | 503 | `desktop_unavailable` | only a locked screen, the secure desktop, or session 0 | `null` |
 | 503 | `capture_busy` | another capture is still running; nothing was captured. Try again | `null` |
-| 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which, e.g. "The request was abandoned before {JOB} started." A request that spent the whole budget queued behind another EDIABAS request gets "The request waited behind another EDIABAS request for the whole {max} s limit; nothing was started." on `/ediabas/job`, `/ediabas/jobs`, `/ediabas/vehicle` and both describe modes, and EDIABAS is not loaded for it. Also a per-item code in `/ediabas/jobs` and `/ediabas/vehicle` (see there) | `null` |
+| 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which, e.g. "The request was abandoned before {JOB} started." A request that spent the whole budget queued behind another EDIABAS request gets "The request waited behind another EDIABAS request for the whole {max} s limit; nothing was started." on `/ediabas/job`, `/ediabas/jobs` and both describe modes, and EDIABAS is not loaded for it. Also a per-item code in `/ediabas/jobs` (see there) | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
 
@@ -290,7 +290,7 @@ itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, 
 process scan is not free, and describe on a large SGBD sends hundreds of short jobs). A job
 running when a BMW tool is seen is stopped with `apiBreak` and counts as not run. Once a BMW
 tool is seen, no further job starts in that request:
-- `/ediabas/jobs` and `/ediabas/vehicle`: the item and every later item get `not_run`; items
+- `/ediabas/jobs`: the item and every later item get `not_run`; items
   already done are kept.
 - describe without `job`: the job list is kept, comments already read are kept, and the rest are
   `not_checked`. If the tool appears before or while `_JOBS` runs, the request is `cable_in_use`.
@@ -401,22 +401,11 @@ failure does not stop the rest. Per-item error codes: `job_not_allowed`, `job_ne
 `ecu_not_found`, `job_not_found`, `cable_not_found`, `ediabas_error`, `job_timeout`, `not_run`. Whole-request failures
 (`bad_request`, `cable_in_use`, `ediabas_unavailable`) are HTTP errors as above.
 
-### `GET /ediabas/vehicle`
-Runs, in one cycle and through the same policy as any other job: `UTILITY STATUS_ZUENDUNG`,
-`UTILITY STATUS_UBATT`, every `voltageSources` entry, `TMODE LESE_SPANNUNG_KL30` and
-`TMODE LESE_SPANNUNG_KL15`. Returns each as an item of the `/ediabas/jobs` shape; the agent
-does not interpret result names (they are confirmed at the car in Phase 6). `voltageSources`
-in the agent config is empty by default, so `voltages` is `[]`; the example below shows one
-entry an E60/E61 owner might add (the night-vision module's supply voltage).
-
-```json
-{ "ignition": { "ok": true, "result": { }, "error": null },
-  "ubatt": { "ok": true, "result": { }, "error": null },
-  "voltages": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG", "ok": true, "result": { }, "error": null } ],
-  "cableKl30": { "ok": false, "result": null, "error": { } },
-  "cableKl15": { "ok": false, "result": null, "error": { } },
-  "durationMs": 2100 }
-```
+The Mac's `ediabas_vehicle_status` is one `/ediabas/jobs` request: `UTILITY STATUS_ZUENDUNG`,
+`UTILITY STATUS_UBATT`, each `voltageSources` entry from the Mac's `config.local.json`, then
+`TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15` ([tools.md](tools.md)). The agent has
+no vehicle-status endpoint of its own (`/ediabas/vehicle` was removed in 0.5.0), and an old
+`voltageSources` key in its `config.json` is a start-up warning, not an error.
 
 ## `GET /screen/capture?window=<handle|title-substring|desktop>&maxEdge=1600&format=jpeg|png`
 - `window` defaults to `desktop` (the primary screen). A value of the form `0x` + hex digits

@@ -31,10 +31,10 @@ What is specific to a car or chassis:
   `policy/policy.json` with its test cases ([policy/README.md](policy/README.md)), then rebuild
   and run the Update line (the agent embeds the policy); until then, read modules one SGBD at a
   time.
-- **`voltageSources`** in the agent's config: extra voltage jobs for `ediabas_vehicle_status`.
-  Empty by default; the `UTILITY` and `TMODE` readings work on any car. An E60/E61 with night vision
-  can add `NVE_65` `STATUS_BORDNETZSPANNUNG` (that module's supply voltage)
-  ([vm-agent/README.md](vm-agent/README.md)).
+- **`voltageSources`** in `config.local.json` on the Mac: extra voltage jobs for
+  `ediabas_vehicle_status`. Empty by default; the `UTILITY` and `TMODE` readings work on any car.
+  An E60/E61 with night vision can add `{ "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" }`
+  (that module's supply voltage) ([docs/tools.md](docs/tools.md#ediabas_vehicle_status)).
 - **The skills' reference data** (ECU map, job cookbook, playbooks, the INPA screen) was
   recorded on that E61's VM. For another car it is an example only: the skills tell Claude to
   find the car's own names with `ediabas_list_ecus` and `ediabas_describe`.

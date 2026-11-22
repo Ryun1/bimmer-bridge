@@ -106,6 +106,19 @@ describe("loading scenarios", () => {
     const names = readdirSync(DEFAULT_FIXTURES, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
     for (const n of names) expect(() => loadScenario(DEFAULT_FIXTURES, n), n).not.toThrow();
   });
+
+  it("no committed recording asks for the removed GET /ediabas/vehicle; inpa-open has the vehicle batch as POST /ediabas/jobs", () => {
+    const names = readdirSync(DEFAULT_FIXTURES, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    for (const n of names) expect(loadScenario(DEFAULT_FIXTURES, n).recordings.filter((r) => r.path === "/ediabas/vehicle"), n).toEqual([]);
+    const items = ["UTILITY STATUS_ZUENDUNG", "UTILITY STATUS_UBATT", "TMODE LESE_SPANNUNG_KL30", "TMODE LESE_SPANNUNG_KL15"].map((x) => {
+      const [ecu, job] = x.split(" ");
+      return { ecu, job };
+    });
+    const m = findRecording(loadScenario(DEFAULT_FIXTURES, "inpa-open"), { method: "POST", path: "/ediabas/jobs", query: [], body: { items } });
+    expect(m?.how).toBe("exact");
+    expect(m?.recording.response.status).toBe(409);
+    expect((m?.recording.response.json as { error: { code: string } }).error.code).toBe("cable_in_use");
+  });
 });
 
 describe("matching", () => {

@@ -4,8 +4,9 @@ import { formatFaultReport, formatJobRaw, formatJobResult, itemErrorText, type F
 import { jobNotAllowed, type JobRequest, type PolicyGuard } from "./policy.js";
 
 /**
- * The tools that send POST /ediabas/jobs: ediabas_read_faults and ediabas_jobs. Both check every
- * item against the policy before anything is sent, and any refusal stops the whole call.
+ * The tools that send POST /ediabas/jobs: ediabas_read_faults, ediabas_jobs and
+ * ediabas_vehicle_status. Each checks every item against the policy before anything is sent,
+ * and any refusal stops the whole call.
  */
 
 /** The most items one /ediabas/jobs request may carry (docs/api.md). */
@@ -92,15 +93,20 @@ export async function readFaults(deps: BatchDeps, ecusIn: string[], includeInfo:
   return formatFaultReport(reports, includeInfo);
 }
 
+/** 1 to BATCH_MAX items in one request: the policy on every item, then `beforeSend`, then the request. */
+export async function runBatch(deps: BatchDeps, items: JobRequest[], timeoutSeconds?: number): Promise<JobsResponse> {
+  checkAll(deps.policy, items);
+  await deps.beforeSend?.();
+  return runChunk(deps, items, timeoutSeconds);
+}
+
 /** ediabas_jobs: 1 to BATCH_MAX items in one request, printed in request order. */
 export async function runJobBatch(
   deps: BatchDeps,
   items: JobRequest[],
   opts: { raw?: boolean | undefined; timeoutSeconds?: number | undefined } = {},
 ): Promise<{ text: string; items: BatchItem[] }> {
-  checkAll(deps.policy, items);
-  await deps.beforeSend?.();
-  const r = await runChunk(deps, items, opts.timeoutSeconds);
+  const r = await runBatch(deps, items, opts.timeoutSeconds);
   const ran = r.items.filter((it) => it.ok && it.result).length;
   const blocks = r.items.map((it, i) => {
     if (it.ok && it.result) return opts.raw ? formatJobRaw(it.result) : formatJobResult(it.result);

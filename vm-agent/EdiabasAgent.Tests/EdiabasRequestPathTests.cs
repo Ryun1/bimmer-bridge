@@ -93,7 +93,7 @@ public class EdiabasRequestPathTests
         Assert.Equal(10_000, r.Value.DurationMs);
     }
 
-    public static TheoryData<string> Requests => ["job", "jobs", "vehicle", "describe-list", "describe-job"];
+    public static TheoryData<string> Requests => ["job", "jobs", "describe-list", "describe-job"];
 
     [Theory]
     [MemberData(nameof(Requests))]
@@ -107,7 +107,6 @@ public class EdiabasRequestPathTests
         {
             "job" => svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queued).Failure,
             "jobs" => svc.RunJobs([new("NVE_65", "IDENT")], null, _audit, default, queued).Failure,
-            "vehicle" => svc.Vehicle([], _audit, default, queued).Failure,
             "describe-list" => svc.DescribeList("NVE_65", null, true, _audit, default, queued).Failure,
             _ => svc.DescribeJob("NVE_65", "IDENT", _audit, default, queued).Failure,
         };

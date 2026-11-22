@@ -36,7 +36,6 @@ internal sealed class Endpoints
             new Route("/ediabas/describe", HttpMethods.Get, ediabas.Describe),
             new Route("/ediabas/job", HttpMethods.Post, ediabas.Job),
             new Route("/ediabas/jobs", HttpMethods.Post, ediabas.Jobs),
-            new Route("/ediabas/vehicle", HttpMethods.Get, ediabas.Vehicle),
         ];
     }
 

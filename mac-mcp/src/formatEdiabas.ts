@@ -1,4 +1,4 @@
-import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, Vehicle } from "./agentClient.js";
+import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, JobsResponse } from "./agentClient.js";
 import { cleanText, describeAgentError, errorText } from "./errors.js";
 import type { Verdict } from "./policy.js";
 
@@ -338,17 +338,31 @@ function readingText(item: BatchItem): string {
   return parts.join("; ");
 }
 
-export function formatVehicle(v: Vehicle): string {
+/**
+ * The items ediabas_vehicle_status sends as one /ediabas/jobs batch (D10): ignition, battery,
+ * each voltage source in order, then the cable's KL30 and KL15. formatVehicle reads by this order.
+ */
+export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: string; job: string }[] {
+  return [
+    { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+    { ecu: "UTILITY", job: "STATUS_UBATT" },
+    ...sources.map((s) => ({ ecu: s.ecu, job: s.job })),
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+  ];
+}
+
+/** `r` answers `vehicleBatch(sources)`, one item per item sent. */
+export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
+  const it = r.items;
+  const n = sources.length;
   const out = ["Vehicle status (each reading's result fields as returned; their meaning is confirmed at the car in Phase 6):"];
-  out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(v.ignition)}`);
-  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(v.ubatt)}`);
-  for (const s of v.voltages) {
-    const name = [s.ecu, s.job].filter((x): x is string => !!x).map((x) => cleanName(x)).join(" ") || "voltage source";
-    out.push(`Voltage (${name}): ${readingText(s)}`);
-  }
-  if (v.voltages.length === 0) out.push("Voltage sources: none configured in the agent.");
-  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(v.cableKl30)}`);
-  out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(v.cableKl15)}`);
+  out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(it[0]!)}`);
+  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(it[1]!)}`);
+  sources.forEach((s, i) => out.push(`Voltage (${cleanName(s.ecu)} ${cleanName(s.job)}): ${readingText(it[2 + i]!)}`));
+  if (n === 0) out.push("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
+  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(it[2 + n]!)}`);
+  out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(it[3 + n]!)}`);
   return out.join("\n");
 }
 

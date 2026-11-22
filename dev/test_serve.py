@@ -535,7 +535,8 @@ class BindAndClients(unittest.TestCase):
             path = Path(d) / "config.local.json"
             self.assertEqual(serve.read_local_config(path), ({}, []))
             path.write_text(json.dumps({"_comment": "x", "vmName": " Win11 ", "vmMac": "02:00:00:00:00:01",
-                                        "agentPort": 9000}), encoding="utf-8")
+                                        "agentPort": 9000, "voltageSources": [{"ecu": "A", "job": "B"}]}),
+                            encoding="utf-8")
             self.assertEqual(serve.read_local_config(path),
                              ({"vmName": "Win11", "vmMac": "02:00:00:00:00:01", "agentPort": 9000}, []))
             path.write_text(json.dumps({"vmname": "x", "vmMac": 5, "agentPort": True}), encoding="utf-8")

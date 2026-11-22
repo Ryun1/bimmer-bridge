@@ -17,7 +17,7 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 | `vm_logs_list` / `vm_logs_read` | log files under the agent's allowed folders; read a tail or a range, optionally grep |
 | `ediabas_list_ecus` | SGBD (`prg`) and group (`grp`) names |
 | `ediabas_describe` | an SGBD's jobs with whether each is runnable (`namesOnly` skips the descriptions), or one job's description, its hash, arguments and results |
-| `ediabas_vehicle_status` | ignition, battery and cable voltage readings, fields as returned |
+| `ediabas_vehicle_status` | ignition, battery and cable voltage readings, and voltages from `voltageSources` in `config.local.json` when configured; one `/ediabas/jobs` batch, fields as returned |
 | `ediabas_job` | one allowed job, result sets as text (or the agent's JSON with `raw: true`); `timeoutSeconds` 1–60 |
 | `ediabas_jobs` | 1–20 allowed jobs in one request, one block per job in request order |
 | `ediabas_read_faults` | `FS_LESEN` (and `IS_LESEN`) for 1–20 ECUs, one fault table per ECU, distances in miles first |
@@ -93,7 +93,9 @@ token is re-read once, so a newly stored token is picked up without a restart.
 
 **`config.local.json`.** Settings for one machine can also go in `config.local.json` at the repo
 root (git-ignored; copy `config.local.example.json`). It is read once at start-up (restart Claude
-after changing it) and may set `vmName`, `vmMac` and `agentPort`; keys starting with `_` are
+after changing it) and may set `vmName`, `vmMac`, `agentPort` and `voltageSources` (extra
+voltage readings for `ediabas_vehicle_status`, see [docs/tools.md](../docs/tools.md#ediabas_vehicle_status));
+keys starting with `_` are
 comments. An environment variable wins over the file, and the file wins over the defaults. A file
 that is not valid JSON, an unknown key or a bad value is a warning on stderr and is ignored; the
 server still starts. `dev/serve.py` reads the same file for `vmName` and `vmMac`.
