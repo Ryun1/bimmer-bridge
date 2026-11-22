@@ -27,6 +27,15 @@ public class CaptureInterfaceTests
         Assert.Equal("TransmitData", cap.Calls[^1]);
     }
 
+    [Fact] // BMW INITs run xstopf before xsetpar; on K+DCAN it sends nothing (EdInterfaceObd.cs:2179-2222)
+    public void StopFrequent_IsRecorded_AndDoesNotStop()
+    {
+        var cap = new CaptureInterface();
+        cap.InterfaceConnect();
+        Assert.True(cap.StopFrequent());
+        Assert.Equal(new[] { "StopFrequent" }, cap.Calls);
+    }
+
     [Fact]
     public void Connected_OnlyAfterInterfaceConnect()
     {

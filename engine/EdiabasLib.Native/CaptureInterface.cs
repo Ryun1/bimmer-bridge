@@ -5,7 +5,8 @@
 // raises IFH-0056 on an unconnected interface), records the parameters the SGBD sets, and
 // stops the job with CaptureStopException at the first call that would reach a car: any
 // transmit, reset, boot, port, programming voltage or SI relay. Battery and ignition voltage
-// read as 12000 mV; key bytes and state read as empty. All of these are recorded in Calls.
+// read as 12000 mV; key bytes and state read as empty; stopping frequent mode succeeds. All of
+// these are recorded in Calls.
 
 using System;
 using System.Collections.Generic;
@@ -71,7 +72,9 @@ namespace EdiabasLib.Native
         public override bool TransmitData(byte[] sendData, out byte[] receiveData) { receiveData = null; Stop("TransmitData"); return false; }
         public override bool TransmitFrequent(byte[] sendData) { Stop("TransmitFrequent"); return false; }
         public override bool ReceiveFrequent(out byte[] receiveData) { receiveData = null; Stop("ReceiveFrequent"); return false; }
-        public override bool StopFrequent() { Stop("StopFrequent"); return false; }
+        // BMW INITs run xstopf before xsetpar. On K+DCAN it only stops EdiabasLib's own comm
+        // thread and sends nothing (EdInterfaceObd.cs:2179-2222), so it is recorded, not stopped.
+        public override bool StopFrequent() { Record("StopFrequent"); return true; }
         public override bool RawData(byte[] sendData, out byte[] receiveData) { receiveData = null; Stop("RawData"); return false; }
         // EdiabasNet calls this at the start of every job and on abort.
         public override bool TransmitCancel(bool cancel) => true;

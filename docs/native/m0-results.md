@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: **waiting for the desk session.**
+Status: sections 2–3 done (2026-11-22); **waiting for the rest of the desk session.**
 
 ---
 
@@ -56,34 +56,55 @@ port.
 dotnet run --project dev/census -- concepts ~/ediabas-ecu --json ~/ediabas-ecu-census.json
 ```
 
+Run 2026-11-22 on Ryan's folder (`~/ediabas-ecu/Ecu`, 1,251 `.prg`), JSON at
+`~/ediabas-ecu-census.json` (outside the repo).
+
 Tally (concept → files, bauds):
 
 | Concept | Name | Files | Bauds |
 |---|---|---|---|
-| | | | |
-| `no_xsetpar` | INIT set no parameters | | |
-| `job_error` | an EDIABAS error ended INIT before it set any: concept unknown, look at each | | |
-| `error` | could not be resolved or parsed (the table prints the reason) | | |
-| **total** | | | |
+| 0x010F | BMW-FAST | 501 | 115200 |
+| 0x0006 | DS2 | 367 | 9600 |
+| 0x0110 | D-CAN | 243 | 500000 |
+| 0x0001 | concept 1 (5-baud init; out of scope) | 47 | 9600 |
+| 0x0002 | concept 2, ISO 9141 / KWP1281 (5-baud init; out of scope) | 32 | 0, 4800 |
+| 0x010D | KWP2000\* | 28 | 9600 |
+| 0x0005 | DS1 | 10 | 0, 9600 |
+| 0x0003 | concept 3 (5-baud init; out of scope): `IHKA`, `IHKA31` | 2 | 0 |
+| 0x010C | KWP2000 BMW (fast init): `mrrbt` only | 1 | 10400 |
+| 0x000E | not implemented in EdiabasLib (IFH-0014): `ZUHEIZ_B` | 1 | 9600 |
+| 0x000F | not implemented in EdiabasLib (IFH-0014): `asc_l22` | 1 | 10400 |
+| `no_xsetpar` | INIT set no parameters: tool and utility SGBDs (`TMODE`, `UTILITY`, `ADS`, `EDIC`, `FA`, `GRPLISTE`, `IFR`, …) | 17 | |
+| `job_error` | an EDIABAS error ended INIT before it set any: concept unknown, look at each | 0 | |
+| `error` | could not be resolved or parsed: `00MDS410.prg`, a 2-byte file (also 2 bytes in the zip made from the VM's folder, dated 2014) | 1 | |
+| **total** | | **1,251** | |
 
-The modules in [at-the-car.md](../at-the-car.md):
+The folder is the whole EDIABAS SGBD set, not only this car's modules, so the tally covers every
+BMW of the era. The modules in [at-the-car.md](../at-the-car.md):
 
 | SGBD | Status | Concept | Baud | Parameters |
 |---|---|---|---|---|
-| `NVE_65` | | | | |
-| `E60` | | | | |
-| `CAS` | | | | |
-| `LM_60` | | | | |
-| `N62_TUE2` | | | | |
-| `ME9N62_2` | | | | |
-| `GS19D` | | | | |
-| `SZL_60` | | | | |
-| `D_MOTOR` (group: resolved variant) | | | | |
+| `NVE_65` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 800, 20, 10, 2, 5000 |
+| `E60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `CAS` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `LM_60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1400, 20, 10, 2, 5000 |
+| `N62_TUE2` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `ME9N62_2` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `GS19D` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `SZL_60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 800, 20, 10, 2, 5000 |
+| `D_MOTOR` (group) | not run: a group resolves to its variant only at the car | | | |
 
 Concept numbers, for reading the tally: 0x0006 DS2, 0x010C KWP2000 BMW (fast init), 0x010D
 KWP2000\*, 0x010F BMW-FAST, 0x0110 D-CAN.
 
-**Decision: does any SGBD use 0x010C (KWP2000 BMW, fast init)?** ______
+**Decision: does any SGBD use 0x010C (KWP2000 BMW, fast init)?** One file only, `mrrbt.prg`,
+which is not one of this car's modules. Every module listed for the E61 is BMW-FAST at
+115200. Proposed: fast init drops out of M2, and section 8 (break width) is not needed.
+
+The first run counted 1,169 `no_xsetpar`, because the capture interface stopped at `xstopf`,
+which nearly every BMW INIT calls before `xsetpar`. On K+DCAN, `xstopf` only stops EdiabasLib's
+own comm thread and sends nothing (`EdInterfaceObd.cs:2179-2222`), so the capture interface
+now records it and carries on. The figures above are from the corrected run.
 
 ### Dry run on upstream test SGBDs (2026-11-22)
 
@@ -115,13 +136,16 @@ is written into the Ecu folder) and flags EdiabasLib's 16 unimplemented opcodes:
 dotnet run --project dev/census -- opcodes ~/ediabas-ecu
 ```
 
+Run 2026-11-22 on `~/ediabas-ecu/Ecu` (2 min 36 s); JSON at `~/ediabas-ecu-opcodes.json`.
+
 | | Result |
 |---|---|
-| Files disassembled | |
-| Errors (file: reason) | |
-| Unimplemented opcodes found (file: mnemonic) | |
+| Files disassembled | 1,603 of 1,604 (1,251 `.prg`, 353 `.grp`); 146 distinct mnemonics, 90,289,714 instructions |
+| Errors (file: reason) | `00MDS410.prg`: 2 bytes, shorter than the header |
+| Unimplemented opcodes found (file: mnemonic) | none |
 
-**Decision: none, or a list of opcodes for M3:** ______
+**Decision: none, or a list of opcodes for M3:** none. No SGBD in the folder uses any of
+EdiabasLib's 16 unimplemented opcodes.
 
 ### Dry run on upstream test SGBDs (2026-11-22)
 
