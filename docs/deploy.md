@@ -7,10 +7,9 @@ How files move between the Mac and the VM. `dev/serve.py`, the `vm-setup/*.ps1` 
 - Listens on the Mac's UTM bridge address, port **8000**. Never `0.0.0.0`.
 - Serves **only the VM's address**; every request from any other address (another VM on the
   same UTM network included) is 403. The address is the one given with `--client <IPv4>`, or
-  else the latest-expiring lease in `/var/db/dhcpd_leases` for the VM's MAC, found as the MCP
-  server finds it (`EDIABAS_VM_MAC`, else `vmMac` in `config.local.json`, else read from UTM's
-  `config.plist` for the VM named `EDIABAS_VM_NAME` / `vmName`, default `Windows`). No lease
-  and no `--client`: it does not start. It must be a host address on the bind address's /24. It never trusts whoever
+  else the newest DHCP lease for the VM's MAC, the same address the MCP server uses (see
+  [Finding the agent](architecture.md#the-request-path)). No lease and no `--client`: it does
+  not start. It must be a host address on the bind address's /24. It never trusts whoever
   connects first.
 - Per run, at most 10 uploads and 40 MB of uploads in all (each upload at most 20 MB). The
   caps are taken before anything is written; a failed upload keeps its share. Past them,

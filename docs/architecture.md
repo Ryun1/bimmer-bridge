@@ -24,18 +24,23 @@ their interactive session and can see the desktop for screenshots. A second copy
 1. Claude calls a tool, for example `ediabas_read_faults` with `NVE_65`.
 2. The MCP server checks the arguments and, for `ediabas_*` tools, the job policy
    (`mac-mcp/src/policy.ts`). A refusal ends here and never reaches the VM.
-3. It finds the agent: the VM's address from `/var/db/dhcpd_leases`, then `arp -an`, then
-   `utmctl ip-address`, for the VM's MAC. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
+3. It finds the agent: the VM's address is the newest lease for the VM's MAC in
+   `/var/db/dhcpd_leases` (the largest expiry; no other lease is tried, and nothing else is
+   asked: no ARP table, no `utmctl`), the way `dev/serve.py` reads it. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
    git-ignored `config.local.json`, else read from UTM's `config.plist` for the VM named by
    `EDIABAS_VM_NAME` / `vmName` (default `Windows`). Only an address on the same subnet
-   as a local `bridge*` interface is contacted. Each candidate gets `GET /hello` with a fresh
-   random nonce and no token ([api.md](api.md#get-hello)); it is used only if it answers as
+   as a local `bridge1NN` interface (UTM's shared network: `bridge100`, `bridge101`, ...) is
+   contacted; `EDIABAS_AGENT_URL` replaces the lease. That one address gets `GET /hello` with a
+   fresh random nonce and no token ([api.md](api.md#get-hello)); it is used only if it answers as
    `ediabas-bridge-agent` with a proof that matches this Mac's token, checked in constant time.
    Nothing that has not proved it holds the token is ever sent the token. The URL is cached
    (`mac-mcp/src/vmAddress.ts`, `mac-mcp/src/agentClient.ts`), and a cached URL is proved
    again with `/hello` (a fresh nonce) at the start of every tool call; if that fails, the
    cache is dropped and discovery runs, so the token never goes to the old address. For an
-   `/ediabas/*` call this happens in its turn in the queue, just before the job is sent.
+   `/ediabas/*` call this happens in its turn in the queue, just before the job is sent. With
+   one address there is one answer: if it fails the check, that failure is the error
+   (`wrong_service`, `agent_outdated`, `agent_not_answering`, `local_network_blocked`), and with
+   no lease for the MAC it is `vm_not_running`.
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
    If the agent's answer is not the agent's (`wrong_service`: an error without the agent's
    error shape; `bad_response`: a 200 that does not match the contract), the cache is

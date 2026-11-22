@@ -5,7 +5,8 @@ reached through a Windows VM in UTM on a Mac, where BMW Standard Tools (INPA, To
 Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. It was built on a 2005 E61
 550i and is meant for any car EDIABAS can talk to ([Which cars](#which-cars)). A small agent
 in the VM (`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes screenshots and
-reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds the VM, calls
+reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds the VM (from its
+newest DHCP lease, see [docs/architecture.md](docs/architecture.md#the-request-path)), calls
 the agent and offers eleven tools to Claude Code and the Claude desktop app. Skills in `skills/`
 teach Claude how to run a diagnostic session.
 
@@ -476,7 +477,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or the bridge is looking for a different VM: the VM is not named `Windows` and `vmName` / `EDIABAS_VM_NAME` is not set, or `vmMac` / `EDIABAS_VM_MAC` is not this VM's MAC | Start the VM in UTM and log in. If it is running, set `vmName` (or `vmMac`) in `config.local.json` ([Setup from scratch](#setup-from-scratch)) and restart Claude |
+| **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or the bridge is looking for a different VM: the VM is not named `Windows` and `vmName` / `EDIABAS_VM_NAME` is not set, or `vmMac` / `EDIABAS_VM_MAC` is not this VM's MAC, or the VM has no DHCP lease yet | Start the VM in UTM and log in. If it is running, set `vmName` (or `vmMac`) in `config.local.json` ([Setup from scratch](#setup-from-scratch)) and restart Claude |
 | **agent_not_answering**: "The VM is up but the agent is not answering" | Nobody is logged in to Windows (the agent starts at log-on), or the agent is not installed or has stopped | Log in to Windows and wait about 30 s. If it persists, read `agent.log` in the VM (see logs below) and re-run the Install line |
 | **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
 | **wrong_service**: "answered as the ediabas-bridge agent but could not prove it holds this Mac's token", or **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install). The Mac checks the agent's `/hello` proof before it sends the token, so a mismatch usually shows as the first; the token was not sent | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a failed proof (and uses it at once if the proof then matches) or a 401 (the next call proves the address with it first) |

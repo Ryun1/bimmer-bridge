@@ -88,7 +88,7 @@ is only ever sent to an address that proved it holds that same token.
 | `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/hello` proof still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
 | `EDIABAS_AGENT_PORT` | `8765` | port used with a discovered address |
 | `EDIABAS_VM_MAC` | read from UTM | the VM's MAC address; when unset, read from UTM's config for the VM (see Finding the VM) |
-| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl`, messages and finding the VM's MAC in UTM's config |
+| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for messages and finding the VM's MAC in UTM's config |
 | `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none; the only token used with `EDIABAS_AGENT_URL` |
 | `EDIABAS_AUDIT_LOG` | `~/Library/Logs/ediabas-bridge/audit.log` | audit log path |
 | `EDIABAS_RECORD_DIR` | — | record every agent exchange into this folder (see Recording) |
@@ -107,19 +107,12 @@ server still starts. `dev/serve.py` reads the same file for `vmName` and `vmMac`
 The VM's MAC is `EDIABAS_VM_MAC`, else `vmMac` in `config.local.json`, else the first network
 card's `MacAddress` in UTM's config for the VM,
 `~/Library/Containers/com.utmapp.UTM/Data/Documents/<EDIABAS_VM_NAME>.utm/config.plist` (read
-with `plutil` at each discovery). When none of these gives a MAC, the DHCP leases and ARP table
-are skipped and only `utmctl` is tried; if that finds nothing, `vm_not_running` says to set
+with `plutil` at each discovery). When none of these gives a MAC, `vm_not_running` says to set
 `EDIABAS_VM_MAC`, or `EDIABAS_VM_NAME` if the VM in UTM has another name.
 
-Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry first), then
-`arp -an`, then `utmctl ip-address <name>`. Only an address on the same subnet as a local
-`bridge*` interface is ever contacted, and it is accepted only if `GET /hello` (sent with a
-fresh random nonce and without the token) returns 200 with `"agent": "ediabas-bridge-agent"`
-and a proof that matches this Mac's token ([docs/api.md](../docs/api.md#get-hello)); the token
-is sent only after that. The accepted URL is cached, and proved again with `/hello` at the
-start of every tool call; if that fails, the cache is cleared and discovery runs before
-anything is sent with the token. On a connection failure, or an answer that is not the
-agent's (`wrong_service`, `bad_response`), the cache is cleared as well.
+The VM's address is the newest DHCP lease for its MAC, on a `bridge1NN` interface, and is
+accepted only if it proves it is the agent with `GET /hello` before the token is sent; the
+full description is in [docs/architecture.md](../docs/architecture.md#the-request-path).
 
 ## Troubleshooting: macOS Local Network permission
 
@@ -135,7 +128,7 @@ The permission is tied to the path of the node binary. Upgrading or reinstalling
 example a Homebrew upgrade that changes the path) can make macOS ask again.
 
 Every failed probe or request, and every accepted address with its source
-(leases / arp / utmctl / env), is logged to stderr, e.g.
+(leases / env), is logged to stderr, e.g.
 `probe 192.168.64.3:8765 failed: unreachable (EHOSTUNREACH)`. The token is never logged.
 
 ## Audit log

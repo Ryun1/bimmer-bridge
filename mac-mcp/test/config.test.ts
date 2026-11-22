@@ -18,7 +18,6 @@ describe("loadConfig", () => {
       auditLogPath: "/Users/test/Library/Logs/ediabas-bridge/audit.log",
       keychainService: "ediabas-bridge",
       keychainAccount: "agent",
-      utmctlPath: "/Applications/UTM.app/Contents/MacOS/utmctl",
       voltageSources: [],
     });
     expect(warnings).toEqual([]);

@@ -67,8 +67,6 @@ interface Opts {
   tokens?: TokenSource;
   fetch?: typeof fetch;
   leases?: string | null;
-  arp?: string | null;
-  utm?: string | null;
   /** `plutil -convert json` output for UTM's config.plist; null: plutil fails (no such file). */
   plutil?: string | null;
   ifaces?: unknown;
@@ -84,16 +82,9 @@ function makeClient(o: Opts = {}) {
     return o.leases;
   });
   const execFile = vi.fn<ExecFileFn>(async (file) => {
-    if (file === "/usr/sbin/arp") {
-      if (o.arp == null) throw new Error("arp failed");
-      return o.arp;
-    }
-    if (file === "/usr/bin/plutil") {
-      if (o.plutil == null) throw new Error("plutil: file does not exist");
-      return o.plutil;
-    }
-    if (o.utm == null) throw new Error("utmctl: guest agent not running");
-    return o.utm;
+    if (file !== "/usr/bin/plutil") throw new Error(`unexpected program ${file}`);
+    if (o.plutil == null) throw new Error("plutil: file does not exist");
+    return o.plutil;
   });
   const networkInterfaces = vi.fn<NetworkInterfacesFn>(() => (o.ifaces ?? VM_BRIDGE) as never);
   const fetchFn = vi.fn<typeof fetch>(o.fetch ?? ((...a) => fetch(...a)));
@@ -514,7 +505,7 @@ describe("identity before token (D5)", () => {
       it(`cached address now ${name}: no request to it ever carries Authorization, the cache is dropped and discovery runs`, async () => {
         const { a, client, readFile } = await cachedThenReplaced(impostor);
         const first = await errorOf(client.listWindows());
-        expect(first.code).toBe("vm_not_running"); // the only candidate is not the agent
+        expect(first.code).toBe("wrong_service"); // the only candidate is not the agent: its own error
         expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again on the first call
         await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }));
         await errorOf(client.health());
@@ -526,7 +517,7 @@ describe("identity before token (D5)", () => {
 
     it("cached address now holds an agent with another token: never sent this Mac's token", async () => {
       const { a, client, readFile } = await cachedThenReplaced(contractHandler("another-token"));
-      expect((await errorOf(client.listWindows())).code).toBe("vm_not_running");
+      expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
       expect(readFile).toHaveBeenCalledTimes(2);
       expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
     });
@@ -602,7 +593,6 @@ describe("AgentClient discovery", () => {
     const { client, fetchFn } = makeClient({
       ifaces: NO_BRIDGE,
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
     });
     const e = await errorOf(client.health());
     expect(e.code).toBe("vm_not_running");
@@ -615,42 +605,39 @@ describe("AgentClient discovery", () => {
     expect((await errorOf(client.health())).message).toContain("Start the 'Win11' VM in UTM");
   });
 
-  it("never contacts a candidate outside every bridge subnet", async () => {
+  it("never contacts the newest lease's address outside every bridge subnet, and does not fall back to an older lease", async () => {
     const fetchMock = vi.fn<typeof fetch>(withHello(async () => okResponse()));
     const { client, fetchFn } = makeClient({
       fetch: fetchMock,
-      // old lease (192.168.65.3) has the LATER expiry here, so it would be tried first if allowed
+      // the newest lease (192.168.65.3) is off-link; the older one (192.168.64.3) is on-link but is not used
       leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
-    await client.health();
-    const urls = calledUrls(fetchFn);
-    expect(urls.length).toBeGreaterThan(0);
-    expect(urls.some((u) => u.includes("192.168.65.3"))).toBe(false);
-    expect(urls[0]).toBe("http://192.168.64.3:8765/hello");
+    const e = await errorOf(client.health());
+    expect(e.code).toBe("vm_not_running");
+    expect(e.message).toContain("192.168.65.3");
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("says the VM is not running when the only candidates are off-link", async () => {
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(withHello(async () => okResponse())),
       leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }),
-      arp: "? (10.1.2.3) at 2:0:0:0:0:1 on en0 ifscope [ethernet]",
-      utm: "172.16.0.9\n",
     });
     expect((await errorOf(client.health())).code).toBe("vm_not_running");
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("tries leases by latest expiry first", async () => {
+  it("contacts only the newest lease", async () => {
     const fetchMock = vi.fn<typeof fetch>(withHello(async () => okResponse()));
     const { client, fetchFn } = makeClient({
       fetch: fetchMock,
       leases: leaseFile({ ip: "192.168.64.9", lease: 0x60000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
     await client.health();
-    expect(calledUrls(fetchFn)[0]).toBe("http://192.168.64.3:8765/hello");
+    expect(calledUrls(fetchFn).every((u) => u.startsWith("http://192.168.64.3:8765/"))).toBe(true);
   });
 
-  it("accepts only the exact agent value and moves on to the next candidate", async () => {
+  it("accepts only the exact agent value: another service at the newest lease is wrong_service, no older lease is tried", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) =>
       String(url).includes("192.168.64.3")
         ? okResponse({ status: "ok", agent: "some-other-agent" })
@@ -660,20 +647,17 @@ describe("AgentClient discovery", () => {
       fetch: fetchMock,
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 0x6b01ba00 }),
     });
-    await client.listWindows().catch(() => undefined);
-    const urls = calledUrls(fetchFn);
-    expect(urls[0]).toBe("http://192.168.64.3:8765/hello");
-    expect(urls[1]).toBe("http://192.168.64.4:8765/hello");
-    expect(urls[2]).toBe("http://192.168.64.4:8765/windows");
-    expect(authHeaders(fetchFn).slice(0, 2)).toEqual([undefined, undefined]);
+    expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello"]);
+    expect(authHeaders(fetchFn)).toEqual([undefined]);
   });
 
-  it("says the VM is not running when something else answers at the only address", async () => {
+  it("says wrong_service when something else answers at the only address", async () => {
     const { client } = makeClient({
       fetch: vi.fn(async () => new Response("<html></html>", { status: 200 })),
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
-    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+    expect((await errorOf(client.health())).code).toBe("wrong_service");
   });
 
   it("maps connection refused at an on-link address to 'agent not answering'", async () => {
@@ -713,21 +697,30 @@ describe("AgentClient discovery", () => {
     expect(authHeaders(fetchFn).every((h) => h === undefined)).toBe(true);
   });
 
-  it("a wrong proof at the only candidate ends as vm_not_running (wrong_service ranks lowest in discovery)", async () => {
+  it("a wrong proof at the only candidate ends as wrong_service, with the token fix", async () => {
     const { client } = makeClient({
       fetch: vi.fn(async () => okResponse({ agent: "ediabas-bridge-agent", proof: "0".repeat(64) })),
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
     const e = await errorOf(client.health());
-    expect(e.code).toBe("vm_not_running");
+    expect(e.code).toBe("wrong_service");
+    expect(e.message).toContain("could not prove it holds this Mac's token");
   });
 
-  it("re-reads the token at most once per call across candidates", async () => {
+  it("a pre-0.5.0 agent (401 on /hello) at the only candidate ends as agent_outdated, not vm_not_running", async () => {
+    const { client } = makeClient({
+      fetch: vi.fn(async () => new Response(JSON.stringify({ error: { code: "unauthorized", message: "Missing or invalid bearer token." } }), { status: 401 })),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 1 }),
+    });
+    expect((await errorOf(client.health())).code).toBe("agent_outdated");
+  });
+
+  it("re-reads the token at most once per call", async () => {
     const tokens = staticTokens();
     const { client } = makeClient({
       tokens,
       fetch: vi.fn(async () => okResponse({ agent: "ediabas-bridge-agent", proof: "0".repeat(64) })),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 3 }, { ip: "192.168.64.4", lease: 2 }, { ip: "192.168.64.5", lease: 1 }),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 3 }),
     });
     await errorOf(client.health());
     expect(tokens.refresh).toHaveBeenCalledTimes(1);
@@ -735,39 +728,12 @@ describe("AgentClient discovery", () => {
     expect(tokens.refresh).toHaveBeenCalledTimes(2);
   });
 
-  it("falls back to arp, then utmctl, and ignores utmctl failure", async () => {
-    const fetchMock = vi.fn<typeof fetch>(withHello(async () => okResponse()));
-    const viaArp = makeClient({
-      fetch: fetchMock,
-      leases: null,
-      arp: "? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]\n? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]\n",
-    });
-    await viaArp.client.health();
-    expect(calledUrls(viaArp.fetchFn)[0]).toBe("http://192.168.64.5:8765/hello");
-    expect(viaArp.execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/sbin/arp"]); // utmctl not needed
-
-    const viaUtm = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: null, arp: "", utm: "192.168.64.6\n" });
-    await viaUtm.client.health();
-    expect(calledUrls(viaUtm.fetchFn)[0]).toBe("http://192.168.64.6:8765/hello");
-    expect(viaUtm.execFile).toHaveBeenCalledWith(
-      "/Applications/UTM.app/Contents/MacOS/utmctl",
-      ["ip-address", "Windows"],
-      expect.any(Object),
-    );
-
-    const nothing = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: null, arp: null, utm: null });
-    const e = await errorOf(nothing.client.health());
+  it("with no lease for the MAC nothing is contacted and no other program runs", async () => {
+    const { client, fetchFn, execFile } = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: null });
+    const e = await errorOf(client.health());
     expect(e.code).toBe("vm_not_running");
-    expect(nothing.fetchFn).not.toHaveBeenCalled();
-  });
-
-  it("does not run utmctl when a lease candidate is accepted", async () => {
-    const { client, execFile } = makeClient({
-      fetch: vi.fn(withHello(async () => okResponse())),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-    });
-    await client.health();
-    expect(execFile).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(execFile).not.toHaveBeenCalled(); // the MAC is configured: no plutil, no arp, no utmctl
   });
 
   describe("VM MAC from UTM's config", () => {
@@ -808,42 +774,27 @@ describe("AgentClient discovery", () => {
       expect(execFile).not.toHaveBeenCalled();
     });
 
-    it("without any MAC: skips leases and ARP, still tries utmctl, and says how to set it", async () => {
+    it("without any MAC: reads no leases and says how to set it", async () => {
       const { client, readFile, execFile } = makeClient({
         env: NO_MAC,
         fetch: vi.fn(withHello(async () => okResponse())),
         plutil: null,
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-        arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
-        utm: null,
       });
       const e = await errorOf(client.health());
       expect(e.code).toBe("vm_not_running");
       expect(e.message).toContain(`its MAC address is not set and could not be read from ${PLIST}`);
       expect(e.message).toContain("set EDIABAS_VM_MAC to the VM's MAC address, or EDIABAS_VM_NAME if the VM in UTM is not called 'Windows'");
       expect(readFile).not.toHaveBeenCalled();
-      expect(execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/bin/plutil", "/Applications/UTM.app/Contents/MacOS/utmctl"]);
+      expect(execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/bin/plutil"]);
     });
 
     it("a MAC with no lease names it and the settings to check", async () => {
-      const { client } = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: "", arp: "", utm: null });
+      const { client } = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: "" });
       const e = await errorOf(client.health());
       expect(e.code).toBe("vm_not_running");
-      expect(e.message).toContain("its MAC address 02:00:00:00:00:01 is not in the DHCP leases or ARP table; if that is not the VM's MAC, set EDIABAS_VM_MAC");
+      expect(e.message).toContain("its MAC address 02:00:00:00:00:01 is not in the DHCP leases; if that is not the VM's MAC, set EDIABAS_VM_MAC");
     });
-  });
-
-  it("de-duplicates candidates across sources", async () => {
-    const { client, fetchFn } = makeClient({
-      fetch: vi.fn(async () => {
-        throw connError("ECONNREFUSED");
-      }),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
-      utm: "192.168.64.3\n",
-    });
-    await errorOf(client.health());
-    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello"]);
   });
 
   it("on a connection failure clears the cache and resolves once more", async () => {
@@ -896,17 +847,6 @@ describe("AgentClient discovery", () => {
 
 describe("local network blocked (macOS Local Network privacy)", () => {
   const LEASES = leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 });
-
-  it("never contacts an off-link candidate, and blames the local network for the on-link one", async () => {
-    const { client, fetchFn } = makeClient({
-      fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH", "connect");
-      }),
-      leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
-    });
-    expect((await errorOf(client.health())).code).toBe("local_network_blocked");
-    expect(calledUrls(fetchFn).some((u) => u.includes("192.168.65.3"))).toBe(false);
-  });
 
   it("maps EHOSTUNREACH on a request right after discovery", async () => {
     const { client, logs } = makeClient({
@@ -991,30 +931,6 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     });
     expect((await errorOf(client.health())).code).toBe("agent_not_answering");
     expect(logs).toContain("probe 192.168.64.3:8765 failed: timeout (TimeoutError)");
-  });
-
-  describe("ranking among candidates", () => {
-    const TWO = leaseFile({ ip: "192.168.64.3", lease: 2 }, { ip: "192.168.64.4", lease: 1 });
-    const by = (a: () => Promise<Response>, b: () => Promise<Response>) =>
-      vi.fn<typeof fetch>(async (url) => (String(url).includes(".3:") ? a() : b()));
-    const unreachable = async (): Promise<Response> => {
-      throw connError("EHOSTUNREACH", "connect");
-    };
-    const refused = async (): Promise<Response> => {
-      throw connError("ECONNREFUSED");
-    };
-    const status = (n: number) => async () =>
-      new Response(JSON.stringify({ error: { code: n === 401 ? "unauthorized" : "forbidden", message: "m" } }), { status: n });
-
-    it("local_network_blocked beats agent_not_answering, in either order", async () => {
-      expect((await errorOf(makeClient({ fetch: by(unreachable, refused), leases: TWO }).client.health())).code).toBe("local_network_blocked");
-      expect((await errorOf(makeClient({ fetch: by(refused, unreachable), leases: TWO }).client.health())).code).toBe("local_network_blocked");
-    });
-
-    it("forbidden beats local_network_blocked, in either order", async () => {
-      expect((await errorOf(makeClient({ fetch: by(unreachable, status(403)), leases: TWO }).client.health())).code).toBe("forbidden");
-      expect((await errorOf(makeClient({ fetch: by(status(403), unreachable), leases: TWO }).client.health())).code).toBe("forbidden");
-    });
   });
 });
 
@@ -1372,14 +1288,6 @@ describe("stderr diagnostics", () => {
     const viaLeases = makeClient({ fetch: ok, leases: leaseFile({ ip: "192.168.64.3", lease: 1 }) });
     await viaLeases.client.health();
     expect(viaLeases.logs).toContain("discovery accepted 192.168.64.3:8765 (source: leases)");
-
-    const viaArp = makeClient({ fetch: ok, leases: null, arp: "? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]" });
-    await viaArp.client.health();
-    expect(viaArp.logs).toContain("discovery accepted 192.168.64.5:8765 (source: arp)");
-
-    const viaUtm = makeClient({ fetch: ok, leases: null, arp: "", utm: "192.168.64.6\n" });
-    await viaUtm.client.health();
-    expect(viaUtm.logs).toContain("discovery accepted 192.168.64.6:8765 (source: utmctl)");
 
     const viaEnv = makeClient({ fetch: ok, env: { EDIABAS_AGENT_URL: "http://127.0.0.1:4567" } });
     await viaEnv.client.health();

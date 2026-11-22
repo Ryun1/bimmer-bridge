@@ -31,7 +31,7 @@ export interface Config {
    * by byte). When undefined, discovery reads it from UTM's config for the VM (`utmConfigPath`).
    */
   vmMac: string | undefined;
-  /** UTM VM name, for `utmctl`, messages and finding the VM's UTM config. */
+  /** UTM VM name, for messages and finding the VM's UTM config. */
   vmName: string;
   /** UTM's config.plist for the VM named `vmName`: where the VM's MAC is read from. */
   utmConfigPath: string;
@@ -42,8 +42,6 @@ export interface Config {
   /** Keychain generic-password item. */
   keychainService: string;
   keychainAccount: string;
-  /** Path of UTM's command-line tool. */
-  utmctlPath: string;
   /** Folder to record every agent exchange into (fixtures). Off when undefined. */
   recordDir: string | undefined;
   /** Extra voltage readings ediabas_vehicle_status runs, in order (config.local.json only). */
@@ -55,7 +53,6 @@ export const DEFAULTS = {
   vmName: "Windows",
   keychainService: "ediabas-bridge",
   keychainAccount: "agent",
-  utmctlPath: "/Applications/UTM.app/Contents/MacOS/utmctl",
 } as const;
 
 type Env = Record<string, string | undefined>;
@@ -233,7 +230,6 @@ export function loadConfig(
       auditLogPath,
       keychainService: DEFAULTS.keychainService,
       keychainAccount: DEFAULTS.keychainAccount,
-      utmctlPath: DEFAULTS.utmctlPath,
       recordDir,
       voltageSources: local.voltageSources ?? [],
     },
