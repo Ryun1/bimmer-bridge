@@ -40,6 +40,25 @@ public class ConceptCensusTests
         Assert.Equal("error", result.Single().Status);
     }
 
+    [Fact] // review finding 2: an EDIABAS error must not look like "INIT set nothing"
+    public void Census_EdiabasErrorWithoutParameters_IsJobError_NotNoXsetpar()
+    {
+        var rows = ConceptCensus.Run(TestFiles.TempCopy("cmd_test1.prg"), jobName: "NO_SUCH_JOB");
+        var row = rows.Single();
+        Assert.Equal("job_error", row.Status);
+        Assert.Contains("SYS-0008", row.Error);
+    }
+
+    [Fact]
+    public void Census_CaptureStopWithParameters_IsOk()
+    {
+        var row = ConceptCensus.Run(TestFiles.TempCopy("cmd_test2.prg", "base1.prg", "base2.prg"), jobName: "TEST_IFACE_FLAGS")
+            .Single(r => r.File == "cmd_test2.prg");
+        Assert.Equal("ok", row.Status);
+        Assert.Equal(0x010Fu, row.Concept);
+        Assert.Equal(115200u, row.Baud);
+    }
+
     [Fact]
     public void Census_RowsAreInNameOrder()
     {

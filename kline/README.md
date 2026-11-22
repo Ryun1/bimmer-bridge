@@ -50,8 +50,9 @@ are reported but do not change the exit code.
 **Bench 12 V supply only, never a car.** Power the cable with 12 V on OBD pin 16 and ground on
 pins 4/5, with nothing else connected; the cable then echoes every byte it sends on the
 K-line. `loopback` sends `N` single bytes 0x55 at 115200 8N1 (default 100) and times each
-echo, then prints min/median/max round trip in ms. `--latency 1` (default) sets the 1 ms
-latency timer first; `--latency 16` leaves the FTDI default. It refuses to run without
+echo, then prints min/median/max round trip in ms. `--latency 1` (default) sets the latency timer to
+1 ms first; `--latency 16` sets it back to 16 ms (the FTDI default) explicitly, since a 1 ms
+setting from `probe` or an earlier run lasts until the cable is replugged. It refuses to run without
 `--bench`.
 
 ## Linux permissions
@@ -70,7 +71,13 @@ sudo udevadm control --reload && sudo udevadm trigger
 ## Errors
 
 `Port.open` returns `NoDevice` (missing or unplugged), `Locked` (another process or tool holds
-it), `NotFtdi`, `Permission` or `Io`. The lock file is
-`$XDG_RUNTIME_DIR`, `$TMPDIR` or `/tmp`, then `kline-<device>.lock` (macOS's `cu.`/`tty.` prefix
-dropped). The lock is an `flock`, released by the kernel when its holder exits, so a lock file
-left by a crashed run never blocks the next open.
+it), `NotFtdi`, `Permission` or `Io`.
+
+The device path is resolved first, so a symlink such as Linux's `/dev/serial/by-id/usb-FTDI_…`
+is identified and locked as the `/dev/ttyUSB*` node it points to.
+
+The lock file is always `/tmp/kline-<device>.lock` (macOS's `cu.`/`tty.` prefix dropped),
+never taken from the environment, so a run under `sudo` or from another session meets the same
+lock. It is an `flock`, released by the kernel when its holder exits, so a lock file left by a
+crashed run never blocks the next open. Root bypasses the device's own exclusive-access flag
+(`TIOCEXCL`) on both macOS and Linux; the lock file still applies.

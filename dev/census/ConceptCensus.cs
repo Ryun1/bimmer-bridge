@@ -4,23 +4,25 @@ using EdiabasLib.Native;
 namespace Census;
 
 /// One row per SGBD. Status is "ok" (INITIALISIERUNG set communication parameters),
-/// "no_xsetpar" (it ran, or stopped, without setting any) or "error" (the file could not be
-/// resolved or parsed).
+/// "no_xsetpar" (it ran, or stopped at the interface, without setting any), "job_error" (an
+/// EDIABAS error ended it before it set any, so its concept is unknown) or "error" (the file
+/// could not be resolved or parsed).
 public sealed record CensusRow(string File, string Status, uint? Concept, uint? Baud, uint[] Params, string[] Calls, string Error);
 
 public static class ConceptCensus
 {
     /// Runs every .prg's INITIALISIERUNG (any case of extension) against a CaptureInterface,
     /// in file-name order, one EdiabasNet at a time. Never opens a port.
-    public static IReadOnlyList<CensusRow> Run(string ecuPath)
+    /// jobName is for tests; the census always runs INITIALISIERUNG.
+    public static IReadOnlyList<CensusRow> Run(string ecuPath, string jobName = "INITIALISIERUNG")
     {
         var rows = new List<CensusRow>();
         foreach (var path in SgbdFiles.Find(ecuPath, ".prg"))
-            rows.Add(RunOne(ecuPath, Path.GetFileName(path)));
+            rows.Add(RunOne(ecuPath, Path.GetFileName(path), jobName));
         return rows;
     }
 
-    static CensusRow RunOne(string ecuPath, string file)
+    static CensusRow RunOne(string ecuPath, string file, string jobName)
     {
         var cap = new CaptureInterface();
         string error = null;
@@ -32,7 +34,7 @@ public static class ConceptCensus
             {
                 ed.ResolveSgbdFile(Path.GetFileNameWithoutExtension(file));
                 parsed = true;
-                ed.ExecuteJob("INITIALISIERUNG");
+                ed.ExecuteJob(jobName);
             }
             catch (Exception ex)
             {
@@ -50,7 +52,11 @@ public static class ConceptCensus
         }
 
         var p = cap.LastCommParameter;
-        string status = !parsed ? "error" : cap.ParameterSets > 0 ? "ok" : "no_xsetpar";
+        string status =
+            !parsed ? "error"
+            : cap.ParameterSets > 0 ? "ok"
+            : error != null && !StoppedAtInterface(error) ? "job_error"
+            : "no_xsetpar";
         return new CensusRow(
             file,
             status,
@@ -60,6 +66,8 @@ public static class ConceptCensus
             cap.Calls.ToArray(),
             error);
     }
+
+    static bool StoppedAtInterface(string error) => error.Contains(nameof(CaptureStopException), StringComparison.Ordinal);
 
     static bool IsJobLevel(Exception ex)
     {
@@ -73,7 +81,10 @@ public static class ConceptCensus
     {
         var parts = new List<string>();
         for (var e = ex; e != null; e = e.InnerException)
-            parts.Add(e.GetType().Name + ": " + e.Message);
+        {
+            var desc = e is EdiabasNet.EdiabasNetException ene ? EdiabasNet.GetErrorDescription(ene.ErrorCode) : "";
+            parts.Add(e.GetType().Name + ": " + (desc.Length > 0 ? desc + " (" + e.Message + ")" : e.Message));
+        }
         return string.Join(" <- ", parts);
     }
 }

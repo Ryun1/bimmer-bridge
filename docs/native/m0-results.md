@@ -62,7 +62,8 @@ Tally (concept → files, bauds):
 |---|---|---|---|
 | | | | |
 | `no_xsetpar` | INIT set no parameters | | |
-| `error` | could not be resolved or parsed | | |
+| `job_error` | an EDIABAS error ended INIT before it set any: concept unknown, look at each | | |
+| `error` | could not be resolved or parsed (the table prints the reason) | | |
 | **total** | | | |
 
 The modules in [at-the-car.md](../at-the-car.md):
@@ -211,8 +212,10 @@ there's no bench supply, write "no bench supply" here; this moves to the start o
 | 1 ms | | | | | | |
 | 16 ms | | | | | | |
 
-If latency 1 shows no improvement over 16, `IOSSDATALAT` did not take effect on the dext (open
-risk 3 in the design); the fallback is longer receive timeouts (`ObdAddRecTimeout`).
+Each run sets the latency explicitly (1 or 16 ms), because a setting lasts until the cable is
+replugged. If latency 1 shows no improvement over 16, `IOSSDATALAT` did not take effect on
+the dext (open risk 3 in the design); the fallback is longer receive timeouts
+(`ObdAddRecTimeout`).
 
 ## 7. Linux repeat (Ryan)
 
@@ -273,4 +276,6 @@ milliseconds.
   before use, or run them in separate processes. M0's census runs one instance at a time,
   and its tests run serially.
 - BESTDIS ignores short reads, so the opcode census checks each file's header and job table
-  bounds itself and reports a truncated file as an error.
+  bounds itself and reports a truncated file as an error. That check was validated only on
+  upstream's test files, so give any `error` row in section 3 a second look before believing
+  it.

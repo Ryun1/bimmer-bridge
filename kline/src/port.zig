@@ -22,7 +22,8 @@ pub const LineSettings = struct { baud: u32, data_bits: u4, parity: Parity };
 pub const OpenOptions = struct {
     /// Refuse anything but an FTDI FT232R (0403:6001).
     require_ftdi: bool = true,
-    /// Where the lock file goes. Default: $XDG_RUNTIME_DIR, else $TMPDIR, else /tmp.
+    /// Where the lock file goes; for tests. The default is always /tmp, never taken from the
+    /// environment, so a run under sudo or another session still meets the same lock.
     lock_dir: ?[]const u8 = null,
 };
 pub const OpenError = error{ NoDevice, Locked, NotFtdi, Permission, Io };
@@ -38,19 +39,23 @@ pub const Port = struct {
     /// Opens a serial device for exclusive use: identity check, lock file, open, TIOCEXCL,
     /// raw mode. A missing device is NoDevice, a device another process holds is Locked.
     pub fn open(path: []const u8, opts: OpenOptions) OpenError!Port {
-        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const path_z = std.fmt.bufPrintZ(&path_buf, "{s}", .{path}) catch return error.NoDevice;
+        var given_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const given_z = std.fmt.bufPrintZ(&given_buf, "{s}", .{path}) catch return error.NoDevice;
 
         // 1. Present at all? Checked first so a missing cable is never reported as NotFtdi.
-        if (std.c.access(path_z, 0) != 0) return switch (libc.errno()) { // F_OK
+        //    Resolved to its real path, so a symlink (/dev/serial/by-id/... on Linux) gets the
+        //    same identity and the same lock as the node it points to.
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const real = std.c.realpath(given_z, &path_buf) orelse return switch (libc.errno()) {
             .NOENT, .NOTDIR, .NXIO, .NODEV => error.NoDevice,
             .ACCES, .PERM => error.Permission,
             else => error.Io,
         };
+        const path_z: [:0]const u8 = std.mem.span(real);
 
         // 2. The right cable.
         if (opts.require_ftdi) {
-            const ids = identity.lookup(path) catch |e| switch (e) {
+            const ids = identity.lookup(path_z) catch |e| switch (e) {
                 error.NotUsb => return error.NotFtdi,
                 error.Io => return error.Io,
             };
@@ -60,13 +65,17 @@ pub const Port = struct {
         // 3. The lock file. flock is released by the kernel when its holder exits, so a file
         //    left behind by a crashed run never blocks.
         var lock_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const lock_path = lockPath(&lock_buf, opts.lock_dir orelse defaultLockDir(), path) catch return error.Io;
-        const lock_fd = std.c.open(lock_path, .{ .ACCMODE = .RDWR, .CREAT = true, .CLOEXEC = true }, @as(std.c.mode_t, 0o600));
+        const lock_path = lockPath(&lock_buf, opts.lock_dir orelse default_lock_dir, path_z) catch return error.Io;
+        const lock_fd = std.c.open(lock_path, .{ .ACCMODE = .RDWR, .CREAT = true, .CLOEXEC = true, .NOFOLLOW = true }, @as(std.c.mode_t, 0o666));
         if (lock_fd < 0) return switch (libc.errno()) {
             .ACCES, .PERM => error.Permission,
             else => error.Io,
         };
         errdefer _ = std.c.close(lock_fd);
+        // Readable and lockable by every user, whoever created it (umask applies at create),
+        // so a lock file made under sudo never shuts the user out. Fails harmlessly when
+        // someone else owns it.
+        _ = fchmod(lock_fd, 0o666);
         if (std.c.flock(lock_fd, std.c.LOCK.EX | std.c.LOCK.NB) != 0) return switch (libc.errno()) {
             .AGAIN => error.Locked,
             else => error.Io,
@@ -156,18 +165,26 @@ pub const Port = struct {
     }
 
     /// Asks the driver to deliver received bytes after 1 ms instead of the FTDI default 16.
-    /// macOS: IOSSDATALAT in milliseconds (1, never 0; it resets on replug). Linux:
-    /// ASYNC_LOW_LATENCY, which ftdi_sio maps to a 1 ms latency timer. Unsupported when the
-    /// device is not a serial driver that takes it (a pty, for example).
     pub fn setLowLatency(self: *Port) LatencyError!void {
+        return self.setLatency(1);
+    }
+
+    /// Sets the FTDI latency timer explicitly, so a measurement at 16 ms is really at 16 ms
+    /// even after an earlier 1 ms setting (both settings outlive the open until replug).
+    /// macOS: IOSSDATALAT in milliseconds (never 0). Linux: 1 sets ASYNC_LOW_LATENCY, which
+    /// ftdi_sio maps to 1 ms; 16 clears it (the driver default); other values are
+    /// Unsupported there. Unsupported when the device is not a serial driver that takes it.
+    pub fn setLatency(self: *Port, ms: u8) LatencyError!void {
+        if (ms == 0) return error.Unsupported;
         if (is_darwin) {
-            var ms: c_ulong = 1;
-            if (darwin.ioctl(self.fd, darwin.IOSSDATALAT, &ms) != 0) return unsupportedOrIo();
+            var v: c_ulong = ms;
+            if (darwin.ioctl(self.fd, darwin.IOSSDATALAT, &v) != 0) return unsupportedOrIo();
             return;
         }
+        if (ms != 1 and ms != 16) return error.Unsupported;
         var ss: linux.struct_serial_struct = undefined;
         if (linux.ioctl(self.fd, linux.TIOCGSERIAL, &ss) != 0) return unsupportedOrIo();
-        ss.flags |= linux.ASYNC_LOW_LATENCY;
+        if (ms == 1) ss.flags |= linux.ASYNC_LOW_LATENCY else ss.flags &= ~linux.ASYNC_LOW_LATENCY;
         if (linux.ioctl(self.fd, linux.TIOCSSERIAL, &ss) != 0) return unsupportedOrIo();
     }
 
@@ -337,15 +354,9 @@ fn isStandard(baud: u32) bool {
     };
 }
 
-fn defaultLockDir() []const u8 {
-    inline for (.{ "XDG_RUNTIME_DIR", "TMPDIR" }) |name| {
-        if (std.c.getenv(name)) |v| {
-            const s = std.mem.span(v);
-            if (s.len > 0) return s;
-        }
-    }
-    return "/tmp";
-}
+const default_lock_dir = "/tmp";
+
+extern "c" fn fchmod(fd: c_int, mode: std.c.mode_t) c_int;
 
 /// <dir>/kline-<name>.lock, where name is the device's basename without macOS's "cu." or
 /// "tty." prefix, so /dev/cu.X and /dev/tty.X (the same device) share one lock.
@@ -572,4 +583,56 @@ test "break on a pty returns without crashing" {
     defer p.close();
     p.setBreak(true) catch |e| try std.testing.expectEqual(error.Io, e);
     p.setBreak(false) catch |e| try std.testing.expectEqual(error.Io, e);
+}
+
+test "setting 16 ms latency on a pty is Unsupported, not a crash" { // review finding 1
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try std.testing.expectError(error.Unsupported, p.setLatency(16));
+}
+
+test "latency 0 is refused before reaching the driver" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try std.testing.expectError(error.Unsupported, p.setLatency(0));
+}
+
+extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
+extern "c" fn unsetenv(name: [*:0]const u8) c_int;
+extern "c" fn symlink(target: [*:0]const u8, link: [*:0]const u8) c_int;
+
+test "the default lock does not depend on the environment" { // review finding 3
+    var pty = try Pty.open();
+    defer pty.close();
+    var a = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer a.close();
+    var other = try TmpDir.create();
+    defer other.cleanup();
+    const saved: ?[*:0]u8 = std.c.getenv("TMPDIR");
+    var saved_copy: [std.fs.max_path_bytes:0]u8 = undefined;
+    if (saved) |v| _ = try std.fmt.bufPrintZ(&saved_copy, "{s}", .{std.mem.span(v)});
+    defer {
+        if (saved != null) _ = setenv("TMPDIR", &saved_copy, 1) else _ = unsetenv("TMPDIR");
+    }
+    _ = setenv("TMPDIR", other.path, 1);
+    _ = setenv("XDG_RUNTIME_DIR", other.path, 1);
+    defer _ = unsetenv("XDG_RUNTIME_DIR");
+    try std.testing.expectError(error.Locked, Port.open(pty.slave_path, .{ .require_ftdi = false }));
+}
+
+test "a symlink to the device takes the same lock" { // review finding 4
+    var pty = try Pty.open();
+    defer pty.close();
+    var tmp = try TmpDir.create();
+    defer tmp.cleanup();
+    var link_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const link = try std.fmt.bufPrintZ(&link_buf, "{s}/cable", .{tmp.path});
+    if (symlink(pty.slave_path, link) != 0) return error.SymlinkFailed;
+    var a = try Port.open(pty.slave_path, .{ .require_ftdi = false, .lock_dir = tmp.path });
+    defer a.close();
+    try std.testing.expectError(error.Locked, Port.open(link, .{ .require_ftdi = false, .lock_dir = tmp.path }));
 }

@@ -52,7 +52,7 @@ public static class Program
         foreach (var r in rows)
         {
             Console.WriteLine($"{r.File,-24} {r.Status,-10} {Hex(r.Concept),-8} {r.Baud?.ToString(CultureInfo.InvariantCulture) ?? "-",-7} {string.Join(",", r.Params)}");
-            if (r.Status == "error") Console.WriteLine("    " + r.Error);
+            if (r.Error != null && r.Status != "ok" && r.Status != "no_xsetpar") Console.WriteLine("    " + r.Error);
         }
         Console.WriteLine();
         Console.WriteLine("TALLY");

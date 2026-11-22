@@ -13,10 +13,15 @@ pub const ftdi_ft232r: UsbIds = .{ .vid = 0x0403, .pid = 0x6001 };
 
 /// The USB vendor and product IDs of the device behind a serial device node. A node that
 /// is not a USB serial device (a pty, Bluetooth, a built-in UART) is NotUsb.
+/// A symlink is resolved first, so /dev/serial/by-id/... finds the same device as /dev/ttyUSB0.
 pub fn lookup(path: []const u8) IdentityError!UsbIds {
+    var given: [std.fs.max_path_bytes]u8 = undefined;
+    const given_z = std.fmt.bufPrintZ(&given, "{s}", .{path}) catch return error.NotUsb;
+    var real_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const real: []const u8 = if (std.c.realpath(given_z, &real_buf)) |r| std.mem.span(r) else path;
     return switch (builtin.os.tag) {
-        .macos => lookupDarwin(path),
-        .linux => lookupLinux(path),
+        .macos => lookupDarwin(real),
+        .linux => lookupLinux(real),
         else => error.NotUsb,
     };
 }

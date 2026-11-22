@@ -264,12 +264,11 @@ fn loopback(arena: std.mem.Allocator, out: *std.Io.Writer, device: []const u8, l
     };
     defer p.close();
     try p.setLine(.{ .baud = 115200, .data_bits = 8, .parity = .none });
-    if (latency_ms == 1) {
-        p.setLowLatency() catch |e| {
-            std.debug.print("kline: latency 1ms: {s}\n", .{if (e == error.Unsupported) "unsupported" else "i/o error"});
-            return 1;
-        };
-    }
+    // Set explicitly either way: a 1 ms setting from probe or an earlier run lasts until replug.
+    p.setLatency(latency_ms) catch |e| {
+        std.debug.print("kline: latency {d}ms: {s}\n", .{ latency_ms, if (e == error.Unsupported) "unsupported" else "i/o error" });
+        return 1;
+    };
     try p.purge();
 
     const rtt_us = try arena.alloc(u64, count);
