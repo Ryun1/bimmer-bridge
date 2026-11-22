@@ -36,7 +36,6 @@ elif ! command -v dotnet >/dev/null 2>&1; then
 fi
 SDK="$(dotnet --version 2>/dev/null)" || die "no .NET SDK that global.json allows (10.0.x) is installed for $(command -v dotnet): brew install dotnet@10"
 case "$SDK" in 10.*) ;; *) die "dotnet $SDK is not a .NET 10 SDK (global.json pins 10.0.x)" ;; esac
-fi
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
 
