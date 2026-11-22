@@ -207,9 +207,9 @@ public class CommentScreenTests
     [Fact]
     public void Reviewed_IsExact()
     {
-        Assert.True(Screen.IsReviewed("NVE_65", "STATUS_X"));
-        Assert.False(Screen.IsReviewed("NVE_65", "STATUS_XY"));
-        Assert.False(new CommentScreen([], [], ["nve_65:status_x"]).IsReviewed("NVE_65", "STATUS_X"));
+        Assert.Equal(ApprovalKind.Unpinned, Screen.Approval("NVE_65", "STATUS_X").Kind);
+        Assert.Equal(ApprovalKind.None, Screen.Approval("NVE_65", "STATUS_XY").Kind);
+        Assert.Equal(ApprovalKind.None, new CommentScreen([], [], ["nve_65:status_x"]).Approval("NVE_65", "STATUS_X").Kind);
     }
 }
 

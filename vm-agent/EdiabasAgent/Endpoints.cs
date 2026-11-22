@@ -77,7 +77,8 @@ internal sealed class Endpoints
             Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck),
             LastCableUseAt: _ctx.CableUse.LastInitAt is { } t ? ApiFormat.Timestamp(t) : null,
             PolicyVersion: _ctx.Policy.Version,
-            Capabilities: AgentContext.Capabilities);
+            Capabilities: AgentContext.Capabilities,
+            Approvals: _ctx.Approvals.Current.Counts);
 
         return Responses.WriteJson(http, StatusCodes.Status200OK, body);
     }

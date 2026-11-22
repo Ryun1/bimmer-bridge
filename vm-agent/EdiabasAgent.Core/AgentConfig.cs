@@ -129,7 +129,7 @@ public sealed class AgentConfig
             return ConfigLoadResult.Failure(errors);
         }
 
-        config.Warnings = [.. UnknownKeys(json), .. config.LogRootWarnings()];
+        config.Warnings = [.. UnknownKeys(json), .. config.LogRootWarnings(), .. config.ReviewedJobWarnings()];
         return ConfigLoadResult.Success(config);
     }
 
@@ -258,6 +258,24 @@ public sealed class AgentConfig
         }
 
         return errors;
+    }
+
+    /// <summary>A <c>reviewedJobs</c> entry of the wrong shape approves nothing (it never becomes a
+    /// name-only approval) and is a warning, not an error: a typo there must not stop the agent
+    /// from starting after an update.</summary>
+    private List<string> ReviewedJobWarnings()
+    {
+        var warnings = new List<string>();
+        for (var i = 0; i < ReviewedJobs.Count; i++)
+        {
+            var entry = ReviewedJobs[i];
+            if (!ApprovalList.TryParseEntry(entry, out _, out _))
+            {
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits");
+            }
+        }
+
+        return warnings;
     }
 
     private static void RequireNonEmpty(List<string> errors, string name, string? value)
