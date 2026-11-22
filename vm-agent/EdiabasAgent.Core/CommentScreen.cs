@@ -184,7 +184,7 @@ public sealed class CommentScreen
     {
     }
 
-    /// <summary>How Ryan approved this job, if at all. Takes the upper-cased names from the verdict.</summary>
+    /// <summary>How the user approved this job, if at all. Takes the upper-cased names from the verdict.</summary>
     public JobApproval Approval(string ecu, string job) => _approvals.Current.Lookup(ecu, job);
 
     /// <summary>

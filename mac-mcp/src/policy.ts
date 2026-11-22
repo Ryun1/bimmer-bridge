@@ -236,7 +236,7 @@ export function policyUnavailable(reason: string): BridgeError {
   return new BridgeError(
     "policy_unavailable",
     `The job policy file could not be loaded on this Mac (${cleanText(reason, 200)}), so every EDIABAS tool refuses and nothing was sent to the VM. ` +
-      "Ryan needs to restore a valid policy/policy.json in the ediabas-bridge repo and restart the MCP server (restart Claude).",
+      "The user needs to restore a valid policy/policy.json in the ediabas-bridge repo and restart the MCP server (restart Claude).",
   );
 }
 
@@ -259,7 +259,7 @@ export function jobNotAllowed(ecu: string, job: string, rule: string): BridgeErr
   const e = new BridgeError(
     "job_not_allowed",
     `Refused by the job policy: ${cleanText(ecu, 80) || "(empty)"} ${cleanText(job, 80) || "(empty)"} (rule ${cleanText(rule, 80)}: ${ruleMeaning(rule)}). ` +
-      "Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell Ryan it was refused.",
+      "Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell the user it was refused.",
   );
   e.rule = rule;
   return e;

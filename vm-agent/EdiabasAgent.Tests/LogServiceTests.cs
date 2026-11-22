@@ -93,8 +93,8 @@ public class LogServiceTests
     public void Read_LinkFromOutsideThatResolvesInside_RefusedWithoutOpening()
     {
         var (svc, fs) = Make(Trace);
-        fs.File(@"C:\Users\ryan\trace-link\api.trc", "x", final: @"\\?\C:\EDIABAS\TRACE\api.trc");
-        AssertRefused(svc.Read(Read(@"C:\Users\ryan\trace-link\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
+        fs.File(@"C:\Users\user\trace-link\api.trc", "x", final: @"\\?\C:\EDIABAS\TRACE\api.trc");
+        AssertRefused(svc.Read(Read(@"C:\Users\user\trace-link\api.trc"), out var refusal), refusal, PathRules.OutsideRoots);
         Assert.Empty(fs.Opened);
     }
 

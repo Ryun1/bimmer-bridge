@@ -1,6 +1,6 @@
 # vm-setup: scripts run in the VM
 
-PowerShell scripts that Ryan runs in the Windows VM by pasting one line that `dev/serve.py`
+PowerShell scripts that the user runs in the Windows VM by pasting one line that `dev/serve.py`
 prints on the Mac. Each line downloads its script, checks its SHA-256 against the value printed
 on the Mac, and only then runs it. How the lines and the server work:
 [docs/deploy.md](../docs/deploy.md).

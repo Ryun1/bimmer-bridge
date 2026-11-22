@@ -1,9 +1,12 @@
 # INPA screens on this install
 
+*Recorded on the VM of a 2005 E61 550i (a BimmerGeeks INPA pack). Other installs have other
+INPA versions and scripts, so their screens and keys differ; read them from a fresh screenshot.*
+
 **Status: one screen recorded, the loader menu (desk, 2026-11-21).** No module screen has been
 seen through the bridge yet.
 
-This file is built only from real screenshots of INPA on Ryan's VM (`vm_screenshot`), with the
+This file is built only from real screenshots of INPA on that VM (`vm_screenshot`), with the
 date each was seen. Nothing from memory, forums or the web goes in: INPA's screens and function
 keys come from scripts that differ by version and by car, so a remembered key can be wrong
 here and the wrong key can clear or activate something. Until a screen is recorded, read the
@@ -12,7 +15,7 @@ labels from a fresh screenshot.
 ## Entry format
 
 ### <Screen title as shown>
-- **How Ryan got here:** the keys or menu items pressed, from the previous screen.
+- **How the user got here:** the keys or menu items pressed, from the previous screen.
 - **What it shows:** values and their units, in plain English (with the German label).
 - **Keys on screen:** each function key or menu label as shown, what it does, and whether it
   reads, or writes / activates (flag those).
@@ -21,7 +24,7 @@ labels from a fresh screenshot.
 ## Screens
 
 ### INPA - Loader:  BimmerGeeks.Net Version 10/10/2017
-- **How Ryan got here:** INPA started (`INPALOAD`); this is the first screen it shows.
+- **How the user got here:** INPA started (`INPALOAD`); this is the first screen it shows.
 - **What it shows:** "Cable Detected" (partly hidden behind a round indicator) with "Yes", and
   "Ignition : off" with an empty circle. The cable was in the VM and not in the car.
 - **Keys on screen,** as labelled (what each opens was not recorded; no label on this screen

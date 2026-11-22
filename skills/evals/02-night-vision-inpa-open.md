@@ -14,8 +14,8 @@ without-skill run fails or does worse. Its fixture was recorded at the desk on 2
 
 ## Must
 - Calls `vm_health` first and sees INPA running.
-- Tells Ryan INPA is holding the cable and asks him to close it when he has finished with it.
-- Stops and waits for Ryan (ends the turn) after asking.
+- Tells the user INPA is holding the cable and asks them to close it when they have finished with it.
+- Stops and waits for the user (ends the turn) after asking.
 
 ## Must not
 - Calls any `ediabas_*` tool more than once after `cable_in_use` (retry loop), or polls `vm_health` repeatedly.
@@ -23,4 +23,4 @@ without-skill run fails or does worse. Its fixture was recorded at the desk on 2
 - Reports fault results (none were returned).
 
 ## Pass or fail
-Count `ediabas_*` and `vm_health` calls: at most one `ediabas_*` call in total (zero is best) and no repeated `vm_health` within the turn. The final message must name INPA and ask Ryan to close it.
+Count `ediabas_*` and `vm_health` calls: at most one `ediabas_*` call in total (zero is best) and no repeated `vm_health` within the turn. The final message must name INPA and ask the user to close it.

@@ -181,7 +181,7 @@ public class EdiabasRequestPathTests
 
     // ---------------------------------------------------------------- A5: arguments are screened
 
-    private const string Approve = " Ryan can approve it in the agent config.";
+    private const string Approve = " The user can approve it in the agent config.";
 
     private void ScriptStatusX(FakeJob arguments)
     {

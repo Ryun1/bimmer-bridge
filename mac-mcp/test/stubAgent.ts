@@ -54,7 +54,7 @@ export function faultSets(): Record<string, unknown>[] {
       F_VORHANDEN_NR: 1,
       F_VORHANDEN_TEXT: "Fault currently present",
       F_HFK: 3,
-      F_UW_KM: 195712,
+      F_UW_KM: 160935,
       F_UW_ANZ: 2,
       F_UW1_NR: 1,
       F_UW1_TEXT: "Engine speed",
@@ -177,7 +177,7 @@ export function defaultResponders(): Record<string, Responder> {
     }),
     "POST /ediabas/job": (r) => {
       const b = r.body as { ecu: string; job: string };
-      return { status: 200, body: jobResult(b.ecu, b.job, [{ ID_BMW_NR: "1234567", KM_STAND: 195712, JOB_STATUS: "OKAY" }]) };
+      return { status: 200, body: jobResult(b.ecu, b.job, [{ ID_BMW_NR: "1234567", KM_STAND: 160935, JOB_STATUS: "OKAY" }]) };
     },
     "POST /ediabas/jobs": (r) => {
       const items = (r.body as { items: { ecu: string; job: string }[] }).items;

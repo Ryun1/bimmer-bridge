@@ -206,7 +206,7 @@ public static class CaptureRules
     public static bool DesktopAvailable(int sessionId, string? inputDesktopName) =>
         sessionId != 0 && string.Equals(inputDesktopName, "Default", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Only for a locked screen, the secure desktop or session 0: the answer tells Ryan to unlock the VM.</summary>
+    /// <summary>Only for a locked screen, the secure desktop or session 0: the answer tells the user to unlock the VM.</summary>
     public static ApiFailure DesktopUnavailable(string why) =>
         ApiFailure.Of(ApiErrors.DesktopUnavailable,
             $"The VM's desktop cannot be captured: {why}. Unlock the VM (sign in) and try again.");

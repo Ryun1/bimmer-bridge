@@ -46,13 +46,13 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   faults says so. A per-ECU error is shown in that ECU's place, with its `[code]`; the others
   still print. A module whose SGBD has no `IS_LESEN` shows "Info memory: no info memory on this
   module." (not a failure).
-- **Distances are miles first**, km in brackets: `121,609 mi (195,712 km)`. Miles are rounded down.
+- **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - `ediabas_vehicle_status` prints each reading's result fields as returned (`key=value`); the
   field names are mapped to "ignition on/off" and volts once Phase 6 has confirmed them.
 - `ediabas_describe` with `namesOnly` adds the line "(names only: not screened, verdicts by
   name)". With `job`, for a screened job (review is not `not_required`) it prints
   `Description hash: <hash>` under the description, and when the job needs review also:
-  `To approve this job as it is described now, Ryan adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
+  `To approve this job as it is described now, the user adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
 - `vm_health`, when the agent reports approvals: `Approved jobs: N pinned, M unpinned.`, and
   when M > 0 also `Unpinned approvals do not notice a changed description; ediabas_describe
   shows the hash to pin them with.`
@@ -70,23 +70,23 @@ use …`. Codes (also the audit outcome):
 
 | Code | From | Meaning for Claude |
 |---|---|---|
-| `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | the VM or the agent could not be reached, or the token was refused or is missing; the message says what Ryan does (README, Troubleshooting) |
-| `ediabas_request_lost` | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent, so the job may have run. It was not sent again. Run `vm_health`; do not repeat the job unless Ryan asks |
+| `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | the VM or the agent could not be reached, or the token was refused or is missing; the message says what the user does (README, Troubleshooting) |
+| `ediabas_request_lost` | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent, so the job may have run. It was not sent again. Run `vm_health`; do not repeat the job unless the user asks |
 | `ediabas_busy` | Mac | another EDIABAS call on this Mac was still running after 120 s; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed |
-| `agent_outdated` | Mac | the agent has no such endpoint; Ryan needs to run the Update line |
+| `agent_outdated` | Mac | the agent has no such endpoint; the user needs to run the Update line |
 | `policy_unavailable` | Mac | the policy file could not be loaded; nothing is sent |
 | `invalid_arguments` | Mac | arguments that cannot go together (`tailBytes` with `offset`/`length`, or only one of `offset` and `length`); nothing is sent |
 | `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, or a fault in the server itself |
-| `not_run` | agent | the agent did not start the job (a batch item, or a single `ediabas_job` / `ediabas_describe`, HTTP 503), or stopped it. The message passes on the agent's reason: the request's time budget ran out (time spent waiting behind another EDIABAS request counts), a BMW tool was opened during the request (ask Ryan to close it), an earlier job did not stop after `apiBreak`, or the request was abandoned. Do not retry in a loop |
+| `not_run` | agent | the agent did not start the job (a batch item, or a single `ediabas_job` / `ediabas_describe`, HTTP 503), or stopped it. The message passes on the agent's reason: the request's time budget ran out (time spent waiting behind another EDIABAS request counts), a BMW tool was opened during the request (ask the user to close it), an earlier job did not stop after `apiBreak`, or the request was abandoned. Do not retry in a loop |
 | `job_not_allowed` | Mac or agent | refused by name; the message names the rule. Do not look for another way |
-| `job_needs_review` | agent | the job's description, or the description of its arguments, suggests it may not be a pure read, or is empty or only a label such as `Jobbeschreibung`; or the description of an approved job has changed. The message quotes it. Ryan decides |
-| `cable_in_use` | agent | a BMW tool is open, or was opened while the request ran (the agent checks again before every EDIABAS job); the message names it. Ask Ryan to close it. Do not retry in a loop. In `ediabas_describe`'s job list a tool opened midway does not fail the call: the descriptions not yet read show as not screened |
+| `job_needs_review` | agent | the job's description, or the description of its arguments, suggests it may not be a pure read, or is empty or only a label such as `Jobbeschreibung`; or the description of an approved job has changed. The message quotes it. The user decides |
+| `cable_in_use` | agent | a BMW tool is open, or was opened while the request ran (the agent checks again before every EDIABAS job); the message names it. Ask the user to close it. Do not retry in a loop. In `ediabas_describe`'s job list a tool opened midway does not fail the call: the descriptions not yet read show as not screened |
 | `ecu_not_found`, `job_not_found` | agent | use `ediabas_list_ecus` / `ediabas_describe`; never guess names. `job_not_found` can come from `ediabas_describe`, `ediabas_job`, an `ediabas_jobs` or `ediabas_read_faults` item, and `ediabas_vehicle_status` |
-| `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. Ryan plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |
-| `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU. The hint says the ECU often did not answer; for error 16 (`IFH-0006: COMMAND NOT ACCEPTED`) it first says the cable may not be attached to the VM (after a replug UTM does not hand it back by itself; Ryan ticks it in UTM's USB menu). When the job finished but its results could not be read, the message says "The job finished but its results could not be read…", without the "ECU did not answer" hint |
+| `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. The user plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |
+| `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU. The hint says the ECU often did not answer; for error 16 (`IFH-0006: COMMAND NOT ACCEPTED`) it first says the cable may not be attached to the VM (after a replug UTM does not hand it back by itself; the user ticks it in UTM's USB menu). When the job finished but its results could not be read, the message says "The job finished but its results could not be read…", without the "ECU did not answer" hint |
 | `ediabas_unavailable` | agent | DLL missing or EDIABAS would not start; or an earlier job did not stop after `apiBreak`, and the agent must be restarted (restart Windows in the VM) before EDIABAS can be used again |
 | `job_timeout` | agent | the job did not finish in time |
-| `window_not_found`, `window_minimized`, `desktop_unavailable` | agent | screenshots: wrong title, minimised window (Ryan restores it), locked screen, secure desktop or nobody logged in |
+| `window_not_found`, `window_minimized`, `desktop_unavailable` | agent | screenshots: wrong title, minimised window (the user restores it), locked screen, secure desktop or nobody logged in |
 | `capture_busy` | agent | another screenshot is still being taken in the VM; nothing was captured. Try again in a moment |
 | `capture_failed` | agent | the desktop was available but Windows failed to copy the image or read the screen size. Try again once, or capture the desktop instead |
 | `bad_request` | agent | the agent rejected a parameter (for example a bad `grep` pattern in `vm_logs_read`, or a grep over the 5 s limit). Fix the argument; do not retry it unchanged |

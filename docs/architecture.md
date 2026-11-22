@@ -8,15 +8,15 @@ tools) and [deploy.md](deploy.md) (Mac to VM deployment); this page is the overv
 | Component | Where it runs | What it is |
 |---|---|---|
 | MCP server (`mac-mcp/`) | the Mac, started by Claude Code or the desktop app over stdio | TypeScript, Node 20+. Offers the eleven tools, finds the VM, holds the policy check on the Mac side, writes the Mac audit log. Built to `mac-mcp/dist/index.js` |
-| agent (`vm-agent/`) | the Windows VM in UTM, in Ryan's logged-in session | `EdiabasAgent.exe`, C# on .NET 10, self-contained win-x86 single file (32-bit, because `api32.dll` is). An HTTP server (Kestrel) on port 8765 that calls EDIABAS, lists and captures windows and reads trace files |
+| agent (`vm-agent/`) | the Windows VM in UTM, in the owner's logged-in Windows session | `EdiabasAgent.exe`, C# on .NET 10, self-contained win-x86 single file (32-bit, because `api32.dll` is). An HTTP server (Kestrel) on port 8765 that calls EDIABAS, lists and captures windows and reads trace files |
 | EDIABAS | the VM (`C:\EDIABAS`) | BMW's diagnostic runtime: `api32.dll` loads the SGBD files (`.prg`, `.grp`) from the Ecu folder and talks to the K+DCAN cable |
 | job policy (`policy/policy.json`) | both sides | default-deny list of what may run. Embedded in the agent at build time; read by the Mac server at start-up |
 | VM scripts (`vm-setup/`) | the VM, pasted into Windows PowerShell | install, update, uninstall, discovery |
 | deploy server (`dev/serve.py`) | the Mac, only while deploying | serves the scripts and the agent zip to the VM and takes the token back into the Keychain |
 | skills (`skills/`) | Claude | guidance on running a session; they enforce nothing |
 
-The agent runs as a scheduled task (`ediabas-bridge agent`) at Ryan's log-on, so it is in his
-interactive session and can see the desktop for screenshots. A second copy exits at once
+The agent runs as a scheduled task (`ediabas-bridge agent`) at the owner's log-on, so it is in
+their interactive session and can see the desktop for screenshots. A second copy exits at once
 (a global mutex), so the task's 5-minute repeat only matters after a crash.
 
 ## The request path
@@ -25,7 +25,9 @@ interactive session and can see the desktop for screenshots. A second copy exits
 2. The MCP server checks the arguments and, for `ediabas_*` tools, the job policy
    (`mac-mcp/src/policy.ts`). A refusal ends here and never reaches the VM.
 3. It finds the agent: the VM's address from `/var/db/dhcpd_leases`, then `arp -an`, then
-   `utmctl ip-address`, for the VM's MAC (`EDIABAS_VM_MAC`). Only an address on the same subnet
+   `utmctl ip-address`, for the VM's MAC. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
+   git-ignored `config.local.json`, else read from UTM's `config.plist` for the VM named by
+   `EDIABAS_VM_NAME` / `vmName` (default `Windows`). Only an address on the same subnet
    as a local `bridge*` interface is contacted, and only one whose `GET /health` answers as
    `ediabas-bridge-agent` is used. The URL is cached (`mac-mcp/src/vmAddress.ts`).
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).

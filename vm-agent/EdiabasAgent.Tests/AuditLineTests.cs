@@ -162,7 +162,7 @@ public class AuditLineTests
     }
 
     // A right-to-left override or zero-width space would make a line read differently from
-    // what it holds when Ryan looks at the audit log.
+    // what it holds when the user looks at the audit log.
     [Fact]
     public void FormatCharacters_ReplacedLikeControlCharacters()
     {

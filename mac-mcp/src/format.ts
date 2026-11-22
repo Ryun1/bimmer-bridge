@@ -96,7 +96,7 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null, 
   if (h.ediabas.stuck === true) {
     lines.push(
       "EDIABAS: STUCK: a job did not stop after apiBreak, so the agent no longer touches EDIABAS and every EDIABAS call fails. " +
-        "Ryan needs to restart the agent (restart Windows in the VM).",
+        "The user needs to restart the agent (restart Windows in the VM).",
     );
   } else if (h.ediabas.loaded === true) {
     lines.push("EDIABAS: loaded now, so the next EDIABAS call starts straight away.");

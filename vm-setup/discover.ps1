@@ -398,7 +398,7 @@ Invoke-EbdSection 'SGBD files (Ecu folder)' {
     if (-not $ecu) { $ecu = 'C:\EDIABAS\Ecu'; Out-EbdLine 'EcuPath not set in EDIABAS.INI; using the default.' }
     Out-EbdLine ('Ecu folder: ' + $ecu)
     if (-not (Test-Path -LiteralPath $ecu -PathType Container)) { Out-EbdLine '  folder not found'; return }
-    foreach ($n in @('TMODE.PRG', 'UTILITY.PRG', 'NVE_65.PRG', 'N62_TUE.PRG', 'ME9N62_2.PRG', 'D_MOTOR.GRP')) {
+    foreach ($n in @('TMODE.PRG', 'UTILITY.PRG', 'D_MOTOR.GRP')) {
         $p = Join-Path $ecu $n
         if (Test-Path -LiteralPath $p -PathType Leaf) {
             $fi = Get-Item -LiteralPath $p -Force

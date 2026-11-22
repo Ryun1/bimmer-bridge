@@ -30,7 +30,7 @@ public sealed class ConfigFile(string path) : IConfigFile
 
 /// <summary>
 /// Re-reads <c>reviewedJobs</c>, and nothing else, when config.json has changed, so that an
-/// approval Ryan adds (or removes) applies without restarting the agent. Called by the runner at
+/// approval the user adds (or removes) applies without restarting the agent. Called by the runner at
 /// the start of every EDIABAS request, before the policy decides anything. A file that is
 /// missing, unreadable or not a valid config keeps the previous list, with one warning per
 /// change of the file; a later good write is picked up. Runner thread only.

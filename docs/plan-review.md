@@ -21,7 +21,7 @@ Items marked **(verify)** are my belief, not confirmed on this VM.
 | .NET SDK | Not installed. Homebrew offers 11.0.100 | §1, build |
 | Node | v24.16.0 under nvm | §7 |
 | `claude_desktop_config.json` | Has no `mcpServers` key. "Control Chrome" is an extension, not a config entry | §7 |
-| UTM VM "Windows" | QEMU backend, aarch64, network mode Shared, MAC `F2:E5:81:1E:82:07`, currently stopped | §4, §6 |
+| UTM VM "Windows" | QEMU backend, aarch64, network mode Shared, MAC `<VM MAC>`, currently stopped | §4, §6 |
 | `utmctl` | Present at `/Applications/UTM.app/Contents/MacOS/utmctl`, not on PATH | §10 |
 
 Two of the four "ask Ryan" questions in §4 are now answered (network mode is Shared; the VM

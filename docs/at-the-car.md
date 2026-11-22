@@ -1,10 +1,15 @@
 # At the car: session checklist
 
-For Phase 6 and any later session that reads the car. This is Ryan's: nothing that talks to
-the car runs unattended. The car has a battery-drain fault, so ignition-on time is the scarce
-resource: do everything you can before the ignition goes on, and keep it under 10 minutes.
+For Phase 6 and any later session that reads the car. The owner runs it, at the car: nothing
+that talks to the car runs unattended. Ignition-on time drains the battery (and the car this was
+built on has a battery-drain fault), so it is the scarce resource: do everything you can before
+the ignition goes on, and keep it under 10 minutes.
 
-The Phase 6 acceptance, from [PLAN.md section 9](../PLAN.md#9-build-phases-and-acceptance):
+The checklist was written for the 2005 E61 550i the bridge was built on. The general steps apply
+to any car; the items marked E60/E61, and the Phase 6 acceptance below, are that car's. On
+another car, find its modules and jobs with `ediabas_list_ecus` and `ediabas_describe` instead.
+
+The Phase 6 acceptance (the E61's), from [PLAN.md section 9](../PLAN.md#9-build-phases-and-acceptance):
 ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the engine SGBD;
 `ediabas_read_faults` on `NVE_65` shows the A752/A751 pair from the INPA session of
 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the
@@ -36,7 +41,7 @@ car-session line and the longer idle time below are all untested there.
 - [ ] Put a battery charger or support unit on the car for the whole session (general
       knowledge, not something recorded on this car): it takes away most of the time pressure
       and avoids communication errors from low voltage.
-- [ ] Start the `Windows` VM in UTM and log in (the agent runs in the logged-in session).
+- [ ] Start the VM in UTM and log in (the agent runs in the logged-in session).
 - [ ] Plug the K+DCAN cable into the Mac and the car, then **tick the cable for the VM in UTM's
       USB menu**. UTM does not hand a plugged-in or replugged cable to the VM by itself; until
       it is ticked, EDIABAS answers `cable_not_found` (error 28, `IFH-0018`) or error 16
@@ -46,11 +51,11 @@ car-session line and the longer idle time below are all untested there.
       NCS Expert in the middle of a flash or coding run.
 - [ ] Ask Claude "is the BMW VM up?": `vm_health` must answer with no BMW tool running.
 - [ ] Look up names now, without the ignition: `ediabas_list_ecus` with a `filter`, then
-      `ediabas_describe`, including `E60` for the whole-car jobs. Describing needs the cable in
+      `ediabas_describe`, including `E60` for the whole-car jobs on an E60/E61. Describing needs the cable in
       the VM but, for most files, not the car (desk, 2026-11-21).
-  - Describe large SGBDs with a `filter` (a job-name substring such as `STATUS_`): a full
-    describe of `CAS` or `LM_60` hit the 60 s limit and left its last jobs unscreened.
-  - `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60` gave `ediabas_error` 100 `SYS-0010` at the
+  - Describe large SGBDs with a `filter` (a job-name substring such as `STATUS_`): on the E61
+    a full describe of `CAS` or `LM_60` hit the 60 s limit and left its last jobs unscreened.
+  - On the E61's VM, `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60` gave `ediabas_error` 100 `SYS-0010` at the
     desk and appear to need the module to answer. Leave them for the ignition-on part, and
     only if the session needs them.
 - [ ] Agree the plan: which ECUs and jobs, in how many calls, and a rough time. The first
@@ -63,7 +68,7 @@ car-session line and the longer idle time below are all untested there.
 - [ ] Switch the ignition on and note the time.
 - [ ] `ediabas_vehicle_status` first. Its field names are not confirmed yet: note what
       ignition and voltage fields it returns, for the skill references.
-- [ ] The whole-car read: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` (which modules
+- [ ] On an E60/E61, the whole-car read: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` (which modules
       answer) and `FS_LESEN_FUNKTIONAL` (their faults in one job), and `C_FA_LESEN` on `CAS` or
       `LM_60` (the vehicle order).
 - [ ] The rest, batched: one `ediabas_read_faults` for the ECUs wanted (up to 20) and the
@@ -74,7 +79,7 @@ car-session line and the longer idle time below are all untested there.
       ignition. At about 8 minutes Claude wraps up; at 10 it stops and asks before any further
       read. Stop even if reads are left; continue another day.
 - [ ] If a job is refused with `job_needs_review`, note the quoted description. Approving it
-      is Ryan's decision and never routine: `ediabas_describe` on the job prints the line to
+      is the owner's decision and never routine: `ediabas_describe` on the job prints the line to
       add to `reviewedJobs`, and the agent picks it up at the next call, no restart
       ([safety.md](safety.md#approving-one-job)). Decide away from the clock if in doubt.
 - [ ] **Ignition off.** Note the total ignition-on time.

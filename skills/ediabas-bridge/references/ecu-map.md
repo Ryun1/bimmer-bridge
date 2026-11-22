@@ -1,4 +1,7 @@
-# ECU map — Ryan's E61 550i
+# ECU map — a 2005 E61 550i
+
+*Recorded on a 2005 E61 550i: other cars' ECUs and jobs differ, so check yours with
+`ediabas_list_ecus` and `ediabas_describe`.*
 
 **Status: no SGBD has yet answered from the car.** The entries below were seen at the desk on
 2026-11-21 with the cable passed through to the VM but not plugged into the car. They show that
@@ -17,7 +20,7 @@ Entries are added in the same commit as the recorded session (fixtures) they cam
 
 | Module | Name (`prg` / `grp`) | Resolved variant | Covers | Confirmed (date, how) |
 |---|---|---|---|---|
-| e.g. the module as Ryan names it | the name passed as `ecu` | the `variant` the tool reported | what its fault memory / jobs cover | date, tool and result that confirmed it |
+| e.g. the module as the owner names it | the name passed as `ecu` | the `variant` the tool reported | what its fault memory / jobs cover | date, tool and result that confirmed it |
 
 ## Entries
 

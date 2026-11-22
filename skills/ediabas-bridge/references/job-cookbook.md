@@ -1,4 +1,7 @@
-# Job cookbook — jobs confirmed on Ryan's E61
+# Job cookbook — jobs seen on a 2005 E61 550i
+
+*Recorded on a 2005 E61 550i: other cars' ECUs and jobs differ, so check yours with
+`ediabas_list_ecus` and `ediabas_describe`.*
 
 **Status: NO job has been run against the car yet.** The lists below are what
 `ediabas_describe` returned at the desk on 2026-11-21, with the cable in the VM and not in the
@@ -59,7 +62,7 @@ with comments (`durationMs` 14745). Cable in the VM, not in the car.
 | `IS_LESEN` | `allow.global` | `Infospeicher lesen (alle Info-Meldungen / Ort und Art)` — `KWP2000: $22 ReadDataByCommonIdentifier` | read info memory (all info messages / location and type) |
 | `IS_LESEN_DETAIL` | `allow.global` | `Infospeicher lesen (alle Info-Meldungen / Ort und Art)` — `KWP2000: $22 ReadDataByCommonIdentifier` | same first line as `IS_LESEN`; the rest of its description names `$2001 - $20FF dtcShadowMemoryEntry` |
 | `PRUEFSTEMPEL_LESEN` | `allow.global` | `Auslesen des Pruefstempels` — `KWP2000: $22 ReadDataByCommonIdentifier` | read the test stamp |
-| `C_FG_LESEN` | `allow.global` | `Fahrgestellnummer lesen` — `KWP2000: $1A ReadECUIdentification` | read the VIN. Its result is the car's VIN: never write it into a file here or quote it beyond what Ryan asks for |
+| `C_FG_LESEN` | `allow.global` | `Fahrgestellnummer lesen` — `KWP2000: $1A ReadECUIdentification` | read the VIN. Its result is the car's VIN: never write it into a file here or quote it beyond what the user asks for |
 | `SERIENNUMMER_LESEN` | `allow.global` | `Hersteller Seriennummer lesen` — `KWP2000: $1A ReadECUIdentification` | read the manufacturer's serial number |
 | `ZIF_LESEN` | `allow.global` | `Auslesen des Zulieferinfofeldes` — `KWP2000: $22   ReadDataByCommonIdentifier` | read the supplier info field |
 | `ZIF_BACKUP_LESEN` | `allow.global` | `Auslesen des Backups des Zulieferinfofeldes` | read the backup of the supplier info field |
@@ -186,16 +189,16 @@ recorded under policy version 1 and are stale where they say "needs review": the
 `STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU`, `STATUS_TRANSPONDER_PAGE`), 7 not checked
 (60 s limit), 7 refused by name; and `MPM_60` showed 19 runnable of 57.
 
-**Approved by Ryan on 2026-11-22.** All five needs-review jobs below (`CAS`
+**Approved by the owner on 2026-11-22.** All five needs-review jobs below (`CAS`
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
 `MPM_60` `STATUS_AD_WERTE_LESEN`) are listed in `reviewedJobs` in the VM's
 `C:\ProgramData\EdiabasBridge\config.json`, and `ediabas_describe` of each then returned
-review `reviewed`: the bridge now runs them. The approval lives only in that VM config, not in
-the repo; after a fresh install the list is empty and they are refused again until Ryan adds
+review `reviewed`: the bridge on that VM now runs them. The approval lives only in that VM config, not in
+the repo; after a fresh install the list is empty and they are refused again until the owner adds
 them back. The verdicts in the tables below are as first recorded (policy version 1), before
 the approval.
 
-**Needs review: the bridge will refuse to run these** (`job_needs_review`). Ryan decides;
+**Needs review: the bridge will refuse to run these** (`job_needs_review`). The user decides;
 the safe default is to skip them. The likely trigger is a screen term from
 `policy/policy.json` `descriptionScreen.terms` found in the recorded description
 (case-insensitive, anywhere in a word). The refusal message itself, which names the matched

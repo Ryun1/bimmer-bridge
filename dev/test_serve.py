@@ -5,6 +5,7 @@ import http.client
 import io
 import json
 import os
+import plistlib
 import sys
 import tempfile
 import threading
@@ -387,9 +388,28 @@ class BindAndClients(unittest.TestCase):
             self.assertEqual(serve.main([]), 1)
         self.assertIn("Start the VM first", err.getvalue())
 
-    def run_main(self, argv, leases="", env=None):
-        """main() up to the point it would serve; returns (code, config or None, stdout, stderr)."""
+    def run_main(self, argv, leases="", env=None, local=None, utm_mac="02:00:00:00:00:01",
+                 vm_name="Windows"):
+        """main() up to the point it would serve; returns (code, config or None, stdout, stderr).
+
+        Runs against a temporary UTM Documents folder (with a config.plist for `vm_name` holding
+        `utm_mac`, none when utm_mac is None) and config.local.json (`local`: a dict, a string
+        written as is, or None for no file); EDIABAS_VM_* from the real environment are dropped.
+        """
         made = []
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        documents = Path(tmp.name) / "Documents"
+        if utm_mac is not None:
+            vm_dir = documents / ("%s.utm" % vm_name)
+            vm_dir.mkdir(parents=True)
+            with open(vm_dir / "config.plist", "wb") as f:
+                plistlib.dump({"Backend": "QEMU", "Network": [
+                    {"Hardware": "virtio-net-pci", "MacAddress": utm_mac, "Mode": "Shared"}]}, f)
+        local_path = Path(tmp.name) / "config.local.json"
+        if local is not None:
+            local_path.write_text(local if isinstance(local, str) else json.dumps(local),
+                                  encoding="utf-8")
 
         class Stop(serve.Server):
             def __init__(self, config):
@@ -409,18 +429,23 @@ class BindAndClients(unittest.TestCase):
         with mock.patch.object(serve, "detect_bridge_address", return_value="192.168.64.1"), \
                 mock.patch.object(serve, "read_leases", return_value=leases), \
                 mock.patch.object(serve, "make_server", side_effect=make), \
-                mock.patch.dict(os.environ, env or {}, clear=False), \
+                mock.patch.object(serve, "UTM_DOCUMENTS", documents), \
+                mock.patch.object(serve, "LOCAL_CONFIG_PATH", local_path), \
+                mock.patch.dict(os.environ, {}, clear=False), \
                 mock.patch("sys.stdout", new=io.StringIO()) as out, \
                 mock.patch("sys.stderr", new=io.StringIO()) as err:
+            os.environ.pop("EDIABAS_VM_MAC", None)
+            os.environ.pop("EDIABAS_VM_NAME", None)
+            os.environ.update(env or {})
             code = serve.main(argv)
         return code, (made[0] if made else None), out.getvalue(), err.getvalue()
 
     LEASES = (
         "{\n\tname=other\n\tip_address=192.168.64.9\n\thw_address=1,aa:bb:cc:0:0:1\n"
         "\tidentifier=1,aa:bb:cc:0:0:1\n\tlease=0x7f000000\n}\n"
-        "{\n\tname=DESKTOP\n\tip_address=192.168.64.3\n\thw_address=1,f2:e5:81:1e:82:7\n"
-        "\tidentifier=1,f2:e5:81:1e:82:7\n\tlease=0x6b01baf4\n}\n"
-        "{\n\tname=DESKTOP\n\tip_address=192.168.64.4\n\thw_address=1,f2:e5:81:1e:82:7\n"
+        "{\n\tname=DESKTOP\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n"
+        "\tidentifier=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n"
+        "{\n\tname=DESKTOP\n\tip_address=192.168.64.4\n\thw_address=1,2:0:0:0:0:1\n"
         "\tlease=0x6b01baf5\n}\n"
     )
 
@@ -436,11 +461,55 @@ class BindAndClients(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(cfg.client, "192.168.64.9")
 
+    def test_main_vm_mac_precedence(self):
+        other = "AA:BB:CC:00:00:01"  # the "other" lease, 192.168.64.9
+        vm = "02:00:00:00:00:01"  # the VM's leases, latest 192.168.64.4
+        cases = [
+            # (env, config.local.json, MAC in UTM's config) -> expected client
+            ({}, None, vm, "192.168.64.4"),
+            ({}, {"vmMac": other}, vm, "192.168.64.9"),  # local file beats UTM
+            ({"EDIABAS_VM_MAC": vm}, {"vmMac": other}, other, "192.168.64.4"),  # env beats both
+            ({}, {"vmMac": ""}, vm, "192.168.64.4"),  # a bad value is ignored
+        ]
+        for env, local, utm_mac, want in cases:
+            code, cfg, _, _ = self.run_main([], leases=self.LEASES, env=env, local=local,
+                                            utm_mac=utm_mac)
+            self.assertEqual(code, 0, (env, local))
+            self.assertEqual(cfg.client, want, (env, local))
+
+    def test_main_vm_name_picks_the_utm_config(self):
+        for env, local in [({"EDIABAS_VM_NAME": "Win11"}, None),
+                           ({}, {"vmName": "Win11"}),
+                           ({"EDIABAS_VM_NAME": "Win11"}, {"vmName": "Windows"})]:
+            code, cfg, _, err = self.run_main([], leases=self.LEASES, env=env, local=local,
+                                              utm_mac="AA:BB:CC:00:00:01", vm_name="Win11")
+            self.assertEqual(code, 0, err)
+            self.assertEqual(cfg.client, "192.168.64.9")
+
+    def test_main_without_a_mac_says_how_to_set_it(self):
+        code, cfg, _, err = self.run_main([], leases=self.LEASES, utm_mac=None)
+        self.assertEqual(code, 1)
+        self.assertIsNone(cfg)
+        self.assertIn("MAC address is not set and could not be read from", err)
+        self.assertIn("Windows.utm", err)
+        self.assertIn("set EDIABAS_VM_MAC", err)
+        self.assertIn("EDIABAS_VM_NAME if the VM in UTM is not called 'Windows'", err)
+        self.assertIn("--client", err)
+
+    def test_main_bad_local_config_warns_and_carries_on(self):
+        code, cfg, _, err = self.run_main([], leases=self.LEASES, local="{ not json")
+        self.assertEqual(code, 0)
+        self.assertEqual(cfg.client, "192.168.64.4")
+        self.assertIn("warning:", err)
+        self.assertIn("is not valid JSON", err)
+
     def test_main_without_a_lease_refuses_to_start(self):
         code, cfg, _, err = self.run_main([], leases="")
         self.assertEqual(code, 1)
         self.assertIsNone(cfg)
         self.assertIn("--client", err)
+        self.assertIn("02:00:00:00:00:01", err)
+        self.assertIn("set EDIABAS_VM_MAC", err)
 
     def test_main_client_flag_wins(self):
         code, cfg, _, _ = self.run_main(["--client", "192.168.64.7"], leases=self.LEASES)
@@ -454,17 +523,58 @@ class BindAndClients(unittest.TestCase):
             self.assertEqual(code, 2, bad)
             self.assertIsNone(cfg, bad)
 
-    def test_vm_mac_default_matches_the_mcp_server(self):
+    def test_local_config_keys_match_the_mcp_server(self):
         config_ts = (Path(__file__).resolve().parent.parent / "mac-mcp" / "src" / "config.ts"
                      ).read_text(encoding="utf-8")
-        self.assertIn('vmMac: "%s"' % serve.VM_MAC_DEFAULT, config_ts)
+        self.assertIn("const LOCAL_KEYS = [%s] as const;"
+                      % ", ".join('"%s"' % k for k in serve.LOCAL_KEYS), config_ts)
+        self.assertIn('vmName: "%s"' % serve.VM_NAME_DEFAULT, config_ts)
+
+    def test_read_local_config(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.local.json"
+            self.assertEqual(serve.read_local_config(path), ({}, []))
+            path.write_text(json.dumps({"_comment": "x", "vmName": " Win11 ", "vmMac": "02:00:00:00:00:01",
+                                        "agentPort": 9000}), encoding="utf-8")
+            self.assertEqual(serve.read_local_config(path),
+                             ({"vmName": "Win11", "vmMac": "02:00:00:00:00:01", "agentPort": 9000}, []))
+            path.write_text(json.dumps({"vmname": "x", "vmMac": 5, "agentPort": True}), encoding="utf-8")
+            local, warnings = serve.read_local_config(path)
+            self.assertEqual(local, {})
+            self.assertEqual(len(warnings), 3)
+            self.assertIn('unknown key "vmname"', warnings[0])
+            self.assertIn("vmMac must be a non-empty string", warnings[1])
+            self.assertIn("agentPort must be a whole number", warnings[2])
+            path.write_text("[1]", encoding="utf-8")
+            self.assertIn("must hold one JSON object", serve.read_local_config(path)[1][0])
+            path.write_text("{", encoding="utf-8")
+            self.assertIn("is not valid JSON", serve.read_local_config(path)[1][0])
+
+    def test_mac_from_utm_config(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.plist"
+            self.assertIsNone(serve.mac_from_utm_config(path))  # missing file
+            for data, want in [
+                ({"Network": [{"MacAddress": "02:00:00:00:00:01"}, {"MacAddress": "02:00:00:00:00:02"}]},
+                 "02:00:00:00:00:01"),
+                ({"Network": []}, None),
+                ({"Network": [{}]}, None),
+                ({"Network": [{"MacAddress": "garbage"}]}, None),
+                ({}, None),
+            ]:
+                with open(path, "wb") as f:
+                    plistlib.dump(data, f)
+                self.assertEqual(serve.mac_from_utm_config(path), want, data)
+            path.write_bytes(b"not a plist")
+            self.assertIsNone(serve.mac_from_utm_config(path))
+        self.assertEqual(serve.utm_config_path("Win11", "/D"), Path("/D/Win11.utm/config.plist"))
 
     def test_lease_parsing(self):
-        self.assertEqual(serve.vm_lease_address(self.LEASES, "F2:E5:81:1E:82:07"), "192.168.64.4")
-        self.assertEqual(serve.vm_lease_address(self.LEASES, "f2-e5-81-1e-82-07"), "192.168.64.4")
-        self.assertIsNone(serve.vm_lease_address(self.LEASES, "F2:E5:81:1E:82:08"))
+        self.assertEqual(serve.vm_lease_address(self.LEASES, "02:00:00:00:00:01"), "192.168.64.4")
+        self.assertEqual(serve.vm_lease_address(self.LEASES, "02-00-00-00-00-01"), "192.168.64.4")
+        self.assertIsNone(serve.vm_lease_address(self.LEASES, "02:00:00:00:00:02"))
         self.assertIsNone(serve.vm_lease_address(self.LEASES, "garbage"))
-        self.assertIsNone(serve.vm_lease_address("", "F2:E5:81:1E:82:07"))
+        self.assertIsNone(serve.vm_lease_address("", "02:00:00:00:00:01"))
 
     def test_valid_bind(self):
         self.assertEqual(serve.validate_bind(" 192.168.64.1 "), "192.168.64.1")

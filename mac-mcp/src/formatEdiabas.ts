@@ -22,7 +22,7 @@ function group(n: number): string {
   return n < 0 ? `-${s}` : s;
 }
 
-/** `121,609 mi (195,712 km)`. Miles are whole miles covered, as an odometer shows them. */
+/** `100,000 mi (160,935 km)`. Miles are whole miles covered, as an odometer shows them. */
 export function formatKm(km: number): string {
   return `${group(Math.floor(km / 1.609344))} mi (${group(Math.round(km))} km)`;
 }
@@ -266,7 +266,7 @@ function verdictText(agent: AgentVerdict, mac: Verdict | null): { runnable: bool
   if (!agent.allowed) return { runnable: false, text: `not allowed (${cleanText(agent.rule, 60)})` };
   const review = cleanText(agent.review, 30);
   if (RUNNABLE_REVIEW.has(review)) return { runnable: true, text: "runnable" };
-  if (review === "needs_review") return { runnable: false, text: "needs review (its description suggests more than a read; Ryan decides)" };
+  if (review === "needs_review") return { runnable: false, text: "needs review (its description suggests more than a read; the user decides)" };
   if (review === "not_checked") return { runnable: false, text: "description not screened" };
   return { runnable: false, text: `not runnable (review ${review || "unknown"})` };
 }
@@ -299,7 +299,7 @@ function hashLines(d: DescribeJob): string[] {
   const out = [`Description hash: ${hash}`];
   if (review === "needs_review") {
     out.push(
-      `To approve this job as it is described now, Ryan adds "${cleanName(d.ecu)}:${cleanName(d.job)}@${hash}" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).`,
+      `To approve this job as it is described now, the user adds "${cleanName(d.ecu)}:${cleanName(d.job)}@${hash}" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).`,
     );
   }
   return out;

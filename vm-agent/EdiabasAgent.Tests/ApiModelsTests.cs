@@ -106,7 +106,7 @@ public class ApiModelsTests
             StartedAt: ApiFormat.Timestamp(new DateTimeOffset(2026, 11, 21, 15, 4, 5, 999, TimeSpan.Zero)),
             UptimeSeconds: 512,
             Os: new OsInfo("Microsoft Windows 10.0.26100", "Arm64", "X86"),
-            User: "ryan",
+            User: "user",
             Elevated: false,
             SessionId: 1,
             BindAddress: "192.168.64.3",

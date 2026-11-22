@@ -572,8 +572,8 @@ public sealed class EdiabasService
             return ApiFailure.Of(
                 ApiErrors.JobNeedsReview,
                 description is null
-                    ? $"{job} has no description, so it cannot be shown to be a read. Ryan can approve it in the agent config."
-                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config.",
+                    ? $"{job} has no description, so it cannot be shown to be a read. The user can approve it in the agent config."
+                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config.",
                 new JobReviewDetails(ecu, job, description, screened.Matched));
         }
 
@@ -581,7 +581,7 @@ public sealed class EdiabasService
     }
 
     /// <summary>
-    /// A pinned approval holds only for the description Ryan read: one that changed, is empty or
+    /// A pinned approval holds only for the description the user read: one that changed, is empty or
     /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips both screens.
     /// </summary>
     private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
@@ -598,9 +598,9 @@ public sealed class EdiabasService
         }
 
         var message = description is not null
-            ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). Ryan can approve it again in the agent config."
+            ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). The user can approve it again in the agent config."
             : read.Ok
-                ? $"{job} has no description now, so its approval cannot be checked. Ryan can approve it again in the agent config."
+                ? $"{job} has no description now, so its approval cannot be checked. The user can approve it again in the agent config."
                 : $"The description of {job} could not be read, so its approval cannot be checked.";
         return ApiFailure.Of(ApiErrors.JobNeedsReview, message, new JobReviewDetails(ecu, job, description, []));
     }
@@ -741,8 +741,8 @@ public sealed class EdiabasService
         return ApiFailure.Of(
             ApiErrors.JobNeedsReview,
             screened.Matched.Count > 0
-                ? $"The argument description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config."
-                : $"{job} takes arguments but they are not described, so the call cannot be shown to be a read. Ryan can approve it in the agent config.",
+                ? $"The argument description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config."
+                : $"{job} takes arguments but they are not described, so the call cannot be shown to be a read. The user can approve it in the agent config.",
             new JobReviewDetails(ecu, job, text, screened.Matched));
     }
 

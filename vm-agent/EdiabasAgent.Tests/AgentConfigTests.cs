@@ -33,9 +33,7 @@ public class AgentConfigTests
         Assert.Equal(@"C:\ProgramData\EdiabasBridge\logs", c.LogDirectory);
         Assert.Equal(new[] { @"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK" }, c.LogRoots);
         Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool" }, c.ConflictProcesses);
-        var vs = Assert.Single(c.VoltageSources);
-        Assert.Equal("NVE_65", vs.Ecu);
-        Assert.Equal("STATUS_BORDNETZSPANNUNG", vs.Job);
+        Assert.Empty(c.VoltageSources);
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(30, c.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);

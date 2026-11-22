@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to config.local.json (git-ignored) and keep only the keys you need. Environment variables (EDIABAS_VM_NAME, EDIABAS_VM_MAC, EDIABAS_AGENT_PORT) win over this file. vmName is the VM's name in UTM (default Windows); its MAC is read from UTM's config for that VM. Add \"vmMac\": \"aa:bb:cc:dd:ee:ff\" only if that lookup fails. Keys starting with _ are comments.",
+  "vmName": "Windows",
+  "agentPort": 8765
+}

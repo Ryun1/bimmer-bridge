@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { networkInterfaces } from "node:os";
 import { promisify } from "node:util";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { loadConfig } from "./config.js";
+import { DEFAULT_LOCAL_CONFIG_PATH, loadConfig } from "./config.js";
 import { createAppServer, stderrLog } from "./server.js";
 import type { ExecFileFn } from "./vmAddress.js";
 
@@ -30,7 +30,7 @@ const execFile: ExecFileFn = async (file, args, opts) => {
 };
 
 async function main(): Promise<void> {
-  const { config, warnings } = loadConfig(process.env);
+  const { config, warnings } = loadConfig(process.env, undefined, DEFAULT_LOCAL_CONFIG_PATH);
   for (const w of warnings) stderrLog(`warning: ${w}`);
 
   const server = createAppServer(config, {

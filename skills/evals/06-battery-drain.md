@@ -18,7 +18,7 @@ this case cannot be run.
 - Uses `ediabas_describe` to choose jobs; uses only names a tool returned.
 - Batches fault memory into one `ediabas_read_faults` call and the status jobs into one `ediabas_jobs` call (or runs them back to back).
 - Mentions the 10-minute ignition-on budget and ends with 'ignition off'.
-- Hands readings to `bmw-e61` and does not claim a cause the data does not show.
+- Hands readings to a car-specific skill (such as `bmw-e61`) when one is installed, and does not claim a cause the data does not show.
 
 ## Must not
 - Reads every ECU, or runs every job an SGBD lists.

@@ -136,7 +136,7 @@ export function agentError(
 }
 
 export const UPDATE_HINT =
-  "Ryan needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see README.md).";
+  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see README.md).";
 
 /** The agent has no such endpoint: it is an older build. */
 export function agentOutdated(path: string): BridgeError {
@@ -195,7 +195,7 @@ export function describeAgentError(code: string, message: string | undefined, de
       const rule = detailString(details, "rule");
       return (
         `The agent refused ${ecuJob(details)} under its job policy${rule ? ` (rule ${cleanText(rule, 80)})` : ""}. ` +
-        "The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell Ryan it was refused."
+        "The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell the user it was refused."
       );
     }
     case "job_needs_review": {
@@ -210,14 +210,14 @@ export function describeAgentError(code: string, message: string | undefined, de
           : `its description suggests it may do more than read (matched: ${matched.join(", ")}). Description: "${cleanText(description, 300)}"`;
       return (
         `The agent did not run ${ecuJob(details)}: ${why}. ` +
-        "Ryan decides whether this job is safe to run; do not try to get the same reading another way."
+        "The user decides whether this job is safe to run; do not try to get the same reading another way."
       );
     }
     case "cable_in_use": {
       const list = processList(details);
       return (
         `The diagnostic cable is in use${list ? ` by ${list}` : " by a BMW tool in the VM"}. ` +
-        "Ask Ryan to close it, then ask again once. Do not retry in a loop."
+        "Ask the user to close it, then ask again once. Do not retry in a loop."
       );
     }
     case "ecu_not_found": {
@@ -236,17 +236,17 @@ export function describeAgentError(code: string, message: string | undefined, de
       const said = `${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""}`;
       // The job ran and ended normally; only reading its results failed. Nothing points at the ECU or cable.
       if (detailsObject(details)?.resultsUnread === true) {
-        return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask Ryan before trying again.`;
+        return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask the user before trying again.`;
       }
       const what = n !== null || text ? said : cleanText(message ?? "no details", 200);
       // Error 16 (IFH-0006) on every real SGBD, seen on 2026-11-22 after the cable was replugged
       // into the Mac: it was no longer attached to the VM until ticked again in UTM.
       const why =
         n === 16
-          ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (Ryan ticks it in UTM's USB menu). " +
+          ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (the user ticks it in UTM's USB menu). " +
             "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
           : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
-      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask Ryan before trying again.`;
+      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.
@@ -256,26 +256,26 @@ export function describeAgentError(code: string, message: string | undefined, de
       const said = n !== null || text ? ` (EDIABAS ${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""})` : "";
       return (
         `EDIABAS could not initialise the diagnostic interface${said}: the K+DCAN cable is not connected to the VM. ` +
-        "Even ediabas_describe needs it for a real SGBD. Ask Ryan to plug the cable into the Mac and pass it through to the " +
-        "Windows VM in UTM. Do not retry until he says it is connected."
+        "Even ediabas_describe needs it for a real SGBD. Ask the user to plug the cable into the Mac and pass it through to the " +
+        "Windows VM in UTM. Do not retry until the user says it is connected."
       );
     }
     case "ediabas_unavailable": {
       const reason = detailString(details, "reason");
-      return `EDIABAS could not be started in the VM${reason ? ` (${cleanText(reason, 200)})` : ""}. Check vm_health (EDIABAS DLL); Ryan may need to check the EDIABAS installation in the VM.`;
+      return `EDIABAS could not be started in the VM${reason ? ` (${cleanText(reason, 200)})` : ""}. Check vm_health (EDIABAS DLL); the user may need to check the EDIABAS installation in the VM.`;
     }
     case "job_timeout": {
       const s = detailNumber(details, "timeoutSeconds");
-      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering; check ediabas_vehicle_status and ask Ryan before trying again.`;
+      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering; check ediabas_vehicle_status and ask the user before trying again.`;
     }
     case "window_not_found":
       return "No visible window in the VM matches that. Use vm_list_windows to see the window titles and handles, or ask for the desktop.";
     case "window_minimized": {
       const title = detailString(details, "title");
-      return `The window${title ? ` "${cleanText(title, 80)}"` : ""} is minimised, and the bridge never restores windows. Ask Ryan to restore it in the VM, then ask again.`;
+      return `The window${title ? ` "${cleanText(title, 80)}"` : ""} is minimised, and the bridge never restores windows. Ask the user to restore it in the VM, then ask again.`;
     }
     case "desktop_unavailable":
-      return "The VM's screen cannot be captured: Windows is locked, showing a secure desktop, or nobody is logged in. Ask Ryan to log in to or unlock Windows, then ask again.";
+      return "The VM's screen cannot be captured: Windows is locked, showing a secure desktop, or nobody is logged in. Ask the user to log in to or unlock Windows, then ask again.";
     case "capture_busy":
       return "Another screenshot is still being taken in the VM; try again in a moment.";
     case "capture_failed":
@@ -292,7 +292,7 @@ export function describeAgentError(code: string, message: string | undefined, de
       const why = message?.trim() ? `the agent said: "${cleanText(message, 200)}"` : "the agent did not start this job and gave no reason.";
       return (
         `Not run: ${why} ` +
-        "If a BMW tool was opened in the VM, ask Ryan to close it before asking again. If the time limit was reached, ask again for this ECU on its own. Do not retry in a loop."
+        "If a BMW tool was opened in the VM, ask the user to close it before asking again. If the time limit was reached, ask again for this ECU on its own. Do not retry in a loop."
       );
     }
     case "bad_request": {
