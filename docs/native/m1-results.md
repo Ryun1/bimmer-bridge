@@ -62,6 +62,35 @@ Found while building: no upstream test job fails through the interface. `cmd_tes
 `TEST_IFACE_FLAGS` traps every interface error and ends ready, which is also a real example of
 an SGBD masking a send error.
 
+### The gate against real reads (Claude, 2026-11-22, no device)
+
+A scratch probe (not committed) took 87 of Ryan's SGBDs: the eight E61 modules, all 28 KWP2000\*,
+the one KWP2000 BMW, and samples of DS2 (25), D-CAN (10) and BMW-FAST (15). For each one it
+ran every job that the policy allows and that takes no argument, through the production path
+(`NativeEdiabasApi` → EdiabasLib → `KlineInterface` → libkline's gate) into an **empty replay**,
+so nothing reached a device. What libkline saw first, per job:
+
+| Outcome | Jobs |
+|---|---|
+| The gate let the first telegram through (the replay then refused it, as it is empty) | 1,381 |
+| Nothing was sent | 135 |
+| **The gate refused it** | **54** |
+
+Every refusal is service **0x30** (input/output control, 41 jobs; 21 of them with control option
+01, "report current state") or **0x31** (start routine, 13 jobs), read correctly under the SGBD's
+own concept. None is a malformed or misread frame, so the stricter gate from the final review
+refuses no legitimate frame shape. But **24 of them are policy-allowed `STATUS_` reads on this
+car's own modules**:
+- `NVE_65`: `STATUS_TASTER`, `STATUS_BORDNETZSPANNUNG` (0x30), `STATUS_PAIRING`,
+  `STATUS_FSC_LESEN` (0x31)
+- `CAS`: `STATUS_CAS_DIAGNOSE` (0x30), `STATUS_KL15_ABSCHALTUNG`, `STATUS_WAKEUP_HISTORY` (0x31)
+- `LM_60`: 17 `STATUS_` jobs (0x30, report current state)
+
+This is the design's open risk 5 happening for real: the gate fails these reads safely, but
+natively they cannot run (on the VM they can). `NVE_65 STATUS_BORDNETZSPANNUNG` is also the
+`voltageSources` example in docs/api.md. Whether to allow 0x30 with "report current state"
+(and which 0x31 routines, if any) is **Ryan's decision**, with its own test case, before M2.
+
 ## 3. Describe for every `.prg` (desk session)
 
 **Before:** the cable unplugged from the car (it may stay in the VM). Ryan says go.
@@ -144,6 +173,9 @@ Every difference, explained or fixed:
 |---|---|---|---|
 
 ## 5. For M2
+
+- **Decide on the gate and 0x30/0x31 reads** (section 2, "The gate against real reads"): 24
+  `STATUS_` reads on NVE_65, CAS and LM_60 are refused natively today.
 
 - The MCP server's native backend (`EDIABAS_BACKEND=native`) and `bridge_health`, with the
   cable's free/locked state.
