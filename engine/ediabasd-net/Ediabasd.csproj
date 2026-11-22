@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- ediabasd, stage 1: EdiabasLib (unmodified) on libkline behind EdiabasAgent.Core's
+       service, with a JSON-lines stdio front and a CLI. GPL-3.0. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>ediabasd</AssemblyName>
+    <RootNamespace>Ediabasd</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../EdiabasLib.Native/EdiabasLib.Native.csproj" />
+    <!-- Core stays in vm-agent/ until M4 (M1 plan, decision 6). -->
+    <ProjectReference Include="../../vm-agent/EdiabasAgent.Core/EdiabasAgent.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ediabasd.Tests" />
+  </ItemGroup>
+</Project>

@@ -231,6 +231,28 @@ error with its trap mask and carry on as though it succeeded.
   applies. Natively, `ediabasd` then answers that request and exits, and the MCP server
   respawns it on the next request. The job is never resent.
 
+#### M1 amendments (from M0's results and the M1 plan)
+
+- **INIT is split by path, deliberately.** Real EDIABAS runs `INITIALISIERUNG` on the first job
+  against a freshly loaded SGBD, even when that job is `_JOBS` (M0 results, section 4). The live
+  instance does the same: it is created fresh for each request with `NoInitForVJobs = false`.
+  The offline instance keeps `NoInitForVJobs = true`, so describe never runs INIT and never
+  touches the cable. For an SGBD whose INIT sends a telegram, describe therefore succeeds
+  natively where real EDIABAS would need the car. This difference is intended.
+- **One process, one job at a time.** Both instances live in `ediabasd`. Every job runs on one
+  worker, one at a time, and `EdiabasFactory.Activate` binds EdiabasNet's static register table
+  to the instance about to run (by reflection; upstream unmodified).
+- **The port opens only when the SGBD asks.** `Init` creates nothing that touches the cable; the
+  live instance is created at the request's first live job, and EdiabasLib opens the port on
+  the SGBD's `xconnect`.
+- **libkline's reasons reach Core as reserved codes** 9001–9007 (`NativeErrorCodes`), which
+  `EdiabasErrorMap` maps to `cable_not_found`, `cable_in_use`, `cable_unsupported`,
+  `cable_permission`, `frame_refused`, `needs_car` and an `ediabas_error` that says to check the
+  cable switch.
+- **Group files resolve at the car only in a live request** (`job`, `jobs`, `vehicle`); a
+  describe with no cached variant gives `needs_car`.
+- `EdiabasAgent.Core` stays in `vm-agent/` until M4.
+
 ### Service, stage 1: reuse `EdiabasAgent.Core`
 
 `vm-agent/EdiabasAgent.Core` is already platform-neutral and reaches EDIABAS only through

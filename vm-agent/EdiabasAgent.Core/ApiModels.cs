@@ -71,6 +71,12 @@ public static class ApiErrors
     public const string JobTimeout = "job_timeout";
     public const string NotRun = "not_run";
 
+    // The native engine (ediabasd) only.
+    public const string CableUnsupported = "cable_unsupported";
+    public const string CablePermission = "cable_permission";
+    public const string FrameRefused = "frame_refused";
+    public const string NeedsCar = "needs_car";
+
     public const string PathNotAllowed = "path_not_allowed";
     public const string FileNotFound = "file_not_found";
     public const string WindowNotFound = "window_not_found";
@@ -87,11 +93,11 @@ public static class ApiErrors
     {
         BadRequest => 400,
         Unauthorized => 401,
-        Forbidden or JobNotAllowed or JobNeedsReview or PathNotAllowed => 403,
+        Forbidden or JobNotAllowed or JobNeedsReview or PathNotAllowed or FrameRefused => 403,
         NotFound or EcuNotFound or JobNotFound or FileNotFound or WindowNotFound => 404,
         MethodNotAllowed => 405,
-        CableInUse or WindowMinimized => 409,
-        EdiabasError or CableNotFound => 502,
+        CableInUse or WindowMinimized or NeedsCar => 409,
+        EdiabasError or CableNotFound or CableUnsupported or CablePermission => 502,
         EdiabasUnavailable or NotRun or DesktopUnavailable or CaptureBusy => 503,
         CaptureFailed => 500,
         JobTimeout => 504,
