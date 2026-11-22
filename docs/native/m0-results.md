@@ -339,6 +339,10 @@ Both behaviours were confirmed with a small C program on the same kernel, outsid
 
 ## 8. Break width (only if section 2 found 0x010C)
 
+**Skipped (2026-11-22).** Section 2 found 0x010C only in `mrrbt.prg`, not an E61 module, and
+section 9 drops fast init from M2. On the real cable, `kline probe` held the 25 ms break for
+26.2 ms by the host clock (section 5).
+
 With a scope or logic analyser on the cable's K-line (pin 7), run `kline probe` and measure the
 low pulse from its `break 25ms` step, on macOS and on Linux. `probe` prints how long the host
 held the break by its own clock; on a pty at the desk that was 29.4 ms for 25 asked (macOS
