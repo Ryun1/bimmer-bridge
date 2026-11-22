@@ -12,7 +12,10 @@ export interface Difference {
   native: unknown;
 }
 
-export type DiffKind = "match" | "differ" | "vm_error" | "native_error" | "both_error";
+/** verdict_only: names, comments, variant and count agree, only verdicts differ. Verdicts come
+ * from the same Core code on both sides, so that is a policy difference (e.g. the VM agent
+ * built from a newer policy.json), not the engine. */
+export type DiffKind = "match" | "differ" | "verdict_only" | "vm_error" | "native_error" | "both_error";
 
 export interface DescribeDiff {
   kind: DiffKind;
@@ -71,5 +74,7 @@ export function diffDescribe(vm: Side, native: Side): DescribeDiff {
     cmp(`jobs[${i}].verdict.review`, vx.review, vy.review);
   }
 
-  return { kind: out.length === 0 ? "match" : "differ", differences: out };
+  const kind: DiffKind =
+    out.length === 0 ? "match" : out.every((d) => /\.verdict\.(allowed|rule|review)$/.test(d.path)) ? "verdict_only" : "differ";
+  return { kind, differences: out };
 }

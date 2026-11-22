@@ -80,4 +80,19 @@ describe("diffDescribe", () => {
     const d = diffDescribe(ok(list([], { variant: "A" })), ok(list([], { variant: "B" })));
     expect(d.differences).toEqual([{ path: "variant", vm: "A", native: "B" }]);
   });
+
+  it("differences only in verdicts are verdict_only (policy drift), and still listed", () => {
+    const a = list([job("STATUS_PAIRING", "same text", "needs_review", true, "allow.pattern")]);
+    const b = list([job("STATUS_PAIRING", "same text", "passed", true, "allow.pattern")]);
+    const d = diffDescribe(ok(a), ok(b));
+    expect(d.kind).toBe("verdict_only");
+    expect(d.differences).toEqual([{ path: "jobs[0].verdict.review", vm: "needs_review", native: "passed" }]);
+  });
+
+  it("a comment difference beside a verdict difference is differ", () => {
+    const a = list([job("A", "x", "needs_review")]);
+    const b = list([job("A", "y", "passed")]);
+    expect(diffDescribe(ok(a), ok(b)).kind).toBe("differ");
+  });
 });
+
