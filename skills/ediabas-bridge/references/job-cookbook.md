@@ -170,6 +170,16 @@ if any, after " — "; tabs in the SGBD's text are shown as one space. "In the j
 the full list showed for the same job. Every job here takes no arguments (`arguments` was
 empty for all of them). Result names are listed as declared, in the SGBD's order.
 
+**Screen changed on 2026-11-22 (agent 0.2.2, policy version 2).** The description screen now
+ignores the words "Beschreibung" and "Umsetzer" before matching its terms, so the label
+"Jobbeschreibung:" no longer fails a job by itself. The counts and verdicts in this file were
+recorded under policy version 1 and are stale where they say "needs review": the same day,
+`ediabas_describe` of `CAS` with filter `STATUS` under version 2 returned 54 jobs: 30 passed,
+4 reviewed, 6 needs review (`STATUS_CC_DATEN_ARG`, `STATUS_ELV_HISTORY_AUS_BUFFER`,
+`STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU`, `STATUS_TRANSPONDER_PAGE`), 7 not checked
+(60 s limit), 7 refused by name; and `MPM_60` showed 19 runnable of 57. Go by what
+`ediabas_describe` returns now, not by the tables.
+
 **Approved by Ryan on 2026-11-22.** All five needs-review jobs below (`CAS`
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
 `MPM_60` `STATUS_AD_WERTE_LESEN`) are listed in `reviewedJobs` in the VM's
