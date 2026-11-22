@@ -9,10 +9,9 @@ Implements the routes in docs/deploy.md and nothing else:
   PUT /token                                                      only with --accept-token
 
 Only the VM may talk to it: every request from any other address is refused (403). The VM's
-address is the latest DHCP lease for its MAC, or the one given with --client. The MAC is found
-as the MCP server finds it: EDIABAS_VM_MAC, else vmMac in config.local.json at the repo root,
-else the first network card in UTM's config.plist for the VM (EDIABAS_VM_NAME, else vmName in
-config.local.json, else "Windows").
+address is the newest DHCP lease for its MAC, or the one given with --client (the MCP server
+finds it the same way, but skips a lease that is off UTM's network: docs/architecture.md, "The
+request path").
 
 Standard library only. Run from anywhere:
   python3 dev/serve.py [--bind IP] [--client VM-IP] [--port N] [--accept-token]
@@ -61,9 +60,9 @@ VM_MAC_ENV = "EDIABAS_VM_MAC"
 VM_NAME_ENV = "EDIABAS_VM_NAME"
 VM_NAME_DEFAULT = "Windows"
 LOCAL_CONFIG_PATH = REPO_ROOT / "config.local.json"
-# Keys config.local.json may set (keys starting with "_" are comments). agentPort is for the
-# MCP server; serve.py accepts it without using it.
-LOCAL_KEYS = ("vmName", "vmMac", "agentPort")
+# Keys config.local.json may set (keys starting with "_" are comments). agentPort and
+# voltageSources are for the MCP server; serve.py accepts them without using them.
+LOCAL_KEYS = ("vmName", "vmMac", "agentPort", "voltageSources")
 UTM_DOCUMENTS = Path.home() / "Library" / "Containers" / "com.utmapp.UTM" / "Data" / "Documents"
 
 
@@ -230,6 +229,8 @@ def read_local_config(path):
         if key not in LOCAL_KEYS:
             warnings.append('%s: unknown key "%s" is ignored (known keys: %s).'
                             % (path, key, ", ".join(LOCAL_KEYS)))
+        elif key == "voltageSources":
+            continue  # the MCP server checks it
         elif key == "agentPort":
             if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535:
                 out[key] = value

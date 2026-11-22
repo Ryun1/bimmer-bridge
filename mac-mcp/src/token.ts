@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { BridgeError, noToken } from "./errors.js";
 import type { ExecFileFn } from "./vmAddress.js";
 
@@ -19,6 +20,14 @@ export interface TokenProviderOptions {
 }
 
 const SECURITY = "/usr/bin/security";
+
+/**
+ * The key of the agent's `/hello` proof (docs/api.md): SHA-256 of the token's UTF-8 bytes.
+ * Taken from one exact token, so the token that passed the proof is the one that is sent.
+ */
+export function helloKey(token: string): Buffer {
+  return createHash("sha256").update(token, "utf8").digest();
+}
 
 /** no_token when EDIABAS_AGENT_URL is set without EDIABAS_AGENT_TOKEN. */
 export function noTokenForOverride(): BridgeError {

@@ -11,7 +11,8 @@ public sealed class FakeJob
     /// <summary>apiState answers busy this many times before the final state.</summary>
     public int BusyPolls { get; init; }
 
-    /// <summary>Busy for ever (until apiBreak, unless <see cref="IgnoresBreak"/>).</summary>
+    /// <summary>Busy for ever (until apiBreak, unless <see cref="IgnoresBreak"/>). A job with
+    /// <see cref="BusyPolls"/> also stops at apiBreak.</summary>
     public bool NeverFinishes { get; init; }
 
     public bool IgnoresBreak { get; init; }
@@ -94,9 +95,20 @@ public sealed class FakeEdiabasApi : IEdiabasApi
 
     public IEnumerable<string> JobCalls => Calls.Where(c => c.StartsWith("Job ", StringComparison.Ordinal));
 
+    /// <summary>How long loading api32.dll takes on <see cref="Clock"/>.</summary>
+    public int LoadMs { get; set; }
+
+    /// <summary>The runner clock, advanced by <see cref="LoadMs"/>; null leaves time alone.</summary>
+    public FakeClock? Clock { get; set; }
+
     public bool TryLoad(out string? reason)
     {
         Calls.Add("TryLoad");
+        if (Clock is not null)
+        {
+            Clock.ElapsedMs += LoadMs;
+        }
+
         reason = LoadOk ? null : "api32.dll not found";
         return LoadOk;
     }
@@ -142,9 +154,15 @@ public sealed class FakeEdiabasApi : IEdiabasApi
             return ApiState.Error;
         }
 
+        // apiBreak stops any job, unless it is scripted to ignore it.
+        if (_broken && !_current.IgnoresBreak)
+        {
+            return ApiState.Break;
+        }
+
         if (_current.NeverFinishes)
         {
-            return _broken && !_current.IgnoresBreak ? ApiState.Break : ApiState.Busy;
+            return ApiState.Busy;
         }
 
         if (_pollsLeft > 0)

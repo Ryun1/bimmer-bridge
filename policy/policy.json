@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "namePattern": "^[A-Za-z0-9_]{1,64}$",
   "maxArgLength": 200,
   "allow": {
@@ -33,6 +33,66 @@
     ],
     "restrictedEcus": {
       "E60": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "E65": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "E70": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "E89X": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "F01": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
+      "R56": [
         "INFO",
         "IDENT_FUNKTIONAL",
         "FS_LESEN_FUNKTIONAL",
@@ -126,7 +186,16 @@
       "erase",
       "delete",
       "activate",
-      "learn"
+      "learn",
+      "schaltet",
+      "einschalt",
+      "ausschalt",
+      "umschalt",
+      "ausloes",
+      "auslös",
+      "trigger",
+      "oeffnen",
+      "öffnen"
     ],
     "ignore": [
       "beschreibung",

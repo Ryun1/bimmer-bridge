@@ -3,7 +3,8 @@
 #   release/EdiabasAgent.zip         EdiabasAgent.exe, version.txt and commit.txt at the zip root
 #   release/EdiabasAgent.zip.sha256  the hex digest, one line
 # Publishes Release, win-x86, self-contained, single file. Fails loudly on any error.
-# Refuses a git tree with uncommitted changes unless --allow-dirty (commit.txt then says -dirty).
+# Refuses a git tree with uncommitted changes, or with untracked files under a release input,
+# unless --allow-dirty (commit.txt then says -dirty).
 #
 #   vm-agent/build.sh [--allow-dirty]
 set -euo pipefail
@@ -42,8 +43,24 @@ done
 # Which commit the zip was built from: version.txt stays exactly the version, commit.txt says this.
 git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || die "$REPO is not a git checkout"
 COMMIT="$(git -C "$REPO" rev-parse --short HEAD)" || die "could not read the git commit"
-if [ -n "$(git -C "$REPO" status --porcelain)" ]; then
-  [ "$ALLOW_DIRTY" -eq 1 ] || die "the git tree has uncommitted changes (git status); commit them, or pass --allow-dirty for a build that is not a release"
+# Dirty: a tracked file anywhere has uncommitted changes, or an untracked file that .gitignore
+# does not cover sits under a release input (the build compiles every .cs under vm-agent/, so an
+# untracked one would ship in an exe that the commit cannot rebuild). Untracked scratch elsewhere
+# does not count. Keep RELEASE_INPUTS and this check the same as in release.sh.
+RELEASE_INPUTS=(VERSION vm-agent policy mac-mcp vm-setup dev skills)
+CHANGED="$(git -C "$REPO" status --porcelain --untracked-files=no)" || die "git status failed"
+UNTRACKED="$(git -C "$REPO" status --porcelain --untracked-files=normal -- "${RELEASE_INPUTS[@]}" | sed -n 's/^?? //p')" \
+  || die "git status failed"
+if [ -n "$CHANGED$UNTRACKED" ]; then
+  DIRTY_WHAT=""
+  if [ -n "$CHANGED" ]; then DIRTY_WHAT="uncommitted changes (git status)"; fi
+  if [ -n "$UNTRACKED" ]; then
+    if [ -n "$DIRTY_WHAT" ]; then DIRTY_WHAT="$DIRTY_WHAT, and "; fi
+    DIRTY_WHAT="${DIRTY_WHAT}untracked files under the release inputs, which the build would pick up: $(printf '%s\n' "$UNTRACKED" | head -n 5 | paste -sd ' ' -)"
+    if [ "$(printf '%s\n' "$UNTRACKED" | grep -c '')" -gt 5 ]; then DIRTY_WHAT="$DIRTY_WHAT ..."; fi
+  fi
+  [ "$ALLOW_DIRTY" -eq 1 ] || die "the git tree is not clean: $DIRTY_WHAT; commit or delete them, or pass --allow-dirty for a build that is not a release"
+  echo "==> the git tree is not clean (--allow-dirty, commit.txt says -dirty): $DIRTY_WHAT"
   COMMIT="$COMMIT-dirty"
 fi
 

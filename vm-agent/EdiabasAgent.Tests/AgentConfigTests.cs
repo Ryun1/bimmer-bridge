@@ -32,12 +32,20 @@ public class AgentConfigTests
         Assert.Equal(@"C:\EDIABAS\ECU", c.EcuPath);
         Assert.Equal(@"C:\ProgramData\EdiabasBridge\logs", c.LogDirectory);
         Assert.Equal(new[] { @"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK" }, c.LogRoots);
-        Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool" }, c.ConflictProcesses);
-        Assert.Empty(c.VoltageSources);
+        Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI" }, c.ConflictProcesses);
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(30, c.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);
         Assert.Equal(20, c.EdiabasIdleReleaseSeconds);
+    }
+
+    [Fact]
+    public void Defaults_ConflictProcesses_IncludeWinkfpAndIsta()
+    {
+        var c = LoadOk("{}");
+        Assert.Equal(
+            new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI" },
+            c.ConflictProcesses);
     }
 
     [Fact]
@@ -58,7 +66,6 @@ public class AgentConfigTests
           "ecuPath": "C:\\EDIABAS\\ECU",
           "logRoots": ["C:\\EDIABAS\\TRACE", "C:\\NCSEXPER\\WORK"],
           "conflictProcesses": ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"],
-          "voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ],
           "reviewedJobs": [],
           "jobTimeoutSeconds": 30,
           "maxJobTimeoutSeconds": 60
@@ -113,12 +120,39 @@ public class AgentConfigTests
         Assert.Equal(r.Warnings, r.Config.Warnings);
     }
 
+    // install.ps1 and update.ps1 record the conflict defaults they offered; the agent ignores it.
+    [Fact]
+    public void ConflictDefaultsOfferedKey_LoadsWithoutErrorsOrWarnings_ConflictProcessesAsWritten()
+    {
+        var r = AgentConfig.Parse("""
+            {
+              "conflictProcesses": ["INPALOAD", "TOOL32"],
+              "conflictDefaultsOffered": ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI"]
+            }
+            """);
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        Assert.Empty(r.Warnings);
+        Assert.Equal(new[] { "INPALOAD", "TOOL32" }, r.Config!.ConflictProcesses);
+    }
+
     [Fact]
     public void KnownKeys_AnyCase_NoWarnings()
     {
-        var r = AgentConfig.Parse("""{ "Port": 8765, "reviewedJobs": [], "EDIABASIDLERELEASESECONDS": 20, "voltageSources": [ { "ecu": "A", "job": "B", "extra": 1 } ] }""");
+        var r = AgentConfig.Parse("""{ "Port": 8765, "reviewedJobs": [], "EDIABASIDLERELEASESECONDS": 20 }""");
         Assert.True(r.Ok);
         Assert.Empty(r.Warnings);
+    }
+
+    [Theory]
+    [InlineData("""[ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ]""")]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("\"nonsense\"")]
+    public void Config_VoltageSourcesKey_IsWarningNotError(string value)
+    {
+        var r = AgentConfig.Parse($$"""{ "voltageSources": {{value}} }""");
+        Assert.True(r.Ok);
+        Assert.Equal(["voltageSources is no longer used; set it on the Mac"], r.Warnings);
     }
 
     [Fact]
@@ -317,7 +351,6 @@ public class AgentConfigTests
     [Theory]
     [InlineData("logRoots")]
     [InlineData("conflictProcesses")]
-    [InlineData("voltageSources")]
     [InlineData("reviewedJobs")]
     [InlineData("tokenFile")]
     public void NullValues_Rejected(string field)

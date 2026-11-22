@@ -22,6 +22,7 @@ public static class RequestParsing
 {
     public const int MaxBodyBytes = 64 * 1024;
     public const int MaxFilterLength = 64;
+    public const int NonceLength = 32;
 
     private static readonly string[] JobKeys = ["ecu", "job", "args", "results", "timeoutSeconds"];
     private static readonly string[] JobsKeys = ["items", "timeoutSeconds"];
@@ -115,6 +116,12 @@ public static class RequestParsing
             ? null
             : Bad("filter", $"filter must be at most {MaxFilterLength} printable ASCII characters.");
     }
+
+    /// <summary><c>nonce</c> for <c>GET /hello</c>: required, exactly 32 characters of <c>[0-9a-f]</c>.</summary>
+    public static ApiFailure? CheckNonce(string? nonce) =>
+        nonce is { Length: NonceLength } && nonce.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f')
+            ? null
+            : Bad("nonce", $"nonce is required and must be exactly {NonceLength} lowercase hex characters.");
 
     /// <summary><c>true</c> or <c>false</c> exactly; absent gives <paramref name="absent"/>.</summary>
     public static bool? ParseBool(string? value, bool absent) => value switch

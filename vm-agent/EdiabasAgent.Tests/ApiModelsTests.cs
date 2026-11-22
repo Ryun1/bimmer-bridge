@@ -31,6 +31,14 @@ public class ApiModelsTests
             ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(0, "", ResultsUnread: true))));
     }
 
+    [Fact]
+    public void Hello_Shape()
+    {
+        Assert.Equal(
+            """{"agent":"ediabas-bridge-agent","proof":"496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd"}""",
+            ApiJson.Serialize(new HelloResponse(HealthResponse.AgentName, "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd")));
+    }
+
     [Theory]
     [InlineData("bad_request", 400)]
     [InlineData("job_not_allowed", 403)]
@@ -56,17 +64,12 @@ public class ApiModelsTests
     }
 
     [Fact]
-    public void Batch_And_Vehicle_Shapes()
+    public void Batch_Shape()
     {
         var item = new BatchItem(false, null, new ErrorDetail("not_run", "m", null));
         Assert.Equal(
             """{"items":[{"ok":false,"result":null,"error":{"code":"not_run","message":"m","details":null}}],"durationMs":3}""",
             ApiJson.Serialize(new BatchResponse([item], 3)));
-
-        var v = new VehicleResponse(item, item, [new VehicleVoltage("NVE_65", "STATUS_BORDNETZSPANNUNG", false, null, null)], item, item, 9);
-        using var doc = JsonDocument.Parse(ApiJson.Serialize(v));
-        Assert.Equal(["ignition", "ubatt", "voltages", "cableKl30", "cableKl15", "durationMs"], doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
-        Assert.Equal(["ecu", "job", "ok", "result", "error"], doc.RootElement.GetProperty("voltages")[0].EnumerateObject().Select(p => p.Name).ToArray());
     }
 
     [Fact]
@@ -113,11 +116,12 @@ public class ApiModelsTests
             Port: 8765,
             Gateway: null,
             ConflictingProcesses: [new ConflictingProcess("INPALOAD", 4312)],
-            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true),
+            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true, true),
             LastCableUseAt: null,
             PolicyVersion: 1,
+            PolicySha256: new string('a', 64),
             Capabilities: ["ediabas"],
-            Approvals: new ApprovalCounts(2, 1));
+            Approvals: new ApprovalCounts(2, 1, ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], "0123456789ab"));
 
         using var doc = JsonDocument.Parse(ApiJson.Serialize(h));
         var root = doc.RootElement;
@@ -125,7 +129,7 @@ public class ApiModelsTests
         [
             "agent", "version", "startedAt", "uptimeSeconds", "os", "user", "elevated", "sessionId",
             "bindAddress", "port", "gateway", "conflictingProcesses", "ediabas", "lastCableUseAt",
-            "policyVersion", "capabilities", "approvals",
+            "policyVersion", "policySha256", "capabilities", "approvals",
         ];
         Assert.Equal(expected, root.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal("ediabas-bridge-agent", root.GetProperty("agent").GetString());
@@ -142,10 +146,11 @@ public class ApiModelsTests
         var ed = root.GetProperty("ediabas");
         Assert.Equal(@"C:\EDIABAS\BIN\api32.dll", ed.GetProperty("dllPath").GetString());
         Assert.True(ed.GetProperty("dllFound").GetBoolean());
-        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck"], ed.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.True(ed.GetProperty("heldOpen").GetBoolean());
+        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck", "heldOpen"], ed.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
-        Assert.Equal("""{"pinned":2,"unpinned":1}""", root.GetProperty("approvals").GetRawText());
+        Assert.Equal("""{"pinned":2,"ignored":1,"entries":["A:B@b8ae0dd9d242","C:D@7b69322a754f"],"hash":"0123456789ab"}""", root.GetProperty("approvals").GetRawText());
     }
 
     [Fact]

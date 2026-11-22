@@ -12,9 +12,6 @@ public enum ApprovalKind
 {
     None,
 
-    /// <summary><c>ECU:JOB</c>: approved by name, whatever the description says now.</summary>
-    Unpinned,
-
     /// <summary><c>ECU:JOB@hash</c>: approved only while the description hashes to one of
     /// <see cref="JobApproval.Hashes"/>.</summary>
     Pinned,
@@ -23,7 +20,6 @@ public enum ApprovalKind
 public sealed record JobApproval(ApprovalKind Kind, IReadOnlySet<string> Hashes)
 {
     public static readonly JobApproval None = new(ApprovalKind.None, new HashSet<string>());
-    public static readonly JobApproval Unpinned = new(ApprovalKind.Unpinned, new HashSet<string>());
 
     /// <summary>True when a pinned approval holds for this description (as the screen receives
     /// it). An empty or unread description never matches.</summary>
@@ -32,70 +28,84 @@ public sealed record JobApproval(ApprovalKind Kind, IReadOnlySet<string> Hashes)
 }
 
 /// <summary>
-/// The parsed <c>reviewedJobs</c> list. Immutable: a re-read builds a new one. Entries are
-/// <c>ECU:JOB</c> or <c>ECU:JOB@hhhhhhhhhhhh</c> (12 lower-case hex digits, see
-/// <see cref="CommentScreen.DescriptionHash"/>). ECU and JOB are matched exactly: the contract
-/// says upper case, and a near miss must not approve anything. When a job has a pinned entry,
-/// its unpinned entry is ignored (the stricter reading); any of several pinned hashes approves.
+/// The parsed <c>reviewedJobs</c> list. Immutable: a re-read builds a new one. Only
+/// <c>ECU:JOB@hhhhhhhhhhhh</c> entries approve anything (12 lower-case hex digits, see
+/// <see cref="CommentScreen.DescriptionHash"/>); any of several pinned hashes approves. An
+/// unpinned <c>ECU:JOB</c> entry (0.4.0 and before) or a malformed one approves nothing and is
+/// counted as ignored, as is one whose ECU or JOB is not upper case. ECU and JOB are matched exactly: the contract says upper case, and a near
+/// miss must not approve anything.
 /// </summary>
 public sealed class ApprovalList
 {
     public const int HashLength = 12;
 
-    // Names: no whitespace, ':' or '@'. Their case is not checked here; a lower-case entry simply
-    // never matches, as before.
+    // Names: no whitespace, ':' or '@'. Case is checked separately (IsUpperCase).
     private static readonly Regex EntryShape = new(
         @"\A(?<key>[^\s:@]+:[^\s:@]+)(?:@(?<hash>[0-9a-f]{12}))?\z",
         RegexOptions.CultureInvariant,
         TimeSpan.FromSeconds(1));
 
     private readonly Dictionary<string, HashSet<string>> _pinned = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _unpinned = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _entries = new(StringComparer.Ordinal);
+
+    // Every distinct entry as written, pinned or ignored: what SameAs compares.
+    private readonly HashSet<string> _all = new(StringComparer.Ordinal);
 
     public static readonly ApprovalList Empty = new([]);
 
-    /// <param name="entries">From the agent config, already validated; an entry of any other
-    /// shape approves nothing.</param>
+    /// <param name="entries">From the agent config; an entry that is not pinned approves nothing.</param>
     public ApprovalList(IEnumerable<string> entries)
     {
+        var pinnedEntries = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var e in entries)
         {
-            if (!TryParseEntry(e, out var key, out var hash))
+            if (e is null)
             {
                 continue;
             }
 
-            _entries.Add(e);
-            if (hash is null)
+            _all.Add(e);
+            if (!TryParseEntry(e, out var key, out var hash) || hash is null || !IsUpperCase(key))
             {
-                _unpinned.Add(key);
+                continue;
             }
-            else
-            {
-                if (!_pinned.TryGetValue(key, out var set))
-                {
-                    _pinned[key] = set = new HashSet<string>(StringComparer.Ordinal);
-                }
 
-                set.Add(hash);
+            pinnedEntries.Add(e);
+            if (!_pinned.TryGetValue(key, out var set))
+            {
+                _pinned[key] = set = new HashSet<string>(StringComparer.Ordinal);
             }
+
+            set.Add(hash);
         }
 
-        PinnedCount = _entries.Count(e => e.Contains('@'));
-        UnpinnedCount = _entries.Count - PinnedCount;
+        Entries = [.. pinnedEntries];
+        PinnedCount = Entries.Count;
+        IgnoredCount = _all.Count - PinnedCount;
     }
 
     /// <summary>Distinct pinned entries.</summary>
     public int PinnedCount { get; }
 
-    /// <summary>Distinct unpinned entries.</summary>
-    public int UnpinnedCount { get; }
+    /// <summary>Distinct entries that approve nothing: unpinned or malformed.</summary>
+    public int IgnoredCount { get; }
+
+    /// <summary>The distinct pinned entries as written, sorted ordinal.</summary>
+    public IReadOnlyList<string> Entries { get; }
 
     /// <summary>For /health.</summary>
-    public ApprovalCounts Counts => new(PinnedCount, UnpinnedCount);
+    public ApprovalCounts Counts => new(PinnedCount, IgnoredCount, Entries, EntriesHash(Entries));
 
-    /// <summary>True for <c>ECU:JOB</c> and <c>ECU:JOB@</c> plus 12 lower-case hex digits.</summary>
+    /// <summary>First 12 lower-case hex digits of SHA-256 over the entries joined by newlines
+    /// (UTF-8): the Mac compares it to notice a change.</summary>
+    public static string EntriesHash(IReadOnlyList<string> entries) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", entries))))[..HashLength];
+
+    /// <summary>Matching is exact upper case, so an entry whose ECU or JOB is not upper case can
+    /// never match and is ignored.</summary>
+    public static bool IsUpperCase(string key) => key == key.ToUpperInvariant();
+
+    /// <summary>True for <c>ECU:JOB</c> and <c>ECU:JOB@</c> plus 12 lower-case hex digits; only
+    /// the second, with a hash, approves anything.</summary>
     public static bool TryParseEntry(string? entry, out string key, out string? hash)
     {
         key = "";
@@ -126,23 +136,18 @@ public sealed class ApprovalList
     }
 
     /// <summary>Takes the upper-cased names from the policy verdict.</summary>
-    public JobApproval Lookup(string ecu, string job)
-    {
-        var key = ecu + ":" + job;
-        if (_pinned.TryGetValue(key, out var hashes))
-        {
-            return new JobApproval(ApprovalKind.Pinned, hashes);
-        }
+    public JobApproval Lookup(string ecu, string job) =>
+        _pinned.TryGetValue(ecu + ":" + job, out var hashes)
+            ? new JobApproval(ApprovalKind.Pinned, hashes)
+            : JobApproval.None;
 
-        return _unpinned.Contains(key) ? JobApproval.Unpinned : JobApproval.None;
-    }
-
-    /// <summary>Same entries, whatever their order.</summary>
-    public bool SameAs(ApprovalList other) => _entries.SetEquals(other._entries);
+    /// <summary>Same entries, ignored ones included, whatever their order.</summary>
+    public bool SameAs(ApprovalList other) => _all.SetEquals(other._all);
 }
 
 /// <summary>The current <see cref="ApprovalList"/>, replaced whole when config.json is re-read.
-/// Thread-safe: /health reads it while the runner may replace it.</summary>
+/// Thread-safe: <see cref="ApprovalReloader"/> replaces it under its own lock, from the runner or
+/// from /health, while other threads read it.</summary>
 public sealed class ApprovalState(ApprovalList initial)
 {
     private volatile ApprovalList _current = initial;
@@ -159,8 +164,8 @@ public sealed class ApprovalState(ApprovalList initial)
 /// screen"): every ignore entry is first replaced by a space, case-insensitively; then the
 /// screen refuses when what is left mentions any screen term, case-insensitively, or when the
 /// description is empty or nothing but words holding an ignore entry.
-/// A job listed in <c>reviewedJobs</c> skips the screen (a pinned entry only while its
-/// description is unchanged), never the name rules.
+/// A job pinned in <c>reviewedJobs</c> skips this screen while its description is unchanged; it
+/// never skips the name rules or the argument screen.
 /// </summary>
 public sealed class CommentScreen
 {

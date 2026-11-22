@@ -4,11 +4,8 @@ import {
   isOnLink,
   leaseCandidates,
   macEquals,
-  parseArp,
   parseLeases,
   parseMac,
-  parseUtmctl,
-  arpCandidates,
   macFromUtmConfig,
 } from "../src/vmAddress.js";
 
@@ -58,14 +55,22 @@ describe("MAC comparison", () => {
 });
 
 describe("DHCP lease parsing", () => {
-  it("orders the two-block sample by latest expiry: current address first", () => {
+  it("lists the MAC's leases newest first", () => {
     expect(leaseCandidates(TWO_BLOCK_LEASES, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
   });
 
-  it("orders by expiry even when the newer block comes first", () => {
-    const text = `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n` +
-      `{\n\tip_address=192.168.65.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x68a1baf4\n}\n`;
-    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
+  it("orders by expiry, not by place in the file", () => {
+    const newer = `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
+    const older = `{\n\tip_address=192.168.65.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x68a1baf4\n}\n`;
+    expect(leaseCandidates(newer + older, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
+    expect(leaseCandidates(older + newer, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
+  });
+
+  it("on an equal expiry the earlier entry in the file wins, as in serve.py", () => {
+    const a = `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
+    const b = `{\n\tip_address=192.168.64.4\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
+    expect(leaseCandidates(a + b, VM_MAC)).toEqual(["192.168.64.3", "192.168.64.4"]);
+    expect(leaseCandidates(b + a, VM_MAC)).toEqual(["192.168.64.4", "192.168.64.3"]);
   });
 
   it("handles field order variants", () => {
@@ -110,43 +115,7 @@ ${TWO_BLOCK_LEASES}
     expect(leaseCandidates("", VM_MAC)).toEqual([]);
     expect(leaseCandidates(`{\n\tip_address=not-an-ip\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x1\n}`, VM_MAC)).toEqual([]);
     expect(leaseCandidates(`{\n\tip_address=192.168.64.4\n\tlease=0x1\n}`, VM_MAC)).toEqual([]);
-  });
-
-  it("de-duplicates repeated addresses", () => {
-    const text = TWO_BLOCK_LEASES + `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x1\n}\n`;
-    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
-  });
-});
-
-describe("arp -an parsing", () => {
-  const ARP = [
-    "? (192.168.1.1) at 0:11:22:33:44:55 on en0 ifscope [ethernet]",
-    "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
-    "? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]",
-    "? (192.168.64.255) at ff:ff:ff:ff:ff:ff on bridge100 ifscope [bridge]",
-    "? (224.0.0.251) at 1:0:5e:0:0:fb on en0 ifscope permanent [ethernet]",
-    "",
-    "garbage line",
-  ].join("\n");
-
-  it("parses entries and skips (incomplete) and junk", () => {
-    expect(parseArp(ARP)).toEqual([
-      { ipAddress: "192.168.1.1", macAddress: "0:11:22:33:44:55", iface: "en0" },
-      { ipAddress: "192.168.64.3", macAddress: "2:0:0:0:0:1", iface: "bridge100" },
-      { ipAddress: "192.168.64.255", macAddress: "ff:ff:ff:ff:ff:ff", iface: "bridge100" },
-      { ipAddress: "224.0.0.251", macAddress: "1:0:5e:0:0:fb", iface: "en0" },
-    ]);
-  });
-
-  it("finds the VM's address", () => {
-    expect(arpCandidates(ARP, VM_MAC)).toEqual(["192.168.64.3"]);
-    expect(arpCandidates("? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]", VM_MAC)).toEqual([]);
-  });
-});
-
-describe("utmctl output parsing", () => {
-  it("keeps IPv4 addresses only", () => {
-    expect(parseUtmctl("192.168.64.3\nfe80::1\n\n  10.0.0.2  \nnonsense\n")).toEqual(["192.168.64.3", "10.0.0.2"]);
+    expect(leaseCandidates(`{\n\tip_address=192.168.64.4\n\thw_address=1,2:0:0:0:0:1\n\tlease=0xzz\n}`, VM_MAC)).toEqual([]);
   });
 });
 
@@ -160,10 +129,20 @@ describe("on-link rule", () => {
     ],
   } as const;
 
-  it("only takes IPv4 subnets from bridge* interfaces", () => {
+  it("only takes IPv4 subnets from bridge1NN interfaces", () => {
     expect(bridgeSubnets(ifaces as never)).toEqual([
       { iface: "bridge100", address: "192.168.64.1", netmask: "255.255.255.0" },
     ]);
+  });
+
+  it("counts only bridge1NN interfaces as on-link: bridge0 is not, bridge100 is", () => {
+    const v4 = (address: string) => [{ address, netmask: "255.255.255.0", family: "IPv4", mac: "f2:00:00:00:00:64", internal: false, cidr: `${address}/24` }];
+    const bridge0 = bridgeSubnets({ bridge0: v4("192.168.64.1") } as never);
+    expect(bridge0).toEqual([]);
+    expect(isOnLink("192.168.64.3", bridge0)).toBe(false);
+    const bridge100 = bridgeSubnets({ bridge100: v4("192.168.64.1") } as never);
+    expect(isOnLink("192.168.64.3", bridge100)).toBe(true);
+    expect(bridgeSubnets({ bridge1: v4("10.0.0.1"), bridge1000: v4("10.0.1.1"), bridge101: v4("10.0.2.1") } as never).map((s) => s.iface)).toEqual(["bridge101"]);
   });
 
   it("accepts addresses inside a bridge subnet only", () => {

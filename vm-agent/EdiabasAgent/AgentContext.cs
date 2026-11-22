@@ -26,6 +26,7 @@ internal sealed class AgentContext : IDisposable
         Policy = JobPolicy.Embedded;
         Logs = new LogService(config.LogRoots, new LogAccess());
         Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
+        ApprovalReloader = new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log));
         Runner = new EdiabasRunner(
             () => new EdiabasService(
                 new Api32(config.EdiabasDll),
@@ -40,7 +41,7 @@ internal sealed class AgentContext : IDisposable
                 config.JobTimeoutSeconds,
                 config.MaxJobTimeoutSeconds,
                 config.EdiabasIdleReleaseSeconds,
-                new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log))),
+                ApprovalReloader),
             log);
     }
 
@@ -66,6 +67,10 @@ internal sealed class AgentContext : IDisposable
 
     /// <summary>The config's <c>reviewedJobs</c> as the runner uses them, for /health.</summary>
     public ApprovalState Approvals { get; }
+
+    /// <summary>Re-reads <c>reviewedJobs</c> from config.json; the runner calls it before every
+    /// EDIABAS request and /health before it answers, so both see the file as it is now.</summary>
+    public ApprovalReloader ApprovalReloader { get; }
 
     /// <summary>Whether the runner has api32.dll loaded right now, for /health.</summary>
     public DllLoadState DllState { get; } = new();

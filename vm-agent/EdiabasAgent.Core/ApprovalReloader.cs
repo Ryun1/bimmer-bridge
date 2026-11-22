@@ -3,71 +3,46 @@ namespace EdiabasAgent.Core;
 /// <summary>The agent's config file, as far as re-reading <c>reviewedJobs</c> needs it.</summary>
 public interface IConfigFile
 {
-    /// <summary>When the file was last written (UTC); null when it is missing or cannot be checked.</summary>
-    DateTime? LastWriteUtc();
-
-    /// <summary>The file's text. May throw an I/O exception.</summary>
+    /// <summary>The file's text. Throws when the file is missing or cannot be read.</summary>
     string ReadAllText();
 }
 
 public sealed class ConfigFile(string path) : IConfigFile
 {
-    public DateTime? LastWriteUtc()
-    {
-        try
-        {
-            var info = new FileInfo(path);
-            return info.Exists ? info.LastWriteTimeUtc : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return null;
-        }
-    }
-
     public string ReadAllText() => File.ReadAllText(path);
 }
 
 /// <summary>
-/// Re-reads <c>reviewedJobs</c>, and nothing else, when config.json has changed, so that an
-/// approval the user adds (or removes) applies without restarting the agent. Called by the runner at
-/// the start of every EDIABAS request, before the policy decides anything. A file that is
-/// missing, unreadable or not a valid config keeps the previous list, with one warning per
-/// change of the file; a later good write is picked up. Runner thread only.
+/// Re-reads <c>reviewedJobs</c>, and nothing else, from config.json at the start of every EDIABAS
+/// request, before the policy decides anything, and when /health is answered, so that an approval
+/// the user adds or removes applies, and shows, without restarting the agent. The file is read
+/// every time: a failed read cannot hide a later removal, because nothing is remembered about the
+/// file except what was warned.
+/// A file that is missing, unreadable or not a valid config keeps the previous list, with one
+/// warning per distinct problem; a later good read is picked up. Thread-safe: the runner thread
+/// and the HTTP threads answering /health may call <see cref="Refresh"/> at the same time; one
+/// lock covers the read, the warnings and the swap of <see cref="ApprovalState.Current"/>.
 /// </summary>
 public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdiabasLog log)
 {
-    // Unset until the first request: the file is read once then, which also catches a change
-    // made between the agent's start-up load and that request.
-    private bool _checked;
-    private DateTime? _stamp;
+    private readonly Lock _gate = new();
+
+    // The problem last warned about (read failure or invalid file); cleared by a good parse.
+    private string? _lastProblem;
+
+    // The file text whose bad reviewedJobs entries were last warned about.
+    private string? _entryWarnedText;
 
     public void Refresh()
     {
-        DateTime? stamp;
-        try
+        lock (_gate)
         {
-            stamp = file.LastWriteUtc();
+            RefreshLocked();
         }
-        catch (Exception)
-        {
-            // An approval check must never fail a request: treated as a file that cannot be checked.
-            stamp = null;
-        }
+    }
 
-        if (_checked && stamp == _stamp)
-        {
-            return;
-        }
-
-        _checked = true;
-        _stamp = stamp;
-        if (stamp is null)
-        {
-            log.Warn("config.json is missing or cannot be checked; reviewedJobs keeps its previous list");
-            return;
-        }
-
+    private void RefreshLocked()
+    {
         string text;
         try
         {
@@ -75,7 +50,8 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
         }
         catch (Exception ex)
         {
-            log.Warn($"config.json changed but cannot be read ({ex.GetType().Name}: {ex.Message}); reviewedJobs keeps its previous list");
+            // An approval check must never fail a request: the previous list stays.
+            Problem($"config.json is missing or cannot be read ({ex.GetType().Name}: {ex.Message}); reviewedJobs keeps its previous list");
             return;
         }
 
@@ -83,14 +59,20 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
         var loaded = AgentConfig.Parse(text);
         if (!loaded.Ok)
         {
-            log.Warn($"config.json changed but is not valid ({string.Join("; ", loaded.Errors)}); reviewedJobs keeps its previous list");
+            Problem($"config.json is not valid ({string.Join("; ", loaded.Errors)}); reviewedJobs keeps its previous list");
             return;
         }
 
-        // Once per change of the file: an entry of the wrong shape approves nothing.
-        foreach (var warning in loaded.Warnings.Where(w => w.StartsWith("reviewedJobs[", StringComparison.Ordinal)))
+        _lastProblem = null;
+
+        // Once per distinct file text: an unpinned or malformed entry approves nothing.
+        if (text != _entryWarnedText)
         {
-            log.Warn(warning);
+            _entryWarnedText = text;
+            foreach (var warning in loaded.Warnings.Where(w => w.StartsWith("reviewedJobs[", StringComparison.Ordinal)))
+            {
+                log.Warn(warning);
+            }
         }
 
         var next = new ApprovalList(loaded.Config!.ReviewedJobs);
@@ -100,6 +82,15 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
         }
 
         state.Current = next;
-        log.Info($"reviewedJobs re-read: {next.PinnedCount} pinned, {next.UnpinnedCount} unpinned");
+        log.Info($"reviewedJobs re-read: {next.PinnedCount} pinned, {next.IgnoredCount} ignored");
+    }
+
+    private void Problem(string message)
+    {
+        if (message != _lastProblem)
+        {
+            _lastProblem = message;
+            log.Warn(message);
+        }
     }
 }

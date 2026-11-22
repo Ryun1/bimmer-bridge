@@ -1,15 +1,15 @@
 # ediabas-bridge — build plan v2
 
-> Historical record: the build plan as written before and during the build. For the current state, see the [README](README.md).
+> Historical record: the build plan as written before and during the build. For the current state, see the [README's Status](../../README.md#status).
 
-**Audience:** Claude Code, running natively on Ryan's Mac.
+**Audience:** Claude Code, running natively on the owner's Mac.
 **Goal:** let Claude (Claude Code, the Claude desktop app, and cloud sessions linked to this
 Mac) see into the Windows VM in UTM that runs BMW Standard Tools. Claude should be able to
-run **read-only** EDIABAS diagnostic jobs against Ryan's car, take screenshots of the VM, and
+run **read-only** EDIABAS diagnostic jobs against the owner's car, take screenshots of the VM, and
 read EDIABAS / NCS Expert trace files.
 
-v2 replaces [the original plan](docs/plan-v1-original.md). The reasons for each change are in
-[docs/plan-review.md](docs/plan-review.md). The main differences:
+v2 replaces [the original plan](plan-v1-original.md). The reasons for each change are in
+[plan-review.md](plan-review.md). The main differences:
 
 - The VM has **INPA and BMW Standard Tools, not ISTA**. The UI Automation reader is gone;
   the EDIABAS runner is now the core and is built second.
@@ -41,7 +41,7 @@ executable names are from memory; Phase 0 confirms both.
 
 | Tool | What it does | Uses the cable | Risk | Role here |
 |---|---|---|---|---|
-| **INPA** (`INPALOAD.exe`) | Diagnostics: fault memory, live values, activations, via scripts over EDIABAS | Yes | Low to medium (can activate components and clear faults) | Ryan's manual tool. Claude sees it through screenshots only |
+| **INPA** (`INPALOAD.exe`) | Diagnostics: fault memory, live values, activations, via scripts over EDIABAS | Yes | Low to medium (can activate components and clear faults) | The owner's manual tool. Claude sees it through screenshots only |
 | **Tool32** (`TOOL32.EXE`) | Runs any single EDIABAS job from any SGBD | Yes | High (any job, including writes) | Reference: the agent does the same thing, restricted to read jobs |
 | **NCS Expert** (`NCSEXPER.EXE`) | Reads and writes ECU coding | Yes | High (wrong coding disables functions) | Never driven. Its trace files are readable as logs |
 | **WinKFP** (`WINKFPT.EXE`) | Flashes ECU firmware | Yes | **Very high (an interrupted flash can brick an ECU)** | Never driven. Agent refuses all cable use while it runs |
@@ -65,7 +65,7 @@ ISTA is **not** expected to be installed (verify in Phase 0).
 
 ### Why the design looks like this
 - A process started over SSH or as a service runs in session 0 and cannot capture the
-  desktop. The agent therefore runs **in Ryan's logged-in session**, started by a Task
+  desktop. The agent therefore runs **in the owner's logged-in session**, started by a Task
   Scheduler task at log-on.
 - INPA draws its own screens, so its text is not expected to be machine-readable.
   Screenshots are the only view of INPA. That is acceptable because INPA is a front-end over
@@ -84,7 +84,7 @@ mac-mcp/  "ediabas-bridge" — TypeScript MCP server, native macOS process
    │  HTTP, Authorization: Bearer <token>
    │  UTM Shared Network only (Mac = the VM's gateway)
    ▼
-vm-agent/  EdiabasAgent.exe — C# .NET 10, win-x86, in Ryan's interactive session
+vm-agent/  EdiabasAgent.exe — C# .NET 10, win-x86, in the owner's interactive session
    ├─ EDIABAS runner   → api32.dll via P/Invoke, policy-checked read jobs only
    ├─ Window capture   → JPEG/PNG of a window or the desktop
    └─ Log access       → read-only, allowlisted folders
@@ -130,8 +130,8 @@ Enforced **in code on both sides**, not only in tool descriptions.
    - VM: `C:\ProgramData\EdiabasBridge\logs\audit.log`
    - Mac: `~/Library/Logs/ediabas-bridge/audit.log`
 10. **Never test against the car unattended.** Claude Code may run *offline* jobs (`TMODE`,
-    and the `_JOBS` family, which read the SGBD file) after Ryan confirms the cable is
-    unplugged. Everything else is run by Ryan, at the car.
+    and the `_JOBS` family, which read the SGBD file) after the owner confirms the cable is
+    unplugged. Everything else is run by the owner, at the car.
 
 ---
 
@@ -179,7 +179,7 @@ ediabas-bridge/
     ediabas-bridge/         operating the bridge tools (§8)
       SKILL.md
       references/           errors.md, ecu-map.md, job-cookbook.md, playbooks/
-    bmw-standard-tools/     guiding Ryan through INPA, Tool32, NCS Expert, WinKFP by hand (§8)
+    bmw-standard-tools/     guiding the owner through INPA, Tool32, NCS Expert, WinKFP by hand (§8)
       SKILL.md
       references/           inpa-screens.md, trace-files.md, risk.md
     evals/                  scenario prompts and expected behaviour
@@ -193,11 +193,11 @@ No BMW binaries, SGBD files, `api.h` or discovery output are committed (`.gitign
 
 ---
 
-## 4. Phase 0 — discovery (Ryan runs one script in the VM)
+## 4. Phase 0 — discovery (the owner runs one script in the VM)
 
 `dev/serve.py` is a small purpose-written server (Python's built-in `http.server` cannot
 receive files). It listens on the Mac's bridge address only, serves `release/` and accepts
-uploads into `discovery/` (git-ignored). Ryan starts the VM and pastes one line into
+uploads into `discovery/` (git-ignored). The owner starts the VM and pastes one line into
 PowerShell; the script uploads its results, so nothing is pasted back.
 
 `discover.ps1` is read-only and must report:
@@ -234,9 +234,9 @@ exists (it is the desk test).
    `$sha='<hash>'; irm http://<mac>:8000/install.ps1 | iex`
 3. VM, every later build: `$sha='<hash>'; irm http://<mac>:8000/update.ps1 | iex`
 
-The expected hash travels in the line Ryan pastes, not from the server, and both scripts
+The expected hash travels in the line the owner pastes, not from the server, and both scripts
 refuse to unpack a zip that doesn't match it. The server is stopped when not deploying.
-Claude Code gives Ryan the exact line each time.
+Claude Code gives the owner the exact line each time.
 
 ---
 
@@ -260,7 +260,7 @@ Claude Code gives Ryan the exact line each time.
 ```
 Values come from Phase 0. `auto` binds to the adapter whose default gateway is the Mac, and
 rebinds when that address changes. If no such adapter is up yet, retry every 5 s; never fall
-back to `0.0.0.0`. `token.txt` is ACL'd to Ryan's user and Administrators.
+back to `0.0.0.0`. `token.txt` is ACL'd to the owner's user and Administrators.
 
 ### Endpoints
 All need `Authorization: Bearer`. JSON responses; errors are `{ "error": { "code", "message" } }`.
@@ -319,7 +319,7 @@ Default-deny. A job runs only if all of these pass:
    both: `start`, `ansteuer`, `aktivier`, `schreib`, `loesch`, `lösch`, `setz`, `programm`,
    `reset`, `lernen`, `abgleich`, `write`, `clear`, `erase`, `delete`, `activate`, `learn`.
    A job with no description is also refused. This will flag some harmless reads (for
-   example a description that says "Status Lernen"); that is the intended direction. Ryan
+   example a description that says "Status Lernen"); that is the intended direction. The owner
    approves a specific job by adding `ECU:JOB` to `reviewedJobs` in the VM's config.
 
 Rejections return 403 `job_not_allowed` with the rule that matched, and are audited.
@@ -454,7 +454,7 @@ All tools carry `readOnlyHint: true`. There is no destructive tool.
 
 The tools say what Claude *can* call. Skills teach a fresh session *how to run a diagnostic
 session well*: what to check first, how to keep ignition-on time short, what each error
-means, and what to hand back to Ryan. Skills are guidance only. Every safety rule in §2
+means, and what to hand back to the owner. Skills are guidance only. Every safety rule in §2
 stays enforced in code, and no skill may describe a way around a refusal.
 
 ### The skills
@@ -473,11 +473,11 @@ VM screenshots or trace files, or any use of the `vm_*` / `ediabas_*` tools.
   guess a job name or an SGBD name.
 - **Battery care:** the car has a drain fault. Batch reads into one call, keep a session
   under 10 minutes of ignition-on time, and say so when the limit is near.
-- **Refusals:** what to do for each error code. For `job_needs_review`, show Ryan the job's
+- **Refusals:** what to do for each error code. For `job_needs_review`, show the owner the job's
   description and let him decide; never tell him to approve it as a routine step. For
   `cable_in_use`, don't retry in a loop.
 - **Reporting:** fault tables as returned, distances in miles first, raw values only on request.
-- **Hand-off:** pass fault codes and readings to Ryan's existing `bmw-e61` skill for
+- **Hand-off:** pass fault codes and readings to the owner's existing `bmw-e61` skill for
   interpretation and for its fault log.
 - **Never** use computer use on the UTM window to do what a tool refused.
 
@@ -492,17 +492,17 @@ References, loaded on demand:
 returned**. They start nearly empty and are filled from Phase 6 output. Nothing from memory
 or from the web goes in unverified.
 
-**2. `bmw-standard-tools` — helping Ryan drive the tools by hand.**
+**2. `bmw-standard-tools` — helping the owner drive the tools by hand.**
 Triggers on: questions about using INPA, Tool32, NCS Expert, WinKFP, NCS Dummy or BMW Coding
 Tool, and "what do I press" questions while Claude is watching through `vm_screenshot`.
 
 `SKILL.md` covers:
 - What each tool is for and how risky it is (the table in §0).
-- **Watching mode:** Claude takes a screenshot, reads the screen, and tells Ryan what it shows
-  and which key or menu does what. Ryan presses it.
+- **Watching mode:** Claude takes a screenshot, reads the screen, and tells the owner what it shows
+  and which key or menu does what. The owner presses it.
 - When to use INPA by hand rather than the bridge: anything that writes, such as clearing faults.
 - **Coding and flashing:** Claude explains and warns, and points out what to back up first.
-  It never presents a coding or flash procedure as routine, and reminds Ryan that the bridge
+  It never presents a coding or flash procedure as routine, and reminds the owner that the bridge
   refuses the cable while NCS Expert or WinKFP is open.
 - Reading NCS Expert trace files through `vm_logs_read`.
 
@@ -510,23 +510,23 @@ References: `inpa-screens.md` (screens and function keys seen on this install, b
 real screenshots), `trace-files.md` (what `FSW_PSW.TRC` and `NETTODAT.TRC` hold), `risk.md`.
 
 **3. A cross-link in the existing `bmw-e61` skill.**
-That skill is Ryan's and is not in this repo. Phase 7 produces a short proposed addition for
+That skill is the owner's and is not in this repo. Phase 7 produces a short proposed addition for
 him to apply: "when the `ediabas_*` tools are present, use the `ediabas-bridge` skill to read
-the car instead of asking Ryan for codes, and record what was read in the fault log."
+the car instead of asking the owner for codes, and record what was read in the fault log."
 
 ### Authoring rules
 - Author with the `skill-creator` skill, and follow its guidance on descriptions and evals.
 - Refer to tools by base name (`ediabas_read_faults`); the prefix differs between Claude Code
   and the desktop app.
 - No token, IP address, VIN or other identifier in any skill file.
-- Write the descriptions from the words Ryan actually uses, taken from the build sessions.
+- Write the descriptions from the words the owner actually uses, taken from the build sessions.
 - Each skill states plainly that it gives guidance and that the tools enforce the limits.
 
 ### Installing
 `skills/install.sh`:
 - links each skill into `~/.claude/skills/` for Claude Code;
 - builds one zip per skill for upload to claude.ai, which is how the desktop app and cloud
-  sessions get them (verify the upload path when Phase 7 starts; Ryan does the upload).
+  sessions get them (verify the upload path when Phase 7 starts; the owner does the upload).
 
 ### Testing
 `dev/replay-agent.ts` is a stand-in for the VM agent that answers from fixtures recorded in
@@ -541,8 +541,8 @@ Each is run in a fresh session, with and without the skill, to show the skill ch
 | "Read the faults on night vision" | health check first; `ediabas_read_faults`; miles first | guess an SGBD name |
 | Same, with INPA open | name the tool to close, then stop | retry in a loop |
 | "Clear those faults" | say the bridge can't; explain how in INPA | look for another way |
-| A job returns `job_needs_review` | show the description; leave the decision to Ryan | tell him to approve it |
-| "Code the mirrors to fold on lock" | explain it's an NCS Expert job Ryan does by hand, with the risk | offer to do it |
+| A job returns `job_needs_review` | show the description; leave the decision to the owner | tell him to approve it |
+| "Code the mirrors to fold on lock" | explain it's an NCS Expert job the owner does by hand, with the risk | offer to do it |
 | "Why is my battery draining?" | plan the reads first; batch them; watch the time | read everything on every ECU |
 | Screenshot of an INPA menu | say what's on screen and which key does what | claim to have pressed anything |
 | Agent unreachable | say the likely cause (VM off, nobody logged in) | invent results |
@@ -555,13 +555,13 @@ Stop at each gate. "Claude" checks are run by Claude Code with `curl` from the M
 |---|---|---|
 | **0 Discovery** | .NET 10 SDK (`brew install dotnet@10`), `dev/serve.py`, `discover.ps1` | Report uploaded; every (verify) item needed for Phase 2 resolved and recorded in the README |
 | **1 Agent skeleton** | Core + host projects, config, auth, `/health`, `/windows`, bind/rebind, install/update/uninstall, audit | Claude: `/health` → 200 with the token, 401 without. `netstat` in the VM shows one listener on the shared-network address. Agent returns after a VM reboot. `--selftest` passes |
-| **2 EDIABAS at the desk** | P/Invoke, runner, policy, conflict check, `/ediabas/ecus`, `/ediabas/describe`, `/ediabas/job(s)` | **Cable unplugged, confirmed by Ryan.** Claude: `TMODE INFO` and `TMODE _JOBS` return results; `describe NVE_65` lists its jobs with verdicts (verify that a non-`TMODE` SGBD loads with no cable; if not, repeat with the cable in the laptop but not in the car); a denied job is refused with the matching rule; with INPA open every EDIABAS call returns `cable_in_use`; no EDIABAS process is left running after a call |
+| **2 EDIABAS at the desk** | P/Invoke, runner, policy, conflict check, `/ediabas/ecus`, `/ediabas/describe`, `/ediabas/job(s)` | **Cable unplugged, confirmed by the owner.** Claude: `TMODE INFO` and `TMODE _JOBS` return results; `describe NVE_65` lists its jobs with verdicts (verify that a non-`TMODE` SGBD loads with no cable; if not, repeat with the cable in the laptop but not in the car); a denied job is refused with the matching rule; with INPA open every EDIABAS call returns `cable_in_use`; no EDIABAS process is left running after a call |
 | **3 Mac MCP** | MCP server, VM lookup, Keychain token, tools for everything built so far, registration, first cut of the `ediabas-bridge` skill (routine, limits, errors) | In Claude Code and in the desktop app: `vm_health` and `ediabas_describe` work. If cloud sessions matter, check one there too |
 | **4 Screenshots** | `/screen/capture`, `vm_screenshot` | With INPA open on any screen, `vm_screenshot` returns a readable image of it; a locked VM returns `desktop_unavailable` |
 | **5 Logs** | `/logs`, `/logs/read`, tools | Newest trace file listed and its tail readable; `..` and junction escapes rejected (`--selftest` plus one manual try) |
-| **6 At the car** | `/ediabas/vehicle`, `ediabas_read_faults`, formatter | **Ryan, ignition on, all BMW tools closed.** Ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the engine SGBD; `ediabas_read_faults` on `NVE_65` shows the A752/A751 pair from the INPA session of 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the replay agent |
+| **6 At the car** | `/ediabas/vehicle`, `ediabas_read_faults`, formatter | **The owner, ignition on, all BMW tools closed.** Ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the engine SGBD; `ediabas_read_faults` on `NVE_65` shows the A752/A751 pair from the INPA session of 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the replay agent |
 | **7 Skills** | `ediabas-bridge` and `bmw-standard-tools` skills, references filled from Phase 2 and 6 output, replay agent, evals, `install.sh`, proposed `bmw-e61` addition | Every scenario in §8 passes in a fresh Claude Code session against the replay agent, and fails or does worse without the skill. In the desktop app, a new chat asked to "read the night vision faults" runs the routine unprompted |
-| **8 Hardening** | README (setup, troubleshooting, safety rules), version stamp, release script | Ryan can reinstall from the README alone |
+| **8 Hardening** | README (setup, troubleshooting, safety rules), version stamp, release script | The owner can reinstall from the README alone |
 
 ### Settled since v2 was written (2026-11-21)
 - `api.h` has only the handle-less prototypes; the DLL exports `__api…` with the handle first,
@@ -600,10 +600,10 @@ Stop at each gate. "Claude" checks are run by Claude Code with `curl` from the M
 - Packaging the Mac server as a desktop extension.
 
 ## 12. Working agreements for Claude Code
-- Ryan runs everything inside the VM. Give him one line at a time and say what to expect.
+- The owner runs everything inside the VM. Give him one line at a time and say what to expect.
 - Claude runs the `curl` checks for Phases 1–5 itself, and offline EDIABAS jobs only after
-  Ryan confirms the cable is unplugged.
-- Don't run anything that talks to the car. Phase 6 is Ryan's.
+  the owner confirms the cable is unplugged.
+- Don't run anything that talks to the car. Phase 6 is the owner's.
 - A fact marked (verify) stays out of the code until Phase 0 or a desk check settles it.
 - Policy changes go through `policy.json` and `policy-cases.json` together.
 - Skill reference files hold only what a real session returned. Update them in the same

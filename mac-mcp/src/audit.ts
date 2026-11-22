@@ -12,6 +12,8 @@ export interface AuditEntry {
   job?: string | undefined;
   /** For a policy refusal: the rule. */
   rule?: string | undefined;
+  /** The approvals watch flagged a change in this call. */
+  approvalsChanged?: boolean | undefined;
 }
 
 // eslint-disable-next-line no-control-regex
@@ -30,13 +32,14 @@ function value(s: string): string {
 
 /**
  * One tab-separated line: UTC time, tool, outcome, duration in ms; then, when present,
- * `ecu=`, `job=` and `rule=` fields.
+ * `ecu=`, `job=`, `rule=` and `approvals_changed=1` fields.
  */
 export function formatAuditLine(e: AuditEntry): string {
   const fields = [e.time.toISOString(), field(e.tool), field(e.outcome), String(Math.round(e.durationMs))];
   if (e.ecu !== undefined) fields.push(`ecu=${value(e.ecu)}`);
   if (e.job !== undefined) fields.push(`job=${value(e.job)}`);
   if (e.rule !== undefined) fields.push(`rule=${value(e.rule)}`);
+  if (e.approvalsChanged) fields.push("approvals_changed=1");
   return fields.join("\t") + "\n";
 }
 

@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | ignition, battery and cable-side voltage readings |
+| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default) |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 
@@ -74,8 +74,8 @@ turns it on.
    on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
-   The job policy allows these whole-car jobs only on `E60`; on another chassis
-   `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
+   The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
+   chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
    the policy (`policy/README.md` in the repo). Until then, find the car's modules with
    `ediabas_list_ecus` and read them one SGBD at a time.
 4. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask the
@@ -91,8 +91,8 @@ turns it on.
 
 **The car-session clock.** Every result of `ediabas_job`, `ediabas_jobs`,
 `ediabas_read_faults` and `ediabas_vehicle_status` ends with "Car session: … since the first
-read from the car (aim to finish within 10 min)." It counts from the first read, not from the
-ignition. At about 8 minutes, wrap up: finish the call in hand, add no new reads, and report.
+read from the car (aim to finish within 10 min)." It counts from the first read from a module (not `TMODE` or `UTILITY`), not from the
+ignition, and the clock resets after 5 minutes without such a read. At about 8 minutes, wrap up: finish the call in hand, add no new reads, and report.
 At 10 minutes, stop and ask the user before any further read; offer to continue another time.
 Read only what the question needs; reading every job on every ECU drains the battery and
 buries the answer.

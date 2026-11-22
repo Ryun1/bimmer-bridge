@@ -1,9 +1,9 @@
 # ista-bridge — build plan
 
-> Historical record: the original, ISTA-based plan, replaced by [PLAN.md](../PLAN.md). For the current state, see the [README](../README.md).
+> Historical record: the original, ISTA-based plan, replaced by [PLAN.md](PLAN.md). For the current state, see the [README's Status](../../README.md#status).
 
-**Audience:** Claude Code, running on Ryan's Mac.
-**Goal:** let Claude (in the Claude desktop app and in cloud sessions linked to this Mac) see into the Windows VM running in UTM. Claude should be able to read ISTA's screen as text, take screenshots of ISTA, read ISTA/EDIABAS logs and run **read-only** EDIABAS diagnostic jobs against Ryan's car.
+**Audience:** Claude Code, running on the owner's Mac.
+**Goal:** let Claude (in the Claude desktop app and in cloud sessions linked to this Mac) see into the Windows VM running in UTM. Claude should be able to read ISTA's screen as text, take screenshots of ISTA, read ISTA/EDIABAS logs and run **read-only** EDIABAS diagnostic jobs against the owner's car.
 
 ---
 
@@ -20,7 +20,7 @@
 - The car has a recurring battery-drain issue, so diagnostic sessions should be short. The tooling must not keep the bus busy or hold the interface open while idle.
 
 ### Why the design looks like this
-- Anything started over SSH or as a Windows service runs in **session 0**. Session 0 cannot see the interactive desktop, so it can't take screenshots or read UI Automation of ISTA. The VM-side component must therefore run **inside Ryan's logged-in desktop session**, started by a Task Scheduler task at log-on.
+- Anything started over SSH or as a Windows service runs in **session 0**. Session 0 cannot see the interactive desktop, so it can't take screenshots or read UI Automation of ISTA. The VM-side component must therefore run **inside the owner's logged-in desktop session**, started by a Task Scheduler task at log-on.
 - ISTA is a .NET/WPF desktop app, so most of its UI is exposed through **Windows UI Automation (UIA)**. That gives fault lists, test-plan steps and measured values as text, without reading them from pixels. Screenshots are the fallback for anything UIA doesn't expose, such as graphs, wiring diagrams and embedded document viewers.
 - ISTA probably runs elevated ("Run as administrator"). Windows UIPI blocks a non-elevated process from reading an elevated window's UI, so the agent must run with highest privileges.
 
@@ -36,7 +36,7 @@ mac-mcp/  "ista-bridge" — TypeScript MCP server, native macOS process
    │  HTTP, Authorization: Bearer <token>
    │  UTM Shared Network only (host 192.168.64.1 → VM 192.168.64.x)
    ▼
-vm-agent/  IstaAgent.exe — C# .NET 8, win-x86, runs in Ryan's interactive session (elevated)
+vm-agent/  IstaAgent.exe — C# .NET 8, win-x86, runs in the owner's interactive session (elevated)
    ├─ UIA reader        → ISTA window text / structure
    ├─ Window capture    → PNG/JPEG of ISTA window or whole desktop
    ├─ Log access        → read-only, allowlisted folders
@@ -56,7 +56,7 @@ vm-agent/  IstaAgent.exe — C# .NET 8, win-x86, runs in Ryan's interactive sess
 
 These are enforced **in code on both sides**, not just in tool descriptions.
 
-1. **No input into the VM.** v1 has no click, keystroke, mouse or clipboard-write endpoints. Ryan drives ISTA himself; Claude only reads.
+1. **No input into the VM.** v1 has no click, keystroke, mouse or clipboard-write endpoints. The owner drives ISTA himself; Claude only reads.
 2. **No ISTA service functions.** The agent never starts ISTA test plans, programming, coding, calibration (e.g. ACC alignment) or anything else in ISTA.
 3. **EDIABAS read-only by allowlist.** `ediabas_job` accepts only:
    - exact names: `IDENT`, `INFO`, `FS_LESEN`, `FS_LESEN_DETAIL`, `IS_LESEN`, `IS_LESEN_DETAIL`, `AIF_LESEN`, `SERIENNUMMER_LESEN`, `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS`
@@ -65,7 +65,7 @@ These are enforced **in code on both sides**, not just in tool descriptions.
    Then a **denylist that overrides the allowlist**. Reject any job name containing (case-insensitive) `SCHREIBEN`, `LOESCHEN`, `STEUERN`, `CODIER`, `FLASH`, `PROG`, `RESET`, `ADAPT`, `VORGEBEN`, `SPEICHER`, `ABGLEICH`, `KALIB`, `LERN`, `INIT`, `SETZEN`, `START`, `STOP`, `ENDE`, `DIAGNOSE_MODE`, `SLEEP`, `POWER_DOWN`, `ENERGIESPAR`.
    Put the policy in one pure, unit-tested class (`JobPolicy`) and run it **in both the VM agent and the Mac server**. Arguments: max 200 chars; no control characters.
 4. **Fault clearing is the only write, and it needs a human.** `ediabas_clear_faults` (jobs `FS_LOESCHEN` / `IS_LOESCHEN` only) works like this:
-   - The Mac server first shows a **native macOS dialog** via `osascript`, naming the ECU and what will be cleared, with *Cancel* as the default button. It proceeds only if Ryan clicks *Clear*. Nothing in a tool argument can skip the dialog.
+   - The Mac server first shows a **native macOS dialog** via `osascript`, naming the ECU and what will be cleared, with *Cancel* as the default button. It proceeds only if the owner clicks *Clear*. Nothing in a tool argument can skip the dialog.
    - The VM agent additionally refuses the clear endpoint unless `allowFaultClear: true` is set in its `config.json`. The default is `false`.
 5. **One user of the cable at a time.** The agent refuses all EDIABAS calls while any of these processes is running: ISTA's GUI process, `INPALOAD.exe`, `Tool32.exe`, or other EDIABAS clients (confirm exact process names in Phase 0). It returns a clear error ("close ISTA/INPA first"). There is no override flag.
 6. **Release the interface when idle.** For each request: `apiInit` → job(s) → `apiEnd`. Never keep an EDIABAS handle open between requests.
@@ -78,7 +78,7 @@ These are enforced **in code on both sides**, not just in tool descriptions.
 9. **Audit trail.** Both sides append one line per request (timestamp, endpoint/tool, ECU, job, outcome, duration) to an audit log:
    - VM: `C:\ProgramData\IstaAgent\audit.log`
    - Mac: `~/Library/Logs/ista-bridge/audit.log`
-10. **Never test against the car unattended.** Claude Code must not run EDIABAS jobs as part of automated tests. Car-facing tests are run by Ryan, at the car, with the ignition on, following the acceptance steps below.
+10. **Never test against the car unattended.** Claude Code must not run EDIABAS jobs as part of automated tests. Car-facing tests are run by the owner, at the car, with the ignition on, following the acceptance steps below.
 
 ---
 
@@ -122,9 +122,9 @@ ista-bridge/
 
 ---
 
-## 4. Phase 0 — discovery (Ryan runs this in the VM)
+## 4. Phase 0 — discovery (the owner runs this in the VM)
 
-Write `vm-setup/discover.ps1` (read-only) and ask Ryan to run it in an **elevated** PowerShell in the VM. The first deploy method is in §5; for Phase 0, Ryan can paste the script into PowerShell. It writes `ista-bridge-discovery.txt` to the Desktop for Ryan to paste back. Starting point:
+Write `vm-setup/discover.ps1` (read-only) and ask the owner to run it in an **elevated** PowerShell in the VM. The first deploy method is in §5; for Phase 0, the owner can paste the script into PowerShell. It writes `ista-bridge-discovery.txt` to the Desktop for the owner to paste back. Starting point:
 
 ```powershell
 # ista-bridge discovery — read-only. Run elevated. Output: Desktop\ista-bridge-discovery.txt
@@ -186,7 +186,7 @@ $out = Join-Path ([Environment]::GetFolderPath('Desktop')) 'ista-bridge-discover
 "Saved to $out"
 ```
 
-Also ask Ryan directly:
+Also ask the owner directly:
 - the UTM network mode for this VM (Settings → Network; want **Shared Network**);
 - whether ISTA is started "as administrator";
 - the ISTA version shown in ISTA's About/Info screen;
@@ -206,7 +206,7 @@ Claude Code builds on the Mac. To get files into the VM without extra software:
    `Invoke-WebRequest http://192.168.64.1:8000/IstaAgent.zip -OutFile $env:TEMP\IstaAgent.zip`
 3. Unzip and run `install.ps1`.
 
-Stop the HTTP server afterwards. Put these steps in the README. Claude Code gives Ryan the exact commands to run; it cannot run anything inside the VM itself.
+Stop the HTTP server afterwards. Put these steps in the README. Claude Code gives the owner the exact commands to run; it cannot run anything inside the VM itself.
 
 ---
 
@@ -227,7 +227,7 @@ Stop the HTTP server afterwards. Put these steps in the README. Claude Code give
   "allowFaultClear": false
 }
 ```
-Fill the values from Phase 0. If `bindAddress` is `"auto"`, pick the IPv4 address in `192.168.64.0/24`. Lock down `token.txt` with ACLs (Administrators + Ryan's user only).
+Fill the values from Phase 0. If `bindAddress` is `"auto"`, pick the IPv4 address in `192.168.64.0/24`. Lock down `token.txt` with ACLs (Administrators + the owner's user only).
 
 ### Startup
 - If the bind address isn't up yet (VM networking still starting), retry every 5 s; never fall back to `0.0.0.0`.
@@ -257,7 +257,7 @@ All require `Authorization: Bearer`. All responses are JSON unless noted, and er
 - **Tables:** for elements supporting GridPattern/TablePattern (DataGrid, ListView), emit `columns` (header names) and `rows` (cell text arrays) instead of walking every cell as a node. ISTA's fault memory and test-plan lists are tables, so this matters most.
 - **`format=text` rendering:** indented lines like `[Button] Read fault memory` and `[Edit] Mileage = 160,935`. Render tables as pipe-separated rows under their header. Skip empty, offscreen and pure layout containers (Pane/Group/Custom with no name and a single child) to keep output compact.
 - Return `{ window: {title, pid, elevated}, nodeCount, truncated, text | tree }`.
-- If ISTA is elevated and the agent isn't, return a specific error that names UIPI and tells Ryan to fix the scheduled task.
+- If ISTA is elevated and the agent isn't, return a specific error that names UIPI and tells the owner to fix the scheduled task.
 - If the desktop is locked or on the secure desktop, return a specific `desktop_unavailable` error.
 
 ### Capture
@@ -297,7 +297,7 @@ All require `Authorization: Bearer`. All responses are JSON unless noted, and er
    - settings `-ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`.
 
    Then start the task immediately.
-4. Disable sleep on AC (`powercfg /change standby-timeout-ac 0`). **Ask Ryan before** turning off the idle screen lock, and explain that a locked screen blocks UIA and screenshots.
+4. Disable sleep on AC (`powercfg /change standby-timeout-ac 0`). **Ask the owner before** turning off the idle screen lock, and explain that a locked screen blocks UIA and screenshots.
 5. Print the VM IP, port and token **once**, with instructions to put the token into the Mac Keychain (§7).
 
 `uninstall.ps1` reverses all of this.
@@ -330,7 +330,7 @@ Every tool has a precise description and MCP annotations: `readOnlyHint: true` o
 
 ### Formatting (`format.ts`)
 - Fault tables: one row per set. Show the code as hex (from `F_ORT_NR`) with its text (`F_ORT_TEXT`), present/stored state, frequency count and logged mileage/conditions where the SGBD provides them. Field names vary by SGBD, so map the known ones and pass the rest through as `key=value`.
-- **Mileage:** wherever a result is in km (e.g. `F_UW_KM` or any field whose unit/name indicates km), show miles first with km in brackets, e.g. `100,000 mi (160,935 km)`. Ryan wants distances in miles.
+- **Mileage:** wherever a result is in km (e.g. `F_UW_KM` or any field whose unit/name indicates km), show miles first with km in brackets, e.g. `100,000 mi (160,935 km)`. The owner wants distances in miles.
 - Append the raw JSON after the text, truncated sensibly.
 
 ### Confirmation dialog (`confirm.ts`)
@@ -359,9 +359,9 @@ Then restart the Claude desktop app.
 
 ## 8. Build phases and acceptance tests
 
-Work phase by phase. Stop at each acceptance gate and ask Ryan to confirm before moving on.
+Work phase by phase. Stop at each acceptance gate and ask the owner to confirm before moving on.
 
-| Phase | Build | Acceptance (Ryan confirms) |
+| Phase | Build | Acceptance (the owner confirms) |
 |---|---|---|
 | **0 Discovery** | `discover.ps1` | Output reviewed; open questions in §4 answered; decisions recorded in README |
 | **1 Agent skeleton** | Kestrel host, config, auth, `/health`, `/windows`, install/uninstall scripts, audit log | From the Mac: `curl -H "Authorization: Bearer …" http://<vm-ip>:8765/health` → 200; without the token → 401. The agent survives a VM reboot (starts at log-on). `netstat` in the VM shows it listening only on the 192.168.64.x address |
@@ -369,8 +369,8 @@ Work phase by phase. Stop at each acceptance gate and ask Ryan to confirm before
 | **3 Screen** | `/screen/text`, `/screen/capture`, `ista_read_screen`, `ista_screenshot` | With ISTA open on a vehicle-identification or fault-memory screen, `ista_read_screen` returns the visible text, including table rows; `ista_screenshot` returns a readable image; elevated-ISTA case works |
 | **4 Logs** | `/logs`, `/logs/read`, Mac tools | Newest ISTA log listed and tail readable; `..`/junction escapes rejected (unit test + manual) |
 | **5 EDIABAS read** | P/Invoke, runner, policy, `/ediabas/*`, Mac tools, formatter | **At the car, ignition on, ISTA and INPA closed:** `ediabas_vehicle_status` shows battery V and ignition on; `ediabas_job` `IDENT` on the engine ECU returns a variant; `ediabas_read_faults` on the Night Vision SGBD shows the historic A752/A751 pair seen in INPA on 11/09/2026; a denied job (e.g. `STEUERN_…`) is refused by **both** sides; with ISTA open, any job returns `cable_in_use` |
-| **6 Fault clear** | `/ediabas/clear`, dialog, before/after re-read | With `allowFaultClear` false → refused. Set to true → dialog appears on the Mac; *Cancel* → nothing sent (audit log confirms); *Clear faults* on a chosen ECU (Ryan picks which) → after-read shows the result |
-| **7 Hardening** | README complete, troubleshooting section, version stamp in `/health`, `release/` zip script | Ryan can reinstall from the README alone |
+| **6 Fault clear** | `/ediabas/clear`, dialog, before/after re-read | With `allowFaultClear` false → refused. Set to true → dialog appears on the Mac; *Cancel* → nothing sent (audit log confirms); *Clear faults* on a chosen ECU (the owner picks which) → after-read shows the result |
+| **7 Hardening** | README complete, troubleshooting section, version stamp in `/health`, `release/` zip script | The owner can reinstall from the README alone |
 
 ### Automated tests (no VM, no car)
 - `vm-agent.Tests` (xUnit, `dotnet test` on the Mac):
@@ -393,13 +393,13 @@ Work phase by phase. Stop at each acceptance gate and ask Ryan to confirm before
 - Moving the K+DCAN cable to the Mac (e.g. via EdiabasLib), which is possible later but not now.
 
 ## 10. Possible v2 (note in README only)
-- An `ista_click_text` tool gated by the same macOS dialog, for stepping through ISTA screens when Ryan is at the car.
+- An `ista_click_text` tool gated by the same macOS dialog, for stepping through ISTA screens when the owner is at the car.
 - Auto-detect the VM's IP via UTM's `utmctl ip-address <vm>` on the Mac, if `utmctl` is available.
 - A saved "sweep" definition, i.e. a list of ECUs to read faults from, mirroring the 11/09/2026 INPA sweep.
 
 ## 11. Working agreements for Claude Code
-- Ryan runs everything inside the VM. Give him copy-pasteable, elevated-PowerShell commands, one block at a time, and say what output to expect.
-- Don't run anything that talks to the car. Phase 5/6 car tests are Ryan's, at the car.
+- The owner runs everything inside the VM. Give him copy-pasteable, elevated-PowerShell commands, one block at a time, and say what output to expect.
+- Don't run anything that talks to the car. Phase 5/6 car tests are the owner's, at the car.
 - When a fact about ISTA/EDIABAS isn't confirmed by Phase 0 output or `api.h`, say so and verify it. Don't hard-code a guess.
 - Keep `JobPolicy` and `policy.ts` in lockstep through the shared fixture; a policy change without a fixture update is a bug.
 - Commit after each phase with a short message naming the phase.

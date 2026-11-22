@@ -1,4 +1,4 @@
-import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, Vehicle } from "./agentClient.js";
+import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, JobsResponse } from "./agentClient.js";
 import { cleanText, describeAgentError, errorText } from "./errors.js";
 import type { Verdict } from "./policy.js";
 
@@ -47,8 +47,9 @@ function cleanName(s: string, max = 64): string {
 }
 
 /** Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer". */
-function isKmName(name: string): boolean {
-  if (/(^|_)KM_H(_|$)/i.test(name)) return false;
+export function isKmName(name: string): boolean {
+  // km/h (KM_H, KM_PRO_H) and km per standard (KM_STD) are speeds or rates, not distances.
+  if (/(^|_)KM_(H|PRO|STD)(_|$)/i.test(name)) return false;
   return /(^|_)KM(_|$)/i.test(name) || /KILOMETER/i.test(name);
 }
 
@@ -88,7 +89,7 @@ function plural(n: number, one: string, many = `${one}s`): string {
 export function itemErrorText(err: AgentErrorInfo | null | undefined): string {
   if (!err) return "failed (the agent gave no error)";
   const code = cleanText(err.code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") || "error";
-  return errorText(code, describeAgentError(code, err.message, err.details) ?? cleanText(err.message || "(no message)"));
+  return errorText(code, describeAgentError(code, err.message, err.details, true) ?? cleanText(err.message || "(no message)"));
 }
 
 // ---------------------------------------------------------------------------
@@ -198,11 +199,29 @@ export interface FaultReport {
   info?: BatchItem | { error: string } | undefined;
 }
 
-function itemSection(item: BatchItem | { error: string }, label: string, info = false): string[] {
+/** Did this item read (a job result came back)? */
+function readOk(item: BatchItem | { error: string }): boolean {
+  return "ok" in item && item.ok && item.result !== null && item.result !== undefined;
+}
+
+/**
+ * `infoAfterFaults`: this is the info memory item, and the same ECU's fault memory read
+ * succeeded (see below).
+ */
+function itemSection(item: BatchItem | { error: string }, label: string, ecu: string, infoAfterFaults = false): string[] {
   if ("ok" in item) {
     if (item.ok && item.result) return formatFaultTable(item.result, label);
-    // Not every module has an info memory; its SGBD then has no IS_LESEN. That is not a failure.
-    if (info && item.error?.code === "job_not_found") return [`  ${label}: no info memory on this module.`];
+    // Not every module has an info memory; its SGBD then has no IS_LESEN, which EDIABAS reports as an
+    // ordinary job error. The agent does not tell the two apart, so say what may be the case, but
+    // only when FS_LESEN of the same ECU just read: then the ECU and cable demonstrably work and a
+    // missing job is the likely cause. Otherwise (the ECU silent, the cable, results unread: the job
+    // ran) the error takes the normal path, as a fault memory error does.
+    const resultsUnread = (item.error?.details as { resultsUnread?: unknown } | null | undefined)?.resultsUnread === true;
+    if (infoAfterFaults && item.error?.code === "ediabas_error" && !resultsUnread) {
+      return [
+        `  ${label}: not read ([ediabas_error] ${cleanText(item.error.message || "no details", 200)}). Many modules have no info memory (no IS_LESEN job); ediabas_describe ${cleanName(ecu)} shows whether this one has it.`,
+      ];
+    }
     return [`  ${label}: ${item.ok ? "no result returned" : `error: ${itemErrorText(item.error)}`}`];
   }
   return [`  ${label}: error: ${item.error}`];
@@ -215,8 +234,8 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
     const variant = "ok" in r.faults && r.faults.result?.variant ? valueText(r.faults.result.variant, 64) : null;
     out.push("");
     out.push(`${cleanName(r.ecu)}${variant && variant !== r.ecu.toUpperCase() ? ` (variant ${variant})` : ""}`);
-    out.push(...itemSection(r.faults, "Fault memory"));
-    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", true));
+    out.push(...itemSection(r.faults, "Fault memory", r.ecu));
+    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", r.ecu, readOk(r.faults)));
   }
   return out.join("\n");
 }
@@ -333,17 +352,31 @@ function readingText(item: BatchItem): string {
   return parts.join("; ");
 }
 
-export function formatVehicle(v: Vehicle): string {
-  const out = ["Vehicle status (each reading's result fields as returned; their meaning is confirmed at the car in Phase 6):"];
-  out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(v.ignition)}`);
-  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(v.ubatt)}`);
-  for (const s of v.voltages) {
-    const name = [s.ecu, s.job].filter((x): x is string => !!x).map((x) => cleanName(x)).join(" ") || "voltage source";
-    out.push(`Voltage (${name}): ${readingText(s)}`);
-  }
-  if (v.voltages.length === 0) out.push("Voltage sources: none configured in the agent.");
-  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(v.cableKl30)}`);
-  out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(v.cableKl15)}`);
+/**
+ * The items ediabas_vehicle_status sends as one /ediabas/jobs batch (D10): ignition, battery,
+ * each voltage source in order, then the cable's KL30 and KL15. formatVehicle reads by this order.
+ */
+export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: string; job: string }[] {
+  return [
+    { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+    { ecu: "UTILITY", job: "STATUS_UBATT" },
+    ...sources.map((s) => ({ ecu: s.ecu, job: s.job })),
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+  ];
+}
+
+/** `r` answers `vehicleBatch(sources)`, one item per item sent. */
+export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
+  const it = r.items;
+  const n = sources.length;
+  const out = ["Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):"];
+  out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(it[0]!)}`);
+  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(it[1]!)}`);
+  sources.forEach((s, i) => out.push(`Voltage (${cleanName(s.ecu)} ${cleanName(s.job)}): ${readingText(it[2 + i]!)}`));
+  if (n === 0) out.push("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
+  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(it[2 + n]!)}`);
+  out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(it[3 + n]!)}`);
   return out.join("\n");
 }
 

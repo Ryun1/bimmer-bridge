@@ -1,8 +1,8 @@
 # Phase results (historical)
 
-What was found and checked in Phases 0 to 5, recorded at the time (2026-11-21). The current
-state is the [README's Status section](../README.md#status). Versions and counts are those of
-the day (agent 0.2.0 at the Phase 2 checks); the self-test, for one, has gained checks since.
+> Historical record: Phase 0 to 5 results as recorded on 2026-11-21. For the current state, see the [README's Status](../../README.md#status).
+
+What was found and checked in Phases 0 to 5, recorded at the time (2026-11-21). Versions and counts are those of the day (agent 0.2.0 at the Phase 2 checks); the self-test, for one, has gained checks since.
 
 ## Phase 0 findings (VM discovery, 2026-11-21)
 
@@ -11,7 +11,7 @@ Facts the later phases build on. Source: `vm-setup/discover.ps1` run in the VM.
 | Item | Finding |
 |---|---|
 | Windows | Windows 11 Home 24H2 (build 26100), ARM64, 4 cores, 4 GB |
-| User | `ryan`, an administrator. **UAC is switched off** (`EnableLUA = 0`), so every process, including the agent, runs elevated whatever run level the task asks for |
+| User | the owner's account, an administrator. **UAC is switched off** (`EnableLUA = 0`), so every process, including the agent, runs elevated whatever run level the task asks for |
 | PowerShell | Windows PowerShell 5.1 only; no PowerShell 7, no .NET runtime (the agent is self-contained) |
 | Network | one adapter, `192.168.64.3/24`, gateway `192.168.64.1`, category Public |
 | ISTA | **not installed** (no `ISTAGUI.exe`, no `C:\Rheingold`, no `C:\ProgramData\BMW`) |
@@ -42,7 +42,7 @@ Facts the later phases build on. Source: `vm-setup/discover.ps1` run in the VM.
 - **Conflict list:** `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT` and `BMW Coding Tool` are all
   confirmed process names, and match the installed config.
 - **Logs (Phase 5):** with EDIABAS tracing off there is little to read. Turning it on means
-  editing `EDIABAS.INI`, which the safety rules forbid the bridge to do; it would be Ryan's choice.
+  editing `EDIABAS.INI`, which the safety rules forbid the bridge to do; it would be the owner's choice.
 - **Phase 2 desk test:** `TMODE.PRG` is present, so the no-cable test is available.
 
 ## Phase 1 and 3 acceptance results (2026-11-21)

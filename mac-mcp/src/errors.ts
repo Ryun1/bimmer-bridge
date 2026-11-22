@@ -3,6 +3,8 @@
  * user (through Claude) as the text of a failed tool call, so each says what to do.
  */
 
+import { hostPort } from "./vmAddress.js";
+
 export const TOKEN_FIX =
   "Hand the VM's token to this Mac again: in the repo run python3 dev/serve.py --accept-token and paste the Install line it prints " +
   "into an Administrator Windows PowerShell in the VM (the installer never shows the token). Or set EDIABAS_AGENT_TOKEN in the server's environment.";
@@ -28,24 +30,31 @@ export const MESSAGES = {
     "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
 
-/** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
-export type LocalErrorCode =
-  | "vm_not_running"
-  | "agent_not_answering"
-  | "ediabas_request_lost"
-  | "ediabas_busy"
-  | "local_network_blocked"
-  | "unauthorized"
-  | "forbidden"
-  | "no_token"
-  | "wrong_service"
-  | "bad_response"
-  | "config_error"
-  | "invalid_arguments"
-  | "agent_outdated"
-  | "policy_unavailable"
-  | "job_not_allowed"
-  | "internal_error";
+/**
+ * Codes this server produces itself. Agent errors use the agent's own `error.code`. Each is
+ * listed in docs/tools.md "Errors" (test/errorCodesDoc.test.ts checks).
+ */
+export const LOCAL_ERROR_CODES = [
+  "vm_not_running",
+  "agent_not_answering",
+  "ediabas_request_lost",
+  "ediabas_busy",
+  "local_network_blocked",
+  "unauthorized",
+  "forbidden",
+  "no_token",
+  "wrong_service",
+  "bad_response",
+  "config_error",
+  "invalid_arguments",
+  "agent_outdated",
+  "policy_unavailable",
+  "policy_mismatch",
+  "job_not_allowed",
+  "internal_error",
+] as const;
+
+export type LocalErrorCode = (typeof LOCAL_ERROR_CODES)[number];
 
 export class BridgeError extends Error {
   override readonly name = "BridgeError";
@@ -68,9 +77,28 @@ export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
 }
 
-/** A request that runs an EDIABAS job failed after it may have reached the agent. */
-export function ediabasRequestLost(): BridgeError {
-  return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+/** The agent's job policy file differs byte for byte from this Mac's. Nothing was sent to /ediabas/*. */
+export function policyMismatch(agentSha256: string, macSha256: string): BridgeError {
+  return new BridgeError(
+    "policy_mismatch",
+    `The agent's job policy (sha256 ${cleanText(agentSha256.slice(0, 12), 40)}) differs from this Mac's (${macSha256.slice(0, 12)}). ` +
+      "Update the agent or the Mac server so both carry the same policy/policy.json.",
+  );
+}
+
+/**
+ * A request that runs an EDIABAS job failed after it may have reached the agent. With `http`:
+ * the address (which proved it is the agent in this call) answered a non-200 without the
+ * agent's error shape, so whether the job ran is unknown.
+ */
+export function ediabasRequestLost(http?: { baseUrl: string; status: number }): BridgeError {
+  if (http === undefined) return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+  return new BridgeError(
+    "ediabas_request_lost",
+    `The agent's address (${hostPort(http.baseUrl)}) answered this EDIABAS request with HTTP ${http.status} but without the agent's error format, ` +
+      "so it is not known whether the agent handled it: the job may have run in the VM. It was not sent again. " +
+      "Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  );
 }
 
 /** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
@@ -95,15 +123,40 @@ export function noToken(): BridgeError {
   return new BridgeError("no_token", MESSAGES.noToken);
 }
 
-export function wrongService(where: string): BridgeError {
+export function wrongService(baseUrl: string): BridgeError {
   return new BridgeError(
     "wrong_service",
-    `Something answered at ${where}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
+    `Something answered at ${hostPort(baseUrl)}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
   );
+}
+
+/**
+ * An address answered `/hello` as the agent but its proof did not match this Mac's token, so the
+ * token was not sent there. `agentUrlOverride`: the token came from EDIABAS_AGENT_TOKEN.
+ */
+export function unprovenAgent(where: string, agentUrlOverride = false): BridgeError {
+  const fix = agentUrlOverride
+    ? "Either EDIABAS_AGENT_TOKEN is not the token of the agent at EDIABAS_AGENT_URL, or something else answers there. Set the right token, or unset EDIABAS_AGENT_URL to use the VM."
+    : `Either the VM's token no longer matches the one on this Mac, or something else answers there. ${TOKEN_FIX}`;
+  return new BridgeError("wrong_service", `The address ${where} answered as the ediabas-bridge agent but could not prove it holds this Mac's token, so the token was not sent there. ${fix}`);
 }
 
 export function badResponse(what: string): BridgeError {
   return new BridgeError("bad_response", `The agent's response to ${what} did not match the expected format. The agent and this server may be different versions.`);
+}
+
+/**
+ * The address, which proved it is the agent in this call, answered `what` with a non-200 that
+ * is not in the agent's error shape: most likely the agent's web server refused the request
+ * before the agent's code ran. For a request that runs no EDIABAS job.
+ */
+export function unexpectedStatus(what: string, baseUrl: string, status: number): BridgeError {
+  return new BridgeError(
+    "bad_response",
+    `The agent's address (${hostPort(baseUrl)}) answered ${what} with HTTP ${status} but without the agent's error format: ` +
+      "the agent's web server may have refused the request before the agent handled it, or another service may answer there now. " +
+      "Run vm_health to check the agent; ask again once if the result is still needed.",
+  );
 }
 
 export function configError(message: string): BridgeError {
@@ -122,9 +175,10 @@ export function agentError(
   code: string | undefined,
   message: string | undefined,
   details?: unknown,
+  run = false,
 ): BridgeError {
   const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || `http_${status}`;
-  const known = describeAgentError(safeCode, message, details);
+  const known = describeAgentError(safeCode, message, details, run);
   if (known) {
     const e = new BridgeError(safeCode, known);
     const rule = detailString(details, "rule");
@@ -136,7 +190,7 @@ export function agentError(
 }
 
 export const UPDATE_HINT =
-  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see README.md).";
+  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see docs/install.md).";
 
 /** The agent has no such endpoint: it is an older build. */
 export function agentOutdated(path: string): BridgeError {
@@ -188,7 +242,7 @@ function processList(details: unknown): string | null {
  * The user-facing message for a known agent error code, or null for codes without one. None
  * suggests a way around a refusal.
  */
-export function describeAgentError(code: string, message: string | undefined, details: unknown): string | null {
+export function describeAgentError(code: string, message: string | undefined, details: unknown, run = false): string | null {
   const agentSaid = message ? ` The agent said: "${cleanText(message, 200)}".` : "";
   switch (code) {
     case "job_not_allowed": {
@@ -246,7 +300,8 @@ export function describeAgentError(code: string, message: string | undefined, de
           ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (the user ticks it in UTM's USB menu). " +
             "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
           : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
-      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.`;
+      const hint = run ? " If the job name may be wrong, check it with ediabas_describe." : "";
+      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.${hint}`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.

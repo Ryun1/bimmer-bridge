@@ -1,16 +1,18 @@
 # Deploy and discovery — contract
 
 How files move between the Mac and the VM. `dev/serve.py`, the `vm-setup/*.ps1` scripts and
-`vm-agent/build.sh` are all built against this file.
+`vm-agent/build.sh` are all built against this file. What each script does in the VM, what it
+leaves there, and the steps to run them: [install.md](install.md#the-scripts-in-the-vm).
 
 ## The Mac-side server: `dev/serve.py`
 - Listens on the Mac's UTM bridge address, port **8000**. Never `0.0.0.0`.
 - Serves **only the VM's address**; every request from any other address (another VM on the
   same UTM network included) is 403. The address is the one given with `--client <IPv4>`, or
-  else the latest-expiring lease in `/var/db/dhcpd_leases` for the VM's MAC, found as the MCP
-  server finds it (`EDIABAS_VM_MAC`, else `vmMac` in `config.local.json`, else read from UTM's
-  `config.plist` for the VM named `EDIABAS_VM_NAME` / `vmName`, default `Windows`). No lease
-  and no `--client`: it does not start. It must be a host address on the bind address's /24. It never trusts whoever
+  else the newest DHCP lease for the VM's MAC, the address the MCP server uses (see
+  [Finding the agent](architecture.md#the-request-path)) except when that newest lease is off
+  UTM's network: the MCP server then takes the newest lease on it, while `serve.py` does not
+  start. No lease and no `--client`: it does not start. It must be a host address on the bind
+  address's /24. It never trusts whoever
   connects first.
 - Per run, at most 10 uploads and 40 MB of uploads in all (each upload at most 20 MB). The
   caps are taken before anything is written; a failed upload keeps its share. Past them,
@@ -61,31 +63,13 @@ variables set earlier on the same pasted line.
 | `$Purge` | uninstall | `$true` to remove `config.json`, `token.txt` and `logs\` as well. Optional, default off: uninstall keeps them for a later reinstall |
 | `$KeepData` | uninstall | ignored: keeping the data is now the default. The script says so if it is set |
 
-Install, update and uninstall must run in an elevated **Windows PowerShell** (5.1) window, not PowerShell 7.
-
-Install and Update download, check and expand the zip in a new folder
-`C:\ProgramData\EdiabasBridge-staging-<guid>` that is created with an ACL granting only
-SYSTEM and Administrators (inheritance off, set at creation), never in the user's `%TEMP%`.
-They hash `EdiabasAgent.exe` there, copy it into place, hash the copy, and delete it if the
-two differ. The staging folder is removed at the end. Install, Update and Uninstall first
-remove any `EdiabasBridge-staging-*` folder left behind by an earlier run that was cut short
-(a link of that name is left alone).
-
 ## The release artefact
 `vm-agent/build.sh` writes:
 - `release/EdiabasAgent.zip` — `EdiabasAgent.exe`, `version.txt` and `commit.txt` at the zip
   root. `commit.txt` holds the short git commit hash, ending in `-dirty` when built with
-  `--allow-dirty` from a tree with uncommitted changes;
+  `--allow-dirty` from a tree with uncommitted changes or with untracked files under a release
+  input (see [development.md](development.md#releasing));
 - `release/EdiabasAgent.zip.sha256` — the hex digest, one line.
-
-## What lives in the VM
-| Path | Purpose | Agent's access |
-|---|---|---|
-| `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe` | the agent | read, execute |
-| `C:\ProgramData\EdiabasBridge\config.json` | configuration | read |
-| `C:\ProgramData\EdiabasBridge\token.txt` | bearer token | read |
-| `C:\ProgramData\EdiabasBridge\logs\agent.log` | agent's own log | write |
-| `C:\ProgramData\EdiabasBridge\logs\audit.log` | one line per request | write |
 
 ## Token hand-off
 `install.ps1` sends the agent's token to `PUT $base/token` only on a first install (no
@@ -96,6 +80,3 @@ the flag the server answers 403), the script says: "Could not send the token to 
 <status>). On the Mac, start: python3 dev/serve.py --accept-token, then paste the Install line
 it prints again." To re-send a token, do exactly that.
 
-- Scheduled task name: `ediabas-bridge agent`. Triggers: at log-on, and every 5 minutes (a
-  second copy exits at once, so this only matters after a crash).
-- Firewall rule display name: `ediabas-bridge agent`.

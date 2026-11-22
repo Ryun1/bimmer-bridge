@@ -311,23 +311,27 @@ public class EdiabasServiceTests
     [Fact]
     public void ReviewedJobs_SkipOnlyTheScreen()
     {
+        // SHA-256("Startet B") = 7b69322a754f...: a description the screen would refuse.
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_SYSTEMCHECK_GRUNDADAPT", FakeJob.Comments("Startet B"));
         _api.On("NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT", FakeJob.Ok());
-        var svc = Service(reviewed: ["NVE_65:STATUS_SYSTEMCHECK_GRUNDADAPT", "NVE_65:FS_LOESCHEN", "NVE_65:C_C_LESEN"]);
+        var svc = Service(reviewed: ["NVE_65:STATUS_SYSTEMCHECK_GRUNDADAPT@7b69322a754f", "NVE_65:FS_LOESCHEN@7b69322a754f", "NVE_65:C_C_LESEN@7b69322a754f"]);
 
         Assert.True(svc.RunJob(new JobRequest("nve_65", "status_systemcheck_grundadapt"), null, _audit, default).Ok);
-        Assert.Equal(["Job NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT [] []"], _api.JobCalls);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_SYSTEMCHECK_GRUNDADAPT] []", "Job NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT [] []"], _api.JobCalls);
 
         // Listing a denied job does not get it past the name rules.
         Assert.Equal("deny.substring:LOESCH", ((JobRefusalDetails)svc.RunJob(new JobRequest("NVE_65", "FS_LOESCHEN"), null, new RequestAudit(), default).Failure!.Error.Details!).Rule);
         Assert.Equal("default_deny", ((JobRefusalDetails)svc.RunJob(new JobRequest("NVE_65", "C_C_LESEN"), null, new RequestAudit(), default).Failure!.Error.Details!).Rule);
-        Assert.Single(_api.JobCalls);
+        Assert.Equal(2, _api.JobCalls.Count());
     }
 
     [Fact]
     public void ReviewedJobs_AreExactUpperCase()
     {
+        // Pinned to the right hash, but the names are not exact.
         _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("starte etwas"));
-        var r = Service(reviewed: ["nve_65:status_x", "NVE_65:STATUS_X "]).RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
+        var hash = CommentScreen.DescriptionHash("starte etwas");
+        var r = Service(reviewed: [$"nve_65:status_x@{hash}", $"NVE_65:STATUS_X @{hash}", $"NVE_65:STATUS_x@{hash}"]).RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
         Assert.Equal("job_needs_review", r.Failure!.Error.Code);
     }
 
@@ -368,7 +372,6 @@ public class EdiabasServiceTests
     {
         _api.On("NVE_65 FS_LESEN", FakeJob.Ok(Set(Text("JOB_STATUS", "OKAY"))));
         _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009"));
-        _api.On("NVE_65 _JOBS", FakeJob.Jobs("FS_LESEN", "IDENT"));
         _api.On("D_MOTOR IDENT", FakeJob.Ok());
 
         var r = Service().RunJobs(
@@ -393,7 +396,7 @@ public class EdiabasServiceTests
         Assert.True(items[4].Ok);
         Assert.Equal(1, _api.Count("Init"));
         Assert.Equal(1, _api.Count("End"));
-        Assert.Equal(4, _api.JobCalls.Count()); // the third item's error also lists _JOBS
+        Assert.Equal(3, _api.JobCalls.Count());
 
         Assert.Equal(5, _audit.Items.Count);
         Assert.Equal("deny.substring:LOESCH", _audit.Items[1].Rule);
@@ -501,21 +504,6 @@ public class EdiabasServiceTests
     }
 
     [Fact]
-    public void Vehicle_IsBoundByTheBudget()
-    {
-        _api.On("UTILITY STATUS_ZUENDUNG", new FakeJob { BusyPolls = 60 }); // 3 s
-        _api.On("UTILITY STATUS_UBATT", new FakeJob { NeverFinishes = true });
-
-        var r = Service(defaultTimeout: 5, maxTimeout: 5).Vehicle([], _audit, default).Value!;
-
-        Assert.True(r.Ignition.Ok);
-        Assert.Equal("job_timeout", r.Ubatt.Error!.Code);
-        Assert.Equal("not_run", r.CableKl30.Error!.Code);
-        Assert.Equal("not_run", r.CableKl15.Error!.Code);
-        Assert.Equal(5_000, _clock.ElapsedMs);
-    }
-
-    [Fact]
     public void DescribeList_HangingCommentFetch_EndsAtTheBudget_RestNotChecked()
     {
         _api.On("NVE_65 _JOBS", FakeJob.Jobs("STATUS_A", "STATUS_B", "FS_LESEN", "STATUS_C"));
@@ -565,9 +553,11 @@ public class EdiabasServiceTests
     [Fact]
     public void Batch_ToolStartsMidway_RestAreNotRun()
     {
+        // Each job takes one recheck interval, so the check before every later item is due; the
+        // tool appears during the second job, which ends before the next scan sees it.
         _api.On("NVE_65 IDENT", FakeJob.Ok());
-        _conflicts.Answers.Add([]);
-        _conflicts.Answers.Add([new ConflictingProcess("WINKFPT", 9)]);
+        _api.DuringJob = () => _clock.ElapsedMs += EdiabasService.ConflictRecheckMs;
+        _conflicts.Answer = () => _clock.ElapsedMs >= 2 * EdiabasService.ConflictRecheckMs ? [new ConflictingProcess("WINKFPT", 9)] : [];
 
         var r = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "IDENT"), new("NVE_65", "IDENT")], null, _audit, default);
 
@@ -596,48 +586,6 @@ public class EdiabasServiceTests
         var r = Service().RunJobs([new("NVE_65", "FS_LOESCHEN"), new("NVE_65", "IDENT")], null, _audit, default);
         Assert.Equal("ediabas_unavailable", r.Failure!.Error.Code);
         Assert.Equal(1, _api.Count("End"));
-    }
-
-    // ---- vehicle ----
-
-    [Fact]
-    public void Vehicle_RunsTheFixedJobs_ThroughThePolicy()
-    {
-        _api.On("UTILITY STATUS_ZUENDUNG", FakeJob.Ok(Set(new FakeResult("STAT_ZUENDUNG", ApiResultFormat.Integer, (short)1))));
-        _api.On("UTILITY STATUS_UBATT", FakeJob.Ok());
-        _api.On("NVE_65 _JOBCOMMENTS STATUS_BORDNETZSPANNUNG", FakeJob.Comments("Bordnetzspannung"));
-        _api.On("NVE_65 STATUS_BORDNETZSPANNUNG", FakeJob.Ok());
-        _api.On("TMODE LESE_SPANNUNG_KL30", FakeJob.Ok());
-        _api.On("TMODE LESE_SPANNUNG_KL15", FakeJob.Error(20, "IFH-0010"));
-        _api.On("TMODE _JOBS", FakeJob.Jobs("LESE_SPANNUNG_KL30", "LESE_SPANNUNG_KL15"));
-
-        var sources = new List<VoltageSource>
-        {
-            new() { Ecu = "NVE_65", Job = "STATUS_BORDNETZSPANNUNG" },
-            new() { Ecu = "NVE_65", Job = "FS_LOESCHEN" },
-        };
-        var r = Service().Vehicle(sources, _audit, default).Value!;
-
-        Assert.True(r.Ignition.Ok);
-        Assert.Equal((short)1, r.Ignition.Result!.Sets[0]["STAT_ZUENDUNG"]);
-        Assert.True(r.Ubatt.Ok);
-        Assert.Equal(2, r.Voltages.Count);
-        Assert.True(r.Voltages[0].Ok);
-        Assert.Equal("NVE_65", r.Voltages[0].Ecu);
-        Assert.Equal("job_not_allowed", r.Voltages[1].Error!.Code);
-        Assert.True(r.CableKl30.Ok);
-        Assert.Equal("ediabas_error", r.CableKl15.Error!.Code);
-        Assert.Equal(1, _api.Count("Init"));
-        Assert.Equal(1, _api.Count("End"));
-        Assert.Equal(6, _audit.Items.Count);
-    }
-
-    [Fact]
-    public void Vehicle_ConflictFails_NothingCalled()
-    {
-        _conflicts.Answers[0] = [new ConflictingProcess("NCSEXPER", 1)];
-        Assert.Equal("cable_in_use", Service().Vehicle([], _audit, default).Failure!.Error.Code);
-        Assert.Empty(_api.Calls);
     }
 
     // ---- describe ----
@@ -675,14 +623,15 @@ public class EdiabasServiceTests
     }
 
     [Fact]
-    public void DescribeList_NoComments_FilterAndReviewed()
+    public void DescribeList_NoComments_FilterAndNotChecked()
     {
+        // Without descriptions no approval can be checked, pinned or not.
         ScriptNve65Jobs();
-        var r = Service(reviewed: ["NVE_65:STATUS_B"]).DescribeList("NVE_65", "status", false, _audit, default).Value!;
+        var r = Service(reviewed: ["NVE_65:STATUS_B", "NVE_65:STATUS_A@7b69322a754f"]).DescribeList("NVE_65", "status", false, _audit, default).Value!;
 
         Assert.Equal(["STATUS_A", "STATUS_B"], r.Jobs.Select(j => j.Name));
         Assert.Equal(Review.NotChecked, r.Jobs[0].Verdict.Review);
-        Assert.Equal(Review.Reviewed, r.Jobs[1].Verdict.Review);
+        Assert.Equal(Review.NotChecked, r.Jobs[1].Verdict.Review);
         Assert.All(r.Jobs, j => Assert.Null(j.Comment));
         Assert.Equal(["Job NVE_65 _JOBS [] []"], _api.JobCalls);
     }

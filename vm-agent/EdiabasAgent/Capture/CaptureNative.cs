@@ -4,7 +4,7 @@ namespace EdiabasAgent.Capture;
 
 /// <summary>
 /// Win32 imports for screenshots. Reading pixels and window state only: nothing here restores,
-/// activates, focuses, moves, resizes or sends input to a window, or touches the clipboard.
+/// activates, focuses, moves, resizes or sends input to a window (the one message it sends is WM_NULL, a no-op liveness probe), or touches the clipboard.
 /// <see cref="PrintWindow"/> is the one call that involves the target window: it asks the
 /// window to draw itself into the agent's own memory bitmap (with PW_RENDERFULLCONTENT the
 /// content comes from DWM's copy of the window). It changes nothing on screen.
@@ -64,6 +64,15 @@ internal static class CaptureNative
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool IsHungAppWindow(IntPtr hWnd);
+
+    // WM_NULL does nothing; the window only has to answer it. Used as a liveness probe.
+    internal const uint WM_NULL = 0x0000;
+    internal const uint SMTO_BLOCK = 0x0001;
+    internal const uint SMTO_ABORTIFHUNG = 0x0002;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+    internal static extern IntPtr SendMessageTimeoutW(IntPtr hWnd, uint Msg, UIntPtr wParam, IntPtr lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
 
     [DllImport("user32.dll", SetLastError = true)]
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]

@@ -28,7 +28,8 @@ version 1 or 2; under version 3 check each again with `ediabas_describe` before 
 | `MPM_60` | `STATUS_ECU_LESEN` | `STATUS_AD_WERTE_LESEN` |
 
 The approved jobs run while that config stands; after a fresh install of the agent they are
-refused again until the owner adds them back. What each job returns is whatever the car sends; do
+refused again until the owner adds them back. From 0.5.0 an approval by name (unpinned) approves
+nothing: each must be the pinned `ECU:JOB@<hash>` line `ediabas_describe` prints. What each job returns is whatever the car sends; do
 not describe it from the name.
 
 Which engine file fits the E61 is not known: `N62_TUE2` and `ME9N62_2` could not be described

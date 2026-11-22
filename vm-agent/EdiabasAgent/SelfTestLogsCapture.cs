@@ -74,7 +74,44 @@ internal static partial class SelfTest
                 }
 
                 links.Add(link);
-                return ExpectRefused($"{name}: symlink escape", logs, link, PathRules.ResolvesOutsideRoots);
+                // A link is opened as itself and refused as not found, before its target is looked at.
+                return ExpectNotFound($"{name}: symlink escape", logs, link);
+            }));
+
+            checks.Add(Guard($"{name}: link to a device is refused without opening the device", () =>
+            {
+                const string label = "link to a device is refused without opening the device";
+                var link = Path.Combine(root, "devlink.trc");
+                var target = @"\\.\NUL";
+                var note = "";
+                try
+                {
+                    File.CreateSymbolicLink(link, target);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Fall back to a link to a regular file outside the root: the same refusal path.
+                    try
+                    {
+                        File.CreateSymbolicLink(link, secret);
+                        note = " (device link could not be made; used a link to a file outside the root)";
+                    }
+                    catch (Exception ex2) when (ex2 is IOException or UnauthorizedAccessException)
+                    {
+                        return new Check($"{name}: {label}", Outcome.Skip, $"cannot create a symbolic link here ({ex2.Message})");
+                    }
+                }
+
+                links.Add(link);
+                var status = new LogAccess().OpenRead(link, out var opened);
+                opened?.Dispose();
+                if (status == LogOpenStatus.Opened)
+                {
+                    return new Check($"{name}: {label}", Outcome.Fail, "the link was opened as a file");
+                }
+
+                var check = ExpectNotFound($"{name}: {label}", logs, link);
+                return check.Outcome == Outcome.Pass ? check with { Detail = check.Detail + note } : check;
             }));
 
             checks.Add(Guard($"{name}: alternate data stream", () =>
@@ -189,6 +226,18 @@ internal static partial class SelfTest
 
         var got = r.Ok ? "the file's content" : $"{r.Failure!.Error.Code} ({refusal ?? "-"})";
         return new Check(name, Outcome.Fail, $"{path}: expected path_not_allowed ({string.Join(" or ", reasons)}), got {got}");
+    }
+
+    private static Check ExpectNotFound(string name, LogService logs, string path)
+    {
+        var r = logs.Read(new LogReadQuery(path, LogReadRange.Tail(4096), null), out var refusal);
+        if (!r.Ok && r.Failure!.Error.Code == ApiErrors.FileNotFound)
+        {
+            return new Check(name, Outcome.Pass, $"{path} refused (opened as a link, file_not_found)");
+        }
+
+        var got = r.Ok ? "the file's content" : $"{r.Failure!.Error.Code} ({refusal ?? "-"})";
+        return new Check(name, Outcome.Fail, $"{path}: expected file_not_found for a link, got {got}");
     }
 
     private static bool MakeJunction(string link, string target, out string why)

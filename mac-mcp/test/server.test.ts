@@ -147,14 +147,16 @@ describe("MCP server", () => {
     expect(t).not.toMatch(/\n\s+at /); // no stack trace
   });
 
-  it("returns isError for a token mismatch, and the token never leaks", async () => {
+  it("returns isError for a token mismatch, the token is never sent, and it never leaks", async () => {
     agent.setHandler(contractHandler("some-other-token"));
     const { client, auditPath, logs } = await connect();
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("rejected the token.");
+    expect(textOf(r)).toContain("could not prove it holds this Mac's token, so the token was not sent there.");
+    expect(textOf(r)).toContain("EDIABAS_AGENT_TOKEN is not the token of the agent at EDIABAS_AGENT_URL");
+    expect(agent.requests.every((q) => q.authorization === undefined)).toBe(true);
     const audit = await readFile(auditPath, "utf8");
-    expect(audit).toMatch(/\tvm_health\tunauthorized\t\d+\n$/);
+    expect(audit).toMatch(/\tvm_health\twrong_service\t\d+\n$/);
     for (const s of [JSON.stringify(r), audit, logs.join("\n")]) expect(s).not.toContain(AGENT_TOKEN);
   });
 
@@ -166,9 +168,12 @@ describe("MCP server", () => {
     await client.callTool({ name: "vm_health", arguments: {} });
     expect(logs).toContain(`discovery accepted 127.0.0.1:${agent.port} (source: leases)`);
     agent.setHandler(contractHandler("other"));
+    agent.requests.length = 0;
     const r = await client.callTool({ name: "vm_list_windows", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(logs).toContain(`request 127.0.0.1:${agent.port} GET /windows failed: HTTP 401`);
+    expect(logs).toContain(`probe 127.0.0.1:${agent.port} failed: the proof does not match this Mac's token`);
+    expect(logs.some((l) => l.startsWith(`cached address 127.0.0.1:${agent.port} did not prove it is the agent (wrong_service)`))).toBe(true);
+    expect(agent.requests.every((q) => q.authorization === undefined)).toBe(true);
     expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
   });
 

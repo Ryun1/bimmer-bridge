@@ -3,13 +3,6 @@ using System.Text.Json.Serialization;
 
 namespace EdiabasAgent.Core;
 
-/// <summary>One entry of <c>voltageSources</c> (used from Phase 2 on).</summary>
-public sealed class VoltageSource
-{
-    public string Ecu { get; set; } = "";
-    public string Job { get; set; } = "";
-}
-
 /// <summary>Result of loading a config file: either a validated config or every error found.</summary>
 public sealed class ConfigLoadResult
 {
@@ -50,8 +43,7 @@ public sealed class AgentConfig
     public string EcuPath { get; set; } = @"C:\EDIABAS\ECU";
     public string LogDirectory { get; set; } = DefaultLogDirectory;
     public List<string> LogRoots { get; set; } = [@"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK"];
-    public List<string> ConflictProcesses { get; set; } = ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"];
-    public List<VoltageSource> VoltageSources { get; set; } = [];
+    public List<string> ConflictProcesses { get; set; } = ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI"];
     public List<string> ReviewedJobs { get; set; } = [];
     public int JobTimeoutSeconds { get; set; } = 30;
     public int MaxJobTimeoutSeconds { get; set; } = 60;
@@ -139,6 +131,13 @@ public sealed class AgentConfig
             .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)),
         StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Read by the agent before 0.5.0; the Mac's config.local.json has it now.</summary>
+    private const string RemovedVoltageSourcesKey = "voltageSources";
+
+    /// <summary>Written by install.ps1 and update.ps1 (the default conflict processes this file
+    /// has been offered); the agent does not read it, and it is not a typo.</summary>
+    private const string SetupConflictDefaultsOfferedKey = "conflictDefaultsOffered";
+
     /// <summary>Top-level keys the agent does not read. A typo ("reviewJobs") would otherwise
     /// be silent and the setting would keep its default.</summary>
     private static List<string> UnknownKeys(string json)
@@ -158,7 +157,13 @@ public sealed class AgentConfig
 
             foreach (var p in doc.RootElement.EnumerateObject())
             {
-                if (!KnownKeys.Contains(p.Name))
+                if (string.Equals(p.Name, RemovedVoltageSourcesKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    // The Mac builds the vehicle-status batch now (config.local.json), whatever the value here.
+                    warnings.Add("voltageSources is no longer used; set it on the Mac");
+                }
+                else if (!KnownKeys.Contains(p.Name)
+                         && !string.Equals(p.Name, SetupConflictDefaultsOfferedKey, StringComparison.OrdinalIgnoreCase))
                 {
                     warnings.Add($"config: unknown key \"{Printable(p.Name)}\" is ignored (a typo?)");
                 }
@@ -217,22 +222,6 @@ public sealed class AgentConfig
         RequireList(errors, "conflictProcesses", ConflictProcesses, allowBlankEntries: false);
         RequireList(errors, "reviewedJobs", ReviewedJobs, allowBlankEntries: false);
 
-        if (VoltageSources is null)
-        {
-            errors.Add("voltageSources: must be an array (got null)");
-        }
-        else
-        {
-            for (var i = 0; i < VoltageSources.Count; i++)
-            {
-                var v = VoltageSources[i];
-                if (v is null || string.IsNullOrWhiteSpace(v.Ecu) || string.IsNullOrWhiteSpace(v.Job))
-                {
-                    errors.Add($"voltageSources[{i}]: needs non-empty \"ecu\" and \"job\"");
-                }
-            }
-        }
-
         if (JobTimeoutSeconds <= 0)
         {
             errors.Add($"jobTimeoutSeconds: must be positive (got {JobTimeoutSeconds})");
@@ -260,18 +249,26 @@ public sealed class AgentConfig
         return errors;
     }
 
-    /// <summary>A <c>reviewedJobs</c> entry of the wrong shape approves nothing (it never becomes a
-    /// name-only approval) and is a warning, not an error: a typo there must not stop the agent
-    /// from starting after an update.</summary>
+    /// <summary>A <c>reviewedJobs</c> entry that is unpinned or of the wrong shape approves
+    /// nothing and is a warning, not an error: a typo there, or a config from before 0.5.0, must
+    /// not stop the agent from starting after an update.</summary>
     private List<string> ReviewedJobWarnings()
     {
         var warnings = new List<string>();
         for (var i = 0; i < ReviewedJobs.Count; i++)
         {
             var entry = ReviewedJobs[i];
-            if (!ApprovalList.TryParseEntry(entry, out _, out _))
+            if (!ApprovalList.TryParseEntry(entry, out var key, out var hash))
             {
-                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits");
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits, the \"ECU:JOB@<hash>\" line ediabas_describe prints");
+            }
+            else if (hash is not null && !ApprovalList.IsUpperCase(key))
+            {
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; the ECU and JOB must be upper case, as ediabas_describe prints them");
+            }
+            else if (hash is null)
+            {
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" is unpinned and approves nothing since 0.5.0; run ediabas_describe on the job and use the \"ECU:JOB@<hash>\" line it prints");
             }
         }
 

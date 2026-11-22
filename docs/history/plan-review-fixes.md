@@ -1,5 +1,7 @@
 # Review fixes and next features: implementation plan (2026-11-22)
 
+> Historical record: the plan for the 0.3.0 review fixes, as written at the time. For the current state, see the [README's Status](../../README.md#status).
+
 > **For agentic workers:** each task below is one implementer's whole brief. Read "Rules for
 > every task" first, then only your task. Steps use `- [ ]` for tracking.
 
@@ -22,7 +24,7 @@ five tasks run in parallel in their own git worktrees; two later tasks build on 
 - Do not contact the VM or its agent (192.168.64.x), do not call any `ediabas-bridge` MCP tool,
   do not run UTM, `release.sh` or `dev/serve.py`. All testing is local with fakes and stubs.
 - Work only in your own worktree (path in your task) and only in the files your task lists.
-  Never touch `/Users/ryan/projects/ediabas-bridge` itself: its `mac-mcp/dist` and `skills/`
+  Never touch `~/projects/ediabas-bridge` itself: its `mac-mcp/dist` and `skills/`
   are live.
 - Code tasks (A to E, G) do NOT edit `README.md`, `docs/`, `skills/` or any directory README.
   List every doc change your work needs under "Doc changes" in your report; task F applies them.
@@ -51,7 +53,7 @@ Conditions no single task's tests would otherwise pin; each has its test in the 
    sent. It never reports "may have run" for a request that was never sent (A2, C2).
 2. The VM comes back on a new address: the next call finds it instead of failing (C3).
 3. A log root that is a junction to somewhere else: listed as missing, never walked (D1).
-4. A job description changes after Ryan approved the job: it needs review again (G).
+4. A job description changes after the owner approved the job: it needs review again (G).
 5. A recording made at the car carries the VIN in an encoded or binary field: scrubbed (E1).
 
 ---
@@ -60,7 +62,7 @@ Conditions no single task's tests would otherwise pin; each has its test in the 
 
 ### Task A: agent, EDIABAS path
 
-Worktree `/Users/ryan/projects/ediabas-bridge-wt/a-ediabas-core`, branch `fix/a-ediabas-core`.
+Worktree `~/projects/ediabas-bridge-wt/a-ediabas-core`, branch `fix/a-ediabas-core`.
 
 **Files:** `vm-agent/EdiabasAgent.Core/EdiabasService.cs`, `EdiabasAgent.Core/EdiabasErrorMap.cs`
 (read only unless needed), `vm-agent/EdiabasAgent/Ediabas/EdiabasRunner.cs`,
@@ -109,7 +111,7 @@ Worktree `/Users/ryan/projects/ediabas-bridge-wt/a-ediabas-core`, branch `fix/a-
 
 ### Task B: policy version 3, both parsers
 
-Worktree `/Users/ryan/projects/ediabas-bridge-wt/b-policy`, branch `fix/b-policy`.
+Worktree `~/projects/ediabas-bridge-wt/b-policy`, branch `fix/b-policy`.
 
 **Files:** `policy/policy.json`, `policy/policy-cases.json`, `policy/policy-parse-cases.json`,
 `vm-agent/EdiabasAgent.Core/JobPolicy.cs`, `CommentScreen.cs`, their tests,
@@ -143,7 +145,7 @@ Worktree `/Users/ryan/projects/ediabas-bridge-wt/b-policy`, branch `fix/b-policy
 
 ### Task C: Mac server
 
-Worktree `/Users/ryan/projects/ediabas-bridge-wt/c-mac`, branch `fix/c-mac`.
+Worktree `~/projects/ediabas-bridge-wt/c-mac`, branch `fix/c-mac`.
 
 **Files:** `mac-mcp/src/` except `policy.ts`; `mac-mcp/test/`. New files where they keep
 `server.ts` and `agentClient.ts` from growing (`src/faults.ts`, `src/carSession.ts`,
@@ -204,7 +206,7 @@ Features:
 
 ### Task D: agent, host side
 
-Worktree `/Users/ryan/projects/ediabas-bridge-wt/d-host`, branch `fix/d-host`.
+Worktree `~/projects/ediabas-bridge-wt/d-host`, branch `fix/d-host`.
 
 **Files:** `vm-agent/EdiabasAgent.Core/LogService.cs`, `LogText.cs`, `AuditLine.cs`,
 `CaptureRules.cs`, `AgentConfig.cs`, `ApiModels.cs` (error codes only);
@@ -231,7 +233,7 @@ Worktree `/Users/ryan/projects/ediabas-bridge-wt/d-host`, branch `fix/d-host`.
 
 ### Task E: deploy and dev tooling
 
-Worktree `/Users/ryan/projects/ediabas-bridge-wt/e-deploy`, branch `fix/e-deploy`.
+Worktree `~/projects/ediabas-bridge-wt/e-deploy`, branch `fix/e-deploy`.
 
 **Files:** `dev/scrub-fixtures.ts`, `dev/test/`, `dev/serve.py`, `dev/test_serve.py`,
 `vm-setup/*.ps1`, `release.sh`, `vm-agent/build.sh`, `vm-agent/Directory.Build.props` (not the
@@ -255,7 +257,7 @@ line by line. List each `.ps1` change in your report so it can be checked in the
   `serve.py` adds `$SendToken=$true;` to the Install line when started with `--accept-token`.
 - [ ] **E4. Options do not stick.** After reading `$KeepData`, `$Elevated`, `$SendToken`
   (and `$Purge`), the scripts remove the variable from the global scope.
-- [ ] **E5. Uninstall keeps Ryan's data unless told otherwise.** Default: remove the task,
+- [ ] **E5. Uninstall keeps the owner's data unless told otherwise.** Default: remove the task,
   firewall rule and program files, keep `config.json`, `token.txt` and `logs\`. `$Purge=$true`
   removes everything. `$KeepData` is accepted and ignored with a note. `serve.py` prints the
   matching hint.
@@ -328,7 +330,7 @@ Branch `fix/f-docs` from `fix/review-2` after G.
 
 - Battery-evidence snapshot, vehicle-status field mapping, grouping functional fault results by
   ECU: need recordings from the first car session (Phase 6).
-- Recording the `needs-review` fixture and committing the eval runner: need Ryan, the VM and
+- Recording the `needs-review` fixture and committing the eval runner: need the owner, the VM and
   the cable at the desk.
 - `PrintWindow` watchdog, a Windows test project, merging `update.ps1` into `install.ps1`:
   cannot be tested without Windows; E9 keeps the two scripts in step meanwhile.
@@ -336,7 +338,7 @@ Branch `fix/f-docs` from `fix/review-2` after G.
   audit-log flooding, the self-test firewall check, links to device paths under a log root:
   low risk for a single-user tool; left for a later pass.
 
-## Ryan's steps after the merge
+## The owner's steps after the merge
 
 1. `./release.sh`, `python3 dev/serve.py`, paste the Update line in the VM (agent 0.3.0,
    policy version 3).

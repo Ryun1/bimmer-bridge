@@ -121,6 +121,10 @@ describe("real MCP server against the replay agent", () => {
     expect(f.isError).toBe(true);
     expect(f.text).toMatch(/cable is in use by SYNTH_TOOL \(pid 7\)/);
     expect(f.text).toMatch(/Do not retry in a loop/);
+    // The vehicle status is one /ediabas/jobs batch, so the overlay's route answers it too.
+    const v = await tool(client, "ediabas_vehicle_status");
+    expect(v.isError).toBe(true);
+    expect(v.text).toMatch(/^\[cable_in_use\] The diagnostic cable is in use by SYNTH_TOOL \(pid 7\)/);
   });
 
   it("with nothing listening, the server reports that the agent is not answering", async () => {

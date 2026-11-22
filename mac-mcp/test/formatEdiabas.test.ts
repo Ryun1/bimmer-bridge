@@ -6,15 +6,28 @@ import {
   formatEcus,
   formatFaultReport,
   formatFaultTable,
+  type FaultReport,
   formatJobRaw,
   formatJobResult,
   formatKm,
+  formatVehicle,
+  isKmName,
   itemErrorText,
+  vehicleBatch,
 } from "../src/formatEdiabas.js";
 import { faultSets, jobResult, phase2Health } from "./stubAgent.js";
 
 const result = (sets: Record<string, unknown>[], o: Record<string, unknown> = {}) =>
   JobResultSchema.parse(jobResult("NVE_65", "FS_LESEN", sets, o));
+
+describe("isKmName", () => {
+  it("a KM token is a distance, but not when PRO, H or STD follows it (km/h, km per hour, km standard)", () => {
+    expect(isKmName("STAT_KM_STAND")).toBe(true);
+    expect(isKmName("STAT_GESCHWINDIGKEIT_KM_PRO_H")).toBe(false);
+    expect(isKmName("SPEED_KM_H")).toBe(false);
+    expect(isKmName("X_KM_STD")).toBe(false);
+  });
+});
 
 describe("formatKm", () => {
   it("puts miles first, km in brackets, with thousands separators", () => {
@@ -94,6 +107,53 @@ describe("fault tables", () => {
     expect(t).toContain("NVE_65\n  Fault memory: no faults stored.");
     expect(t).toContain("D_MOTOR\n  Fault memory: error: [ecu_not_found] There is no SGBD or group file named D_MOTOR");
     expect(t).toContain("X\n  Fault memory: error: The VM does not appear to be running.");
+  });
+
+  describe("info memory errors", () => {
+    const noResponse = {
+      ok: false as const,
+      result: null,
+      error: { code: "ediabas_error", message: "EDIABAS job failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } },
+    };
+    const report = (faults: FaultReport["faults"], info: FaultReport["info"]) => formatFaultReport([{ ecu: "NVE_65", faults, info }], true);
+
+    it("after a good fault-memory read, an ediabas_error on IS_LESEN says the module may have no info memory", () => {
+      const t = report(
+        { ok: true, result: result([]), error: null },
+        { ok: false, result: null, error: { code: "ediabas_error", message: "EDIABAS job failed: SYS-0008: JOB NOT FOUND", details: { errorCode: 19 } } },
+      );
+      expect(t).toContain(
+        "  Info memory: not read ([ediabas_error] EDIABAS job failed: SYS-0008: JOB NOT FOUND). Many modules have no info memory (no IS_LESEN job); ediabas_describe NVE_65 shows whether this one has it.",
+      );
+    });
+
+    it("when the fault-memory read failed too, the info memory error gets the normal error text", () => {
+      const t = report(noResponse, noResponse);
+      const normal = `error: ${itemErrorText(noResponse.error)}`;
+      expect(t).toContain(`  Fault memory: ${normal}\n  Info memory: ${normal}`);
+      expect(t).toContain("IFH-0009");
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("a fault-memory stand-in error ({ error }) also gives the info memory the normal error text", () => {
+      const t = report({ error: "The VM does not appear to be running." }, noResponse);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(noResponse.error)}`);
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("results that could not be read mean IS_LESEN ran: normal error text even after a good fault-memory read", () => {
+      const unread = { ok: false as const, result: null, error: { code: "ediabas_error", message: "x", details: { errorCode: 98, resultsUnread: true } } };
+      const t = report({ ok: true, result: result([]), error: null }, unread);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(unread.error)}`);
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("an error other than ediabas_error on IS_LESEN is unchanged", () => {
+      const busy = { ok: false as const, result: null, error: { code: "cable_in_use", message: "x", details: { processes: [{ name: "INPALOAD", pid: 1 }] } } };
+      const t = report({ ok: true, result: result([]), error: null }, busy);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(busy.error)}`);
+      expect(t).toContain("[cable_in_use]");
+    });
   });
 });
 
@@ -267,5 +327,50 @@ describe("results that could not be read", () => {
     for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
       expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
     }
+  });
+});
+
+describe("vehicle status", () => {
+  const FIXED = [
+    { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+    { ecu: "UTILITY", job: "STATUS_UBATT" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+  ];
+
+  it("vehicleBatch: four readings in D10 order without voltage sources", () => {
+    expect(vehicleBatch([])).toEqual(FIXED);
+  });
+
+  it("vehicleBatch: a voltage source goes third, after ignition and battery", () => {
+    const b = vehicleBatch([{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }]);
+    expect(b).toHaveLength(5);
+    expect(b[2]).toEqual({ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" });
+    expect([b[0], b[1], b[3], b[4]]).toEqual(FIXED);
+  });
+
+  it("formatVehicle reads the items in that order", () => {
+    const ok = (ecu: string, job: string, set: Record<string, unknown>) => ({ ok: true, result: JobResultSchema.parse(jobResult(ecu, job, [set])) });
+    const sources = [{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG" }];
+    const items = [
+      ok("UTILITY", "STATUS_ZUENDUNG", { STAT_ZUENDUNG: 1, JOB_STATUS: "OKAY" }),
+      ok("UTILITY", "STATUS_UBATT", { STAT_UBATT: 12480 }),
+      ok("NVE_65", "STATUS_BORDNETZSPANNUNG", { STAT_SPANNUNG_WERT: 12.4 }),
+      ok("TMODE", "LESE_SPANNUNG_KL30", { SPANNUNG_KL30: 12510 }),
+      { ok: false, result: null, error: { code: "ediabas_error", message: "failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } } },
+    ];
+    const t = formatVehicle({ items }, sources).split("\n");
+    expect(t[0]).toBe("Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):");
+    expect(t[1]).toBe("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
+    expect(t[2]).toBe("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
+    expect(t[3]).toBe("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
+    expect(t[4]).toBe("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
+    expect(t[5]).toMatch(/^Cable KL15 \(TMODE LESE_SPANNUNG_KL15\): error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    expect(t).toHaveLength(6);
+  });
+
+  it("formatVehicle says where voltage sources are configured when there are none", () => {
+    const item = { ok: true, result: JobResultSchema.parse(jobResult("TMODE", "X", [])) };
+    expect(formatVehicle({ items: [item, item, item, item] }, [])).toContain("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
   });
 });
