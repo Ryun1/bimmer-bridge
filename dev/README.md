@@ -45,7 +45,8 @@ JSON line per ECU goes to `--out` with its `kind` (`match`, `differ`, `vm_error`
 `native_error`, `both_error`); a second run skips ECUs already there.
 
 **It runs EDIABAS in the VM** (and real EDIABAS runs each SGBD's INIT first), so it is a desk
-session: the cable unplugged from the car, Ryan's go-ahead. Build `engine/ediabasd-net` first.
+session: the cable unplugged from the car, Ryan's go-ahead. Build `engine/ediabasd-net` and
+`mac-mcp` (`npm ci && npm run build`) first: the tool loads the agent client from `mac-mcp/dist`.
 
 ```sh
 node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out describe-diff.jsonl [--only NVE_65] [--limit 20]

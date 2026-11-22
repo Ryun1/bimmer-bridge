@@ -10,6 +10,7 @@
  *
  *   export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
  *   /opt/homebrew/opt/dotnet@10/bin/dotnet build engine/ediabasd-net
+ *   (cd mac-mcp && npm ci && npm run build)
  *   node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out describe-diff.jsonl [--only NVE_65 …] [--limit N]
  *
  * One JSON line per ECU goes to --out; ECUs already in it are skipped, so a run can be resumed.
@@ -23,10 +24,13 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { AgentClient } from "../mac-mcp/src/agentClient.ts";
-import { DEFAULT_LOCAL_CONFIG_PATH, loadConfig } from "../mac-mcp/src/config.ts";
-import { BridgeError } from "../mac-mcp/src/errors.ts";
-import { TokenProvider } from "../mac-mcp/src/token.ts";
+// Types from mac-mcp's sources; the code itself from its build (mac-mcp/dist), because its
+// sources import ".js" specifiers that only resolve once compiled.
+import type { AgentClient } from "../mac-mcp/src/agentClient.ts";
+import type * as ConfigModule from "../mac-mcp/src/config.ts";
+import type * as ErrorsModule from "../mac-mcp/src/errors.ts";
+import type * as TokenModule from "../mac-mcp/src/token.ts";
+import type * as ClientModule from "../mac-mcp/src/agentClient.ts";
 import type { ExecFileFn } from "../mac-mcp/src/vmAddress.ts";
 import { diffDescribe, type DiffKind, type Side } from "./describe-diff-lib.ts";
 
@@ -110,6 +114,12 @@ const execFile: ExecFileFn = async (file, args, opts) => {
   return stdout;
 };
 
+const dist = (name: string) => new URL(`../mac-mcp/dist/${name}.js`, import.meta.url).href;
+const { AgentClient: AgentClientImpl } = (await import(dist("agentClient"))) as typeof ClientModule;
+const { DEFAULT_LOCAL_CONFIG_PATH, loadConfig } = (await import(dist("config"))) as typeof ConfigModule;
+const { BridgeError } = (await import(dist("errors"))) as typeof ErrorsModule;
+const { TokenProvider } = (await import(dist("token"))) as typeof TokenModule;
+
 function vmClient(): AgentClient {
   const { config, warnings } = loadConfig(process.env, undefined, DEFAULT_LOCAL_CONFIG_PATH);
   for (const w of warnings) console.error(`warning: ${w}`);
@@ -122,7 +132,7 @@ function vmClient(): AgentClient {
     service: config.keychainService,
     account: config.keychainAccount,
   });
-  return new AgentClient({
+  return new AgentClientImpl({
     config,
     tokens,
     sources: { readFile: (p) => readFile(p, "utf8"), execFile, networkInterfaces },
