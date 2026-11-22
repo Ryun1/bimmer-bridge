@@ -9,7 +9,9 @@ to the VM: [install.md](install.md#updating).
   tools (`dev/replay-agent.ts`, `dev/scrub-fixtures.ts`, `dev/record-server.ts`) are run directly by Node through type
   stripping, which needs 24+.
 - **.NET 10 SDK** (`brew install dotnet@10`). It is keg-only; `release.sh` and
-  `vm-agent/build.sh` find it in the Homebrew folder by themselves. To run `dotnet` by hand, see
+  `vm-agent/build.sh` use it from the Homebrew folder by themselves, ahead of any other `dotnet`
+  on `PATH`. `global.json` pins the SDK to 10.0.x (any 10.0 feature band), so a newer major is
+  refused, not silently used. To run `dotnet` by hand, see
   [install.md](install.md#1-prerequisites-on-the-mac).
 - **Python 3** (the macOS one is enough), for `dev/serve.py` and its tests.
 - The MCP server's dependencies, once: `(cd mac-mcp && npm ci)`. `dev/` has none of its own; its
@@ -151,7 +153,7 @@ with the skills and once without.
    `commit.txt` then ends in `-dirty`, and it ends with "Checks passed, but this is NOT a
    release: … the git tree is not clean."). Not clean means a tracked file with uncommitted
    changes anywhere, or an untracked file that `.gitignore` does not cover under a release
-   input: `VERSION`, `vm-agent/`, `policy/`, `mac-mcp/`, `vm-setup/`, `dev/` or `skills/` (the
+   input: `VERSION`, `global.json`, `vm-agent/`, `policy/`, `mac-mcp/`, `vm-setup/`, `dev/` or `skills/` (the
    .NET build compiles every `.cs` it finds, so an untracked one would ship in an exe that the
    commit cannot rebuild). The message names the untracked files. Untracked scratch elsewhere,
    such as notes under `docs/`, does not count. `vm-agent/build.sh` checks the tree the same

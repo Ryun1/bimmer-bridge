@@ -19,20 +19,23 @@ done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
+# From the repo root, so dotnet finds global.json (the SDK pin) wherever this is run from.
+cd "$REPO"
 RELEASE="$REPO/release"
 PROJECT="$HERE/EdiabasAgent/EdiabasAgent.csproj"
 
 die() { echo "build.sh: ERROR: $*" >&2; exit 1; }
 
-# Find the .NET 10 SDK: PATH first, then the Homebrew keg.
-if ! command -v dotnet >/dev/null 2>&1; then
-  if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
-    export DOTNET_ROOT="${DOTNET_ROOT:-/opt/homebrew/opt/dotnet@10/libexec}"
-    export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
-  else
-    die "dotnet not found (need the .NET 10 SDK)"
-  fi
+# The .NET 10 SDK: the Homebrew keg first (Homebrew's plain `dotnet` may be a newer major, which
+# global.json refuses), then PATH. Keep this the same as in release.sh.
+if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
+  export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
+  export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
+elif ! command -v dotnet >/dev/null 2>&1; then
+  die "dotnet not found (need the .NET 10 SDK: brew install dotnet@10)"
 fi
+SDK="$(dotnet --version 2>/dev/null)" || die "no .NET SDK that global.json allows (10.0.x) is installed for $(command -v dotnet): brew install dotnet@10"
+case "$SDK" in 10.*) ;; *) die "dotnet $SDK is not a .NET 10 SDK (global.json pins 10.0.x)" ;; esac
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
 
@@ -47,7 +50,7 @@ COMMIT="$(git -C "$REPO" rev-parse --short HEAD)" || die "could not read the git
 # does not cover sits under a release input (the build compiles every .cs under vm-agent/, so an
 # untracked one would ship in an exe that the commit cannot rebuild). Untracked scratch elsewhere
 # does not count. Keep RELEASE_INPUTS and this check the same as in release.sh.
-RELEASE_INPUTS=(VERSION vm-agent policy mac-mcp vm-setup dev skills)
+RELEASE_INPUTS=(VERSION global.json vm-agent policy mac-mcp vm-setup dev skills)
 CHANGED="$(git -C "$REPO" status --porcelain --untracked-files=no)" || die "git status failed"
 UNTRACKED="$(git -C "$REPO" status --porcelain --untracked-files=normal -- "${RELEASE_INPUTS[@]}" | sed -n 's/^?? //p')" \
   || die "git status failed"
