@@ -576,12 +576,16 @@ class Startup(unittest.TestCase):
             expected = (
                 "  $base='http://192.168.64.1:8000'; $sha='%s'; "
                 "$ebFile=\"$env:TEMP\\ediabas-bridge-%s\"; "
-                "iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile; "
+                "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; "
+                "$ebOk=$false; "
+                "try { iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } "
+                "catch { Write-Host 'download failed: the Mac did not serve %s (is serve.py running?)' -ForegroundColor Red }; "
+                "if ($ebOk) { "
                 "$ebBytes=[IO.File]::ReadAllBytes($ebFile); "
                 "if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '%s') "
                 "{ iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } "
-                "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red }"
-                % (sha, script, script, self.script_sha[script], script))
+                "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red } }"
+                % (sha, script, script, script, self.script_sha[script], script))
             self.assertEqual(self.line_for(lines, script), expected)
 
     def test_every_line_pins_its_script_and_never_pipes_into_iex(self):
