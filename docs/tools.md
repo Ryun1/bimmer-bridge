@@ -53,7 +53,7 @@ Codes (also the audit outcome):
 | `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, or a fault in the server itself |
 | `not_run` | agent | the agent did not start the job (a batch item, or a single `ediabas_job` / `ediabas_describe`, HTTP 503), or stopped it. The message passes on the agent's reason: the request's time budget ran out, a BMW tool was opened during the request (ask Ryan to close it), an earlier job did not stop after `apiBreak`, or the request was abandoned. Do not retry in a loop |
 | `job_not_allowed` | Mac or agent | refused by name; the message names the rule. Do not look for another way |
-| `job_needs_review` | agent | the job's description suggests it may not be a pure read; the message quotes it. Ryan decides |
+| `job_needs_review` | agent | the job's description suggests it may not be a pure read, or is empty or only a label such as `Jobbeschreibung`; the message quotes it. Ryan decides |
 | `cable_in_use` | agent | a BMW tool is open, or was opened while the request ran (the agent checks again before every EDIABAS job); the message names it. Ask Ryan to close it. Do not retry in a loop. In `ediabas_describe`'s job list a tool opened midway does not fail the call: the descriptions not yet read show as not screened |
 | `ecu_not_found`, `job_not_found` | agent | use `ediabas_list_ecus` / `ediabas_describe`; never guess names |
 | `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. Ryan plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |

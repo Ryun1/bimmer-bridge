@@ -27,7 +27,7 @@ public sealed class JobPolicy
     private static readonly string[] TopKeys = ["version", "namePattern", "maxArgLength", "allow", "deny", "descriptionScreen"];
     private static readonly string[] AllowKeys = ["globalExact", "patterns", "restrictedEcus"];
     private static readonly string[] DenyKeys = ["substrings", "tokens"];
-    private static readonly string[] ScreenKeys = ["terms"];
+    private static readonly string[] ScreenKeys = ["terms", "ignore"];
 
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
 
@@ -39,6 +39,7 @@ public sealed class JobPolicy
     private readonly List<string> _denySubstrings = [];
     private readonly List<string> _denyTokens = [];
     private readonly List<string> _screenTerms = [];
+    private readonly List<string> _screenIgnore = [];
 
     private JobPolicy(string error)
     {
@@ -65,6 +66,10 @@ public sealed class JobPolicy
 
     /// <summary>Terms of the description screen (empty when the policy did not load).</summary>
     public IReadOnlyList<string> ScreenTerms => _screenTerms;
+
+    /// <summary>Text the description screen removes before matching its terms
+    /// (<c>descriptionScreen.ignore</c>; empty when the policy did not load).</summary>
+    public IReadOnlyList<string> ScreenIgnore => _screenIgnore;
 
     /// <summary>Parses and validates policy JSON. Never throws.</summary>
     public static JobPolicy Parse(string json)
@@ -167,6 +172,23 @@ public sealed class JobPolicy
         if (policy._screenTerms.Count == 0)
         {
             throw new PolicyFormatException("descriptionScreen.terms must not be empty");
+        }
+
+        // Lower-case and each listed once, so an entry reads as what it removes. Checked the
+        // same way as the Mac's parser (policy.ts) and policy/policy-parse-cases.json.
+        foreach (var s in StrArray(screen["ignore"], "descriptionScreen.ignore"))
+        {
+            if (!string.Equals(s, s.ToLowerInvariant(), StringComparison.Ordinal))
+            {
+                throw new PolicyFormatException($"descriptionScreen.ignore entry '{s}' must be lower-case");
+            }
+
+            if (policy._screenIgnore.Contains(s, StringComparer.Ordinal))
+            {
+                throw new PolicyFormatException($"descriptionScreen.ignore lists '{s}' twice");
+            }
+
+            policy._screenIgnore.Add(s);
         }
 
         return policy;

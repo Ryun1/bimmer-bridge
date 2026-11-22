@@ -31,7 +31,7 @@ internal sealed class AgentContext : IDisposable
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
-                new CommentScreen(Policy.ScreenTerms, config.ReviewedJobs),
+                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, config.ReviewedJobs),
                 new SystemRunnerClock(),
                 CableUse,
                 new EdiabasLogAdapter(log),

@@ -110,15 +110,23 @@ describe("vm_health", () => {
     const r = await call("vm_health");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
-    expect(r.text).toContain("Job policy: agent version 1; Mac version 1.");
+    expect(r.text).toContain("Job policy: agent version 2; Mac version 2.");
     expect(r.text).not.toMatch(/WARNING/);
   });
 
   it("warns when the agent's policy version differs", async () => {
-    override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 2, capabilities: ["ediabas"] }) }));
+    override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 3, capabilities: ["ediabas"] }) }));
     const { call } = await connect();
     const r = await call("vm_health");
-    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 2\) differs from this Mac's \(version 1\)/);
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 3\) differs from this Mac's \(version 2\)/);
+    expect(r.text).toMatch(/Update line/);
+  });
+
+  it("warns about an agent still on policy version 1 (no description-screen ignore list)", async () => {
+    override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 1, capabilities: ["ediabas"] }) }));
+    const { call } = await connect();
+    const r = await call("vm_health");
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 1\) differs from this Mac's \(version 2\)/);
     expect(r.text).toMatch(/Update line/);
   });
 
@@ -375,6 +383,7 @@ describe("ediabas_job", () => {
     ["job_not_allowed", 403, { ecu: "NVE_65", job: "STATUS_X", rule: "deny.token:START" }, /agent refused NVE_65 STATUS_X under its job policy \(rule deny.token:START\)/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. Ryan decides/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "", matched: [] }, /has no description/],
+    ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Jobbeschreibung", matched: [] }, /^(?![\s\S]*suggests)[\s\S]*description has nothing in it but a label \("Jobbeschreibung"\), so the agent cannot tell that it only reads/],
     ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /EDIABAS reported error 159: IFH-0009: NO RESPONSE/],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
     ["cable_in_use", 409, null, /in use by a BMW tool in the VM/],

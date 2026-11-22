@@ -20,7 +20,7 @@ public class EdiabasReleaseAndCableTests
             _conflicts,
             new FakeEcus("NVE_65", "TMODE", "UTILITY", "D_MOTOR"),
             JobPolicy.Embedded,
-            new CommentScreen(JobPolicy.Embedded.ScreenTerms, []),
+            new CommentScreen(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, []),
             _clock,
             new CableUse(),
             _log,

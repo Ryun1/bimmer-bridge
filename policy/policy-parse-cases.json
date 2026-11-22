@@ -4,147 +4,202 @@
   {
    "name": "a minimal valid policy",
    "valid": true,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "empty lists and no restricted ECUs (terms still set)",
    "valid": true,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":0,\"allow\":{\"globalExact\":[],\"patterns\":[],\"restrictedEcus\":{}},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":0,\"allow\":{\"globalExact\":[],\"patterns\":[],\"restrictedEcus\":{}},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "whitespace and key order do not matter",
    "valid": true,
-   "text": "{\n  \"descriptionScreen\": { \"terms\": [ \"start\" ] },\n  \"deny\": { \"tokens\": [ \"START\" ], \"substrings\": [ \"LOESCH\" ] },\n  \"allow\": { \"restrictedEcus\": { \"TMODE\": [ \"INFO\" ] }, \"patterns\": [ \"^STATUS_[A-Z]+$\" ], \"globalExact\": [ \"IDENT\" ] },\n  \"maxArgLength\": 10, \"namePattern\": \"^[A-Z_]+$\", \"version\": 1\n}\n"
+   "text": "{\n  \"descriptionScreen\": { \"ignore\": [ \"umsetzer\" ],\n    \"terms\": [ \"start\" ] },\n  \"deny\": { \"tokens\": [ \"START\" ], \"substrings\": [ \"LOESCH\" ] },\n  \"allow\": { \"restrictedEcus\": { \"TMODE\": [ \"INFO\" ] }, \"patterns\": [ \"^STATUS_[A-Z]+$\" ], \"globalExact\": [ \"IDENT\" ] },\n  \"maxArgLength\": 10, \"namePattern\": \"^[A-Z_]+$\", \"version\": 1\n}\n"
+  },
+  {
+   "name": "an empty descriptionScreen.ignore list",
+   "valid": true,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[]}}"
+  },
+  {
+   "name": "lower-case ignore entries, one with an umlaut",
+   "valid": true,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"zähler\"]}}"
   },
   {
    "name": "an unknown top-level key",
    "valid": false,
-   "text": "{\"version\":1,\"comment\":\"x\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"comment\":\"x\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown kind of deny rule",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"regex\":[\"^X\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"regex\":[\"^X\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown key under allow",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"prefixes\":[\"READ_\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"prefixes\":[\"READ_\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown key under descriptionScreen",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"x\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"],\"extra\":[\"x\"]}}"
   },
   {
    "name": "a duplicate top-level key (deny twice)",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key written with an escape (\\u0064eny)",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"\\u0064eny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"\\u0064eny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key under allow",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"globalExact\":[\"FS_LOESCHEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"globalExact\":[\"FS_LOESCHEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate restricted ECU",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"],\"TMODE\":[\"INFO\",\"SENDE\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"],\"TMODE\":[\"INFO\",\"SENDE\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key under deny",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version 0",
    "valid": false,
-   "text": "{\"version\":0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a negative version",
    "valid": false,
-   "text": "{\"version\":-1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":-1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a fractional version",
    "valid": false,
-   "text": "{\"version\":1.5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1.5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version as a string",
    "valid": false,
-   "text": "{\"version\":\"1\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":\"1\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version beyond a 32-bit integer",
    "valid": false,
-   "text": "{\"version\":2147483648,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":2147483648,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a negative maxArgLength",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":-1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":-1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "maxArgLength beyond a 32-bit integer",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":2147483648,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":2147483648,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty namePattern",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a namePattern that does not compile",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"([\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"([\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in globalExact",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in deny.substrings",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\",\"\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\",\"\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in deny.tokens",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in a restricted ECU list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty restricted ECU name",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty pattern",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "no description screen terms",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty description screen term",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\",\"\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\",\"\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "no descriptionScreen.ignore (a version 1 file)",
+   "valid": false,
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+  },
+  {
+   "name": "an upper-case ignore entry",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"BESCHREIBUNG\"]}}"
+  },
+  {
+   "name": "a mixed-case ignore entry",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"Umsetzer\"]}}"
+  },
+  {
+   "name": "an ignore entry with an upper-case umlaut",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"rÜck\"]}}"
+  },
+  {
+   "name": "a duplicate ignore entry",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"umsetzer\"]}}"
+  },
+  {
+   "name": "an empty ignore entry",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"\"]}}"
+  },
+  {
+   "name": "an ignore entry that is not a string",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",1]}}"
+  },
+  {
+   "name": "ignore that is not a list",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":\"umsetzer\"}}"
+  },
+  {
+   "name": "null for ignore",
+   "valid": false,
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":null}}"
   },
   {
    "name": "a missing key",
@@ -154,37 +209,37 @@
   {
    "name": "a list entry that is not a string",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",1],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",1],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a restricted ECU that is not a list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":\"INFO\"}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":\"INFO\"}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "deny that is not an object",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":[],\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":[],\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "null for a list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":null,\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":null,\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a top level that is not an object",
    "valid": false,
-   "text": "[{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}]"
+   "text": "[{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}]"
   },
   {
    "name": "a trailing comma",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]},}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]},}"
   },
   {
    "name": "a comment",
    "valid": false,
-   "text": "// policy\n{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "// policy\n{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "not JSON",

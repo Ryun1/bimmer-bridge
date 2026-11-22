@@ -22,7 +22,7 @@ public class EdiabasMidRequestConflictTests
             _conflicts,
             new FakeEcus("NVE_65", "TMODE", "UTILITY"),
             JobPolicy.Embedded,
-            new CommentScreen(JobPolicy.Embedded.ScreenTerms, []),
+            new CommentScreen(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, []),
             _clock,
             new CableUse(),
             _log,

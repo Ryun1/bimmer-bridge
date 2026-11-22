@@ -6,7 +6,8 @@ import { BridgeError, cleanText } from "./errors.js";
 /**
  * The EDIABAS job policy (policy/policy.json), evaluated exactly as docs/api.md "Job policy"
  * steps 1–7. The Mac runs it before any request leaves, so a refused job never reaches the VM.
- * The description screen is the agent's job; the Mac only reports `screen: true`.
+ * The description screen is the agent's job; the Mac only reports `screen: true` (it still
+ * validates `descriptionScreen`, so both sides accept the same files).
  */
 
 /** policy/policy.json at the repo root: two levels above both src/ and dist/. */
@@ -17,6 +18,10 @@ export const DEFAULT_POLICY_PATH = fileURLToPath(new URL("../../policy/policy.js
 // so the Mac never silently ignores a rule the agent would refuse to load.
 const INT32_MAX = 2147483647;
 const Names = z.array(z.string().min(1));
+/** Lower-case, non-empty and each listed once (descriptionScreen.ignore). */
+const LowerNames = z
+  .array(z.string().min(1).refine((s) => s === s.toLowerCase(), "must be lower-case"))
+  .refine((a) => new Set(a).size === a.length, "must not list an entry twice");
 
 const PolicySchema = z.strictObject({
   version: z.number().int().min(1).max(INT32_MAX),
@@ -28,7 +33,7 @@ const PolicySchema = z.strictObject({
     restrictedEcus: z.record(z.string().min(1), Names),
   }),
   deny: z.strictObject({ substrings: Names, tokens: Names }),
-  descriptionScreen: z.strictObject({ terms: Names.min(1) }),
+  descriptionScreen: z.strictObject({ terms: Names.min(1), ignore: LowerNames }),
 });
 
 /**
@@ -77,6 +82,8 @@ export interface Policy {
   restrictedEcus: Map<string, Set<string>>;
   denySubstrings: string[];
   denyTokens: string[];
+  /** descriptionScreen.ignore: validated here, used only by the agent's screen. */
+  screenIgnore: string[];
 }
 
 export interface Verdict {
@@ -109,6 +116,7 @@ export function parsePolicy(text: string): Policy {
     restrictedEcus: new Map(Object.entries(raw.allow.restrictedEcus).map(([k, v]) => [k, new Set(v)])),
     denySubstrings: raw.deny.substrings.filter((s) => s.length > 0),
     denyTokens: raw.deny.tokens,
+    screenIgnore: raw.descriptionScreen.ignore,
   };
 }
 

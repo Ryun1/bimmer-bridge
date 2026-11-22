@@ -73,7 +73,7 @@ export function synthHealth(o: Record<string, unknown> = {}): Record<string, unk
     conflictingProcesses: [],
     ediabas: { dllPath: "C:\\SYNTH\\api32.dll", dllFound: true },
     lastCableUseAt: null,
-    policyVersion: 1,
+    policyVersion: 2,
     capabilities: ["ediabas", "capture", "logs"],
     ...o,
   };

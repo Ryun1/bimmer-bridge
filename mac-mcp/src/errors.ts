@@ -195,7 +195,10 @@ export function describeAgentError(code: string, message: string | undefined, de
       const matched = Array.isArray(matchedRaw) ? matchedRaw.filter((m): m is string => typeof m === "string").map((m) => cleanText(m, 40)) : [];
       const why = !description?.trim()
         ? "the job has no description, so the agent cannot tell that it only reads"
-        : `its description suggests it may do more than read${matched.length ? ` (matched: ${matched.join(", ")})` : ""}. Description: "${cleanText(description, 300)}"`;
+        : matched.length === 0
+          ? // Blank once descriptionScreen.ignore is applied, e.g. only "Jobbeschreibung".
+            `its description has nothing in it but a label ("${cleanText(description, 300)}"), so the agent cannot tell that it only reads`
+          : `its description suggests it may do more than read (matched: ${matched.join(", ")}). Description: "${cleanText(description, 300)}"`;
       return (
         `The agent did not run ${ecuJob(details)}: ${why}. ` +
         "Ryan decides whether this job is safe to run; do not try to get the same reading another way."

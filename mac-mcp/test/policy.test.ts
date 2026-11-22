@@ -81,7 +81,12 @@ describe("policy loading", () => {
     expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
     const g = PolicyGuard.load();
     expect(g.error).toBeNull();
-    expect(g.version).toBe(1);
+    expect(g.version).toBe(2);
+  });
+
+  it("reads descriptionScreen.ignore (the agent runs the screen; the Mac only validates it)", () => {
+    expect(policy.version).toBe(2);
+    expect(policy.screenIgnore).toEqual(["beschreibung", "umsetzer"]);
   });
 
   const failing: [string, () => string][] = [
@@ -93,6 +98,21 @@ describe("policy loading", () => {
     ["a wrong type", () => JSON.stringify({ ...JSON.parse(policyText), version: "1" })],
     ["an invalid pattern", () => JSON.stringify({ ...JSON.parse(policyText), namePattern: "([" })],
     ["an empty file", () => ""],
+    ["no descriptionScreen.ignore", () => {
+      const j = JSON.parse(policyText);
+      delete j.descriptionScreen.ignore;
+      return JSON.stringify(j);
+    }],
+    ["an upper-case ignore entry", () => {
+      const j = JSON.parse(policyText);
+      j.descriptionScreen.ignore = ["beschreibung", "Umsetzer"];
+      return JSON.stringify(j);
+    }],
+    ["a duplicate ignore entry", () => {
+      const j = JSON.parse(policyText);
+      j.descriptionScreen.ignore = ["umsetzer", "umsetzer"];
+      return JSON.stringify(j);
+    }],
   ];
 
   it.each(failing)("fails closed on %s: every check refuses with policy_unavailable", (_name, read) => {

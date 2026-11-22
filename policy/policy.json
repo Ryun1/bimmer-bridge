@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "namePattern": "^[A-Za-z0-9_]{1,64}$",
   "maxArgLength": 200,
   "allow": {
@@ -109,6 +109,10 @@
       "delete",
       "activate",
       "learn"
+    ],
+    "ignore": [
+      "beschreibung",
+      "umsetzer"
     ]
   }
 }

@@ -105,8 +105,9 @@ public class JobPolicyTests
     public void Embedded_Loads()
     {
         Assert.True(JobPolicy.Embedded.Loaded, JobPolicy.Embedded.LoadError);
-        Assert.Equal(1, JobPolicy.Embedded.Version);
+        Assert.Equal(2, JobPolicy.Embedded.Version);
         Assert.Contains("lösch", JobPolicy.Embedded.ScreenTerms);
+        Assert.Equal(["beschreibung", "umsetzer"], JobPolicy.Embedded.ScreenIgnore);
     }
 
     [Fact]
@@ -167,8 +168,13 @@ public class JobPolicyTests
         Mutate(n => n["allow"]!["restrictedEcus"] = new JsonArray()),
         Mutate(n => n["descriptionScreen"]!["terms"] = new JsonArray()),
         Mutate(n => n.Remove("descriptionScreen")),
-        Text().Replace("\"version\": 1,", "\"version\": 1, \"version\": 2,", StringComparison.Ordinal),
-        Text().Replace("\"version\": 1,", "// comment\n\"version\": 1,", StringComparison.Ordinal),
+        Mutate(n => n["descriptionScreen"]!.AsObject().Remove("ignore")),
+        Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("beschreibung", "Umsetzer")),
+        Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "umsetzer")),
+        Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "")),
+        Mutate(n => n["descriptionScreen"]!["ignore"] = "umsetzer"),
+        Text().Replace("\"version\": 2,", "\"version\": 2, \"version\": 3,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 2,", "// comment\n\"version\": 2,", StringComparison.Ordinal),
     ];
 
     [Theory]
@@ -180,6 +186,7 @@ public class JobPolicyTests
         Assert.NotNull(policy.LoadError);
         Assert.Null(policy.Version);
         Assert.Empty(policy.ScreenTerms);
+        Assert.Empty(policy.ScreenIgnore);
 
         foreach (var (ecu, job) in new[] { ("NVE_65", "IDENT"), ("TMODE", "INFO"), ("NVE_65", "STATUS_X"), ("NVE_65", "_JOBS") })
         {

@@ -85,7 +85,7 @@ public class ResultShapingTests
 
 public class CommentScreenTests
 {
-    private static readonly CommentScreen Screen = new(JobPolicy.Embedded.ScreenTerms, ["NVE_65:STATUS_X"]);
+    private static readonly CommentScreen Screen = new(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, ["NVE_65:STATUS_X"]);
 
     [Theory]
     [InlineData("Status Bordnetzspannung")]
@@ -123,10 +123,67 @@ public class CommentScreenTests
         Assert.Empty(r.Matched);
     }
 
+    // descriptionScreen.ignore: labels recorded from the VM that only looked like screen terms.
+    [Theory]
+    [InlineData("Jobbeschreibung: liest den Status")]
+    [InlineData("Messwerte des AD-Umsetzers ausgelesen")]
+    [InlineData("JOBBESCHREIBUNG: Status")]
+    [InlineData("Jobbeschreibung:\nStatus der Klemme 30")]
+    public void IgnoredLabels_Pass(string description)
+    {
+        var r = Screen.Screen(description);
+        Assert.True(r.Passed, string.Join(",", r.Matched));
+        Assert.Empty(r.Matched);
+    }
+
+    // Nothing broader than the two labels is ignored: these still fail on the term shown, and
+    // `matched` lists only what is left after the ignore step.
+    [Theory]
+    [InlineData("EEPROM beschreiben", new[] { "schreib" })]
+    [InlineData("Zaehler zuruecksetzen", new[] { "setz" })]
+    [InlineData("Zähler rücksetzen", new[] { "setz" })]
+    [InlineData("Jobbeschreibung: Start Routine", new[] { "start" })]
+    [InlineData("Beschreibungschreiben", new[] { "schreib" })]
+    [InlineData("Umsetzer setzen", new[] { "setz" })]
+    public void IgnoreIsNarrow(string description, string[] matched)
+    {
+        var r = Screen.Screen(description);
+        Assert.False(r.Passed);
+        Assert.Equal(matched, r.Matched);
+    }
+
+    /// <summary>An ignore entry is replaced by a space, so the text around it cannot join into a
+    /// new term.</summary>
+    [Fact]
+    public void IgnoredText_BecomesASpace()
+    {
+        var screen = new CommentScreen(["ab"], ["xx"], []);
+        Assert.True(screen.Screen("Wert aXXb").Passed);
+        var r = screen.Screen("Wert aXXbab");
+        Assert.False(r.Passed);
+        Assert.Equal(["ab"], r.Matched);
+    }
+
+    /// <summary>A description that is only labels is empty: it fails, with nothing matched. The
+    /// "Job" left of "Jobbeschreibung" is part of the label, not a description.</summary>
+    [Theory]
+    [InlineData("Jobbeschreibung")]
+    [InlineData("Jobbeschreibung:")]
+    [InlineData(" JOBBESCHREIBUNG  ")]
+    [InlineData("Beschreibung")]
+    [InlineData("Beschreibung Umsetzer")]
+    [InlineData("Jobbeschreibung: -")]
+    public void BlankAfterIgnore_IsEmpty(string description)
+    {
+        var r = Screen.Screen(description);
+        Assert.False(r.Passed);
+        Assert.Empty(r.Matched);
+    }
+
     [Fact]
     public void NoTerms_NothingPasses()
     {
-        Assert.False(new CommentScreen([], []).Screen("Status lesen").Passed);
+        Assert.False(new CommentScreen([], [], []).Screen("Status lesen").Passed);
     }
 
     [Fact]
@@ -134,7 +191,7 @@ public class CommentScreenTests
     {
         Assert.True(Screen.IsReviewed("NVE_65", "STATUS_X"));
         Assert.False(Screen.IsReviewed("NVE_65", "STATUS_XY"));
-        Assert.False(new CommentScreen([], ["nve_65:status_x"]).IsReviewed("NVE_65", "STATUS_X"));
+        Assert.False(new CommentScreen([], [], ["nve_65:status_x"]).IsReviewed("NVE_65", "STATUS_X"));
     }
 }
 

@@ -20,7 +20,7 @@ public class EdiabasServiceTests
             _conflicts,
             new FakeEcus(ecus.Length == 0 ? ["NVE_65", "TMODE", "UTILITY", "D_MOTOR", "N62_TUE"] : ecus),
             JobPolicy.Embedded,
-            new CommentScreen(JobPolicy.Embedded.ScreenTerms, reviewed ?? []),
+            new CommentScreen(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, reviewed ?? []),
             _clock,
             _cable,
             _log,
@@ -108,7 +108,7 @@ public class EdiabasServiceTests
     public void BrokenPolicy_RefusesAndNeverTouchesTheApi()
     {
         var broken = JobPolicy.Parse("{}");
-        var svc = new EdiabasService(_api, _conflicts, new FakeEcus("NVE_65"), broken, new CommentScreen(broken.ScreenTerms, []), _clock, _cable, _log, _dll, 30, 60, IdleSeconds);
+        var svc = new EdiabasService(_api, _conflicts, new FakeEcus("NVE_65"), broken, new CommentScreen(broken.ScreenTerms, broken.ScreenIgnore, []), _clock, _cable, _log, _dll, 30, 60, IdleSeconds);
 
         var r = svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
         Assert.Equal("job_not_allowed", r.Failure!.Error.Code);

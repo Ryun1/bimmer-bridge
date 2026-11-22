@@ -106,7 +106,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 |---|---|---|---|
 | 400 | `bad_request` | missing or malformed parameter or JSON body; body over 64 KB | `{ "parameter": "…" }` or `null` |
 | 403 | `job_not_allowed` | the job policy refused the ECU/job/args | `{ ecu, job, rule }` |
-| 403 | `job_needs_review` | a job allowed by the `STATUS_` pattern has a description that fails the screen, or has no description | `{ ecu, job, description, matched: ["start"] }` (`matched` is `[]` when the description is empty) |
+| 403 | `job_needs_review` | a job allowed by the `STATUS_` pattern has a description that fails the screen, or has no description | `{ ecu, job, description, matched: ["start"] }` (`matched` is `[]` when the description is empty or only labels; see "Description screen") |
 | 403 | `path_not_allowed` | log path outside the configured roots, or an escape attempt | `{ reason }` |
 | 404 | `ecu_not_found` | no `.prg` or `.grp` of that name in the Ecu folder | `{ ecu }` |
 | 404 | `job_not_found` | `describe` was asked for a job the SGBD does not have | `{ ecu, job }` |
@@ -142,7 +142,8 @@ caught by the conflict check before EDIABAS is called.
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server
 reads the same file. Both evaluate it the same way and both run `policy/policy-cases.json`.
 Both also load it the same way: a file with an unknown or duplicate key, a `version` below 1, an
-empty name, or no `descriptionScreen.terms` is invalid, the agent then refuses every job
+empty name, no `descriptionScreen.terms`, or a missing or bad `descriptionScreen.ignore` (it must
+be a list of non-empty lower-case strings, none listed twice; it may be empty) is invalid, the agent then refuses every job
 (`policy_unavailable`) and the Mac every `ediabas_*` tool. Both run
 `policy/policy-parse-cases.json`, which lists policy texts each side must accept or refuse.
 
@@ -163,11 +164,27 @@ Evaluation, in this order. The first rule that decides wins; `rule` is the strin
    `screen: true`.
 7. Otherwise `default_deny`.
 
+The file is at `version` 2: version 2 added `descriptionScreen.ignore`, which a version 1 file
+does not have (so this build refuses it). `GET /health` reports the agent's version as
+`policyVersion`; `vm_health` warns when it differs from the Mac's.
+
 **Description screen (agent only).** For a verdict with `screen: true`, the agent reads the
-job's description (`_JOBCOMMENTS`) and refuses with `job_needs_review` if the description is
-empty or contains, case-insensitively, any entry of `descriptionScreen.terms`. A job listed as
-`ECU:JOB` (upper-case) in the agent config's `reviewedJobs` skips the screen, never the name
-rules.
+job's description (`_JOBCOMMENTS`) and refuses with `job_needs_review` if:
+- the description is empty or whitespace; or
+- after every case-insensitive occurrence of a `descriptionScreen.ignore` entry is replaced by
+  one space (a space, so that removing it cannot join the text around it into a term), it
+  contains, case-insensitively, any entry of `descriptionScreen.terms`. `matched` lists the
+  terms found in that text; or
+- nothing else is left: once every whitespace-separated word that contains an ignore entry is
+  set aside, no letter or digit remains (a description that is only `Jobbeschreibung:` is as
+  good as none). `matched` is then `[]`.
+
+The ignore entries are labels seen in real descriptions that only look like a term:
+`beschreibung` (from `Jobbeschreibung:`, which starts every CAS description and contains
+`schreib`) and `umsetzer` (`AD-Umsetzers`, an A/D converter, contains `setz`). Nothing broader
+is ignored: `EEPROM beschreiben` still fails on `schreib`, `Zaehler zuruecksetzen` on `setz`, and
+`Beschreibungschreiben` on `schreib`. A job listed as `ECU:JOB` (upper-case) in the agent config's
+`reviewedJobs` skips the screen, never the name rules.
 
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
