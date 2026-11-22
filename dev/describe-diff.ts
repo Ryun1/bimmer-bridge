@@ -84,7 +84,19 @@ class Ediabasd {
       env: { ...process.env, XDG_STATE_HOME: join(dir, "state") },
       stdio: ["pipe", "pipe", "pipe"],
     });
-    this.child.stderr.on("data", () => {});
+    let stderr = "";
+    this.child.stderr.on("data", (d: Buffer) => {
+      stderr = (stderr + d.toString()).slice(-2000);
+    });
+    // A child that dies (no DOTNET_ROOT for dotnet 10, a config error, a stuck job's exit 3)
+    // fails every pending request loudly instead of leaving the run to end silently.
+    this.child.on("exit", (code) => {
+      this.dead = `ediabasd exited with code ${code}: ${stderr.trim()}`;
+      for (const [, done] of this.waiting) {
+        done({ ok: false, error: { code: "ediabasd_exited", message: this.dead } });
+      }
+      this.waiting.clear();
+    });
     createInterface({ input: this.child.stdout }).on("line", (line) => {
       const msg = JSON.parse(line) as Record<string, unknown>;
       const done = this.waiting.get(msg.id as number);
@@ -93,7 +105,10 @@ class Ediabasd {
     });
   }
 
+  private dead: string | undefined;
+
   request(method: string, params: unknown): Promise<Side> {
+    if (this.dead !== undefined) return Promise.reject(new Error(this.dead));
     const id = this.next++;
     return new Promise((res) => {
       this.waiting.set(id, (msg) =>
@@ -162,7 +177,7 @@ async function main(): Promise<void> {
   const native = new Ediabasd(args.ediabasd, args.ecuPath);
   const client = vmClient();
   const listed = await native.request("ecus", {});
-  if (!listed.ok) throw new Error(`ediabasd ecus failed: ${listed.code}`);
+  if (!listed.ok) throw new Error(`ediabasd ecus failed: ${listed.code}: ${listed.message ?? ""}`);
   const files = ((listed.value as { files: { name: string; type: string }[] }).files ?? [])
     .filter((f) => f.type === "prg")
     .map((f) => f.name.toUpperCase())
@@ -175,6 +190,7 @@ async function main(): Promise<void> {
     count++;
     const vm = await vmDescribe(client, ecu);
     const nat = await native.request("describe", { ecu, comments: true });
+    if (!nat.ok && nat.code === "ediabasd_exited") throw new Error(nat.message);
     const d = diffDescribe(vm, nat);
     appendFileSync(args.out, JSON.stringify({ ecu, kind: d.kind, differences: d.differences, vmError: vm.ok ? null : vm.code, nativeError: nat.ok ? null : nat.code }) + "\n");
     console.error(`${ecu}: ${d.kind}`);
