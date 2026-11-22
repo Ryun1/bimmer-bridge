@@ -164,4 +164,101 @@ public class EdiabasRequestPathTests
         Assert.Equal(new EdiabasErrorDetails(code, text), f.Error.Details);
         Assert.Contains(_log.Lines, l => l.StartsWith("WARN NVE_65 IDENT: finished but its results could not be read", StringComparison.Ordinal));
     }
+
+    // ---------------------------------------------------------------- A5: arguments are screened
+
+    private const string Approve = " Ryan can approve it in the agent config.";
+
+    private void ScriptStatusX(FakeJob arguments)
+    {
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_X", arguments);
+        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+    }
+
+    private static FakeJob ArgRows(params List<FakeResult>[] rows) => new() { Sets = [[], .. rows] };
+
+    [Fact]
+    public void ArgumentScreen_DescribedArguments_Pass_InCallOrder()
+    {
+        ScriptStatusX(ArgRows([Text("ARG", "KANAL"), Text("ARGTYPE", "int"), Text("ARGCOMMENT0", "Kanalnummer 1-4")], [Text("ARG", "MODUS"), Text("ARGTYPE", "int")]));
+
+        var r = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1;2"), null, _audit, default);
+
+        Assert.True(r.Ok);
+        Assert.Equal(
+            ["Job NVE_65 _JOBCOMMENTS [STATUS_X] []", "Job NVE_65 _ARGUMENTS [STATUS_X] []", "Job NVE_65 STATUS_X [1;2] []"],
+            _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void ArgumentScreen_MatchedTerm_IsNeedsReview()
+    {
+        ScriptStatusX(ArgRows([Text("ARG", "MODUS"), Text("ARGCOMMENT0", "1 = Selbsttest starten")]));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        var d = Assert.IsType<JobReviewDetails>(f.Error.Details);
+        Assert.Equal($"The argument description of STATUS_X mentions: {string.Join(", ", d.Matched)}.{Approve}", f.Error.Message);
+        Assert.Contains("start", d.Matched);
+        Assert.Equal("MODUS\n1 = Selbsttest starten", d.Description);
+        Assert.Equal(RequestAudit.ScreenRule, _audit.Rule);
+        Assert.DoesNotContain("Job NVE_65 STATUS_X [1] []", _api.JobCalls);
+    }
+
+    [Fact]
+    public void ArgumentScreen_ReadFails_IsNeedsReview()
+    {
+        ScriptStatusX(FakeJob.Error(100, "SYS-0010"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        Assert.Equal($"STATUS_X takes arguments but they are not described, so the call cannot be shown to be a read.{Approve}", f.Error.Message);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_NoRows_IsNeedsReview()
+    {
+        ScriptStatusX(ArgRows());
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        Assert.Equal($"STATUS_X takes arguments but they are not described, so the call cannot be shown to be a read.{Approve}", f.Error.Message);
+        var d = Assert.IsType<JobReviewDetails>(f.Error.Details);
+        Assert.Null(d.Description);
+        Assert.Empty(d.Matched);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_TimeoutKeepsItsOwnCode()
+    {
+        ScriptStatusX(new FakeJob { NeverFinishes = true });
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), 2, _audit, default).Failure!;
+
+        Assert.Equal("job_timeout", f.Error.Code);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_NotForCallsWithoutArgs_ReviewedOrUnscreenedJobs()
+    {
+        ScriptStatusX(ArgRows());
+        _api.On("NVE_65 STATUS_Y", FakeJob.Ok());
+        _api.On("NVE_65 FS_LESEN_DETAIL", FakeJob.Ok());
+        var svc = Service(reviewed: ["NVE_65:STATUS_Y"]);
+
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X"), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X", ""), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_Y", "1"), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "FS_LESEN_DETAIL", "0x4711"), null, new RequestAudit(), default).Ok);
+
+        Assert.DoesNotContain(_api.JobCalls, c => c.Contains("_ARGUMENTS", StringComparison.Ordinal));
+    }
 }

@@ -27,7 +27,8 @@ public sealed class RequestAudit
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
 /// <para>Per request: conflict check → (lazily, at the first job that will really run) apiInit
-/// → per job: policy → Ecu file → description screen where required → conflict check again
+/// → per job: policy → Ecu file → description screen where required (and, for a call with
+/// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
 /// reused) → apiJob → poll apiState
 /// every 50 ms until not busy or timeout (apiBreak on timeout) → read every result set →
@@ -533,6 +534,11 @@ public sealed class EdiabasService
                         new JobReviewDetails(verdict.Ecu!, verdict.Job!, description, screened.Matched)),
                     RequestAudit.ScreenRule);
             }
+
+            if (!string.IsNullOrEmpty(request.Args) && ScreenArguments(session, verdict.Ecu!, verdict.Job!, timeout, ct) is { } argFailure)
+            {
+                return Fail(argFailure, RequestAudit.ScreenRule);
+            }
         }
 
         var run = Execute(session, verdict.Ecu!, verdict.Job!, request.Args ?? "", request.Results ?? "", timeout, ct);
@@ -611,16 +617,58 @@ public sealed class EdiabasService
         return new TextList(lines);
     }
 
+    /// <summary>
+    /// The argument screen for a screened job called with arguments: the job's own description
+    /// passed, but the arguments it takes could still select a write. Every <c>ARG</c> name and
+    /// <c>ARGCOMMENT</c> goes through the same screen. Null when the call may go ahead; a failed
+    /// read or no argument rows at all is <c>job_needs_review</c>, because nothing then shows the
+    /// arguments are harmless. A failure that is about the request (time, cancel, a BMW tool)
+    /// keeps its own code.
+    /// </summary>
+    private ApiFailure? ScreenArguments(Session session, string ecu, string job, int timeout, CancellationToken ct)
+    {
+        var rows = ReadParameterRows(session, ecu, "_ARGUMENTS", job, "ARG", "ARGTYPE", "ARGCOMMENT", timeout, ct);
+        if (!rows.Ok && rows.Failure!.Error.Code != ApiErrors.EdiabasError)
+        {
+            return rows.Failure;
+        }
+
+        var text = rows.Ok
+            ? NullIfBlank(string.Join("\n", rows.Value!.SelectMany(a => new[] { a.Name, a.Comment }).OfType<string>().Where(t => t.Length > 0)))
+            : null;
+        var screened = _screen.Screen(text);
+        if (screened.Passed)
+        {
+            return null;
+        }
+
+        return ApiFailure.Of(
+            ApiErrors.JobNeedsReview,
+            screened.Matched.Count > 0
+                ? $"The argument description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config."
+                : $"{job} takes arguments but they are not described, so the call cannot be shown to be a read. Ryan can approve it in the agent config.",
+            new JobReviewDetails(ecu, job, text, screened.Matched));
+    }
+
+    /// <summary>For describe: a failed read counts as no rows.</summary>
     private Outcome<List<JobParameterInfo>> ReadParameterTable(
+        Session session, string ecu, string infoJob, string job, string nameKey, string typeKey, string commentPrefix, int timeout, CancellationToken ct)
+    {
+        var rows = ReadParameterRows(session, ecu, infoJob, job, nameKey, typeKey, commentPrefix, timeout, ct);
+
+        // A job without arguments may make EDIABAS report an error rather than no sets.
+        return !rows.Ok && rows.Failure!.Error.Code == ApiErrors.EdiabasError
+            ? new List<JobParameterInfo>()
+            : rows;
+    }
+
+    private Outcome<List<JobParameterInfo>> ReadParameterRows(
         Session session, string ecu, string infoJob, string job, string nameKey, string typeKey, string commentPrefix, int timeout, CancellationToken ct)
     {
         var run = AgentJob(session, ecu, infoJob, job, timeout, ct);
         if (!run.Ok)
         {
-            // A job without arguments may make EDIABAS report an error rather than no sets.
-            return run.Failure!.Error.Code == ApiErrors.EdiabasError
-                ? new List<JobParameterInfo>()
-                : run.Failure!;
+            return run.Failure!;
         }
 
         var list = run.Value!.Sets

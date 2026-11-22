@@ -243,12 +243,12 @@ public class EdiabasServiceTests
         _api.On("NVE_65 _JOBCOMMENTS STATUS_BORDNETZSPANNUNG", FakeJob.Comments("Bordnetzspannung auslesen"));
         _api.On("NVE_65 STATUS_BORDNETZSPANNUNG", FakeJob.Ok(Set(new FakeResult("STAT_SPANNUNG_WERT", ApiResultFormat.Real, 12.6))));
 
-        var r = Service().RunJob(new JobRequest("NVE_65", "STATUS_BORDNETZSPANNUNG", "ignored-by-screen"), null, _audit, default);
+        var r = Service().RunJob(new JobRequest("NVE_65", "STATUS_BORDNETZSPANNUNG"), null, _audit, default);
 
         Assert.True(r.Ok);
         Assert.Equal(12.6, r.Value!.Sets[0]["STAT_SPANNUNG_WERT"]);
         Assert.Equal(
-            ["Job NVE_65 _JOBCOMMENTS [STATUS_BORDNETZSPANNUNG] []", "Job NVE_65 STATUS_BORDNETZSPANNUNG [ignored-by-screen] []"],
+            ["Job NVE_65 _JOBCOMMENTS [STATUS_BORDNETZSPANNUNG] []", "Job NVE_65 STATUS_BORDNETZSPANNUNG [] []"],
             _api.JobCalls);
         Assert.Equal(1, _api.Count("Init"));
         Assert.Equal(1, _api.Count("End"));
@@ -353,9 +353,11 @@ public class EdiabasServiceTests
     {
         // Whatever the client sends as args, the agent's _JOBCOMMENTS call carries the job name.
         _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_X", new FakeJob { Sets = [[], [Text("ARG", "NAME"), Text("ARGCOMMENT0", "Name des Wertes")]] });
         _api.On("NVE_65 STATUS_X", FakeJob.Ok());
         Service().RunJob(new JobRequest("nve_65", "status_x", "FS_LOESCHEN", "X"), null, _audit, default);
         Assert.Equal("Job NVE_65 _JOBCOMMENTS [STATUS_X] []", _api.JobCalls.First());
+        Assert.Equal("Job NVE_65 _ARGUMENTS [STATUS_X] []", _api.JobCalls.ElementAt(1));
     }
 
     // ---- batch ----
