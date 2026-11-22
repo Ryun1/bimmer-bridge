@@ -46,6 +46,9 @@ public sealed record HealthResponse(
     public const string AgentName = "ediabas-bridge-agent";
 }
 
+/// <summary><c>GET /hello</c>: the agent's name and its proof of holding the token (decision D5).</summary>
+public sealed record HelloResponse(string Agent, string Proof);
+
 public sealed record Bounds(int X, int Y, int Width, int Height);
 
 public sealed record WindowInfo(string Handle, string Title, string? ProcessName, int Pid, Bounds Bounds, bool Minimized);

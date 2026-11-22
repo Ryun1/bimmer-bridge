@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using EdiabasAgent.Core;
 
 namespace EdiabasAgent.Tests;
@@ -160,5 +162,55 @@ public class TokenAuthTests
     public void Null_FileContent_Rejected()
     {
         Assert.False(TokenAuth.ParseTokenFile(null).Ok);
+    }
+
+    [Fact]
+    public void HelloProof_KnownVector()
+    {
+        const string nonce = "00112233445566778899aabbccddeeff";
+        var key = SHA256.HashData(Encoding.UTF8.GetBytes("test-token"));
+        var expected = Convert.ToHexStringLower(
+            HMACSHA256.HashData(key, Encoding.UTF8.GetBytes("ediabas-bridge-hello-v1:" + nonce)));
+
+        var proof = new TokenAuth("test-token").HelloProof(nonce);
+
+        Assert.Equal(expected, proof);
+        Assert.Equal("496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd", proof);
+    }
+
+    [Fact]
+    public void HelloProof_DependsOnTokenAndNonce()
+    {
+        const string nonce = "00112233445566778899aabbccddeeff";
+        var proof = new TokenAuth(Token).HelloProof(nonce);
+        Assert.Matches("^[0-9a-f]{64}$", proof);
+        Assert.NotEqual(proof, new TokenAuth(Token + "x").HelloProof(nonce));
+        Assert.NotEqual(proof, new TokenAuth(Token).HelloProof("ffeeddccbbaa99887766554433221100"));
+        Assert.DoesNotContain(Token, proof, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HelloProof_NoConfiguredToken_Throws()
+    {
+        Assert.Throws<InvalidOperationException>(() => new TokenAuth("").HelloProof("00112233445566778899aabbccddeeff"));
+    }
+
+    [Theory]
+    [InlineData("GET", "/hello", false)]
+    [InlineData("get", "/hello", false)]
+    [InlineData("GET", "/HELLO", false)]
+    [InlineData("POST", "/hello", true)]
+    [InlineData("HEAD", "/hello", true)]
+    [InlineData("GET", "/hello/", true)]
+    [InlineData("GET", "/hello/x", true)]
+    [InlineData("GET", "/hellox", true)]
+    [InlineData("GET", "/hell", true)]
+    [InlineData("GET", "/health", true)]
+    [InlineData("GET", "/", true)]
+    [InlineData("GET", "", true)]
+    [InlineData("GET", null, true)]
+    public void NeedsToken_OnlyGetHelloIsExempt(string method, string? path, bool needsToken)
+    {
+        Assert.Equal(needsToken, TokenAuth.NeedsToken(method, path));
     }
 }

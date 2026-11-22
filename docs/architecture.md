@@ -35,8 +35,9 @@ their interactive session and can see the desktop for screenshots. A second copy
    the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
    only a connection that was never made (refused, or a connect timeout) is retried.
 5. In the agent, `vm-agent/EdiabasAgent/Middleware.cs` runs, in order: source address (only
-   the VM's default gateway, which is the Mac), token, path, method. Every request, refused or
-   not, gets an audit line.
+   the VM's default gateway, which is the Mac), token, path, method. Only `GET /hello` (the
+   identity proof, [api.md](api.md#get-hello)) skips the token step; the other three still
+   apply to it. Every request, refused or not, gets an audit line.
 6. An EDIABAS handler (`EdiabasEndpoints.cs`) queues the work on the EDIABAS thread and waits.
 7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; loading the
    DLL, the conflict check again, `apiInit`; for each job the policy, the Ecu file, the

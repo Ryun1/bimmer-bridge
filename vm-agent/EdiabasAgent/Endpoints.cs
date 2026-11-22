@@ -9,9 +9,10 @@ namespace EdiabasAgent;
 internal sealed record Route(string Path, string Method, Func<HttpContext, Task> Handler);
 
 /// <summary>
-/// The route table, the single list of what exists, plus the handlers for <c>GET /health</c> and
-/// <c>GET /windows</c> (docs/api.md). EDIABAS handlers are in EdiabasEndpoints.cs, screenshots
-/// in ScreenEndpoints.cs, logs in LogEndpoints.cs.
+/// The route table, the single list of what exists, plus the handlers for <c>GET /hello</c>,
+/// <c>GET /health</c> and <c>GET /windows</c> (docs/api.md). <c>/hello</c> is the only route that
+/// needs no token (<see cref="TokenAuth.NeedsToken"/>). EDIABAS handlers are in
+/// EdiabasEndpoints.cs, screenshots in ScreenEndpoints.cs, logs in LogEndpoints.cs.
 /// </summary>
 internal sealed class Endpoints
 {
@@ -27,6 +28,7 @@ internal sealed class Endpoints
         var logs = new LogEndpoints(ctx.Logs);
         Routes =
         [
+            new Route(TokenAuth.HelloPath, HttpMethods.Get, Hello),
             new Route("/health", HttpMethods.Get, Health),
             new Route("/windows", HttpMethods.Get, Windows),
             new Route("/screen/capture", HttpMethods.Get, screen.Capture),
@@ -40,6 +42,31 @@ internal sealed class Endpoints
     }
 
     public IReadOnlyList<Route> Routes { get; }
+
+    /// <summary>
+    /// <c>GET /hello?nonce=</c>: proves the agent holds the token without needing it
+    /// (<see cref="TokenAuth.HelloProof"/>). Reached without a token; the source check still applies.
+    /// </summary>
+    private async Task Hello(HttpContext http)
+    {
+        var audit = HandlerSupport.Audit(http);
+        var q = HandlerSupport.Query(http, "nonce");
+        if (!q.Ok)
+        {
+            await HandlerSupport.Fail(http, audit, q.Failure!);
+            return;
+        }
+
+        var nonce = q.Value!.Get("nonce");
+        if (RequestParsing.CheckNonce(nonce) is { } bad)
+        {
+            await HandlerSupport.Fail(http, audit, bad);
+            return;
+        }
+
+        await Responses.WriteJson(http, StatusCodes.Status200OK,
+            new HelloResponse(HealthResponse.AgentName, _ctx.Auth.HelloProof(nonce!)));
+    }
 
     private Task Health(HttpContext http)
     {

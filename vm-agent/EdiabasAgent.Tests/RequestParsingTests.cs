@@ -137,6 +137,30 @@ public class RequestParsingTests
         Assert.NotNull(RequestParsing.CheckFilter("a\nb"));
         Assert.NotNull(RequestParsing.CheckFilter("ä"));
     }
+
+    [Fact]
+    public void Nonce_Accepted()
+    {
+        Assert.Null(RequestParsing.CheckNonce("00112233445566778899aabbccddeeff"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0112233445566778899aabbccddeeff")]
+    [InlineData("00112233445566778899aabbccddeeff0")]
+    [InlineData("00112233445566778899AABBCCDDEEFF")]
+    [InlineData("00112233445566778899aabbccddeefg")]
+    [InlineData("00112233445566778899aabbccddeef ")]
+    [InlineData("00112233445566778899aabbccddeef\n")]
+    [InlineData("\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669aabbccddeeff0011223344")]
+    public void Nonce_Shape(string? nonce)
+    {
+        var f = RequestParsing.CheckNonce(nonce)!;
+        Assert.Equal(400, f.Status);
+        Assert.Equal("bad_request", f.Error.Code);
+        Assert.Equal("nonce", Param(f));
+    }
 }
 
 public class EcuFolderTests : IDisposable

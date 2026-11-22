@@ -31,6 +31,14 @@ public class ApiModelsTests
             ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(0, "", ResultsUnread: true))));
     }
 
+    [Fact]
+    public void Hello_Shape()
+    {
+        Assert.Equal(
+            """{"agent":"ediabas-bridge-agent","proof":"496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd"}""",
+            ApiJson.Serialize(new HelloResponse(HealthResponse.AgentName, "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd")));
+    }
+
     [Theory]
     [InlineData("bad_request", 400)]
     [InlineData("job_not_allowed", 403)]

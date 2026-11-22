@@ -3,13 +3,14 @@
 The contract between `vm-agent` (server) and `mac-mcp` (client). Both sides are built against
 this file. Change it here first.
 
-The first part covers `/health` and `/windows` (Phases 1 and 3). The part from "Phases 2, 4, 5
-and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
+The first part covers `/hello`, `/health` and `/windows` (Phases 1 and 3). The part from
+"Phases 2, 4, 5 and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
 screenshot and log endpoints.
 
 ## Transport
 - Plain HTTP, port **8765**, on the VM's shared-network IPv4 address only.
-- Every request, including `/health`, needs `Authorization: Bearer <token>`.
+- Every request, including `/health`, needs `Authorization: Bearer <token>`, except
+  [`GET /hello`](#get-hello), the one unauthenticated route.
 - The token is 32 random bytes, base64url without padding (43 characters).
 - Responses are `application/json; charset=utf-8`. Property names are camelCase.
   Absent values are `null`, never omitted.
@@ -24,16 +25,42 @@ Any non-2xx response has this body:
 | Status | `code` | When |
 |---|---|---|
 | 403 | `forbidden` | the request did not come from the VM's network gateway (the Mac). Checked first, before the token is looked at |
-| 401 | `unauthorized` | header missing, malformed, or token wrong. Sent before any routing, so an unauthenticated caller cannot tell which paths exist |
+| 401 | `unauthorized` | header missing, malformed, or token wrong. Sent before any routing, so an unauthenticated caller cannot tell which paths exist (apart from `GET /hello`) |
 | 404 | `not_found` | unknown path (authenticated callers only) |
 | 405 | `method_not_allowed` | known path, wrong method |
 | 500 | `internal_error` | unhandled failure; the message is generic, details go to the agent log |
 
 A 401 also carries `WWW-Authenticate: Bearer`.
 
-Order of checks: source address (403), token (401), path (404), method (405). Requests that
+Order of checks: source address (403), token (401), path (404), method (405). `GET /hello`
+skips the token step only, and only for that exact path and method: `/hello/`, `/hellox` and
+`POST /hello` still need the token. Requests that
 Kestrel rejects itself (malformed HTTP, oversized headers, HTTP/2) never reach these checks
 and get Kestrel's own response.
+
+## `GET /hello`
+`GET /hello?nonce=<32 lowercase hex>` proves the agent holds the token without the caller
+sending it (decision D5). It needs no token; an `Authorization` header sent with it is ignored.
+The source-address check (403) still comes first, and the request is audited like any other.
+
+```json
+{ "agent": "ediabas-bridge-agent", "proof": "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd" }
+```
+
+- `proof` is lowercase hex
+  `HMAC-SHA256(key = SHA-256(UTF-8 token), message = UTF-8 "ediabas-bridge-hello-v1:" + nonce)`.
+  The example is for token `test-token` and nonce `00112233445566778899aabbccddeeff`.
+- `nonce` is required, given once, exactly 32 characters of `[0-9a-f]`; anything else
+  (missing, 31 or 33 characters, upper case, another parameter) is 400 `bad_request` with
+  `details.parameter`.
+- A client checks the proof (in constant time, with a fresh nonce) before it sends the token to
+  an address, so the token never goes to something that is not this agent.
+- Why it is safe without a token: only the VM's gateway (the Mac) reaches it (firewall and
+  source check), it touches neither the cable nor EDIABAS, and the proof reveals nothing usable
+  about the token. It is an HMAC keyed with the token's SHA-256, bound to a fixed context string
+  and to the caller's nonce; it cannot be turned back into the token or its hash, cannot be
+  presented as a Bearer token, and a proof for one nonce says nothing about another. The token
+  is 32 random bytes, so it cannot be guessed offline from a proof either.
 
 ## `GET /health`
 Never touches the cable and never loads the EDIABAS DLL.
