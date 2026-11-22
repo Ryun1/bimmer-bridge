@@ -672,7 +672,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
         state.failing = true;
         const e = await errorOf(call.run(c));
         expect(state.sent).toBe(1);
-        expect(e.code).toBe("agent_not_answering");
+        expect(e.code).toBe("ediabas_request_lost");
         expect(e.message).toBe(MESSAGES.ediabasRequestLost);
         // nothing after the failed request: no re-probe, no second send
         expect(calledUrls(fetchFn).at(-1)).toContain(call.path);

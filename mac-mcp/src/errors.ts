@@ -30,6 +30,7 @@ export const MESSAGES = {
 export type LocalErrorCode =
   | "vm_not_running"
   | "agent_not_answering"
+  | "ediabas_request_lost"
   | "local_network_blocked"
   | "unauthorized"
   | "forbidden"
@@ -64,9 +65,9 @@ export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
 }
 
-/** A request that runs an EDIABAS job failed after it may have reached the agent. Same code as a dead agent. */
+/** A request that runs an EDIABAS job failed after it may have reached the agent. */
 export function ediabasRequestLost(): BridgeError {
-  return new BridgeError("agent_not_answering", MESSAGES.ediabasRequestLost);
+  return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
 }
 
 export function localNetworkBlocked(): BridgeError {
@@ -280,6 +281,11 @@ export function describeAgentError(code: string, message: string | undefined, de
     default:
       return null;
   }
+}
+
+/** The text of a failed tool call: the code in brackets, then the message. */
+export function errorText(code: string, message: string): string {
+  return `[${code}] ${message}`;
 }
 
 /** Anything thrown that is not a BridgeError becomes a generic internal error (no stack). */

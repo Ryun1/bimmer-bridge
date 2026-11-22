@@ -78,8 +78,10 @@ describe("MCP server", () => {
     expect(instr).toMatch(/Call vm_health first/);
     // Evals showed vm_health batched with ediabas_* calls; it is a gate, not an ordering hint.
     expect(instr).toMatch(/vm_health first and on its own; read its answer before any other tool/);
-    expect(instr).toMatch(/agent_outdated is not installed in the VM yet/);
-    expect(instr).toMatch(/Never retry a refusal/);
+    expect(instr).toMatch(/\[agent_outdated\]: that tool is not installed in the VM yet; say so/);
+    expect(instr).toMatch(/Errors start with a code in brackets/);
+    expect(instr).toContain("[ediabas_request_lost]");
+    expect(instr).toMatch(/Never retry a refusal \(\[job_not_allowed\], \[job_needs_review\]\)/);
     expect(instr).toMatch(/never guess names/);
     expect(instr).toMatch(/read-only/i);
     expect(instr).toContain("vm_health");

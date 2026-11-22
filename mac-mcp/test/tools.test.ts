@@ -104,6 +104,31 @@ describe("tool list", () => {
   });
 });
 
+describe("error results", () => {
+  it("start with their code in brackets", async () => {
+    const { call } = await connect();
+    const refused = await call("ediabas_job", { ecu: "NVE_65", job: "FS_LOESCHEN" });
+    expect(refused.text).toMatch(/^\[job_not_allowed\] Refused by the job policy/);
+    override("POST /ediabas/job", () => agentErr(409, "cable_in_use", "x", null));
+    const busy = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(busy.text).toMatch(/^\[cable_in_use\] The diagnostic cable is in use/);
+    const bad = await call("vm_logs_read", { path: "C:\\x.log", offset: 5 });
+    expect(bad.text).toMatch(/^\[invalid_arguments\] /);
+  });
+
+  it("gives a job request that may have run its own code", async () => {
+    agent.setHandler((req, res) => {
+      if (req.url === "/health") stubHandler()(req, res);
+      else req.socket.destroy();
+    });
+    const { call, auditLines } = await connect();
+    await call("vm_health");
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.text).toMatch(/^\[ediabas_request_lost\] The connection to the VM agent broke/);
+    expect((await auditLines()).at(-1)).toContain("\tediabas_request_lost\t");
+  });
+});
+
 describe("vm_health", () => {
   it("shows the agent's features and policy version against the Mac's", async () => {
     const { call } = await connect();
@@ -384,17 +409,17 @@ describe("ediabas_job", () => {
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. Ryan decides/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "", matched: [] }, /has no description/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Jobbeschreibung", matched: [] }, /^(?![\s\S]*suggests)[\s\S]*description has nothing in it but a label \("Jobbeschreibung"\), so the agent cannot tell that it only reads/],
-    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^(?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
+    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^\[ediabas_error\] (?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
     [
       "ediabas_error",
       502,
       { errorCode: 16, errorText: "IFH-0006: COMMAND NOT ACCEPTED" },
-      /^EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
+      /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
     ],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
     ["cable_in_use", 409, null, /in use by a BMW tool in the VM/],
-    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^(?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
-    ["cable_not_found", 502, null, /^EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
+    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^\[cable_not_found\] (?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
+    ["cable_not_found", 502, null, /^\[cable_not_found\] EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
   ] as const)("maps the agent's %s", async (code, status, details, msg) => {
     override("POST /ediabas/job", () => agentErr(status, code, "agent message", details));
     const { call, auditLines } = await connect();
@@ -409,17 +434,17 @@ describe("ediabas_job", () => {
     [
       "a BMW tool started during the request",
       "A BMW tool started during the request (INPALOAD pid 4312); no further jobs are started.",
-      /^Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\); no further jobs are started\."/,
+      /^\[not_run\] Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\); no further jobs are started\."/,
     ],
     [
       "the time limit",
       "The request reached its 60 s limit before IDENT started.",
-      /^Not run: the agent said: "The request reached its 60 s limit before IDENT started\."/,
+      /^\[not_run\] Not run: the agent said: "The request reached its 60 s limit before IDENT started\."/,
     ],
     [
       "an earlier job that ignored apiBreak",
       "An earlier job did not stop after apiBreak; no further jobs are started.",
-      /^Not run: the agent said: "An earlier job did not stop after apiBreak/,
+      /^\[not_run\] Not run: the agent said: "An earlier job did not stop after apiBreak/,
     ],
   ] as const)("passes the agent's reason through for a 503 not_run (%s)", async (_why, message, msg) => {
     override("POST /ediabas/job", () => agentErr(503, "not_run", message, null));
@@ -435,7 +460,7 @@ describe("ediabas_job", () => {
     override("POST /ediabas/job", () => agentErr(503, "not_run", "", null));
     const { call } = await connect();
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
-    expect(r.text).toMatch(/^Not run: the agent did not start this job and gave no reason\./);
+    expect(r.text).toMatch(/^\[not_run\] Not run: the agent did not start this job and gave no reason\./);
   });
 
   it("shows that the agent must be restarted when EDIABAS is stuck", async () => {

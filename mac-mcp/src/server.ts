@@ -5,7 +5,7 @@ import { z } from "zod";
 import { AgentClient, type BatchItem } from "./agentClient.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import type { Config } from "./config.js";
-import { BridgeError, badResponse, cleanText, toBridgeError } from "./errors.js";
+import { BridgeError, badResponse, cleanText, errorText, toBridgeError } from "./errors.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
 import {
   formatDescribeJob,
@@ -35,14 +35,15 @@ export const SERVER_VERSION: string = (() => {
 })();
 
 export const INSTRUCTIONS = [
-  "ediabas-bridge reads BMW diagnostic information from a Windows VM (UTM) on this Mac that runs EDIABAS, INPA and related tools on a cable to Ryan's car.",
-  "Call vm_health first and on its own; read its answer before any other tool, as it says whether the VM is reachable and a BMW tool holds the cable.",
+  "ediabas-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to Ryan's car.",
+  "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
   "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job, ediabas_vehicle_status reads ignition and voltages.",
-  "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car, and jobs that may do more than read are refused.",
-  "Never retry a refusal or look for another way to do what was refused.",
-  "A tool that reports agent_outdated is not installed in the VM yet: say so rather than offering it.",
+  "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
+  "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
+  "[agent_outdated]: that tool is not installed in the VM yet; say so.",
+  "[ediabas_request_lost]: the job may have run; do not repeat it unless Ryan asks.",
   "If the VM or agent is unreachable, tell the user the fix the message gives rather than retrying.",
 ].join(" ");
 
@@ -131,7 +132,7 @@ export function buildServer(parts: ServerParts): McpServer {
       outcome = err.code;
       rule = err.rule;
       if (err.code === "internal_error") parts.log(parts.redact(`${tool}: ${err.message}`));
-      result = { isError: true, content: [{ type: "text", text: parts.redact(err.message) }] };
+      result = { isError: true, content: [{ type: "text", text: parts.redact(errorText(err.code, err.message)) }] };
     }
     try {
       await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule });
