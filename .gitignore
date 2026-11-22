@@ -21,6 +21,12 @@ api32.dll
 api64.dll
 api.h
 EDIABAS.INI
+*.ini
+*.INI
+*.dll
+*.DLL
+*.exe
+*.EXE
 discovery/
 ista-bridge-discovery*.txt
 

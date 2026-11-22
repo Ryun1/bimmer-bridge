@@ -2,12 +2,12 @@
 #
 # Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Uninstall line that
 # dev/serve.py prints (it checks this file's SHA-256 before running it).
-# To keep config.json, token.txt and logs\ for a later reinstall, put $KeepData=$true; at the
-# start of that line.
 #
-# Stops and removes the scheduled task and the firewall rule and removes
-# C:\ProgramData\EdiabasBridge. Restores nothing else: the sleep setting changed by
-# install.ps1 is left as it is.
+# Stops and removes the scheduled task and the firewall rule and removes the program files from
+# C:\ProgramData\EdiabasBridge, keeping config.json (with the hand-approved reviewedJobs),
+# token.txt and logs\ for a later reinstall. To remove those too, put $Purge=$true; at the start
+# of that line. ($KeepData is no longer needed: keeping them is the default.)
+# Restores nothing else: the sleep setting changed by install.ps1 is left as it is.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
 
 & {
@@ -19,8 +19,12 @@
     $RuleName = 'ediabas-bridge agent'
     $Keep = @('config.json', 'token.txt', 'logs')
 
-    function Get-OptionalVar([string]$Name) {
-        return Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+    # An option from the pasted line: read once, then removed from the window's global scope,
+    # so a later paste in the same window does not inherit it.
+    function Get-OneShotVar([string]$Name) {
+        $value = Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+        Remove-Variable -Name $Name -Scope Global -ErrorAction SilentlyContinue
+        return $value
     }
 
     function Write-Step([string]$Text) {
@@ -46,10 +50,35 @@
         }
     }
 
+    # Staging folders left behind when a window was closed mid-run (the finally that removes
+    # them did not run). Only names install.ps1 and update.ps1 make; a link is left alone, and
+    # Directory.Delete does not follow links inside the folder.
+    function Remove-StaleStaging {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $env:ProgramData -Directory -Force -ErrorAction SilentlyContinue)) {
+            if ($dir.Name -notmatch '^EdiabasBridge-staging-[0-9a-f]{32}$') { continue }
+            if (($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warn ($dir.FullName + ' is a link, not a staging folder; left alone.')
+                continue
+            }
+            try {
+                [System.IO.Directory]::Delete($dir.FullName, $true)
+                Write-Host ('    Removed the left-over ' + $dir.FullName)
+            } catch {
+                Write-Warn ('Could not remove ' + $dir.FullName + ': ' + $_.Exception.Message)
+            }
+        }
+    }
+
     try {
+        # Options first, so they are cleared even when a check below stops the script.
+        $purge = ((Get-OneShotVar 'Purge') -eq $true)
+        $keepDataSet = ($null -ne (Get-OneShotVar 'KeepData'))
         Assert-Elevated
         Assert-WindowsPowerShell
-        $keepData = ((Get-OptionalVar 'KeepData') -eq $true)
+        Remove-StaleStaging
+        if ($keepDataSet) {
+            Write-Host '    $KeepData is ignored: config.json, token.txt and logs\ are kept unless $Purge=$true is set.'
+        }
 
         # ---- task ----
         $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -82,13 +111,14 @@
 
         # ---- files ----
         if (Test-Path -LiteralPath $Root) {
-            if ($keepData) {
+            if ($purge) {
+                Write-Step ('Removing ' + $Root + ' with config.json, token.txt and logs\ ($Purge)')
+                Remove-Item -LiteralPath $Root -Recurse -Force
+            } else {
                 Write-Step ('Removing ' + $Root + ' except config.json, token.txt and logs\')
                 Get-ChildItem -LiteralPath $Root -Force | Where-Object { $Keep -notcontains $_.Name } |
                     Remove-Item -Recurse -Force
-            } else {
-                Write-Step ('Removing ' + $Root)
-                Remove-Item -LiteralPath $Root -Recurse -Force
+                Write-Host '    Kept for a later reinstall. To remove them too: the Uninstall line with $Purge=$true; at its start.'
             }
         } else {
             Write-Step ($Root + ' not found')

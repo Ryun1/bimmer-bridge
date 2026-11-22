@@ -7,6 +7,8 @@
 # Optional variables set before it on the same line:
 #   $base     server URL (default http://<IPv4 default gateway>:8000)
 #   $Elevated $true to run the agent with highest privileges (default: limited)
+#   $SendToken $true to send the existing token to the Mac (serve.py --accept-token sets it);
+#             a first install always sends it. The token is never printed.
 #
 # Idempotent: re-running upgrades in place. config.json and token.txt are kept if present.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
@@ -27,6 +29,14 @@
 
     function Get-OptionalVar([string]$Name) {
         return Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+    }
+
+    # An option from the pasted line: read once, then removed from the window's global scope,
+    # so a later paste in the same window does not inherit it.
+    function Get-OneShotVar([string]$Name) {
+        $value = Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+        Remove-Variable -Name $Name -Scope Global -ErrorAction SilentlyContinue
+        return $value
     }
 
     function Write-Step([string]$Text) {
@@ -83,6 +93,8 @@
         return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
     }
 
+    # shared:begin
+    # This block is the same in install.ps1 and update.ps1 (dev/test_serve.py checks it).
     # A new, empty folder that only SYSTEM and Administrators can write to, created with that
     # ACL in one step (no window in which another process could put a file in it). The zip is
     # downloaded, checked and expanded here, never in the user's %TEMP%, so a non-elevated
@@ -115,6 +127,25 @@
             throw ('Could not restrict ' + $path + ' to Administrators. Nothing was changed.')
         }
         return $path
+    }
+
+    # Staging folders left behind when a window was closed mid-run (the finally that removes
+    # them did not run). Only names New-AdminOnlyDirectory makes; a link is left alone, and
+    # Directory.Delete does not follow links inside the folder.
+    function Remove-StaleStaging {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $env:ProgramData -Directory -Force -ErrorAction SilentlyContinue)) {
+            if ($dir.Name -notmatch '^EdiabasBridge-staging-[0-9a-f]{32}$') { continue }
+            if (($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warn ($dir.FullName + ' is a link, not a staging folder; left alone.')
+                continue
+            }
+            try {
+                [System.IO.Directory]::Delete($dir.FullName, $true)
+                Write-Host ('    Removed the left-over ' + $dir.FullName)
+            } catch {
+                Write-Warn ('Could not remove ' + $dir.FullName + ': ' + $_.Exception.Message)
+            }
+        }
     }
 
     # Copies the verified exe and checks that what landed is the same file.
@@ -153,6 +184,7 @@
         }
         throw 'EdiabasAgent.exe is still running after 10 seconds; stop it in Task Manager and run this again.'
     }
+    # shared:end
 
     function New-Grant($Sid, [string]$Rights) {
         return New-Object psobject -Property @{ Sid = $Sid; Rights = $Rights }
@@ -259,8 +291,13 @@
 
     $tmp = $null
     try {
+        # Options first, so they are cleared even when a check below stops the script.
+        $runElevated = ((Get-OneShotVar 'Elevated') -eq $true)
+        $sendToken = ((Get-OneShotVar 'SendToken') -eq $true)
+
         Assert-Elevated
         Assert-WindowsPowerShell
+        Remove-StaleStaging
 
         # ---- inputs ----
         $sha = Get-OptionalVar 'sha'
@@ -276,8 +313,6 @@
             $base = 'http://' + $gateway + ':8000'
         }
         $base = ([string]$base).TrimEnd('/')
-        $elevatedVar = Get-OptionalVar 'Elevated'
-        $runElevated = ($elevatedVar -eq $true)
 
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $userName = $identity.Name
@@ -454,17 +489,19 @@
             }
         }
 
-        # ---- 11. token hand-off (every run) ----
-        # serve.py accepts PUT /token only when started with --accept-token; otherwise it answers 403.
-        Write-Step 'Sending the token to the Mac'
-        $put = Invoke-Http 'PUT' ($base + '/token') $null $token 10000
-        if ($put.Status -ge 200 -and $put.Status -lt 300) {
-            Write-Note "token stored in the Mac's Keychain"
-        } elseif ($firstInstall) {
-            Write-Warn ('Could not send the token to the Mac (HTTP ' + $put.Status + '). Run this once on the Mac:')
-            Write-Host ("security add-generic-password -U -s ediabas-bridge -a agent -w '" + $token + "'")
+        # ---- 11. token hand-off (first install, or $SendToken) ----
+        # serve.py accepts PUT /token only when started with --accept-token, and then puts
+        # $SendToken=$true on the Install line. The token is never printed.
+        if ($firstInstall -or $sendToken) {
+            Write-Step 'Sending the token to the Mac'
+            $put = Invoke-Http 'PUT' ($base + '/token') $null $token 10000
+            if ($put.Status -ge 200 -and $put.Status -lt 300) {
+                Write-Note "token stored in the Mac's Keychain"
+            } else {
+                Write-Warn ('Could not send the token to the Mac (HTTP ' + $put.Status + '). On the Mac, start: python3 dev/serve.py --accept-token, then paste the Install line it prints again.')
+            }
         } else {
-            Write-Note ('The token was not sent to the Mac (HTTP ' + $put.Status + '). To re-send it, start serve.py on the Mac with --accept-token and run the install line again.')
+            Write-Note 'The token was not sent to the Mac. To send it, start serve.py on the Mac with --accept-token and paste the Install line it prints.'
         }
         $token = $null
 

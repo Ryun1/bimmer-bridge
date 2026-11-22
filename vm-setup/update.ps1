@@ -55,6 +55,8 @@
         return [string]$routes[0].NextHop
     }
 
+    # shared:begin
+    # This block is the same in install.ps1 and update.ps1 (dev/test_serve.py checks it).
     # A new, empty folder that only SYSTEM and Administrators can write to, created with that
     # ACL in one step (no window in which another process could put a file in it). The zip is
     # downloaded, checked and expanded here, never in the user's %TEMP%, so a non-elevated
@@ -87,6 +89,25 @@
             throw ('Could not restrict ' + $path + ' to Administrators. Nothing was changed.')
         }
         return $path
+    }
+
+    # Staging folders left behind when a window was closed mid-run (the finally that removes
+    # them did not run). Only names New-AdminOnlyDirectory makes; a link is left alone, and
+    # Directory.Delete does not follow links inside the folder.
+    function Remove-StaleStaging {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $env:ProgramData -Directory -Force -ErrorAction SilentlyContinue)) {
+            if ($dir.Name -notmatch '^EdiabasBridge-staging-[0-9a-f]{32}$') { continue }
+            if (($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warn ($dir.FullName + ' is a link, not a staging folder; left alone.')
+                continue
+            }
+            try {
+                [System.IO.Directory]::Delete($dir.FullName, $true)
+                Write-Host ('    Removed the left-over ' + $dir.FullName)
+            } catch {
+                Write-Warn ('Could not remove ' + $dir.FullName + ': ' + $_.Exception.Message)
+            }
+        }
     }
 
     # Copies the verified exe and checks that what landed is the same file.
@@ -125,11 +146,13 @@
         }
         throw 'EdiabasAgent.exe is still running after 10 seconds; stop it in Task Manager and run this again.'
     }
+    # shared:end
 
     $tmp = $null
     try {
         Assert-Elevated
         Assert-WindowsPowerShell
+        Remove-StaleStaging
 
         $sha = Get-OptionalVar 'sha'
         if (-not $sha -or ([string]$sha).Trim() -notmatch '^[0-9a-fA-F]{64}$') {

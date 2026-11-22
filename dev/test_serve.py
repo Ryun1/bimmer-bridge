@@ -576,12 +576,16 @@ class Startup(unittest.TestCase):
             expected = (
                 "  $base='http://192.168.64.1:8000'; $sha='%s'; "
                 "$ebFile=\"$env:TEMP\\ediabas-bridge-%s\"; "
-                "iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile; "
+                "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; "
+                "$ebOk=$false; "
+                "try { iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } "
+                "catch { Write-Host 'download failed: the Mac did not serve %s (is serve.py running?)' -ForegroundColor Red }; "
+                "if ($ebOk) { "
                 "$ebBytes=[IO.File]::ReadAllBytes($ebFile); "
                 "if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '%s') "
                 "{ iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } "
-                "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red }"
-                % (sha, script, script, self.script_sha[script], script))
+                "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red } }"
+                % (sha, script, script, script, self.script_sha[script], script))
             self.assertEqual(self.line_for(lines, script), expected)
 
     def test_every_line_pins_its_script_and_never_pipes_into_iex(self):
@@ -593,7 +597,68 @@ class Startup(unittest.TestCase):
             self.assertNotIn("| iex", line)
             self.assertNotIn("irm", line)
             line.encode("ascii")
-        self.assertIn("$KeepData=$true; ", "\n".join(lines))
+        text = "\n".join(lines)
+        self.assertIn("$Purge=$true; ", text)
+        self.assertNotIn("KeepData", text)
+
+    def test_install_line_sends_the_token_only_with_accept_token(self):
+        # install.ps1 sends the token on a first install, or when $SendToken is true; serve.py
+        # sets it only when it will take the token, so a re-install does not send it for nothing.
+        (self.release / "EdiabasAgent.zip").write_bytes(b"zip")
+        plain = self.lines()
+        self.assertNotIn("SendToken", "\n".join(plain))
+        accepting = self.lines(accept_token=True)
+        self.assertTrue(self.line_for(accepting, "install.ps1").startswith(
+            "  $SendToken=$true; $base='http://192.168.64.1:8000'; "))
+        for script in ("discover.ps1", "update.ps1", "uninstall.ps1"):
+            self.assertNotIn("SendToken", self.line_for(accepting, script))
+
+    def test_install_script_never_prints_the_token(self):
+        text = (serve.REPO_ROOT / "vm-setup" / "install.ps1").read_text(encoding="ascii")
+        self.assertNotIn("add-generic-password", text)
+        self.assertNotIn("-w '", text)
+        self.assertIn("'SendToken'", text)
+
+    def test_options_do_not_stick_in_the_window(self):
+        # The pasted line sets its options in the global session; each script removes the ones
+        # it read, so a later paste in the same window does not inherit them.
+        setup = serve.REPO_ROOT / "vm-setup"
+        for script, names in (("install.ps1", ("Elevated", "SendToken")),
+                              ("uninstall.ps1", ("KeepData", "Purge"))):
+            text = (setup / script).read_text(encoding="ascii")
+            self.assertIn("Remove-Variable -Name $Name -Scope Global", text, script)
+            for name in names:
+                self.assertIn("Get-OneShotVar '%s'" % name, text, script)
+                self.assertNotIn("Get-OptionalVar '%s'" % name, text, script)
+
+    def test_left_over_staging_folders_are_removed_first(self):
+        # A closed window skips the finally that removes the staging folder.
+        setup = serve.REPO_ROOT / "vm-setup"
+        for script in ("install.ps1", "update.ps1", "uninstall.ps1"):
+            text = (setup / script).read_text(encoding="ascii")
+            self.assertIn("function Remove-StaleStaging", text, script)
+            self.assertIn("'^EdiabasBridge-staging-[0-9a-f]{32}$'", text, script)
+            self.assertIn("[System.IO.Directory]::Delete($dir.FullName, $true)", text, script)
+            body = text[text.index("    try {\n"):]
+            call = body.index("        Remove-StaleStaging\n")
+            self.assertGreater(call, body.index("        Assert-WindowsPowerShell\n"), script)
+            if "New-AdminOnlyDirectory\n" in body:
+                self.assertLess(call, body.index("New-AdminOnlyDirectory\n"), script)
+
+    def test_install_and_update_share_one_block(self):
+        # The staging folder, the verified copy and stopping the agent are the same code in
+        # both scripts; a fix to one must reach the other.
+        blocks = []
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            self.assertEqual(text.count("    # shared:begin\n"), 1, script)
+            self.assertEqual(text.count("    # shared:end\n"), 1, script)
+            block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
+            for name in ("New-AdminOnlyDirectory", "Remove-StaleStaging", "Copy-VerifiedExe",
+                         "Stop-Agent"):
+                self.assertIn("function %s" % name, block, script)
+            blocks.append(block)
+        self.assertEqual(blocks[0], blocks[1])
 
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
