@@ -172,11 +172,13 @@ public sealed class LogService
         var budget = MaxScannedEntries;
         var cut = false;
 
+        // The same roots /logs/read accepts: a root that leads somewhere a read would refuse
+        // (a share, a bare drive, another kind of drive) is shown missing and never walked.
+        var usable = UsableRoots();
         for (var i = 0; i < _roots.Count; i++)
         {
             var root = _roots[i];
-            var usable = PathRules.Check(root) is null;
-            var exists = usable && _fs.IsLocalDisk(root[0]) && _fs.ResolveDirectory(root) is not null;
+            var exists = usable.Any(r => r.Index == i);
             roots.Add(new LogRoot(i, root, exists));
             if (!exists || (query.Root is { } only && only != i))
             {
@@ -280,7 +282,7 @@ public sealed class LogService
             return NotAllowed(textReason);
         }
 
-        var roots = ResolvedRoots();
+        var roots = UsableRoots();
 
         // The text must name a place under a usable root (as configured, or where it resolves)
         // before anything is opened. A path on another drive (a mapped network drive among
@@ -382,17 +384,20 @@ public sealed class LogService
         }
     }
 
-    private sealed record ResolvedRoot(string Configured, string Resolved);
+    private sealed record ResolvedRoot(int Index, string Configured, string Resolved);
 
     /// <summary>
-    /// Roots as they resolve now (a root may be a link itself). Unusable ones, missing ones, and
-    /// any configured on or leading to a drive that is not a local fixed disk are dropped.
+    /// Roots as they resolve now (a root may be a link itself), for both /logs and /logs/read.
+    /// Unusable ones, missing ones, any whose resolved path is not a plain path (a share, a
+    /// bare drive, a volume path), and any configured on or leading to a drive that is not a
+    /// local fixed disk are dropped.
     /// </summary>
-    private List<ResolvedRoot> ResolvedRoots()
+    private List<ResolvedRoot> UsableRoots()
     {
         var list = new List<ResolvedRoot>();
-        foreach (var root in _roots)
+        for (var i = 0; i < _roots.Count; i++)
         {
+            var root = _roots[i];
             // A root on a network, removable or optical drive is not opened and grants nothing.
             if (PathRules.Check(root) is not null || !_fs.IsLocalDisk(root[0]))
             {
@@ -402,7 +407,7 @@ public sealed class LogService
             var resolved = PathRules.NormalizeFinal(_fs.ResolveDirectory(root));
             if (resolved is not null && _fs.IsLocalDisk(resolved[0]))
             {
-                list.Add(new ResolvedRoot(root, resolved));
+                list.Add(new ResolvedRoot(i, root, resolved));
             }
         }
 
