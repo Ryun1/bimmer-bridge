@@ -357,7 +357,7 @@ export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: st
 export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
   const it = r.items;
   const n = sources.length;
-  const out = ["Vehicle status (each reading's result fields as returned; their meaning is confirmed at the car in Phase 6):"];
+  const out = ["Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):"];
   out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(it[0]!)}`);
   out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(it[1]!)}`);
   sources.forEach((s, i) => out.push(`Voltage (${cleanName(s.ecu)} ${cleanName(s.job)}): ${readingText(it[2 + i]!)}`));

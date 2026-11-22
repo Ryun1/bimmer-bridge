@@ -164,7 +164,8 @@ export function buildServer(parts: ServerParts): McpServer {
     // The car-session line is added after the cut, so it is always the last line.
     const fit = (text: string) => {
       const notice = ctx.notice ? parts.redact(ctx.notice) : null;
-      const budget = TEXT_BUDGET - (footer ? footer.length + 2 : 0) - (notice ? notice.length + 2 : 0);
+      // Never below 0: a notice longer than the whole budget leaves the text nothing, not less.
+      const budget = Math.max(0, TEXT_BUDGET - (footer ? footer.length + 2 : 0) - (notice ? notice.length + 2 : 0));
       const t = fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT, budget);
       return [notice, t, footer].filter((x) => x !== null).join("\n\n");
     };

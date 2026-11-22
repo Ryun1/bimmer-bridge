@@ -312,7 +312,7 @@ describe("vehicle status", () => {
       { ok: false, result: null, error: { code: "ediabas_error", message: "failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } } },
     ];
     const t = formatVehicle({ items }, sources).split("\n");
-    expect(t[0]).toBe("Vehicle status (each reading's result fields as returned; their meaning is confirmed at the car in Phase 6):");
+    expect(t[0]).toBe("Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):");
     expect(t[1]).toBe("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
     expect(t[2]).toBe("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
     expect(t[3]).toBe("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");

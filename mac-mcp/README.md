@@ -11,7 +11,7 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 
 | Tool | What it does |
 |---|---|
-| `vm_health` | this server's version and start time, agent status (warns when the agent's version differs from this server's), BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's), approved jobs (pinned and unpinned) |
+| `vm_health` | this server's version and start time, agent status (warns when the agent's version differs from this server's), BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's), approved jobs (pinned; unpinned entries are ignored), listed |
 | `vm_list_windows` | windows open in the VM |
 | `vm_screenshot` | an image of the desktop or one window (`window`, `maxEdge`), then a one-line caption |
 | `vm_logs_list` / `vm_logs_read` | log files under the agent's allowed folders; read a tail or a range, optionally grep |

@@ -521,6 +521,19 @@ describe("ediabas_vehicle_status", () => {
 describe("approval changes", () => {
   const approvals = (entries: string[], hash: string) => ({ pinned: entries.length, ignored: 0, entries, hash });
 
+  it("a notice longer than the whole text budget leaves the result text nothing, and is still shown", async () => {
+    override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(["NVE_65:STATUS_X@b8ae0dd9d242"], "aaaaaaaaaaaa") }) }));
+    const { call } = await connect();
+    await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    const many = Array.from({ length: 3000 }, (_, i) => `NVE_65:STATUS_${String(i).padStart(5, "0")}@b8ae0dd9d242`);
+    override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(many, "bbbbbbbbbbbb") }) }));
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.text.startsWith("[approvals changed] reviewedJobs in the VM changed")).toBe(true);
+    expect(r.text).toContain("NVE_65:STATUS_02999@b8ae0dd9d242");
+    expect(r.text).toMatch(/\n… cut at 0 of \d+ characters\./);
+    expect(r.text).not.toMatch(/cut at -/);
+  });
+
   it("flags a change between two ediabas_job calls, and the audit line says so", async () => {
     override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(["NVE_65:STATUS_X@b8ae0dd9d242"], "aaaaaaaaaaaa") }) }));
     const { call, auditLines } = await connect();

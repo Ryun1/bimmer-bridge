@@ -2,8 +2,8 @@
 
 Every failed call starts with its code in brackets (`[job_not_allowed] ...`) and then says what
 happened and what to do. Relay that message. What each code means is listed once, in the
-project's [docs/tools.md](../../../docs/tools.md#errors); this file covers only what to tell the
-user where the message is not enough.
+"Errors" section of `docs/tools.md` in the ediabas-bridge repository (not part of this skill);
+this file covers only what to tell the user where the message is not enough.
 
 General rule: tell the user what to do, do not retry in a loop, and call `vm_health` once more
 after they say it is fixed. Never fill in results that were not returned. A refusal is the answer:
