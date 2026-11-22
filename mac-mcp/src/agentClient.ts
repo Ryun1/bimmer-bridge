@@ -133,6 +133,8 @@ export const DescribeJobSchema = z.object({
   variant: z.string().nullable().optional(),
   job: z.string(),
   comment: z.string().nullable().optional(),
+  // 12 lower-case hex digits, what a pinned reviewedJobs entry holds; older agents omit it.
+  descriptionHash: z.string().nullable().optional(),
   verdict: VerdictSchema,
   arguments: z.array(ParamSchema),
   results: z.array(ParamSchema),

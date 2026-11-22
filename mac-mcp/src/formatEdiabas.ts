@@ -290,11 +290,26 @@ function paramLines(ps: DescribeJob["arguments"]): string[] {
   return ps.map((p) => `  ${cleanName(p.name)}${p.type ? ` (${cleanText(p.type, 30)})` : ""}${p.comment ? ` — ${cleanText(p.comment, 200)}` : ""}`);
 }
 
+/** The description hash, and for a job that needs review the reviewedJobs entry that pins it. */
+function hashLines(d: DescribeJob): string[] {
+  const review = cleanText(d.verdict.review, 30);
+  const hash = d.descriptionHash ? cleanText(d.descriptionHash, 64) : "";
+  if (review === "not_required" || !hash) return [];
+  const out = [`Description hash: ${hash}`];
+  if (review === "needs_review") {
+    out.push(
+      `To approve this job as it is described now, Ryan adds "${cleanName(d.ecu)}:${cleanName(d.job)}@${hash}" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).`,
+    );
+  }
+  return out;
+}
+
 export function formatDescribeJob(d: DescribeJob, mac: Verdict | null): string {
   const v = verdictText(d.verdict, mac);
   const variant = d.variant && d.variant.toUpperCase() !== d.ecu.toUpperCase() ? ` (variant ${valueText(d.variant, 64)})` : "";
   const out = [`${cleanName(d.ecu)}${variant} ${cleanName(d.job)}: ${v.text}`];
   out.push(`Description: ${d.comment ? cleanText(d.comment, 600) : "(none)"}`);
+  out.push(...hashLines(d));
   out.push(d.arguments.length ? "Arguments:" : "Arguments: none");
   out.push(...paramLines(d.arguments));
   out.push(d.results.length ? "Results:" : "Results: none listed");

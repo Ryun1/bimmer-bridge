@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
+import { DescribeJobSchema, EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead } from "../src/format.js";
 import {
   formatDescribeJob,
@@ -137,6 +137,50 @@ describe("describe / ecus", () => {
     expect(t).toMatch(/Description: Liest\s+Status/);
     expect(t).toContain("  ARG (int) — Nummer");
     expect(t).toContain("Results: none listed");
+  });
+
+  describe("description hash", () => {
+    const body = (review: string, hash?: string | null) => ({
+      ecu: "NVE_65",
+      variant: "NVE_65",
+      job: "STATUS_X",
+      comment: "Liest Status",
+      ...(hash === undefined ? {} : { descriptionHash: hash }),
+      verdict: { allowed: true, rule: "allow.pattern", review },
+      arguments: [],
+      results: [],
+      durationMs: 5,
+    });
+    const mac = { allowed: true, rule: "allow.pattern", screen: true };
+    const approve =
+      'To approve this job as it is described now, Ryan adds "NVE_65:STATUS_X@0123456789ab" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).';
+
+    it("needs_review: the hash and the line to paste, directly under the description", () => {
+      const lines = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", "0123456789ab")), mac).split("\n");
+      const at = lines.indexOf("Description: Liest Status");
+      expect(lines[at + 1]).toBe("Description hash: 0123456789ab");
+      expect(lines[at + 2]).toBe(approve);
+    });
+
+    it("reviewed: only the hash", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("reviewed", "0123456789ab")), mac);
+      expect(t).toContain("\nDescription hash: 0123456789ab\n");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("not_required: neither", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("not_required", "0123456789ab")), mac);
+      expect(t).not.toContain("Description hash");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("null hash, or an older agent without the field: neither", () => {
+      for (const hash of [null, undefined]) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
   });
 
   it("ECU list, with truncation", () => {
