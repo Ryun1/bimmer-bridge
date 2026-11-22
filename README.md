@@ -17,7 +17,7 @@ Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. A small agent i
 > before you act on it. It is not a substitute for a qualified mechanic or for BMW's own tools.
 > The authors accept no liability for damage, loss or cost of any kind from using it. This
 > project is not affiliated with or endorsed by BMW AG; BMW, EDIABAS, INPA and the other names
-> are their owners' trademarks.
+> are their owners' trademarks. See also the [MIT license](LICENSE).
 
 ## What it does and does not do
 
@@ -77,6 +77,7 @@ from 0.3.0 on has been run at the car.**
   `C:\ProgramData\EdiabasBridge`, the task and firewall rule, the Keychain service, the Mac audit
   log folder and the agent's handshake.
 - The README is shorter and starts with a use-at-your-own-risk disclaimer.
+- Licensed under MIT ([LICENSE](LICENSE)).
 
 Open: the at-the-car checks ([docs/at-the-car.md](docs/at-the-car.md)), evals 01, 03 and 06
 (they need fixtures recorded at the car), and a run without the skills that does worse for evals
@@ -99,3 +100,7 @@ Open: the at-the-car checks ([docs/at-the-car.md](docs/at-the-car.md)), evals 01
 
 Personal settings stay out of the repo: the VM's name or MAC go in the git-ignored
 `config.local.json`.
+
+## License
+
+[MIT](LICENSE). It covers this repo's code and docs only, not BMW's software or SGBD files.
