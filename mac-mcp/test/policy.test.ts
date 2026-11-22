@@ -81,11 +81,11 @@ describe("policy loading", () => {
     expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
     const g = PolicyGuard.load();
     expect(g.error).toBeNull();
-    expect(g.version).toBe(2);
+    expect(g.version).toBe(3);
   });
 
   it("reads descriptionScreen.ignore (the agent runs the screen; the Mac only validates it)", () => {
-    expect(policy.version).toBe(2);
+    expect(policy.version).toBe(3);
     expect(policy.screenIgnore).toEqual(["beschreibung", "umsetzer"]);
   });
 
