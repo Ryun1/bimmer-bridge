@@ -27,6 +27,9 @@ pub const OpenOptions = struct {
 };
 pub const OpenError = error{ NoDevice, Locked, NotFtdi, Permission, Io };
 pub const LineError = error{ Unsupported, Io };
+pub const IoError = error{Io};
+pub const LatencyError = error{ Unsupported, Io };
+pub const ReceiveError = error{ Timeout, Io };
 
 pub const Port = struct {
     fd: c_int,
@@ -130,6 +133,118 @@ pub const Port = struct {
                 else => 8,
             },
             .parity = if (t.c_cflag & sys.PARENB == 0) .none else if (t.c_cflag & sys.PARODD != 0) .odd else .even,
+        };
+    }
+
+    pub fn setDtr(self: *Port, on: bool) IoError!void {
+        return self.modemBits(sys.TIOCM_DTR, on);
+    }
+
+    pub fn setRts(self: *Port, on: bool) IoError!void {
+        return self.modemBits(sys.TIOCM_RTS, on);
+    }
+
+    pub fn getDsr(self: *Port) IoError!bool {
+        var bits: c_int = 0;
+        if (sys.ioctl(self.fd, sys.TIOCMGET, &bits) != 0) return error.Io;
+        return bits & sys.TIOCM_DSR != 0;
+    }
+
+    /// Holds the line in break until cleared. The caller times the pulse.
+    pub fn setBreak(self: *Port, on: bool) IoError!void {
+        if (sys.ioctl(self.fd, if (on) sys.TIOCSBRK else sys.TIOCCBRK) != 0) return error.Io;
+    }
+
+    /// Asks the driver to deliver received bytes after 1 ms instead of the FTDI default 16.
+    /// macOS: IOSSDATALAT in milliseconds (1, never 0; it resets on replug). Linux:
+    /// ASYNC_LOW_LATENCY, which ftdi_sio maps to a 1 ms latency timer. Unsupported when the
+    /// device is not a serial driver that takes it (a pty, for example).
+    pub fn setLowLatency(self: *Port) LatencyError!void {
+        if (is_darwin) {
+            var ms: c_ulong = 1;
+            if (darwin.ioctl(self.fd, darwin.IOSSDATALAT, &ms) != 0) return unsupportedOrIo();
+            return;
+        }
+        var ss: linux.struct_serial_struct = undefined;
+        if (linux.ioctl(self.fd, linux.TIOCGSERIAL, &ss) != 0) return unsupportedOrIo();
+        ss.flags |= linux.ASYNC_LOW_LATENCY;
+        if (linux.ioctl(self.fd, linux.TIOCSSERIAL, &ss) != 0) return unsupportedOrIo();
+    }
+
+    /// Writes all of bytes, waiting for room when the driver's buffer is full.
+    pub fn write(self: *Port, bytes: []const u8) IoError!void {
+        var rest = bytes;
+        while (rest.len > 0) {
+            const n = std.c.write(self.fd, rest.ptr, rest.len);
+            if (n > 0) {
+                rest = rest[@intCast(n)..];
+                continue;
+            }
+            if (n < 0) switch (libc.errno()) {
+                .INTR => continue,
+                .AGAIN => {
+                    var fds = [_]std.c.pollfd{.{ .fd = self.fd, .events = std.c.POLL.OUT, .revents = 0 }};
+                    const rc = std.c.poll(&fds, 1, 1000);
+                    if (rc < 0 and libc.errno() == .INTR) continue;
+                    if (rc != 1 or fds[0].revents & (std.c.POLL.ERR | std.c.POLL.HUP | std.c.POLL.NVAL) != 0) return error.Io;
+                    continue;
+                },
+                else => return error.Io,
+            };
+            return error.Io;
+        }
+    }
+
+    /// Drops anything received but not read, and anything written but not yet sent.
+    pub fn purge(self: *Port) IoError!void {
+        if (libc.tcflush(self.fd, sys.TCIOFLUSH) != 0) return error.Io;
+    }
+
+    /// Fills buf exactly. The first byte must arrive within timeout_ms and no later gap may exceed
+    /// timeout_tel_end_ms (EdiabasLib ReceiveData semantics, EdInterfaceObd.cs:3381-3450).
+    pub fn receive(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32) ReceiveError!void {
+        var got: usize = 0;
+        var deadline = libc.monotonicNs() + @as(u64, timeout_ms) * std.time.ns_per_ms;
+        while (got < buf.len) {
+            const now = libc.monotonicNs();
+            if (now >= deadline) return error.Timeout;
+            const wait_ms: c_int = @intCast(@min((deadline - now + std.time.ns_per_ms - 1) / std.time.ns_per_ms, std.math.maxInt(c_int)));
+            var fds = [_]std.c.pollfd{.{ .fd = self.fd, .events = std.c.POLL.IN, .revents = 0 }};
+            const rc = std.c.poll(&fds, 1, wait_ms);
+            if (rc < 0) {
+                if (libc.errno() == .INTR) continue;
+                return error.Io;
+            }
+            if (rc == 0) continue; // the deadline check above decides
+            const ev = fds[0].revents;
+            if (ev & std.c.POLL.IN == 0) {
+                if (ev & (std.c.POLL.ERR | std.c.POLL.HUP | std.c.POLL.NVAL) != 0) return error.Io;
+                continue;
+            }
+            const n = std.c.read(self.fd, buf[got..].ptr, buf.len - got);
+            if (n > 0) {
+                got += @intCast(n);
+                deadline = libc.monotonicNs() + @as(u64, timeout_tel_end_ms) * std.time.ns_per_ms;
+            } else if (n == 0) {
+                // With VMIN=0/VTIME=0 a read can return 0 on a spurious wakeup (Linux), so only
+                // a hang-up or error means the other end has gone; otherwise the deadline rules.
+                if (ev & (std.c.POLL.ERR | std.c.POLL.HUP | std.c.POLL.NVAL) != 0) return error.Io;
+            } else switch (libc.errno()) {
+                .INTR, .AGAIN => {},
+                else => return error.Io,
+            }
+        }
+    }
+
+    fn modemBits(self: *Port, bits: c_int, on: bool) IoError!void {
+        var b = bits;
+        if (sys.ioctl(self.fd, if (on) sys.TIOCMBIS else sys.TIOCMBIC, &b) != 0) return error.Io;
+    }
+
+    fn unsupportedOrIo() LatencyError {
+        return switch (libc.errno()) {
+            .NOTTY, .INVAL, .OPNOTSUPP => error.Unsupported,
+            else => error.Io,
         };
     }
 
@@ -341,4 +456,120 @@ test "lock names ignore the macOS cu./tty. prefix" {
         try lockPath(&b, "/x", "/dev/tty.usbserial-A1"),
     );
     try std.testing.expectEqualStrings("/x/kline-ttyUSB0.lock", try lockPath(&a, "/x", "/dev/ttyUSB0"));
+}
+
+// ---- Task 6: modem lines, break, latency, timed receive ----
+
+fn writeMaster(pty: *Pty, bytes: []const u8) !void {
+    if (std.c.write(pty.master, bytes.ptr, bytes.len) != @as(isize, @intCast(bytes.len))) return error.WriteFailed;
+}
+
+fn readMaster(pty: *Pty, buf: []u8, timeout_ms: i32) !usize {
+    var fds = [_]std.c.pollfd{.{ .fd = pty.master, .events = std.c.POLL.IN, .revents = 0 }};
+    if (std.c.poll(&fds, 1, timeout_ms) != 1) return error.NothingToRead;
+    const n = std.c.read(pty.master, buf.ptr, buf.len);
+    if (n <= 0) return error.ReadFailed;
+    return @intCast(n);
+}
+
+test "receive gets bytes written by the other end" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try writeMaster(&pty, "\x83\xf1\x01");
+    var buf: [3]u8 = undefined;
+    try p.receive(&buf, 100, 20);
+    try std.testing.expectEqualSlices(u8, "\x83\xf1\x01", &buf);
+}
+
+test "receive times out when nothing arrives" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    var buf: [1]u8 = undefined;
+    const t0 = libc.monotonicNs();
+    try std.testing.expectError(error.Timeout, p.receive(&buf, 50, 20));
+    try std.testing.expect(libc.monotonicNs() - t0 >= 50 * std.time.ns_per_ms);
+}
+
+const GapWriter = struct {
+    fn run(pty: *Pty, gap_ms: u64) void {
+        writeMaster(pty, "\x01") catch return;
+        libc.sleepNs(gap_ms * std.time.ns_per_ms);
+        writeMaster(pty, "\x02") catch return;
+    }
+};
+
+test "receive times out on a gap longer than timeout_tel_end" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    const t = try std.Thread.spawn(.{}, GapWriter.run, .{ &pty, 60 });
+    defer t.join();
+    var buf: [2]u8 = undefined;
+    try std.testing.expectError(error.Timeout, p.receive(&buf, 100, 20));
+}
+
+test "receive spans a gap shorter than timeout_tel_end" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    const t = try std.Thread.spawn(.{}, GapWriter.run, .{ &pty, 5 });
+    defer t.join();
+    var buf: [2]u8 = undefined;
+    try p.receive(&buf, 100, 50);
+    try std.testing.expectEqualSlices(u8, "\x01\x02", &buf);
+}
+
+test "write reaches the other end" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try p.write("\x55");
+    var buf: [4]u8 = undefined;
+    const n = try readMaster(&pty, &buf, 200);
+    try std.testing.expectEqualSlices(u8, "\x55", buf[0..n]);
+}
+
+test "purge drops unread input" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try writeMaster(&pty, "\xaa\xbb");
+    libc.sleepNs(10 * std.time.ns_per_ms);
+    try p.purge();
+    var buf: [1]u8 = undefined;
+    try std.testing.expectError(error.Timeout, p.receive(&buf, 30, 20));
+}
+
+test "receive after the other end has gone is Io, not a hang" { // Review Focus 3
+    var pty = try Pty.open();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    pty.close();
+    var buf: [1]u8 = undefined;
+    try std.testing.expectError(error.Io, p.receive(&buf, 100, 20));
+}
+
+test "low latency on a pty is Unsupported, not a crash" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    try std.testing.expectError(error.Unsupported, p.setLowLatency());
+}
+
+test "break on a pty returns without crashing" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
+    defer p.close();
+    p.setBreak(true) catch |e| try std.testing.expectEqual(error.Io, e);
+    p.setBreak(false) catch |e| try std.testing.expectEqual(error.Io, e);
 }
