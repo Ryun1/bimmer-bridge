@@ -199,12 +199,25 @@ export interface FaultReport {
   info?: BatchItem | { error: string } | undefined;
 }
 
-function itemSection(item: BatchItem | { error: string }, label: string, ecu: string, info = false): string[] {
+/** Did this item read (a job result came back)? */
+function readOk(item: BatchItem | { error: string }): boolean {
+  return "ok" in item && item.ok && item.result !== null && item.result !== undefined;
+}
+
+/**
+ * `infoAfterFaults`: this is the info memory item, and the same ECU's fault memory read
+ * succeeded (see below).
+ */
+function itemSection(item: BatchItem | { error: string }, label: string, ecu: string, infoAfterFaults = false): string[] {
   if ("ok" in item) {
     if (item.ok && item.result) return formatFaultTable(item.result, label);
     // Not every module has an info memory; its SGBD then has no IS_LESEN, which EDIABAS reports as an
-    // ordinary job error. The agent does not tell the two apart, so say what may be the case.
-    if (info && item.error?.code === "ediabas_error") {
+    // ordinary job error. The agent does not tell the two apart, so say what may be the case, but
+    // only when FS_LESEN of the same ECU just read: then the ECU and cable demonstrably work and a
+    // missing job is the likely cause. Otherwise (the ECU silent, the cable, results unread: the job
+    // ran) the error takes the normal path, as a fault memory error does.
+    const resultsUnread = (item.error?.details as { resultsUnread?: unknown } | null | undefined)?.resultsUnread === true;
+    if (infoAfterFaults && item.error?.code === "ediabas_error" && !resultsUnread) {
       return [
         `  ${label}: not read ([ediabas_error] ${cleanText(item.error.message || "no details", 200)}). Many modules have no info memory (no IS_LESEN job); ediabas_describe ${cleanName(ecu)} shows whether this one has it.`,
       ];
@@ -222,7 +235,7 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
     out.push("");
     out.push(`${cleanName(r.ecu)}${variant && variant !== r.ecu.toUpperCase() ? ` (variant ${variant})` : ""}`);
     out.push(...itemSection(r.faults, "Fault memory", r.ecu));
-    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", r.ecu, true));
+    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", r.ecu, readOk(r.faults)));
   }
   return out.join("\n");
 }

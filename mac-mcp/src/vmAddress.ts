@@ -107,7 +107,7 @@ export function isIPv4(ip: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// The VM's address: the newest lease in /var/db/dhcpd_leases
+// The VM's address: the newest on-link lease in /var/db/dhcpd_leases
 // ---------------------------------------------------------------------------
 
 export interface Lease {
@@ -142,16 +142,15 @@ export function parseLeases(text: string): Lease[] {
 }
 
 /**
- * The address of the newest lease for `mac`: `[]` or `[ip]`. Newest is the largest `lease`
- * (expiry); on a tie the earlier entry in the file wins, as in `vm_lease_address` in dev/serve.py.
+ * The addresses of every lease for `mac`, newest first: the largest `lease` (expiry) first, and
+ * on a tie the earlier entry in the file first, as in `vm_lease_address` in dev/serve.py. The
+ * caller contacts only one of them: the first that is on-link (`VmLocator.discover`).
  */
 export function leaseCandidates(text: string, mac: string): string[] {
-  let best: Lease | undefined;
-  for (const l of parseLeases(text)) {
-    if (!macEquals(l.hwAddress, mac)) continue;
-    if (best === undefined || l.lease > best.lease) best = l;
-  }
-  return best ? [best.ipAddress] : [];
+  return parseLeases(text)
+    .filter((l) => macEquals(l.hwAddress, mac))
+    .sort((a, b) => b.lease - a.lease) // stable: ties keep file order
+    .map((l) => l.ipAddress);
 }
 
 // ---------------------------------------------------------------------------
@@ -271,13 +270,17 @@ export class VmLocator {
         `its MAC address is not set and could not be read from ${this.config.utmConfigPath}: ${vmMacHint(this.config)}`,
       );
     }
-    const ip = leaseCandidates(await this.sources.readFile(LEASES_PATH).catch(() => ""), mac)[0];
-    if (ip === undefined) {
+    const leases = leaseCandidates(await this.sources.readFile(LEASES_PATH).catch(() => ""), mac);
+    if (leases.length === 0) {
       throw vmNotRunning(this.config.vmName, `its MAC address ${mac} is not in the DHCP leases; if that is not the VM's MAC, ${vmMacHint(this.config)}`);
     }
-    if (!isOnLink(ip, subnets)) {
+    // The newest lease on UTM's network. A newer one off-link (from a former UTM subnet) can
+    // never be contacted, so skipping it adds no source; only this one address is probed, and
+    // if it fails no older lease is tried.
+    const ip = leases.find((l) => isOnLink(l, subnets));
+    if (ip === undefined) {
       // never send anything off-link
-      throw vmNotRunning(this.config.vmName, `its newest DHCP lease (${ip}) is not on the UTM network`);
+      throw vmNotRunning(this.config.vmName, `none of its DHCP leases is on the UTM network (the newest is ${leases[0]})`);
     }
     const baseUrl = `http://${ip}:${this.config.agentPort}`;
     await this.probe(baseUrl, ctx); // its own error is the answer

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NOTICE_ENTRIES_MAX } from "../src/approvalWatch.js";
 import { createAppServer } from "../src/server.js";
 import { loadConfig } from "../src/config.js";
 import { wrongService } from "../src/errors.js";
@@ -521,17 +522,41 @@ describe("ediabas_vehicle_status", () => {
 describe("approval changes", () => {
   const approvals = (entries: string[], hash: string) => ({ pinned: entries.length, ignored: 0, entries, hash });
 
-  it("a notice longer than the whole text budget leaves the result text nothing, and is still shown", async () => {
+  /** One ediabas_job call to set the baseline, then a changed list (and any other routes) for the next call. */
+  const changeApprovals = async (entries: string[], routes: Record<string, Responder> = {}) => {
     override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(["NVE_65:STATUS_X@b8ae0dd9d242"], "aaaaaaaaaaaa") }) }));
-    const { call } = await connect();
-    await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    const c = await connect();
+    await c.call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    agent.setHandler(stubHandler({ ...routes, "GET /health": () => ({ status: 200, body: phase2Health({ approvals: approvals(entries, "bbbbbbbbbbbb") }) }) }));
+    return c;
+  };
+
+  it("a VM-controlled list of any length gives a capped notice and leaves the tool's text its budget", async () => {
     const many = Array.from({ length: 3000 }, (_, i) => `NVE_65:STATUS_${String(i).padStart(5, "0")}@b8ae0dd9d242`);
-    override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(many, "bbbbbbbbbbbb") }) }));
+    const { call } = await changeApprovals(many);
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
     expect(r.text.startsWith("[approvals changed] reviewedJobs in the VM changed")).toBe(true);
-    expect(r.text).toContain("NVE_65:STATUS_02999@b8ae0dd9d242");
-    expect(r.text).toMatch(/\n… cut at 0 of \d+ characters\./);
-    expect(r.text).not.toMatch(/cut at -/);
+    expect(r.text).toContain("NVE_65:STATUS_00000@b8ae0dd9d242");
+    expect(r.text).toContain(`... and ${3000 - NOTICE_ENTRIES_MAX} more.`);
+    expect(r.text).not.toContain("NVE_65:STATUS_02999@b8ae0dd9d242");
+    expect(r.text).toContain("NVE_65 IDENT: job status OKAY");
+    expect(r.text).not.toContain("… cut at");
+  });
+
+  it("on an error result the error's [code] comes first, then the notice, then the car-session line", async () => {
+    const { call } = await changeApprovals(["D_MOTOR:IDENT@7b69322a754f"], {
+      "POST /ediabas/job": () => agentErr(409, "cable_in_use", "INPA holds the cable.", { processes: [{ name: "INPALOAD", pid: 4312 }] }),
+    });
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[cable_in_use\] [^\n]+\n\n\[approvals changed\] reviewedJobs in the VM changed since this server started: now D_MOTOR:IDENT@7b69322a754f\. Only the owner should change it\.\n\nCar session: /);
+  });
+
+  it("on a success result the notice stays first", async () => {
+    const { call } = await changeApprovals(["D_MOTOR:IDENT@7b69322a754f"]);
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toMatch(/^\[approvals changed\] [^\n]+\n\nNVE_65 IDENT: job status OKAY[\s\S]*\n\nCar session: [^\n]+$/);
   });
 
   it("flags a change between two ediabas_job calls, and the audit line says so", async () => {

@@ -120,6 +120,21 @@ public class AgentConfigTests
         Assert.Equal(r.Warnings, r.Config.Warnings);
     }
 
+    // install.ps1 and update.ps1 record the conflict defaults they offered; the agent ignores it.
+    [Fact]
+    public void ConflictDefaultsOfferedKey_LoadsWithoutErrorsOrWarnings_ConflictProcessesAsWritten()
+    {
+        var r = AgentConfig.Parse("""
+            {
+              "conflictProcesses": ["INPALOAD", "TOOL32"],
+              "conflictDefaultsOffered": ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI"]
+            }
+            """);
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        Assert.Empty(r.Warnings);
+        Assert.Equal(new[] { "INPALOAD", "TOOL32" }, r.Config!.ConflictProcesses);
+    }
+
     [Fact]
     public void KnownKeys_AnyCase_NoWarnings()
     {

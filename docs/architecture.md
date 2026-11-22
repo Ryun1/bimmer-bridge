@@ -25,8 +25,11 @@ their interactive session and can see the desktop for screenshots. A second copy
 2. The MCP server checks the arguments and, for `ediabas_*` tools, the job policy
    (`mac-mcp/src/policy.ts`). A refusal ends here and never reaches the VM.
 3. It finds the agent: the VM's address is the newest lease for the VM's MAC in
-   `/var/db/dhcpd_leases` (the largest expiry; no other lease is tried, and nothing else is
-   asked: no ARP table, no `utmctl`), the way `dev/serve.py` reads it. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
+   `/var/db/dhcpd_leases` that is on UTM's network (the largest expiry among those; a newer
+   lease off that network, from a former UTM subnet, is skipped, no other lease is tried, and
+   nothing else is asked: no ARP table, no `utmctl`). `dev/serve.py` reads the leases the same
+   way but takes the newest lease even when it is off UTM's network, and then refuses to start
+   (pass `--client`). The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
    git-ignored `config.local.json`, else read from UTM's `config.plist` for the VM named by
    `EDIABAS_VM_NAME` / `vmName` (default `Windows`). Only an address on the same subnet
    as a local `bridge1NN` interface (UTM's shared network: `bridge100`, `bridge101`, ...) is
@@ -40,10 +43,11 @@ their interactive session and can see the desktop for screenshots. A second copy
    `/ediabas/*` call this happens in its turn in the queue, just before the job is sent. With
    one address there is one answer: if it fails the check, that failure is the error
    (`wrong_service`, `agent_outdated`, `agent_not_answering`, `local_network_blocked`), and with
-   no lease for the MAC it is `vm_not_running`.
+   no lease for the MAC, or none on UTM's network, it is `vm_not_running`.
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
-   If the agent's answer is not the agent's (`wrong_service`: an error without the agent's
-   error shape; `bad_response`: a 200 that does not match the contract), the cache is
+   If the answer is not in the agent's format (an HTTP error without the agent's error shape:
+   `bad_response`, or `ediabas_request_lost` for a request that runs a job, with the status in
+   the message; a 200 that does not match the contract: `bad_response`), the cache is
    dropped. Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
    the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
    only a connection that was never made (refused, or a connect timeout) is retried.

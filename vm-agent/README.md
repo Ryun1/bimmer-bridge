@@ -11,7 +11,7 @@ is [docs/api.md](../docs/api.md); how it fits with the rest is
 | `EdiabasAgent/` | the Windows host: Kestrel, request pipeline, P/Invoke into `api32.dll`, the EDIABAS thread, window capture, log access, `--selftest` |
 | `EdiabasAgent.Tests/` | xUnit tests of `EdiabasAgent.Core` |
 | `Directory.Build.props` | the version (`<Version>`), which must match `VERSION` |
-| `build.sh` | writes `release/EdiabasAgent.zip` (exe, `version.txt`, `commit.txt`) and its `.sha256`; stops on uncommitted changes unless `--allow-dirty` |
+| `build.sh` | writes `release/EdiabasAgent.zip` (exe, `version.txt`, `commit.txt`) and its `.sha256`; stops on uncommitted changes, or on untracked files under a release input (see [development.md](../docs/development.md#releasing)), unless `--allow-dirty` |
 
 ```sh
 (cd vm-agent && dotnet test EdiabasAgent.Tests)   # tests, on the Mac
@@ -51,6 +51,7 @@ agent exit: it logs why in `agent.log` and re-reads the file every 30 s.
 | `logDirectory` | `C:\ProgramData\EdiabasBridge\logs` | `agent.log`, `audit.log`, `selftest.txt` |
 | `logRoots` | `C:\EDIABAS\TRACE`, `C:\NCSEXPER\WORK` | the only folders `/logs` may read |
 | `conflictProcesses` | `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool`, `WINKFP`, `ISTAGUI` | process names that hold the cable (any process with `api32.dll` loaded counts too) |
+| `conflictDefaultsOffered` | not read | written by `install.ps1` and `update.ps1`: the default `conflictProcesses` names this file has been offered, so Update never adds back one the owner removed ([docs/install.md](../docs/install.md#what-update-does)); not an unknown key |
 | `reviewedJobs` | empty | approvals that skip the description screen: `ECU:JOB@<12 hex>`, pinned to the description. An unpinned `ECU:JOB` (0.4.0 and before) or an entry of another shape is a warning and approves nothing ([docs/safety.md](../docs/safety.md#approving-one-job)) |
 | `jobTimeoutSeconds` | 30 | default per job; at most `maxJobTimeoutSeconds` |
 | `maxJobTimeoutSeconds` | 60 | a request's time budget; at most 60, because the Mac stops waiting after 75 s |

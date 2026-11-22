@@ -134,6 +134,10 @@ public sealed class AgentConfig
     /// <summary>Read by the agent before 0.5.0; the Mac's config.local.json has it now.</summary>
     private const string RemovedVoltageSourcesKey = "voltageSources";
 
+    /// <summary>Written by install.ps1 and update.ps1 (the default conflict processes this file
+    /// has been offered); the agent does not read it, and it is not a typo.</summary>
+    private const string SetupConflictDefaultsOfferedKey = "conflictDefaultsOffered";
+
     /// <summary>Top-level keys the agent does not read. A typo ("reviewJobs") would otherwise
     /// be silent and the setting would keep its default.</summary>
     private static List<string> UnknownKeys(string json)
@@ -158,7 +162,8 @@ public sealed class AgentConfig
                     // The Mac builds the vehicle-status batch now (config.local.json), whatever the value here.
                     warnings.Add("voltageSources is no longer used; set it on the Mac");
                 }
-                else if (!KnownKeys.Contains(p.Name))
+                else if (!KnownKeys.Contains(p.Name)
+                         && !string.Equals(p.Name, SetupConflictDefaultsOfferedKey, StringComparison.OrdinalIgnoreCase))
                 {
                     warnings.Add($"config: unknown key \"{Printable(p.Name)}\" is ignored (a typo?)");
                 }

@@ -87,7 +87,7 @@ export interface ServerParts {
 
 /** Per call: what run() adds to the result besides the tool's own text. */
 interface CallContext {
-  /** The approvals watch's message, shown first in the result. */
+  /** The approvals watch's message: first in a result, after the text of an error. */
   notice: string | null;
 }
 
@@ -161,13 +161,15 @@ export function buildServer(parts: ServerParts): McpServer {
     let result: CallToolResult;
     let footer: string | null = null;
     const ctx: CallContext = { notice: null };
-    // The car-session line is added after the cut, so it is always the last line.
-    const fit = (text: string) => {
+    // The car-session line is added after the cut, so it is always the last line. The approvals
+    // notice goes first, except on an error: the model keys on an error's leading [code], so there
+    // the notice follows the error text.
+    const fit = (text: string, isError = false) => {
       const notice = ctx.notice ? parts.redact(ctx.notice) : null;
-      // Never below 0: a notice longer than the whole budget leaves the text nothing, not less.
+      // The notice is capped (approvalWatch NOTICE_MAX), so this stays well above 0; the floor is a backstop.
       const budget = Math.max(0, TEXT_BUDGET - (footer ? footer.length + 2 : 0) - (notice ? notice.length + 2 : 0));
       const t = fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT, budget);
-      return [notice, t, footer].filter((x) => x !== null).join("\n\n");
+      return (isError ? [t, notice, footer] : [notice, t, footer]).filter((x) => x !== null).join("\n\n");
     };
     try {
       const out = await body(ctx);
@@ -188,7 +190,7 @@ export function buildServer(parts: ServerParts): McpServer {
       rule = err.rule;
       if (err.code === "internal_error") parts.log(parts.redact(`${tool}: ${err.message}`));
       if (CAR_TOOLS.has(tool)) footer = car.line();
-      result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message)) }] };
+      result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message), true) }] };
     }
     try {
       await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule, approvalsChanged: ctx.notice !== null });

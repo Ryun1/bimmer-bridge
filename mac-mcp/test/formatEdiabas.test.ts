@@ -6,6 +6,7 @@ import {
   formatEcus,
   formatFaultReport,
   formatFaultTable,
+  type FaultReport,
   formatJobRaw,
   formatJobResult,
   formatKm,
@@ -106,6 +107,53 @@ describe("fault tables", () => {
     expect(t).toContain("NVE_65\n  Fault memory: no faults stored.");
     expect(t).toContain("D_MOTOR\n  Fault memory: error: [ecu_not_found] There is no SGBD or group file named D_MOTOR");
     expect(t).toContain("X\n  Fault memory: error: The VM does not appear to be running.");
+  });
+
+  describe("info memory errors", () => {
+    const noResponse = {
+      ok: false as const,
+      result: null,
+      error: { code: "ediabas_error", message: "EDIABAS job failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } },
+    };
+    const report = (faults: FaultReport["faults"], info: FaultReport["info"]) => formatFaultReport([{ ecu: "NVE_65", faults, info }], true);
+
+    it("after a good fault-memory read, an ediabas_error on IS_LESEN says the module may have no info memory", () => {
+      const t = report(
+        { ok: true, result: result([]), error: null },
+        { ok: false, result: null, error: { code: "ediabas_error", message: "EDIABAS job failed: SYS-0008: JOB NOT FOUND", details: { errorCode: 19 } } },
+      );
+      expect(t).toContain(
+        "  Info memory: not read ([ediabas_error] EDIABAS job failed: SYS-0008: JOB NOT FOUND). Many modules have no info memory (no IS_LESEN job); ediabas_describe NVE_65 shows whether this one has it.",
+      );
+    });
+
+    it("when the fault-memory read failed too, the info memory error gets the normal error text", () => {
+      const t = report(noResponse, noResponse);
+      const normal = `error: ${itemErrorText(noResponse.error)}`;
+      expect(t).toContain(`  Fault memory: ${normal}\n  Info memory: ${normal}`);
+      expect(t).toContain("IFH-0009");
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("a fault-memory stand-in error ({ error }) also gives the info memory the normal error text", () => {
+      const t = report({ error: "The VM does not appear to be running." }, noResponse);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(noResponse.error)}`);
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("results that could not be read mean IS_LESEN ran: normal error text even after a good fault-memory read", () => {
+      const unread = { ok: false as const, result: null, error: { code: "ediabas_error", message: "x", details: { errorCode: 98, resultsUnread: true } } };
+      const t = report({ ok: true, result: result([]), error: null }, unread);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(unread.error)}`);
+      expect(t).not.toContain("Many modules have no info memory");
+    });
+
+    it("an error other than ediabas_error on IS_LESEN is unchanged", () => {
+      const busy = { ok: false as const, result: null, error: { code: "cable_in_use", message: "x", details: { processes: [{ name: "INPALOAD", pid: 1 }] } } };
+      const t = report({ ok: true, result: result([]), error: null }, busy);
+      expect(t).toContain(`  Info memory: error: ${itemErrorText(busy.error)}`);
+      expect(t).toContain("[cable_in_use]");
+    });
   });
 });
 

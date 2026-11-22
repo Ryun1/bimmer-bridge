@@ -45,8 +45,9 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   present or stored, frequency, logged conditions. Field names differ between SGBDs, so known
   names are mapped and every other field is passed through as `key=value`. An ECU with no
   faults says so. A per-ECU error is shown in that ECU's place, with its `[code]`; the others
-  still print. An `IS_LESEN` that fails with `ediabas_error` shows "Info memory: not read (...). Many
+  still print. An `IS_LESEN` that fails with `ediabas_error` after that ECU's `FS_LESEN` read shows "Info memory: not read (...). Many
   modules have no info memory (no IS_LESEN job); ediabas_describe <ECU> shows whether this one has it."
+  Otherwise its error is shown like a fault memory error.
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then
@@ -75,8 +76,9 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   extra round trip; it never loads the DLL; if it fails, the tool fails as its own request
   would). The Mac server remembers the agent's `approvals.hash`; when it differs from the last
   one seen, the result starts with `[approvals changed] reviewedJobs in the VM changed since this
-  server started: now <entries, or none>. Only the owner should change it.` (the result may be an
-  error too), and the Mac audit line gets the field `approvals_changed=1`. The agent re-reads
+  server started: now <entries, or none>. Only the owner should change it.` (on an error it
+  follows the error's `[code]` text instead; at most 20 entries are shown, each cut to 80
+  characters, then `... and N more`), and the Mac audit line gets the field `approvals_changed=1`. The agent re-reads
   `config.json` before answering `/health`, so the first call after an edit is the one flagged.
   The first call after the server starts only sets the baseline. An agent that does not report `hash` is never flagged.
 - **Car session.** The results of `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and
@@ -94,13 +96,13 @@ use …`. Codes (also the audit outcome):
 | Code | From | Meaning for Claude |
 |---|---|---|
 | `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | the VM or the agent could not be reached, or the token was refused or is missing; the message says what the user does ([install.md, Troubleshooting](install.md#troubleshooting)) |
-| `ediabas_request_lost` | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent, so the job may have run. It was not sent again. Run `vm_health`; do not repeat the job unless the user asks |
+| `ediabas_request_lost` | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent, or the agent's address answered it with an HTTP error without the agent's error format (the message gives the status), so the job may have run. It was not sent again. Run `vm_health`; do not repeat the job unless the user asks |
 | `ediabas_busy` | Mac | another EDIABAS call on this Mac was still running after 120 s; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed |
 | `agent_outdated` | Mac | the agent has no such endpoint; the user needs to run the Update line |
 | `policy_unavailable` | Mac | the policy file could not be loaded; nothing is sent |
 | `policy_mismatch` | Mac | the agent reports a different SHA-256 for its policy file than this Mac loaded; nothing is sent to `/ediabas/*`. The agent or the Mac server is out of date: the user updates the agent (Update line) or restarts Claude. Do not look for another way |
 | `invalid_arguments` | Mac | arguments that cannot go together (`tailBytes` with `offset`/`length`, or only one of `offset` and `length`); nothing is sent |
-| `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, or a fault in the server itself |
+| `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, the agent's address answered with an HTTP error without the agent's error format (`bad_response`; the message gives the status: often the agent's web server refusing the request), or a fault in the server itself |
 | `not_run` | agent | the agent did not start the job (a batch item, or a single `ediabas_job` / `ediabas_describe`, HTTP 503), or stopped it. The message passes on the agent's reason: the request's time budget ran out (time spent waiting behind another EDIABAS request counts), a BMW tool was opened during the request (ask the user to close it), an earlier job did not stop after `apiBreak`, or the request was abandoned. Do not retry in a loop |
 | `job_not_allowed` | Mac or agent | refused by name; the message names the rule. Do not look for another way |
 | `job_needs_review` | agent | the job's description, or the description of its arguments, suggests it may not be a pure read, or is empty or only a label such as `Jobbeschreibung`; or the description of an approved job has changed. The message quotes it. The user decides |

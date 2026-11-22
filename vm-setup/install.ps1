@@ -211,7 +211,8 @@
     }
 
     # The BMW tools that hold the cable while they run. A new config.json lists them as
-    # conflictProcesses; Update adds any of them that an existing config.json lacks.
+    # conflictProcesses and conflictDefaultsOffered; Update adds to an existing config.json
+    # only the ones it was never offered, so a default the owner removed stays removed.
     function Get-DefaultConflictProcesses {
         return @('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool', 'WINKFP', 'ISTAGUI')
     }
@@ -445,6 +446,9 @@
                 ecuPath              = (Join-Path $ediabasRoot 'ECU')
                 logRoots             = [object[]]$logRoots
                 conflictProcesses    = [object[]]@(Get-DefaultConflictProcesses)
+                # Not read by the agent: the defaults this file has been offered, so Update
+                # never adds back one the owner removed.
+                conflictDefaultsOffered = [object[]]@(Get-DefaultConflictProcesses)
                 reviewedJobs         = [object[]]@()
                 jobTimeoutSeconds    = 30
                 maxJobTimeoutSeconds = 60

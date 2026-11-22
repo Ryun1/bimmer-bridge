@@ -158,9 +158,10 @@ Open:
   triggering words added to the description screen.
 - The agent stops a running job (`apiBreak`) within about 250 ms if a BMW tool starts, and checks
   again just before `apiInit`. `WINKFP` and `ISTAGUI` join the default conflict list (Update adds
-  missing defaults to `config.json` and keeps `config.json.bak`).
+  the defaults a `config.json` was never offered, records them in `conflictDefaultsOffered` so
+  one you remove stays removed, and keeps `config.json.bak`).
 - The Mac sends the token only to an address that proves itself with `GET /hello` in the same
-  call; the VM is found from its newest DHCP lease only.
+  call; the VM is found from its newest DHCP lease on UTM's network only.
 - A job the SGBD lacks is `ediabas_error` again (`job_not_found` only comes from
   `ediabas_describe` now). This reverses a 0.3.0 item.
 - `ediabas_vehicle_status` runs as one jobs batch from the Mac. Move `voltageSources` from the

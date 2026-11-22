@@ -7,10 +7,11 @@
 #
 # Verifies the hash, disables the scheduled task and stops the agent, copies the current exe
 # to EdiabasAgent.exe.bak, puts the new exe in place, adds any default conflict process that
-# config.json lacks, makes the firewall rule again for the current gateway, enables and starts
-# the task, and waits up to 60 s for /health. If the copy fails or the new agent does not
-# answer, it puts the backup back (and config.json.bak, if this run merged config.json), starts
-# it and checks /health once more, saying so when the restored agent does not answer either.
+# config.json was never offered (conflictDefaultsOffered), makes the firewall rule again for
+# the current gateway, enables and starts the task, and waits up to 60 s for /health. If the
+# copy fails or the new agent does not answer, it puts the backup back (and config.json.bak,
+# if this run merged config.json), starts it and checks /health once more, saying so when the
+# restored agent does not answer either.
 # The task is enabled again on every way out.
 # The token, the ACLs, the task settings and every other config.json setting are left as they are.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
@@ -203,7 +204,8 @@
     }
 
     # The BMW tools that hold the cable while they run. A new config.json lists them as
-    # conflictProcesses; Update adds any of them that an existing config.json lacks.
+    # conflictProcesses and conflictDefaultsOffered; Update adds to an existing config.json
+    # only the ones it was never offered, so a default the owner removed stays removed.
     function Get-DefaultConflictProcesses {
         return @('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool', 'WINKFP', 'ISTAGUI')
     }
@@ -316,9 +318,27 @@
         return ($result.Status -eq 403 -and [string]$result.Body -like '*forbidden*')
     }
 
-    # Adds the default conflict processes that config.json's conflictProcesses lacks (compared
-    # without case), after the owner's own entries. Everything else in the file (reviewedJobs
-    # and the other keys) is kept. A file that cannot be read or parsed is left untouched.
+    # The defaults install.ps1 wrote before conflictDefaultsOffered existed (0.4.0 and earlier):
+    # a config.json without that key counts as having been offered these.
+    function Get-LegacyOfferedConflictDefaults {
+        return @('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool')
+    }
+
+    # $true when $Names holds $Name, compared without case.
+    function Test-NameIn([string]$Name, $Names) {
+        foreach ($n in $Names) {
+            if ([string]$n -ieq $Name) { return $true }
+        }
+        return $false
+    }
+
+    # Adds to config.json's conflictProcesses the default conflict processes this file was never
+    # offered (conflictDefaultsOffered, compared without case) and does not already list, after
+    # the owner's own entries, and records every default in conflictDefaultsOffered, so a default
+    # the owner removed is not added back. A file without that key counts as offered the 0.4.0
+    # defaults; a file without a conflictProcesses array gets every default. Everything else in
+    # the file (reviewedJobs and the other keys) is kept. A file that cannot be read or parsed,
+    # or whose conflictDefaultsOffered is not an array, is left untouched.
     # Returns $true only when it rewrote config.json (the previous file is then config.json.bak).
     function Merge-ConflictDefaults {
         if (-not (Test-Path -LiteralPath $ConfigPath)) {
@@ -341,25 +361,44 @@
         $rj = $cfg.PSObject.Properties['reviewedJobs']
         if ($null -ne $rj -and $null -ne $rj.Value) { $origReviewed = @($rj.Value).Count }
 
+        # The defaults already offered to this file. Not an array: something other than Install
+        # or Update wrote it, so the file is left as it is rather than guessed at.
+        $offeredProp = $cfg.PSObject.Properties['conflictDefaultsOffered']
+        $offeredHad = @()
+        $offered = @(Get-LegacyOfferedConflictDefaults)
+        if ($null -ne $offeredProp) {
+            if (-not ($offeredProp.Value -is [System.Array])) {
+                Write-Warn ('conflictDefaultsOffered in ' + $ConfigPath + ' is not a JSON array; left untouched, conflict process defaults not merged. Make it a list of names, or remove the key.')
+                return $false
+            }
+            $offeredHad = @($offeredProp.Value)
+            $offered = $offeredHad
+        }
+
         $prop = $cfg.PSObject.Properties['conflictProcesses']
         $current = @()
         if ($null -ne $prop -and $null -ne $prop.Value) {
             $current = @($prop.Value)
         }
-        $added = @()
-        foreach ($name in @(Get-DefaultConflictProcesses)) {
-            $found = $false
-            foreach ($have in $current) {
-                if ([string]$have -ieq $name) { $found = $true; break }
-            }
-            if (-not $found) { $added += $name }
+        # No array to remove a name from (missing, null or a single value): the owner removed
+        # nothing, so every default it lacks is added, as before conflictDefaultsOffered.
+        if ($null -eq $prop -or -not ($prop.Value -is [System.Array])) {
+            $offered = @()
         }
-        if ($added.Count -eq 0) {
-            Write-Note 'config.json already lists every default conflict process'
+        $added = @()
+        $offeredMissing = @()
+        foreach ($name in @(Get-DefaultConflictProcesses)) {
+            if (-not (Test-NameIn $name $offeredHad)) { $offeredMissing += $name }
+            if ((Test-NameIn $name $offered) -or (Test-NameIn $name $current)) { continue }
+            $added += $name
+        }
+        if ($added.Count -eq 0 -and $offeredMissing.Count -eq 0) {
+            Write-Note 'config.json has been offered every default conflict process before (conflictDefaultsOffered); not changed. A default removed from conflictProcesses stays removed.'
             return $false
         }
-        # A plain .NET object[] (List.ToArray, set through a method call, not a cmdlet
-        # parameter), so ConvertTo-Json writes a JSON array and not {"value":...,"Count":...}.
+        # Plain .NET object[]s (List.ToArray, set through a method call, not a cmdlet
+        # parameter), so ConvertTo-Json writes JSON arrays and not {"value":...,"Count":...},
+        # also for one entry.
         $list = New-Object 'System.Collections.Generic.List[object]'
         foreach ($item in $current) { $list.Add($item) }
         foreach ($item in $added) { $list.Add($item) }
@@ -369,9 +408,19 @@
         } else {
             $prop.Value = $merged
         }
+        $offeredList = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($item in $offeredHad) { $offeredList.Add($item) }
+        foreach ($item in $offeredMissing) { $offeredList.Add($item) }
+        $offeredNew = $offeredList.ToArray()
+        if ($null -eq $offeredProp) {
+            $cfg.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('conflictDefaultsOffered', $offeredNew))
+        } else {
+            $offeredProp.Value = $offeredNew
+        }
         $json = $cfg | ConvertTo-Json -Depth 10
 
-        # The new text must parse back to the same file plus the added names.
+        # The new text must parse back to the same file plus the added names and the
+        # conflictDefaultsOffered written above.
         $problem = $null
         try {
             $re = $json | ConvertFrom-Json
@@ -401,9 +450,36 @@
             }
         }
         if ($null -eq $problem) {
+            $reOffered = $re.PSObject.Properties['conflictDefaultsOffered']
+            if ($null -eq $reOffered -or -not ($reOffered.Value -is [System.Array])) {
+                $problem = 'conflictDefaultsOffered is not an array'
+            } else {
+                $reOfferedItems = @($reOffered.Value)
+                if ($reOfferedItems.Count -ne $offeredNew.Count) {
+                    $problem = 'conflictDefaultsOffered has ' + $reOfferedItems.Count + ' entries, not ' + $offeredNew.Count
+                } else {
+                    for ($i = 0; $i -lt $offeredNew.Count; $i++) {
+                        if ([string]$reOfferedItems[$i] -cne [string]$offeredNew[$i]) {
+                            $problem = 'conflictDefaultsOffered entry ' + $i + ' changed'
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        if ($null -eq $problem) {
             foreach ($key in $origKeys) {
                 if ($null -eq $re.PSObject.Properties[$key]) {
                     $problem = 'the key ' + $key + ' is missing'
+                    break
+                }
+            }
+        }
+        if ($null -eq $problem) {
+            # Only conflictProcesses (when the file had none) and conflictDefaultsOffered are new.
+            foreach ($reKey in @($re.PSObject.Properties | ForEach-Object { $_.Name })) {
+                if (-not ($origKeys -contains $reKey) -and $reKey -ne 'conflictProcesses' -and $reKey -ne 'conflictDefaultsOffered') {
+                    $problem = 'the key ' + $reKey + ' is new'
                     break
                 }
             }
@@ -432,7 +508,14 @@
             Write-Warn ('Could not write ' + $ConfigPath + ' (' + $_.Exception.Message + '); left as it was, conflict process defaults not merged.')
             return $false
         }
-        Write-Note ('Added to conflictProcesses in config.json: ' + ($added -join ', ') + ' (previous file kept as ' + $ConfigBackupPath + ')')
+        if ($added.Count -gt 0) {
+            Write-Note ('Added to conflictProcesses in config.json: ' + ($added -join ', ') + ' (previous file kept as ' + $ConfigBackupPath + ')')
+        } else {
+            Write-Note ('Nothing added to conflictProcesses in config.json (previous file kept as ' + $ConfigBackupPath + ')')
+        }
+        if ($offeredMissing.Count -gt 0) {
+            Write-Note ('Recorded in conflictDefaultsOffered in config.json: ' + ($offeredMissing -join ', ') + '. Update does not add these again; a default removed from conflictProcesses stays removed.')
+        }
         return $true
     }
 
@@ -578,7 +661,7 @@
                         [System.IO.File]::Copy($ConfigBackupPath, $ConfigPath, $true)
                         $configNote = ' and config.json from ' + $ConfigBackupPath
                     } catch {
-                        Write-Warn ('Could not put ' + $ConfigBackupPath + ' back as config.json (' + $_.Exception.Message + '); the merged config.json stays (only conflictProcesses was added to it).')
+                        Write-Warn ('Could not put ' + $ConfigBackupPath + ' back as config.json (' + $_.Exception.Message + '); the merged config.json stays (only conflictProcesses and conflictDefaultsOffered were changed in it).')
                     }
                 }
                 Enable-ScheduledTask -TaskName $TaskName | Out-Null

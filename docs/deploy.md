@@ -8,9 +8,11 @@ leaves there, and the steps to run them: [install.md](install.md#the-scripts-in-
 - Listens on the Mac's UTM bridge address, port **8000**. Never `0.0.0.0`.
 - Serves **only the VM's address**; every request from any other address (another VM on the
   same UTM network included) is 403. The address is the one given with `--client <IPv4>`, or
-  else the newest DHCP lease for the VM's MAC, the same address the MCP server uses (see
-  [Finding the agent](architecture.md#the-request-path)). No lease and no `--client`: it does
-  not start. It must be a host address on the bind address's /24. It never trusts whoever
+  else the newest DHCP lease for the VM's MAC, the address the MCP server uses (see
+  [Finding the agent](architecture.md#the-request-path)) except when that newest lease is off
+  UTM's network: the MCP server then takes the newest lease on it, while `serve.py` does not
+  start. No lease and no `--client`: it does not start. It must be a host address on the bind
+  address's /24. It never trusts whoever
   connects first.
 - Per run, at most 10 uploads and 40 MB of uploads in all (each upload at most 20 MB). The
   caps are taken before anything is written; a failed upload keeps its share. Past them,
@@ -65,7 +67,8 @@ variables set earlier on the same pasted line.
 `vm-agent/build.sh` writes:
 - `release/EdiabasAgent.zip` — `EdiabasAgent.exe`, `version.txt` and `commit.txt` at the zip
   root. `commit.txt` holds the short git commit hash, ending in `-dirty` when built with
-  `--allow-dirty` from a tree with uncommitted changes;
+  `--allow-dirty` from a tree with uncommitted changes or with untracked files under a release
+  input (see [development.md](development.md#releasing));
 - `release/EdiabasAgent.zip.sha256` — the hex digest, one line.
 
 ## Token hand-off

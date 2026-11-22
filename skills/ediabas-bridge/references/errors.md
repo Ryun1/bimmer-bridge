@@ -23,6 +23,9 @@ never look for another tool, job or route (and never computer use on the VM wind
   shows the Mac server's version and the agent's. If the Mac server is the older one, Claude
   is running a server from before an update: the user restarts Claude. If the agent is older, it
   needs the Update line (Deploy steps below). Then stop: do not get the result another way.
+  A `[bad_response]` that names an HTTP status is different: the agent's address answered with
+  an HTTP error that is not in the agent's format. Run `vm_health`, then ask again once if the
+  result is still needed.
 
 ## Refusals
 

@@ -12,6 +12,7 @@ import {
   forbidden,
   localNetworkBlocked,
   unauthorized,
+  unexpectedStatus,
   unprovenAgent,
   vmNotRunning,
   wrongService,
@@ -631,8 +632,14 @@ export class AgentClient {
     if (res.status !== 200) {
       this.log(`request ${hostPort(baseUrl)} ${describeRequest(spec)} failed: HTTP ${res.status}`);
       const body = Buffer.from(res.bytes).toString("utf8");
-      // A non-2xx without the agent's error shape: another service holds this address now.
-      if (!isAgentErrorBody(body)) throw wrongService(baseUrl);
+      if (!isAgentErrorBody(body)) {
+        // A non-200 without the agent's error shape from an address that proved it is the agent
+        // in this call: most likely the agent's web server (Kestrel) refusing the request (400,
+        // 413, 431, 503) before the agent's code ran, but possibly another service now. Drop the
+        // cached address either way (decision D5). A job request may still have run.
+        this.locator.invalidate();
+        throw spec.runsJob ? ediabasRequestLost({ baseUrl, status: res.status }) : unexpectedStatus(describeRequest(spec), baseUrl, res.status);
+      }
       throw this.httpError(res.status, body, res.token, spec);
     }
     return parse(res);

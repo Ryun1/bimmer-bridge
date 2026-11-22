@@ -55,22 +55,22 @@ describe("MAC comparison", () => {
 });
 
 describe("DHCP lease parsing", () => {
-  it("gives only the newest of two leases for the MAC", () => {
-    expect(leaseCandidates(TWO_BLOCK_LEASES, VM_MAC)).toEqual(["192.168.64.3"]);
+  it("lists the MAC's leases newest first", () => {
+    expect(leaseCandidates(TWO_BLOCK_LEASES, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
   });
 
-  it("gives the newest by expiry even when it comes first or last in the file", () => {
+  it("orders by expiry, not by place in the file", () => {
     const newer = `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
     const older = `{\n\tip_address=192.168.65.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x68a1baf4\n}\n`;
-    expect(leaseCandidates(newer + older, VM_MAC)).toEqual(["192.168.64.3"]);
-    expect(leaseCandidates(older + newer, VM_MAC)).toEqual(["192.168.64.3"]);
+    expect(leaseCandidates(newer + older, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
+    expect(leaseCandidates(older + newer, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
   });
 
   it("on an equal expiry the earlier entry in the file wins, as in serve.py", () => {
     const a = `{\n\tip_address=192.168.64.3\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
     const b = `{\n\tip_address=192.168.64.4\n\thw_address=1,2:0:0:0:0:1\n\tlease=0x6b01baf4\n}\n`;
-    expect(leaseCandidates(a + b, VM_MAC)).toEqual(["192.168.64.3"]);
-    expect(leaseCandidates(b + a, VM_MAC)).toEqual(["192.168.64.4"]);
+    expect(leaseCandidates(a + b, VM_MAC)).toEqual(["192.168.64.3", "192.168.64.4"]);
+    expect(leaseCandidates(b + a, VM_MAC)).toEqual(["192.168.64.4", "192.168.64.3"]);
   });
 
   it("handles field order variants", () => {
@@ -91,7 +91,7 @@ describe("DHCP lease parsing", () => {
       { ipAddress: "192.168.64.9", hwAddress: "2:0:0:0:0:1", lease: 0x6b01baf4 },
       { ipAddress: "192.168.64.8", hwAddress: "2:0:0:0:0:1", lease: 0x6b01bb00 },
     ]);
-    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.8"]);
+    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.8", "192.168.64.9"]);
   });
 
   it("ignores other hosts", () => {
@@ -108,7 +108,7 @@ ${TWO_BLOCK_LEASES}
 	hw_address=1,2:0:0:0:0:2
 	lease=0x7ffffffe
 }`;
-    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.3"]);
+    expect(leaseCandidates(text, VM_MAC)).toEqual(["192.168.64.3", "192.168.65.3"]);
   });
 
   it("returns nothing for an empty or missing file and skips broken blocks", () => {

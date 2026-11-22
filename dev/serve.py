@@ -9,8 +9,9 @@ Implements the routes in docs/deploy.md and nothing else:
   PUT /token                                                      only with --accept-token
 
 Only the VM may talk to it: every request from any other address is refused (403). The VM's
-address is the newest DHCP lease for its MAC, or the one given with --client, as the MCP server
-finds it (docs/architecture.md, "The request path").
+address is the newest DHCP lease for its MAC, or the one given with --client (the MCP server
+finds it the same way, but skips a lease that is off UTM's network: docs/architecture.md, "The
+request path").
 
 Standard library only. Run from anywhere:
   python3 dev/serve.py [--bind IP] [--client VM-IP] [--port N] [--accept-token]

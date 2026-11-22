@@ -228,9 +228,11 @@ After a code change, or to install a newer build:
 3. In the VM, in **Windows PowerShell run as administrator**, paste the **Update** line that
    `serve.py` printed. It verifies the hash, replaces the exe (keeping the old one as
    `EdiabasAgent.exe.bak`), adds to `config.json`'s `conflictProcesses` any of the seven
-   default BMW tools it lacks (it prints the names it added; everything else in the file,
-   approvals included, is kept, the previous file is kept as `config.json.bak`, and a file it
-   cannot read is left alone with a warning), makes the firewall rule again for the current
+   default BMW tools that this `config.json` was never offered and does not list, and records
+   all seven in `conflictDefaultsOffered`, so a default you remove from `conflictProcesses`
+   stays removed (it prints the names it added; everything else in the file, approvals
+   included, is kept, the previous file is kept as `config.json.bak`, and a file it cannot
+   read is left alone with a warning), makes the firewall rule again for the current
    gateway, restarts the agent and waits up to 60 s for it to answer `/health` (`Agent is
    up.`, always with the 403 note, as at install). It ends with
    `Updated to ediabas-bridge agent <version>`. If the copy fails, or the new agent does not
@@ -277,12 +279,15 @@ or wherever the exe is installed). Expected: PASS, including "link to a device i
 
 **E. Update checks.**
 1. Right after C, compare `config.json` with `config.json.bak` in `C:\ProgramData\EdiabasBridge`:
-   `reviewedJobs` and the other keys are intact and the only difference is the
-   `conflictProcesses` defaults that C printed as added (`WINKFP`, `ISTAGUI` on a 0.4.0 file).
-   If C printed `config.json already lists every default conflict process`, C did not write
-   `config.json.bak` and there is nothing to compare.
+   `reviewedJobs` and the other keys are intact and the only differences are the
+   `conflictProcesses` defaults that C printed as added (`WINKFP`, `ISTAGUI` on a 0.4.0 file
+   that lists the five 0.4.0 defaults) and the new `conflictDefaultsOffered` key listing all
+   seven defaults (C printed `Recorded in conflictDefaultsOffered in config.json: ...`).
+   If C printed `config.json has been offered every default conflict process before`, C did
+   not write `config.json.bak` and there is nothing to compare.
 2. Run the Update line a second time. Expected: `Updated to ediabas-bridge agent 0.5.0` and
-   `config.json already lists every default conflict process`. It is a no-op for the agent, but
+   `config.json has been offered every default conflict process before
+   (conflictDefaultsOffered); not changed.` It is a no-op for the agent, but
    it copies the running 0.5.0 exe to `EdiabasAgent.exe.bak`, replacing the 0.4.0 backup, and it
    leaves `config.json` and `config.json.bak` as they are.
 3. Optional: a forced rollback. Update reads and writes only the live
@@ -291,7 +296,7 @@ or wherever the exe is installed). Expected: PASS, including "link to a device i
    have, such as `"192.0.2.1"`, and run the Update line. Expected: `The new agent did not come up
    within 60 s ... Rolling back.`, then `Rolled back to 0.5.0`: the version of the exe that was
    in place when this run started, which this run's backup step copied to `EdiabasAgent.exe.bak`.
-   `config.json` is restored only when that same run added conflict defaults to it (not the case
+   `config.json` is restored only when that same run rewrote it (not the case
    here, so the line does not mention it and the wrong `bindAddress` stays). The restored exe
    reads the same `config.json`, so it does not come up either, and Update says so:
    `The restored agent (0.5.0) does not answer at ... either`, then a red `ERROR:`. To undo:
@@ -354,12 +359,13 @@ Uninstall must run in an elevated **Windows PowerShell** (5.1) window, not Power
 | Script | Does | Window |
 |---|---|---|
 | `install.ps1` | installs or upgrades the agent in `C:\ProgramData\EdiabasBridge`: exe, `config.json` and `token.txt` (both kept if present), firewall rule and scheduled task `ediabas-bridge agent`, sleep on AC off; sends the token to the Mac on a first install or with `$SendToken=$true` (never prints it) | Windows PowerShell 5.1, as administrator |
-| `update.ps1` | replaces the exe (previous one kept as `EdiabasAgent.exe.bak`, put back if the copy fails or the new agent does not answer `/health` within 60 s), adds missing default conflict processes to `config.json`, makes the firewall rule again for the current gateway, and restarts the scheduled task (disabled during the copy) | Windows PowerShell 5.1, as administrator |
+| `update.ps1` | replaces the exe (previous one kept as `EdiabasAgent.exe.bak`, put back if the copy fails or the new agent does not answer `/health` within 60 s), adds to `config.json` the default conflict processes it was never offered (recorded in `conflictDefaultsOffered`, so one you removed stays removed), makes the firewall rule again for the current gateway, and restarts the scheduled task (disabled during the copy) | Windows PowerShell 5.1, as administrator |
 | `uninstall.ps1` | removes the task, the firewall rule and the program files; keeps `config.json`, `token.txt` and `logs\` by default (`$Purge=$true; ` at the start of the line removes them too; `$KeepData` is ignored) | Windows PowerShell 5.1, as administrator |
 | `discover.ps1` | read-only report of the VM (used once, for Phase 0); uploads it into `discovery/` on the Mac | Windows PowerShell 5.1 |
 
 Running the Install line over an existing install keeps `config.json` as it is, so it does not
-add new default conflict processes to it; the Update line does.
+add new default conflict processes to it; the Update line does. A `config.json` that Install
+writes lists every default in both `conflictProcesses` and `conflictDefaultsOffered`.
 
 Install and Update download, check and expand the zip in a new folder
 `C:\ProgramData\EdiabasBridge-staging-<guid>` that is created with an ACL granting only
@@ -374,13 +380,21 @@ remove any `EdiabasBridge-staging-*` folder left behind by an earlier run that w
 
 Update, in order: disable the scheduled task (its 5-minute trigger cannot start the exe
 mid-copy) and stop the agent; copy the current exe to `EdiabasAgent.exe.bak` (hash-checked);
-copy the new exe into place; add to `config.json`'s `conflictProcesses` any of the seven
+copy the new exe into place; add to `config.json`'s `conflictProcesses` each of the seven
 defaults (`INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool`, `WINKFP`, `ISTAGUI`)
-it lacks, compared without case, after the owner's own entries, and print the names added
-(the other keys, `reviewedJobs` included, are kept; a file that does not parse is left alone
-with a warning; the new text must parse back with `conflictProcesses` an array equal to the
-merged list, every original top-level key present and as many `reviewedJobs` entries, or
-`config.json` is left untouched; it is written as UTF-8 without BOM, re-indented by
+that is neither on its `conflictDefaultsOffered` list nor already on `conflictProcesses`,
+compared without case, after the owner's own entries, print the names added, and add every
+default to `conflictDefaultsOffered` (keeping any other names on it), so no default is offered
+twice and one the owner removes from `conflictProcesses` stays removed. `conflictDefaultsOffered`
+is written only by Install and Update; the agent does not read it. A file without the key
+(written before 0.5.0) counts as offered the five 0.4.0 defaults (`INPALOAD`, `TOOL32`,
+`NCSEXPER`, `WINKFPT`, `BMW Coding Tool`), so a 0.4.0 file gains `WINKFP` and `ISTAGUI` once; a
+file without a `conflictProcesses` array gets every default it lacks. The other keys,
+`reviewedJobs` included, are kept; a file that does not parse, or whose
+`conflictDefaultsOffered` is not an array, is left alone with a warning; the new text must
+parse back with `conflictProcesses` and `conflictDefaultsOffered` arrays equal to the merged
+lists, every original top-level key present and no other new key, and as many `reviewedJobs`
+entries, or `config.json` is left untouched; it is written as UTF-8 without BOM, re-indented by
 `ConvertTo-Json`, as Install writes it, and the previous file is kept as `config.json.bak`; an
 unexpected error in this step is a warning, `config.json` is left untouched and Update carries
 on);
@@ -410,7 +424,7 @@ hashes it prints are those of the files when it started.
 |---|---|---|
 | `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe` | the agent | read, execute |
 | `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe.bak` | the exe before the last update (Update's rollback copy) | not used |
-| `C:\ProgramData\EdiabasBridge\config.json.bak` | `config.json` before Update last added conflict processes to it | not used |
+| `C:\ProgramData\EdiabasBridge\config.json.bak` | `config.json` before Update last changed its `conflictProcesses` or `conflictDefaultsOffered` | not used |
 | `C:\ProgramData\EdiabasBridge\config.json` | configuration (the folder grants users read access only; with UAC off, any program the owner runs in the VM can still edit it, so `vm_health` lists the approved jobs and every `ediabas_*` result is flagged `[approvals changed]` when they change) | read |
 | `C:\ProgramData\EdiabasBridge\token.txt` | bearer token | read |
 | `C:\ProgramData\EdiabasBridge\logs\agent.log` | agent's own log | write |
@@ -438,6 +452,7 @@ codes are listed in [tools.md](tools.md#errors).
 | **agent_outdated**, or `vm_health` says "Agent features: not reported" | The agent in the VM is an older build that lacks that endpoint | [Updating](#updating): run the Update line |
 | `vm_health` warns that the agent's job policy differs from the Mac's | The agent and the Mac server were built from different versions of `policy/policy.json` | Run `./release.sh`, the Update line, and restart Claude |
 | **bad_response** | The agent and the MCP server are different versions | As above |
+| **bad_response** naming an HTTP status, or **ediabas_request_lost** naming one | The agent's address answered with an HTTP error that is not in the agent's format: usually the agent's web server refusing the request before the agent handled it | Run `vm_health`. A job request is not sent again by itself, as the job may have run; ask again if the result is still needed |
 | **policy_unavailable** | `policy/policy.json` could not be loaded by the Mac server; every `ediabas_*` tool refuses | Restore the file from git, then restart Claude |
 | **policy_mismatch** | The agent in the VM and the Mac server carry different `policy/policy.json` files (compared by SHA-256), so every `ediabas_*` tool refuses | Run `./release.sh`, the Update line, and restart Claude |
 | **cable_in_use**, naming a process | A BMW tool that uses the cable is open in the VM (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool, or anything with `api32.dll` loaded). There is no override, by design | Close that tool in the VM, then ask once more. Do not retry in a loop |

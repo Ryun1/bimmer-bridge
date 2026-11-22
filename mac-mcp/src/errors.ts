@@ -86,9 +86,19 @@ export function policyMismatch(agentSha256: string, macSha256: string): BridgeEr
   );
 }
 
-/** A request that runs an EDIABAS job failed after it may have reached the agent. */
-export function ediabasRequestLost(): BridgeError {
-  return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+/**
+ * A request that runs an EDIABAS job failed after it may have reached the agent. With `http`:
+ * the address (which proved it is the agent in this call) answered a non-200 without the
+ * agent's error shape, so whether the job ran is unknown.
+ */
+export function ediabasRequestLost(http?: { baseUrl: string; status: number }): BridgeError {
+  if (http === undefined) return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+  return new BridgeError(
+    "ediabas_request_lost",
+    `The agent's address (${hostPort(http.baseUrl)}) answered this EDIABAS request with HTTP ${http.status} but without the agent's error format, ` +
+      "so it is not known whether the agent handled it: the job may have run in the VM. It was not sent again. " +
+      "Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  );
 }
 
 /** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
@@ -133,6 +143,20 @@ export function unprovenAgent(where: string, agentUrlOverride = false): BridgeEr
 
 export function badResponse(what: string): BridgeError {
   return new BridgeError("bad_response", `The agent's response to ${what} did not match the expected format. The agent and this server may be different versions.`);
+}
+
+/**
+ * The address, which proved it is the agent in this call, answered `what` with a non-200 that
+ * is not in the agent's error shape: most likely the agent's web server refused the request
+ * before the agent's code ran. For a request that runs no EDIABAS job.
+ */
+export function unexpectedStatus(what: string, baseUrl: string, status: number): BridgeError {
+  return new BridgeError(
+    "bad_response",
+    `The agent's address (${hostPort(baseUrl)}) answered ${what} with HTTP ${status} but without the agent's error format: ` +
+      "the agent's web server may have refused the request before the agent handled it, or another service may answer there now. " +
+      "Run vm_health to check the agent; ask again once if the result is still needed.",
+  );
 }
 
 export function configError(message: string): BridgeError {
