@@ -54,8 +54,9 @@ The VM agent's own `JobPolicyTests` still pass on the same files (`vm-agent/Edia
 | Fails the whole request; nothing more is started | Core `EdiabasServiceTests.FrameRefused_FailsTheWholeBatch_AndStartsNothingMore`, `FrameRefused_FailsAVehicleRead`; the latch survives the next SGBD's `xconnect` (`KlineInterfaceTests.Latch_SurvivesAnotherConnect`, `Latch_SurvivesDisconnectAndConnect`) |
 | KWP2000\* framing (length at byte 3, service ID at byte 4) | `gate.zig` "kwp2000\* (0x010D) has its length at byte 3 …" (found by the final review: the gate had read 0x010D as BMW-FAST) |
 
-Suites at the end of M1: Zig 56 pass + 3 skip (macOS) in the library, 7 CLI, 6 C ABI;
-`engine/EdiabasLib.Native.Tests` 13; `engine/ediabasd-net.Tests` 67.
+Suites at the end of M1 (after the final review's fixes): Zig 62 pass + 3 skip (macOS) in the
+library, 7 CLI, 6 C ABI; `engine/EdiabasLib.Native.Tests` 16; `engine/ediabasd-net.Tests` 67;
+`vm-agent/EdiabasAgent.Tests` 1,295.
 
 Found while building: no upstream test job fails through the interface. `cmd_test2`'s
 `TEST_IFACE_FLAGS` traps every interface error and ends ready, which is also a real example of
