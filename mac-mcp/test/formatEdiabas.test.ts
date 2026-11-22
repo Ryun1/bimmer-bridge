@@ -242,3 +242,22 @@ describe("health, capture, logs", () => {
     expect(t).not.toMatch(/cut at/);
   });
 });
+
+describe("results that could not be read", () => {
+  const text = (details: unknown) => itemErrorText({ code: "ediabas_error", message: "The job finished but its results could not be read.", details });
+  const head = "[ediabas_error] The job finished but its results could not be read";
+  const tail = " Ask Ryan before trying again.";
+
+  it("shows the number and text EDIABAS gave, or whichever one it gave, or neither", () => {
+    expect(text({ errorCode: 134, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 134: SYS-0002).${tail}`);
+    expect(text({ errorCode: 134, resultsUnread: true })).toBe(`${head} (EDIABAS error 134).${tail}`);
+    expect(text({ errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS SYS-0002).${tail}`);
+    expect(text({ resultsUnread: true })).toBe(`${head}.${tail}`);
+  });
+
+  it("is only used when the agent sets resultsUnread to true", () => {
+    for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
+      expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
+    }
+  });
+});

@@ -233,7 +233,12 @@ export function describeAgentError(code: string, message: string | undefined, de
     case "ediabas_error": {
       const n = detailNumber(details, "errorCode");
       const text = detailString(details, "errorText");
-      const what = n !== null || text ? `${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""}` : cleanText(message ?? "no details", 200);
+      const said = `${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""}`;
+      // The job ran and ended normally; only reading its results failed. Nothing points at the ECU or cable.
+      if (detailsObject(details)?.resultsUnread === true) {
+        return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask Ryan before trying again.`;
+      }
+      const what = n !== null || text ? said : cleanText(message ?? "no details", 200);
       // Error 16 (IFH-0006) on every real SGBD, seen on 2026-11-22 after the cable was replugged
       // into the Mac: it was no longer attached to the VM until ticked again in UTM.
       const why =

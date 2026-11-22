@@ -873,7 +873,7 @@ public sealed class EdiabasService
         var code = _api.ErrorCode();
         var text = _api.ErrorText();
         _log.Warn($"{ecu} {job}: finished but its results could not be read (EDIABAS error {code}: {text})");
-        return ApiFailure.Of(ApiErrors.EdiabasError, "The job finished but its results could not be read.", new EdiabasErrorDetails(code, text));
+        return ApiFailure.Of(ApiErrors.EdiabasError, "The job finished but its results could not be read.", new EdiabasErrorDetails(code, text, ResultsUnread: true));
     }
 
     private void BreakAndSettle(Session session, string ecu, string job)
