@@ -168,9 +168,12 @@ describe("MCP server", () => {
     await client.callTool({ name: "vm_health", arguments: {} });
     expect(logs).toContain(`discovery accepted 127.0.0.1:${agent.port} (source: leases)`);
     agent.setHandler(contractHandler("other"));
+    agent.requests.length = 0;
     const r = await client.callTool({ name: "vm_list_windows", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(logs).toContain(`request 127.0.0.1:${agent.port} GET /windows failed: HTTP 401`);
+    expect(logs).toContain(`probe 127.0.0.1:${agent.port} failed: the proof does not match this Mac's token`);
+    expect(logs.some((l) => l.startsWith(`cached address 127.0.0.1:${agent.port} did not prove it is the agent (wrong_service)`))).toBe(true);
+    expect(agent.requests.every((q) => q.authorization === undefined)).toBe(true);
     expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
   });
 

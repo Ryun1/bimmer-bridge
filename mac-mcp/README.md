@@ -114,10 +114,10 @@ Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry firs
 `bridge*` interface is ever contacted, and it is accepted only if `GET /hello` (sent with a
 fresh random nonce and without the token) returns 200 with `"agent": "ediabas-bridge-agent"`
 and a proof that matches this Mac's token ([docs/api.md](../docs/api.md#get-hello)); the token
-is sent only after that. The accepted URL is cached; on a connection failure the cache is
-cleared and discovery runs once more, and on an answer that is not the agent's
-(`wrong_service`, `bad_response`) the cache is cleared and the next call proves the address
-again.
+is sent only after that. The accepted URL is cached, and proved again with `/hello` at the
+start of every tool call; if that fails, the cache is cleared and discovery runs before
+anything is sent with the token. On a connection failure, or an answer that is not the
+agent's (`wrong_service`, `bad_response`), the cache is cleared as well.
 
 ## Troubleshooting: macOS Local Network permission
 

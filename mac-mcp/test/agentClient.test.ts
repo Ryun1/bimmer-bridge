@@ -163,20 +163,20 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     expect(h.conflictingProcesses).toEqual([{ name: "INPALOAD", pid: 4312 }]);
     const w = await client.listWindows();
     expect(w.windows).toHaveLength(2);
-    // /hello goes without the token; everything after it carries it
-    expect(a.requests[0]).toMatchObject({ authorization: undefined });
-    expect(a.requests.slice(1).every((r) => r.authorization === `Bearer ${AGENT_TOKEN}`)).toBe(true);
+    // /hello goes without the token; everything else carries it
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/health", "/hello", "/windows"]);
+    for (const r of a.requests) expect(r.authorization).toBe(r.path.startsWith("/hello?") ? undefined : `Bearer ${AGENT_TOKEN}`);
     // discovery skipped
     expect(readFile).not.toHaveBeenCalled();
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it("caches the accepted base URL", async () => {
+  it("caches the accepted base URL, and proves it again before each call", async () => {
     const a = await fake();
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
     await client.listWindows();
     await client.listWindows();
-    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/windows", "/windows"]);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/windows", "/hello", "/windows"]);
   });
 
   it("still requires the exact agent value", async () => {
@@ -220,7 +220,7 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, requestTimeoutMs: 150 });
     await client.health();
     a.setHandler((req, res) => {
-      if (req.url === "/health") contractHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) contractHandler()(req, res);
       // /windows never answers
     });
     expect((await errorOf(client.listWindows())).code).toBe("agent_not_answering");
@@ -429,54 +429,90 @@ describe("identity before token (D5)", () => {
   });
 
   describe("a cached address that stops being the agent (F7)", () => {
-    /** Discovery via a lease to a local fake agent, which then gets replaced by `impostor`. */
-    async function cachedThenReplaced(impostor: Parameters<FakeAgent["setHandler"]>[0]) {
+    type H = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void;
+    const LEASE = leaseFile({ ip: "127.0.0.1", lease: 0x6b01baf4 });
+
+    /** Discovery via a lease to a local fake agent, which then gets replaced by `next`. */
+    async function cachedThenReplaced(next: H, tokens?: TokenSource) {
       const a = await fake(stubHandler());
-      const c = makeClient({ ifaces: LOOPBACK_BRIDGE, env: { EDIABAS_AGENT_PORT: String(a.port) }, leases: leaseFile({ ip: "127.0.0.1", lease: 0x6b01baf4 }) });
+      const c = makeClient({ ifaces: LOOPBACK_BRIDGE, env: { EDIABAS_AGENT_PORT: String(a.port) }, leases: LEASE, tokens });
       await c.client.listWindows();
       expect(c.readFile).toHaveBeenCalledTimes(1);
-      a.setHandler(impostor);
+      a.setHandler(next);
       a.requests.length = 0;
       return { a, ...c };
     }
 
-    it("cached address now answers 404 without the agent's error shape -> wrong_service, cache invalidated, next call rediscovers", async () => {
-      const { a, client, readFile } = await cachedThenReplaced((_req, res) => {
-        res.writeHead(404, { "content-type": "text/plain" });
-        res.end("not found");
-      });
-      expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
-      const second = await errorOf(client.listWindows());
-      expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again
-      expect(second.code).toBe("vm_not_running"); // the only candidate is not the agent
-      expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/windows", "/hello"]);
+    const notFound: H = (_req, res) => {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("not found");
+    };
+    const otherJson: H = (_req, res) => json(res, 200, { status: "ok", hello: "from another service" });
+
+    it("the cached address is proved with /hello (fresh nonce, no token) before every call", async () => {
+      const a = await fake(stubHandler());
+      const { client, readFile } = makeClient({ ifaces: LOOPBACK_BRIDGE, env: { EDIABAS_AGENT_PORT: String(a.port) }, leases: LEASE });
+      await client.listWindows();
+      await client.listWindows();
+      await client.runJob({ ecu: "NVE_65", job: "IDENT" });
+      expect(readFile).toHaveBeenCalledTimes(1); // still cached: no discovery
+      expect(a.requests.map((r) => `${r.path.split("?")[0]} ${r.authorization ? "token" : "none"}`)).toEqual([
+        "/hello none",
+        "/windows token",
+        "/hello none",
+        "/windows token",
+        "/hello none",
+        "/ediabas/job token",
+      ]);
+      const nonces = a.requests.filter((r) => r.path.startsWith("/hello")).map((r) => r.path);
+      expect(new Set(nonces).size).toBe(3);
     });
 
-    it("cached address answers 200 with JSON that fails the schema -> bad_response, cache invalidated", async () => {
-      const { a, client, readFile } = await cachedThenReplaced((_req, res) => json(res, 200, { hello: "from another service" }));
+    for (const [name, impostor] of [
+      ["answers 404 without the agent's error shape", notFound],
+      ["answers 200 with other JSON", otherJson],
+    ] as const) {
+      it(`cached address now ${name}: no request to it ever carries Authorization, the cache is dropped and discovery runs`, async () => {
+        const { a, client, readFile } = await cachedThenReplaced(impostor);
+        const first = await errorOf(client.listWindows());
+        expect(first.code).toBe("vm_not_running"); // the only candidate is not the agent
+        expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again on the first call
+        await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }));
+        await errorOf(client.health());
+        expect(a.requests.length).toBeGreaterThan(0);
+        // Review Focus 3: including the very first request after the swap
+        expect(a.requests.every((r) => r.authorization === undefined && r.path.startsWith("/hello?"))).toBe(true);
+      });
+    }
+
+    it("cached address now holds an agent with another token: never sent this Mac's token", async () => {
+      const { a, client, readFile } = await cachedThenReplaced(contractHandler("another-token"));
+      expect((await errorOf(client.listWindows())).code).toBe("vm_not_running");
+      expect(readFile).toHaveBeenCalledTimes(2);
+      expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+    });
+
+    it("cached address now holds an agent older than /hello: agent_outdated, never sent the token", async () => {
+      const old: H = (_req, res) => json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token." } }, { "www-authenticate": "Bearer" });
+      const { a, client, readFile, logs } = await cachedThenReplaced(old);
+      expect((await errorOf(client.listWindows())).code).toBe("agent_outdated");
+      expect(readFile).toHaveBeenCalledTimes(2);
+      expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+      expect(logs.some((l) => /cached address 127\.0\.0\.1:\d+ did not prove it is the agent \(agent_outdated\)/.test(l))).toBe(true);
+    });
+
+    it("a proven agent whose answer is a 404 without the agent's error shape -> wrong_service, cache invalidated, next call rediscovers", async () => {
+      const { client, readFile } = await cachedThenReplaced((req, res) => (answerHello(req, res, AGENT_TOKEN) ? undefined : notFound(req, res)));
+      expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+      await errorOf(client.listWindows());
+      expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again
+    });
+
+    it("a proven agent whose 200 fails the schema -> bad_response, cache invalidated", async () => {
+      const { client, readFile } = await cachedThenReplaced((req, res) => (answerHello(req, res, AGENT_TOKEN) ? undefined : otherJson(req, res)));
       expect((await errorOf(client.listWindows())).code).toBe("bad_response");
       await errorOf(client.listWindows());
       expect(readFile).toHaveBeenCalledTimes(2);
-      expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/windows", "/hello"]);
-    });
-
-    it("the second call to an impostor at the cached address sends no Authorization", async () => {
-      for (const impostor of [
-        (_req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => {
-          res.writeHead(404);
-          res.end();
-        },
-        (_req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => json(res, 200, { status: "ok" }),
-      ]) {
-        const { a, client } = await cachedThenReplaced(impostor);
-        await errorOf(client.listWindows()); // still cached: this one carried the token
-        const firstCall = a.requests.length;
-        await errorOf(client.listWindows());
-        await errorOf(client.health());
-        const later = a.requests.slice(firstCall);
-        expect(later.length).toBeGreaterThan(0);
-        expect(later.every((r) => r.authorization === undefined && r.path.startsWith("/hello"))).toBe(true);
-      }
     });
 
     it("an agent error in its own shape keeps the cache", async () => {
@@ -490,15 +526,34 @@ describe("identity before token (D5)", () => {
 
     it("a 401 that is not in the agent's shape is not answered with a re-read token", async () => {
       const tokens = staticTokens();
-      const a = await fake();
-      const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
-      await client.listWindows();
-      a.setHandler((_req, res) => {
+      const { client } = await cachedThenReplaced((req, res) => {
+        if (answerHello(req, res, AGENT_TOKEN)) return;
         res.writeHead(401);
         res.end("who are you");
-      });
+      }, tokens);
       expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
       expect(tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it("an EDIABAS job whose cached address fails the re-proof on the connection is sent once, to the rediscovered agent", async () => {
+      // A reset at /hello: nothing was sent with the token, so the job never "may have run".
+      let vmIp = "192.168.64.3";
+      const fetchMock = vi.fn<typeof fetch>(async (url) => {
+        const u = String(url);
+        if (!u.includes(`${vmIp}:`)) throw connError("ECONNRESET");
+        if (u.endsWith("/ediabas/job")) return okResponse(jobResult("NVE_65", "IDENT", [{ A: 1 }]));
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
+      });
+      const c = makeClient({ fetch: fetchMock, leases: leaseFile({ ip: vmIp, lease: 0x6b01baf4 }) });
+      await c.client.listWindows();
+      vmIp = "192.168.64.4";
+      c.readFile.mockImplementation(async () => leaseFile({ ip: vmIp, lease: 0x6b01baf5 }));
+      expect((await c.client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
+      expect(calledUrls(c.fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello", // reset: the cache is dropped
+        "http://192.168.64.4:8765/hello",
+        "http://192.168.64.4:8765/ediabas/job",
+      ]);
     });
   });
 });
@@ -770,7 +825,7 @@ describe("AgentClient discovery", () => {
     expect(calledUrls(c.fetchFn)).toEqual([
       "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
-      "http://192.168.64.3:8765/windows", // fails
+      "http://192.168.64.3:8765/hello", // the re-proof fails: the cache is dropped
       "http://192.168.64.4:8765/hello",
       "http://192.168.64.4:8765/windows",
     ]);
@@ -839,8 +894,9 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     blocked = true;
     const e = await errorOf(client.listWindows());
     expect(e.code).toBe("local_network_blocked");
-    // cached request failed, cache cleared, re-resolved once, retried once
+    // re-proved, cached request failed, cache cleared, re-resolved once, retried once
     expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
       "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
@@ -1010,6 +1066,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
     const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
     expect(r.job).toBe("IDENT");
     expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/ediabas/job", // refused
       "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/ediabas/job",
@@ -1079,6 +1136,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
       expect(r.job).toBe("IDENT");
       expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/ediabas/job", // never connected
         "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/ediabas/job",
@@ -1091,7 +1149,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       arm();
       const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
       expect(e.code).toBe("ediabas_request_lost");
-      expect(calledUrls(fetchFn).slice(2)).toEqual(["http://192.168.64.3:8765/ediabas/job"]);
+      expect(calledUrls(fetchFn).slice(2)).toEqual(["http://192.168.64.3:8765/hello", "http://192.168.64.3:8765/ediabas/job"]);
     });
 
     it("a connect timeout right after discovery is not reported as possibly run", async () => {
@@ -1108,6 +1166,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       arm();
       expect((await c.listWindows()).windows).toHaveLength(2);
       expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/windows",
         "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/windows",
@@ -1126,10 +1185,8 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       vmIp = "192.168.64.4";
       c.readFile.mockImplementation(async () => leaseFile({ ip: vmIp, lease: 0x6b01baf5 }));
       expect((await c.client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
-      expect(calledUrls(c.fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toEqual([
-        "http://192.168.64.3:8765/ediabas/job",
-        "http://192.168.64.4:8765/ediabas/job",
-      ]);
+      // the re-proof at the old address fails first, so the job goes only to the new one
+      expect(calledUrls(c.fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toEqual(["http://192.168.64.4:8765/ediabas/job"]);
     });
   });
 
@@ -1217,6 +1274,15 @@ describe("one EDIABAS request at a time", () => {
       "/ediabas/describe",
       "/ediabas/ecus",
     ]);
+  });
+
+  it("a queued call proves the address in its own turn, after the job before it", async () => {
+    const { a } = await oneAtATime(50);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.health();
+    a.requests.length = 0;
+    await Promise.all([client.runJob({ ecu: "NVE_65", job: "IDENT" }), client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }])]);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/ediabas/job", "/hello", "/ediabas/jobs"]);
   });
 
   it("answers ediabas_busy without sending when the wait passes the limit", async () => {
@@ -1357,12 +1423,13 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     await client.listWindows();
     await client.capture();
     await client.listLogs();
-    expect(spy.mock.calls.map((c) => c[0])).toEqual([15_000, 15_000, 15_000]);
+    // each call: the 3 s /hello re-proof, then the request
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([3_000, 15_000, 3_000, 15_000, 3_000, 15_000]);
     spy.mockClear();
     await client.listEcus();
     await client.runJob({ ecu: "NVE_65", job: "IDENT" });
     await client.runJobs([{ ecu: "NVE_65", job: "IDENT" }]);
-    expect(spy.mock.calls.map((c) => c[0])).toEqual([75_000, 75_000, 75_000]);
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([3_000, 75_000, 3_000, 75_000, 3_000, 75_000]);
   });
 
   it("tolerates unknown extra fields everywhere", async () => {

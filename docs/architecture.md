@@ -32,12 +32,14 @@ their interactive session and can see the desktop for screenshots. A second copy
    random nonce and no token ([api.md](api.md#get-hello)); it is used only if it answers as
    `ediabas-bridge-agent` with a proof that matches this Mac's token, checked in constant time.
    Nothing that has not proved it holds the token is ever sent the token. The URL is cached
-   (`mac-mcp/src/vmAddress.ts`, `mac-mcp/src/agentClient.ts`).
+   (`mac-mcp/src/vmAddress.ts`, `mac-mcp/src/agentClient.ts`), and a cached URL is proved
+   again with `/hello` (a fresh nonce) at the start of every tool call; if that fails, the
+   cache is dropped and discovery runs, so the token never goes to the old address. For an
+   `/ediabas/*` call this happens in its turn in the queue, just before the job is sent.
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
-   If the cached address answers like something other than the agent (`wrong_service`: an
-   error without the agent's error shape; `bad_response`: a 200 that does not match the
-   contract), the cache is dropped, so the next call proves the address again before it sends
-   the token. Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
+   If the agent's answer is not the agent's (`wrong_service`: an error without the agent's
+   error shape; `bad_response`: a 200 that does not match the contract), the cache is
+   dropped. Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
    the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
    only a connection that was never made (refused, or a connect timeout) is retried.
 5. In the agent, `vm-agent/EdiabasAgent/Middleware.cs` runs, in order: source address (only
@@ -130,9 +132,8 @@ the recorder never records request headers.
   gateway only, and the agent itself answers 403 to any other source before looking at the
   token.
 - **The Mac side.** The MCP server contacts only on-link addresses on a `bridge*` interface and
-  checks the `/hello` proof before it sends the token to one. A cached address that later
-  answers like another service is dropped; at most the one request that found that out has
-  gone to it with the token. `serve.py` binds the Mac's bridge address (never
+  checks the `/hello` proof before it sends the token to one, on every tool call, cached
+  address or not. A cached address that fails the proof is dropped and never sent the token. `serve.py` binds the Mac's bridge address (never
   `0.0.0.0`), serves only the VM's address, and each pasted line runs a script only if its
   SHA-256 matches the one printed on the Mac ([deploy.md](deploy.md)).
 - **The log roots.** `/logs` and `/logs/read` read only under `logRoots` in the VM's config

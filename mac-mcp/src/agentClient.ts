@@ -486,7 +486,7 @@ export class AgentClient {
 
   private async callNow<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
     const ctx: CallContext = { tokenRefreshed: false };
-    const first = await this.locator.resolve(ctx);
+    const first = await this.resolveProven(ctx);
     try {
       return await this.request(first.baseUrl, spec, ctx, parse);
     } catch (e) {
@@ -508,6 +508,27 @@ export class AgentClient {
       this.locator.invalidate();
       if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       throw this.connectionError(e, second.baseUrl);
+    }
+  }
+
+  /**
+   * The address for this call, proved with `/hello` before any Bearer request (decision D5).
+   * Discovery proves each candidate itself; a cached address is proved again on every call, as
+   * another service may hold it now. If that fails, the cache is dropped and discovery runs,
+   * so the token never goes to the old address. Nothing was sent with the token here, so a
+   * failure at this step never makes a job request "may have run".
+   */
+  private async resolveProven(ctx: CallContext): Promise<{ baseUrl: string; fromCache: boolean }> {
+    const target = await this.locator.resolve(ctx);
+    if (!target.fromCache) return target;
+    try {
+      await this.probe(target.baseUrl, ctx);
+      return target;
+    } catch (e) {
+      if (!(e instanceof BridgeError) || e.code === "no_token") throw e;
+      this.log(`cached address ${hostPort(target.baseUrl)} did not prove it is the agent (${e.code}); finding the agent again`);
+      this.locator.invalidate();
+      return this.locator.resolve(ctx);
     }
   }
 
