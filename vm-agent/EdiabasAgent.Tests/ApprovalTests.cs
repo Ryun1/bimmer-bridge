@@ -90,12 +90,19 @@ public class ApprovalTests
     [InlineData("ECU:JOB@")]
     [InlineData("ECU:JOB@B8AE0DD9D242")]
     [InlineData("NVE_65")]
-    public void Config_RefusesBadEntries(string entry)
+    public void Config_BadEntryIsAWarningAndApprovesNothing(string entry)
     {
+        // Not an error: a typo in one approval must not stop the agent from starting.
         var r = AgentConfig.Parse($$"""{ "reviewedJobs": ["NVE_65:STATUS_X", "{{entry}}"] }""");
-        Assert.False(r.Ok);
-        var e = Assert.Single(r.Errors);
-        Assert.StartsWith("reviewedJobs[1]:", e);
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        var w = Assert.Single(r.Warnings);
+        Assert.StartsWith("reviewedJobs[1]:", w);
+
+        var list = new ApprovalList(r.Config!.ReviewedJobs);
+        Assert.Equal(0, list.PinnedCount);
+        Assert.Equal(1, list.UnpinnedCount);
+        Assert.Equal(ApprovalKind.None, list.Lookup("ECU", "JOB").Kind);
+        Assert.Equal(ApprovalKind.None, list.Lookup("NVE_65", "").Kind);
     }
 
     [Fact]

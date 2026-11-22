@@ -129,7 +129,7 @@ public sealed class AgentConfig
             return ConfigLoadResult.Failure(errors);
         }
 
-        config.Warnings = [.. UnknownKeys(json), .. config.LogRootWarnings()];
+        config.Warnings = [.. UnknownKeys(json), .. config.LogRootWarnings(), .. config.ReviewedJobWarnings()];
         return ConfigLoadResult.Success(config);
     }
 
@@ -216,7 +216,6 @@ public sealed class AgentConfig
         RequireList(errors, "logRoots", LogRoots, allowBlankEntries: false);
         RequireList(errors, "conflictProcesses", ConflictProcesses, allowBlankEntries: false);
         RequireList(errors, "reviewedJobs", ReviewedJobs, allowBlankEntries: false);
-        ValidateReviewedJobs(errors);
 
         if (VoltageSources is null)
         {
@@ -261,23 +260,22 @@ public sealed class AgentConfig
         return errors;
     }
 
-    /// <summary>A pin that does not parse must not quietly become a name-only approval, or approve nothing
-    /// without a word: either way Ryan should hear about it.</summary>
-    private void ValidateReviewedJobs(List<string> errors)
+    /// <summary>A <c>reviewedJobs</c> entry of the wrong shape approves nothing (it never becomes a
+    /// name-only approval) and is a warning, not an error: a typo there must not stop the agent
+    /// from starting after an update.</summary>
+    private List<string> ReviewedJobWarnings()
     {
-        if (ReviewedJobs is null)
-        {
-            return;
-        }
-
+        var warnings = new List<string>();
         for (var i = 0; i < ReviewedJobs.Count; i++)
         {
             var entry = ReviewedJobs[i];
-            if (!string.IsNullOrWhiteSpace(entry) && !ApprovalList.TryParseEntry(entry, out _, out _))
+            if (!ApprovalList.TryParseEntry(entry, out _, out _))
             {
-                errors.Add($"reviewedJobs[{i}]: must be \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits (got \"{Printable(entry)}\")");
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits");
             }
         }
+
+        return warnings;
     }
 
     private static void RequireNonEmpty(List<string> errors, string name, string? value)

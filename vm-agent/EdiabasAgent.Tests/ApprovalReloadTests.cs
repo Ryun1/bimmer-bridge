@@ -104,7 +104,6 @@ public class ApprovalReloadTests
     [Theory]
     [InlineData("{ \"reviewedJobs\": [\"NVE_65:STATUS_B\" ")]
     [InlineData("[]")]
-    [InlineData("{ \"reviewedJobs\": [\"NVE_65:STATUS_B@XYZ\"] }")]
     [InlineData("{ \"reviewedJobs\": [], \"port\": 0 }")]
     public void BrokenFile_KeepsTheOldList_WarnsOnce_LaterFixIsPickedUp(string broken)
     {
@@ -121,6 +120,22 @@ public class ApprovalReloadTests
         Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
         Assert.Equal(["INFO reviewedJobs re-read: 0 pinned, 0 unpinned"], ReReads);
         Assert.Single(Warnings);
+    }
+
+    [Fact]
+    public void EntryOfTheWrongShape_ApprovesNothing_TheRestIsReRead_WarnsOnce()
+    {
+        _file.Text = Config("NVE_65:STATUS_B");
+        var svc = Service(State("NVE_65:STATUS_B"));
+        Assert.True(RunB(svc).Ok);
+
+        // A valid file with one bad entry: the file is still the truth, the bad entry approves nothing.
+        _file.Write("{ \"reviewedJobs\": [\"NVE_65:STATUS_B@XYZ\"] }");
+        Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
+        Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
+        Assert.Equal(["INFO reviewedJobs re-read: 0 pinned, 0 unpinned"], ReReads);
+        var w = Assert.Single(Warnings);
+        Assert.Contains("reviewedJobs[0]", w);
     }
 
     [Fact]

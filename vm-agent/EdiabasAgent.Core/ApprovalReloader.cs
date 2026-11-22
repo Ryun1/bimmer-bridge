@@ -87,6 +87,12 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
             return;
         }
 
+        // Once per change of the file: an entry of the wrong shape approves nothing.
+        foreach (var warning in loaded.Warnings.Where(w => w.StartsWith("reviewedJobs[", StringComparison.Ordinal)))
+        {
+            log.Warn(warning);
+        }
+
         var next = new ApprovalList(loaded.Config!.ReviewedJobs);
         if (next.SameAs(state.Current))
         {
