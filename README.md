@@ -115,11 +115,10 @@ Check any change against that list.
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.4.0 (agent, MCP server and `VERSION`), job policy version 3, eleven MCP tools.
-**0.4.0 is installed in the original owner's VM (2026-11-22, updated from 0.3.0 with the Update
-line): `vm_health` shows the Mac server and the agent both at 0.4.0, policy version 3 on both
-sides, the existing `config.json` and approvals kept, and the Mac server found the VM from UTM's
-config with no MAC set. Nothing in 0.3.0 or 0.4.0 has been run at the car.**
+Version 0.5.0 (agent, MCP server and `VERSION`), job policy version 4, eleven MCP tools.
+**0.5.0 is built (`./release.sh` passes) but not yet installed in the VM: the upgrade steps and
+desk checks are pending, see [Upgrading to 0.5.0](docs/install.md#upgrading-to-050). The VM still
+runs 0.4.0 (installed 2026-11-22). Nothing in 0.3.0, 0.4.0 or 0.5.0 has been run at the car.**
 
 | Phase | State |
 |---|---|
@@ -135,9 +134,10 @@ config with no MAC set. Nothing in 0.3.0 or 0.4.0 has been run at the car.**
 
 Open:
 - **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Finish the 0.4.0 desk check**: `vm_health` passed (both at 0.4.0); still to do with the cable
-  in the VM: `ediabas_describe` on `E60` shows the two whole-car jobs as allowed, and the job
-  verdicts in the skill references are re-recorded under policy version 3.
+- **Upgrade the VM to 0.5.0 and finish its desk checks** (the owner's, cable in the VM, not in
+  the car): [Upgrading to 0.5.0](docs/install.md#upgrading-to-050). This includes the open 0.4.0
+  item (`ediabas_describe` on `E60` shows the two whole-car jobs as allowed) and re-recording the
+  skill references' job verdicts under policy version 4.
 - **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
   eval 04's `needs-review` fixture can be recorded at the desk
   ([dev/fixtures/README.md](dev/fixtures/README.md)).
@@ -149,8 +149,30 @@ Open:
 
 ### What changed in 0.5.0
 
+- **Pin your approvals before updating.** Only pinned entries (`ECU:JOB@hash`) approve anything;
+  unpinned ones are ignored. `ediabas_describe` prints the line to paste. Steps:
+  [Upgrading to 0.5.0](docs/install.md#upgrading-to-050).
+- Approvals are listed in `vm_health`; a change prints `[approvals changed]`; tools refuse with
+  `[policy_mismatch]` if the Mac's and the VM's policy files differ.
 - Policy version 4: `E65`, `E70`, `E89X`, `F01`, `R56` restricted like `E60`; switching and
   triggering words added to the description screen.
+- The agent stops a running job (`apiBreak`) within about 250 ms if a BMW tool starts, and checks
+  again just before `apiInit`. `WINKFP` and `ISTAGUI` join the default conflict list (Update adds
+  missing defaults to `config.json` and keeps `config.json.bak`).
+- The Mac sends the token only to an address that proves itself with `GET /hello` in the same
+  call; the VM is found from its newest DHCP lease only.
+- A job the SGBD lacks is `ediabas_error` again (`job_not_found` only comes from
+  `ediabas_describe` now). This reverses a 0.3.0 item.
+- `ediabas_vehicle_status` runs as one jobs batch from the Mac. Move `voltageSources` from the
+  VM's `config.json` to the Mac's `config.local.json` and delete the VM key (the agent warns
+  while it is there).
+- `/logs/read` refuses a log file that is itself a link; a failed `apiEnd` shows in `vm_health`;
+  screenshots fall back to the screen copy for a window that does not answer in 500 ms.
+- Update: backs up the exe and rolls back on failure; the firewall rule is re-pinned to the
+  current gateway.
+- The recorder moved to `dev/` (`dev/record-server.ts`).
+- A 0.5.0 Mac server needs a 0.5.0 agent: `vm_health` warns on a version difference, and a 0.4.0
+  agent answers `/hello` with 401, which shows as `[agent_outdated]`.
 
 Earlier versions: [docs/history/changes.md](docs/history/changes.md). The acceptance results of
 Phases 0 to 5 are in [docs/history/phase-results.md](docs/history/phase-results.md).

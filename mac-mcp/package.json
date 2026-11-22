@@ -1,6 +1,6 @@
 {
   "name": "ediabas-bridge-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Local stdio MCP server that reads BMW diagnostic data from the ediabas-bridge VM agent (read-only).",
   "private": true,
   "type": "module",

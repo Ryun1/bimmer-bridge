@@ -248,6 +248,55 @@ After a code change, or to install a newer build:
 7. Check with `vm_health`: the Mac server's version and the agent's should both be the new
    one, with no version or policy-version warning.
 
+## Upgrading to 0.5.0
+
+For the owner, from 0.4.0. Do the steps in order. Anything touching the cable is done with the
+cable in the VM and **not in the car** (confirm this first).
+
+**A. Before updating (0.4.0 still installed).**
+1. Run `vm_health`. Expected: the approvals show as unpinned (5 in the original VM).
+2. Run `ediabas_describe` for each approved job. Each prints its pinned `ECU:JOB@hash` line.
+3. In the VM, replace each entry in `C:\ProgramData\EdiabasBridge\config.json` `reviewedJobs`
+   with that printed line. Unpinned entries approve nothing from 0.5.0.
+4. Run `vm_health` again. Expected on 0.4.0: `N pinned, 0 unpinned`.
+
+**B. `voltageSources`.** If the VM's `config.json` has a non-empty `voltageSources`, move it to
+the Mac's `config.local.json` and delete the key from the VM file (0.5.0 warns while it is there).
+
+**C. Update.** Follow [Updating](#updating) (`./release.sh`, `python3 dev/serve.py`, paste the
+Update line in an administrator PowerShell, restart Claude). Then `vm_health`. Expected: Mac
+server and agent both 0.5.0, policy version 4 on both sides, the policy hashes match, the
+approvals listed, 0 ignored.
+
+**D. Self-test.** In the VM run `EdiabasAgent.exe --selftest` (in `C:\ProgramData\EdiabasBridge`
+or wherever the exe is installed). Expected: PASS, including "link to a device is refused".
+
+**E. Update checks.**
+1. Run the Update line a second time. Expected: a no-op update that succeeds.
+2. Compare `config.json` with `config.json.bak`: `reviewedJobs` and the other keys are intact
+   and the only difference is any added `conflictProcesses` defaults (`WINKFP`, `ISTAGUI`).
+3. Optionally, on a copy of the config (not the live one), try: a file with no
+   `conflictProcesses` (the defaults are added), a file saved with a BOM (still read), and a
+   forced rollback, for example temporarily a wrong `bindAddress` so the agent does not come
+   up. Expected for the last: `Rolled back to 0.4.x` and `config.json` restored. Put the live
+   file back to its correct state afterwards.
+
+**F. Desk checks** (cable not in the car, confirmed).
+1. `TMODE INFO` runs.
+2. `ediabas_vehicle_status` returns the TMODE lines.
+3. Open INPA while a `TMODE _JOBS` describe runs. Expected: `cable_in_use` or `not_run`.
+4. Edit `reviewedJobs` in the VM. Expected: the next `ediabas_*` result starts
+   `[approvals changed]`.
+5. `vm_screenshot` of INPA while it loads a script. Expected: a readable image.
+6. `ediabas_describe` on `E60` shows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` as allowed.
+7. Re-record the skill references' job verdicts under policy version 4
+   (`dev/record-server.ts`, see [docs/development.md](development.md)).
+
+**G. Release.** Then publish the GitHub release with the files `release.sh` printed and merge
+`release-0.5.0`. Record what passed in the README Status.
+
+---
+
 ## Uninstalling
 
 Start `python3 dev/serve.py` on the Mac first, then in the VM, in **Windows PowerShell run as
