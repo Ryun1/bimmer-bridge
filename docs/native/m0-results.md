@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–4 done (2026-11-22); **waiting for sections 5–7 of the desk session.**
+Status: sections 1–5 done (2026-11-22); **waiting for sections 6–7 of the desk session.**
 
 ---
 
@@ -237,25 +237,38 @@ are kept in the VM as `C:\EDIABAS\TRACE\IFH.trc.m0run1`, `IFH.trc.m0run2` and
    FTDI driver accept and read back a non-standard rate?), `latency 1ms`, and the `lock` line's
    `exclusive` (macOS ptys don't enforce `TIOCEXCL`, so only the real cable can show it).
 
+Run 2026-11-22 on macOS 26.6.2 (arm64), Zig 0.16.0, cable not in the car (the cable's serial
+number is replaced by `<serial>`):
+
 ```
-(kline list)
+$ kline list
+/dev/cu.usbserial-<serial>  0403:6001  ftdi
 
-(kline probe)
+$ kline probe /dev/cu.usbserial-<serial>
+ok   identity 0403:6001
+ok   lock (second open refused: lock file yes, exclusive yes)
+ok   line 9600 8E1 (read back 9600 8E1)
+ok   line 115200 8N1 (read back 115200 8N1)
+ok   line 10400 8N1 (read back 10400 8N1)
+ok   latency 1ms
+ok   dtr on/off
+ok   dsr off
+ok   break 25ms (held 26.214 ms by the host clock)
 
-exit code:
+exit code: 0
 ```
 
 | Check | Result |
 |---|---|
-| Enumerates as `0403:6001` | |
-| Lock: lock file refuses a second open | |
-| Lock: `TIOCEXCL` refuses a second open | |
-| 9600 8E1 read back | |
-| 115200 8N1 read back | |
-| 10400 8N1 read back | |
-| Latency 1 ms accepted | |
-| DTR on/off | |
-| DSR | |
+| Enumerates as `0403:6001` | yes (FTDI FT232R) |
+| Lock: lock file refuses a second open | yes |
+| Lock: `TIOCEXCL` refuses a second open | yes (the real FTDI device enforces it, unlike a pty) |
+| 9600 8E1 read back | yes |
+| 115200 8N1 read back | yes |
+| 10400 8N1 read back | yes (macOS 26's FTDI driver takes the non-standard rate via `IOSSIOSPEED`) |
+| Latency 1 ms accepted | yes (accepted; whether it takes effect is section 6) |
+| DTR on/off | yes |
+| DSR | off (nothing connected) |
 
 ## 6. Echo timing (Ryan; bench 12 V supply only)
 
