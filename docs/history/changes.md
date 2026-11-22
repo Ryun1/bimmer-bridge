@@ -1,6 +1,86 @@
-# What changed in 0.3.0 and 0.4.0
+# What changed in 0.3.0 to 0.5.1
 
 > Historical record: the release notes of earlier versions, moved from the README. For the current state, see the [README's Status](../../README.md#status).
+
+## Checks of 0.5.0 in the VM and the phase table
+
+0.5.0 in the VM, 2026-11-22 (cable in the VM, not in the car):
+- Approvals pinned before the update; `vm_health` then showed 5 pinned, 0 ignored, and policy
+  version 4 with the same SHA-256 on both sides.
+- `update.ps1` under Windows PowerShell 5.1: the first Update added `WINKFP` and `ISTAGUI` and
+  recorded `conflictDefaultsOffered`, with `reviewedJobs` and the other keys unchanged; a second
+  Update changed nothing; a default removed by hand stayed removed after a third.
+  `vm-setup/*.ps1` also parse under `pwsh` 7.7 on the Mac.
+- `--selftest`: PASS (after the self-test's own 8.3 check was fixed, PR #2).
+- Desk checks: `TMODE INFO`; `ediabas_vehicle_status` (TMODE lines; `NVE_65` voltage from the
+  Mac's `config.local.json`); INPA open gives `cable_in_use`; an INPA screenshot is readable;
+  `ediabas_describe E60` shows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` runnable; a
+  `reviewedJobs` edit shows `[approvals changed]` first on a result and after the `[code]` on an
+  error; with the car absent, the info memory line gives the real no-response error. Stopping a
+  running job when a BMW tool opens mid-job (`apiBreak`) is covered by the agent's tests only: a
+  desk-side describe is too short to open INPA during it.
+- Restart checks: after a VM reboot the agent came back by itself at log-on, and the running
+  Mac server reconnected without a restart. After the Mac slept, the agent and the bridge stayed
+  up, but the cable was handed back to the Mac: a `TMODE` job then failed with error 48 until the
+  cable was ticked for the VM again in UTM. The error hint for 48 now says so.
+
+| Phase | State |
+|---|---|
+| 0 Discovery | done (2026-11-21) |
+| 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, came back after a Windows restart |
+| 2 EDIABAS at the desk | done (2026-11-21, agent 0.2.0): every desk check passes. Agent 0.2.2 deployed and used at the desk on 2026-11-22 |
+| 3 Mac MCP | done: the ten tools of 0.2.x (`ediabas_jobs`, the eleventh, came in 0.3.0). Checked in Claude Code and in the desktop app (`ediabas_describe` on `NVE_65`, 2026-11-21) |
+| 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
+| 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
+| 6 At the car | built (vehicle status, fault tables). **Not run: this is the owner's, at the car** |
+| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 passed with the skills (2026-11-21), but for 07 and 08 the run without the skills was not shown to do worse, so PLAN.md's acceptance is not met for them; eval 04 passed 3 of 3 with the skills and failed 3 of 3 without them (2026-11-22, `needs-review` fixture); skill references filled from the desk recordings of 2026-11-21/22 |
+| 8 Hardening | built: `VERSION`, `release.sh`, the docs. The plan's acceptance check (reinstalling from this README alone) has not been run; updates from the README's lines have |
+
+Open:
+- **Phase 6 at the car**, the owner's: [docs/at-the-car.md](../at-the-car.md).
+- **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car
+  ([dev/fixtures/README.md](../../dev/fixtures/README.md)).
+- **Eval acceptance**: 07 and 08 still need a run without the skills that does worse.
+- **Skill reference entries that need car recordings**: the vehicle-status field names, the
+  engine SGBD, and the SGBDs that can only be described with the control unit answering.
+
+## What changed in 0.5.1
+
+- After the Mac sleeps, UTM hands the cable back to the Mac. `ediabas_error` 48
+  (`IFH-0038`) now says the cable may not be attached to the VM, as error 16 does after a replug,
+  instead of only blaming the ECU. Mac server only.
+- `global.json` pins the .NET SDK to 10.0.x, and `release.sh` / `vm-agent/build.sh` prefer the
+  `dotnet@10` keg and check the version, so a newer `dotnet` on `PATH` is refused, not used.
+- The agent's code is unchanged since 0.5.0; its version moves with the others, so the Update
+  line brings it to 0.5.1. Skill references: job verdicts under policy version 4.
+
+## What changed in 0.5.0
+
+- **Pin your approvals before updating.** Only pinned entries (`ECU:JOB@hash`) approve anything;
+  unpinned ones are ignored. `ediabas_describe` prints the line to paste. Steps:
+  [Upgrading to 0.5.0](../install.md#upgrading-to-050).
+- Approvals are listed in `vm_health`; a change prints `[approvals changed]`; tools refuse with
+  `[policy_mismatch]` if the Mac's and the VM's policy files differ.
+- Policy version 4: `E65`, `E70`, `E89X`, `F01`, `R56` restricted like `E60`; switching and
+  triggering words added to the description screen.
+- The agent stops a running job (`apiBreak`) within about 250 ms if a BMW tool starts, and checks
+  again just before `apiInit`. `WINKFP` and `ISTAGUI` join the default conflict list (Update adds
+  the defaults a `config.json` was never offered, records them in `conflictDefaultsOffered` so
+  one you remove stays removed, and keeps `config.json.bak`).
+- The Mac sends the token only to an address that proves itself with `GET /hello` in the same
+  call; the VM is found from its newest DHCP lease on UTM's network only.
+- A job the SGBD lacks is `ediabas_error` again (`job_not_found` only comes from
+  `ediabas_describe` now). This reverses a 0.3.0 item.
+- `ediabas_vehicle_status` runs as one jobs batch from the Mac. Move `voltageSources` from the
+  VM's `config.json` to the Mac's `config.local.json` and delete the VM key (the agent warns
+  while it is there).
+- `/logs/read` refuses a log file that is itself a link; a failed `apiEnd` shows in `vm_health`;
+  screenshots fall back to the screen copy for a window that does not answer in 500 ms.
+- Update: backs up the exe and rolls back on failure; the firewall rule is re-pinned to the
+  current gateway.
+- The recorder moved to `dev/` (`dev/record-server.ts`).
+- A 0.5.0 Mac server needs a 0.5.0 agent: `vm_health` warns on a version difference, and a 0.4.0
+  agent answers `/hello` with 401, which shows as `[agent_outdated]`.
 
 ## What changed in 0.4.0
 

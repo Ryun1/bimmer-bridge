@@ -73,7 +73,7 @@ has no `.git` and `release.sh` stops without one, then use the release's prebuil
 build only the Mac server:
 
 ```sh
-git clone --branch v0.5.0 https://github.com/Ryun1/bimmer-bridge && cd bimmer-bridge
+git clone --branch v0.6.0 https://github.com/Ryun1/bimmer-bridge && cd bimmer-bridge
 mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
 shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
 (cd mac-mcp && npm ci && npm run build)
@@ -168,7 +168,7 @@ that a Node upgrade does not break the registration. The server must stay at
 claude mcp add --scope user bimmer-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"
 ```
 
-**Claude desktop app:** quit the app, then add an `bimmer-bridge` entry under `mcpServers` in
+**Claude desktop app:** quit the app, then add a `bimmer-bridge` entry under `mcpServers` in
 `~/Library/Application Support/Claude/claude_desktop_config.json`. Keep every other key in the
 file as it is; create the `mcpServers` key if it is not there. `<repo>` is the absolute path of
 this repo (`pwd` in the repo root prints it):
@@ -254,6 +254,28 @@ After a code change, or to install a newer build:
    `skills/install.sh` again and upload the new zips.
 7. Check with `vm_health`: the Mac server's version and the agent's should both be the new
    one, with no version or policy-version warning.
+
+## Upgrading to 0.6.0
+
+0.6.0 renames the project from ediabas-bridge to bimmer-bridge. The VM side keeps its names
+(`C:\ProgramData\EdiabasBridge`, the `ediabas-bridge agent` task and firewall rule), and so do
+the Keychain service and the Mac audit log folder, so the token and the installed agent carry
+over. On the Mac:
+
+1. Rename your clone's folder if you like, and point it at the renamed GitHub repo:
+   `git remote set-url origin https://github.com/Ryun1/bimmer-bridge` (GitHub also redirects
+   the old URL).
+2. Build and update as in [Updating](#updating). The agent's code is unchanged, so its only
+   change is the version.
+3. Replace the MCP server's registration:
+   `claude mcp remove --scope user ediabas-bridge`, then the `claude mcp add` line in
+   [step 4](#4-register-the-mcp-server). In the desktop app's config, rename the
+   `ediabas-bridge` key under `mcpServers` to `bimmer-bridge` and fix the path if the folder
+   moved. The tools are now `mcp__bimmer-bridge__*`, so any permission rules that name
+   `mcp__ediabas-bridge__` need the new prefix.
+4. Replace the skill: `rm ~/.claude/skills/ediabas-bridge`, then `skills/install.sh`. On
+   claude.ai, delete the uploaded `ediabas-bridge` skill and upload `skills/dist/bimmer-bridge.zip`.
+5. Restart Claude and check with `vm_health`.
 
 ## Upgrading to 0.5.0
 
