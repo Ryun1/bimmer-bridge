@@ -6,10 +6,10 @@
  * server has no recording code. stdout is the MCP channel: diagnostics go to stderr.
  *
  *   EDIABAS_RECORD_DIR=<folder outside the repo> \
- *     node --experimental-transform-types --import ./dev/ts-resolve.mjs dev/record-server.ts
+ *     node --import ./dev/ts-resolve.mjs dev/record-server.ts
  *
- * (mac-mcp/src needs transform-types for its constructor parameter properties, and ts-resolve.mjs
- * for its "./x.js" imports; no build and no extra dependency.)
+ * (Node strips the types without a flag: erasableSyntaxOnly keeps mac-mcp/src strippable, and
+ * ts-resolve.mjs handles its "./x.js" imports; no build and no extra dependency.)
  */
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";

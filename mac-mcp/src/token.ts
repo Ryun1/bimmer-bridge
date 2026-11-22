@@ -48,7 +48,11 @@ export class TokenProvider {
   private readonly seen = new Set<string>();
   private warnedEnv = false;
 
-  constructor(private readonly opts: TokenProviderOptions) {}
+  private readonly opts: TokenProviderOptions;
+
+  constructor(opts: TokenProviderOptions) {
+    this.opts = opts;
+  }
 
   /** The token, reading it on first use. Throws `no_token` (absence is not cached). */
   async get(): Promise<string> {

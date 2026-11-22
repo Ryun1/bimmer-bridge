@@ -11,6 +11,7 @@
       "@modelcontextprotocol/sdk/*": ["../mac-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/*"]
     },
     "strict": true,
+    "erasableSyntaxOnly": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,

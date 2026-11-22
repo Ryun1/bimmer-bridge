@@ -20,7 +20,11 @@ export class CarSession {
   private start: number | null = null;
   private last = 0;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  private readonly now: () => number;
+
+  constructor(now: () => number = Date.now) {
+    this.now = now;
+  }
 
   /** A successful read on `ecu`; starts a session unless one is running. */
   record(ecu: string): void {

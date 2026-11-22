@@ -101,16 +101,18 @@ Fixtures come only from real sessions; nothing is written by hand.
 
 1. Register the recording server in place of the production one for the session, with
    `EDIABAS_RECORD_DIR` set to a folder **outside the repo** (it holds real vehicle data):
-   command `node`, arguments `--experimental-transform-types --import
-   /path/to/repo/dev/ts-resolve.mjs /path/to/repo/dev/record-server.ts`, and the same `env`
+   command `node` (the same binary as the production registration, so macOS's Local Network
+   permission carries over), arguments `--import /path/to/repo/dev/ts-resolve.mjs
+   /path/to/repo/dev/record-server.ts`, and the same `env`
    as the production registration plus `EDIABAS_RECORD_DIR`. From a shell:
-   `EDIABAS_RECORD_DIR=~/ediabas-recordings/x node --experimental-transform-types --import ./dev/ts-resolve.mjs dev/record-server.ts`. It is the production server
+   `EDIABAS_RECORD_DIR=~/ediabas-recordings/x node --import ./dev/ts-resolve.mjs dev/record-server.ts`. It is the production server
    (`mac-mcp/src`) with a recording `fetch` (`dev/recorder.ts`); the production server itself
    never writes exchanges. Every agent exchange except `GET /hello` is written as one JSON file
    named `<UTC time>-<sequence>-<METHOD>-<path>[-<ECU>-<JOB>].json`, screenshots beside it; the
-   token and request headers never are. No build and no extra dependency: Node's type
-   stripping needs `--experimental-transform-types` for `mac-mcp/src`'s parameter properties,
-   and `dev/ts-resolve.mjs` maps its `./x.js` imports to `./x.ts` and the MCP SDK to
+   token and request headers never are. No build and no extra dependency: Node 22.18+ strips
+   the types without a flag (`erasableSyntaxOnly` in both tsconfigs keeps `mac-mcp/src` and
+   `dev/` within what it can strip; Node 26 removed `--experimental-transform-types`), and
+   `dev/ts-resolve.mjs` maps its `./x.js` imports to `./x.ts` and the MCP SDK to
    `mac-mcp/node_modules`.
 2. Scrub into the fixtures folder, first with `--dry-run`:
    `node dev/scrub-fixtures.ts <raw-folder> <scenario> --dry-run`, then without it.

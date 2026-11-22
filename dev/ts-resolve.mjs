@@ -2,7 +2,7 @@
 //  - an import written "./x.js" for the compiler is retried as "./x.ts" when no .js exists;
 //  - "@modelcontextprotocol/sdk/*" (dev/ has no node_modules) resolves to mac-mcp's copy, the
 //    same mapping dev/vitest.config.ts uses.
-// Used by `node --experimental-transform-types --import ./dev/ts-resolve.mjs dev/record-server.ts`.
+// Used by `node --import ./dev/ts-resolve.mjs dev/record-server.ts`.
 import { register } from "node:module";
 
 const sdk = new URL("../mac-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/", import.meta.url).href;
