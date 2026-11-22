@@ -1,6 +1,8 @@
 // census: offline surveys of an SGBD folder. Nothing here opens a port or talks to a car.
 //
 //   census concepts <ecuPath> [--json <out>]   what each .prg's INITIALISIERUNG asks of the cable
+//   census opcodes  <ecuPath> [--json <out>]   opcode counts over every .prg/.grp, flagging the
+//                                              ones EdiabasLib does not implement
 
 using System.Globalization;
 using System.Text.Json;
@@ -31,6 +33,7 @@ public static class Program
         switch (pos[0])
         {
             case "concepts": return Concepts(ecuPath, json);
+            case "opcodes": return Opcodes(ecuPath, json);
             default: return Usage();
         }
     }
@@ -38,6 +41,7 @@ public static class Program
     static int Usage()
     {
         Console.Error.WriteLine("usage: census concepts <ecuPath> [--json <out>]");
+        Console.Error.WriteLine("       census opcodes  <ecuPath> [--json <out>]");
         return 2;
     }
 
@@ -60,6 +64,32 @@ public static class Program
         }
         Console.WriteLine($"{"total",-12} {rows.Count,5}");
         if (json != null) File.WriteAllText(json, JsonSerializer.Serialize(rows, Json));
+        return 0;
+    }
+
+    static int Opcodes(string ecuPath, string json)
+    {
+        var r = OpcodeCensus.Run(ecuPath);
+        Console.WriteLine("MNEMONIC     COUNT");
+        foreach (var kv in r.MnemonicCounts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal))
+            Console.WriteLine($"{kv.Key,-10} {kv.Value,7}");
+        Console.WriteLine();
+        Console.WriteLine("UNIMPLEMENTED IN EDIABASLIB: " + (r.Unimplemented.Count == 0 ? "none" : r.Unimplemented.Count + " (file, mnemonic)"));
+        foreach (var (file, mnemonic) in r.Unimplemented)
+            Console.WriteLine($"  {file,-24} {mnemonic}");
+        Console.WriteLine("ERRORS: " + (r.Errors.Count == 0 ? "none" : r.Errors.Count.ToString(CultureInfo.InvariantCulture)));
+        foreach (var (file, error) in r.Errors)
+            Console.WriteLine($"  {file,-24} {error}");
+        if (json != null)
+        {
+            var doc = new
+            {
+                mnemonicCounts = r.MnemonicCounts,
+                unimplemented = r.Unimplemented.Select(u => new { file = u.File, mnemonic = u.Mnemonic }),
+                errors = r.Errors.Select(e => new { file = e.File, error = e.Error }),
+            };
+            File.WriteAllText(json, JsonSerializer.Serialize(doc, Json));
+        }
         return 0;
     }
 

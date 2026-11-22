@@ -28,6 +28,18 @@ public class ConceptCensusTests
         Assert.Equal("no_xsetpar", rows.Single(r => r.File.Equals("cmd_test1.prg", StringComparison.OrdinalIgnoreCase)).Status);
     }
 
+    [Fact] // Review Focus 2: truncated, not just junk
+    public async Task Census_TruncatedFile_IsErrorRow_NotHung()
+    {
+        var dir = TestFiles.TempCopy("cmd_test2.prg");
+        var path = Path.Combine(dir, "cmd_test2.prg");
+        var bytes = File.ReadAllBytes(path);
+        File.WriteAllBytes(path, bytes.Take(bytes.Length / 2).ToArray());
+        var run = Task.Run(() => ConceptCensus.Run(dir));
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(30)); // TimeoutException if it hangs
+        Assert.Equal("error", result.Single().Status);
+    }
+
     [Fact]
     public void Census_RowsAreInNameOrder()
     {
