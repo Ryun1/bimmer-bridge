@@ -50,7 +50,9 @@ The VM agent's own `JobPolicyTests` still pass on the same files (`vm-agent/Edia
 | Truncated frames refused | "truncated header refuses as malformed", "zero-length data is malformed" |
 | A refusal latches until close | `session.zig` "send refused before any concept, and the refusal latches"; C# `TransmitData_ClearFaults_RefusedAndLatched` |
 | Applies to replay too | "gate applies in replay too" |
-| Surfaces as `frame_refused` even when the SGBD masks the error | `NativeEdiabasApiTests.GateRefusal_FailsJobEvenWhenMasked` (the job ends ready, the request fails with code 9005), `GateRefused_FailsAReadyJob`; Core `NativeErrorMapTests` maps 9005 to `frame_refused` |
+| Surfaces as `frame_refused` even when the SGBD masks the error | `NativeEdiabasApiTests.GateRefusal_FailsJobEvenWhenMasked` (a fake cable reporting `gate_refused` under a job that ends ready), `GateRefused_FailsAReadyJob`. Not end to end: none of upstream's allowed test SGBDs declares a concept and then sends a refused service ID under a trap mask (with no concept declared, EdiabasLib refuses `xsend` itself before the transport). M2's recordings can supply one; Core `NativeErrorMapTests` maps 9005 to `frame_refused` |
+| Fails the whole request; nothing more is started | Core `EdiabasServiceTests.FrameRefused_FailsTheWholeBatch_AndStartsNothingMore`, `FrameRefused_FailsAVehicleRead`; the latch survives the next SGBD's `xconnect` (`KlineInterfaceTests.Latch_SurvivesAnotherConnect`, `Latch_SurvivesDisconnectAndConnect`) |
+| KWP2000\* framing (length at byte 3, service ID at byte 4) | `gate.zig` "kwp2000\* (0x010D) has its length at byte 3 …" (found by the final review: the gate had read 0x010D as BMW-FAST) |
 
 Suites at the end of M1: Zig 56 pass + 3 skip (macOS) in the library, 7 CLI, 6 C ABI;
 `engine/EdiabasLib.Native.Tests` 13; `engine/ediabasd-net.Tests` 67.
