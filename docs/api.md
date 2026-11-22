@@ -468,3 +468,68 @@ One line per request as before, now also carrying `ecu`, `job`, for refusals the
 `rule` (or the path refusal reason), and `target` (the log path or window asked for). Batch
 requests write one line per item plus one for the request. Control characters and Unicode
 format characters (U+202E, U+200B, U+2066 …) in a field are replaced with `_`.
+
+## `ediabasd` stdio (native engine)
+
+`ediabasd` (`engine/ediabasd-net`, stage 1 of the native engine) runs the same service as the
+VM agent's `/ediabas/*` endpoints, on EdiabasLib and the cable layer `libkline` instead of
+`api32.dll` in a VM. It has no listener: the MCP server starts `ediabasd serve` as a child
+process and speaks JSON lines on its stdin and stdout, one request at a time. A job is never
+resent. Log lines go to stderr.
+
+Request, one per line: `{"id": <any JSON value>, "method": "<name>", "params": {…}}`.
+Response, one per line: `{"id": <the same>, "ok": true, "result": {…}}` or
+`{"id": <the same>, "ok": false, "error": {"code", "message", "details"}}`. A line that is not a
+request object gets `bad_request` with `"id": null`; the server carries on.
+
+| `method` | `params` | `result` |
+|---|---|---|
+| `ecus` | `{ "filter"? }` | as `GET /ediabas/ecus` |
+| `describe` | `{ "ecu", "job"?, "filter"?, "comments"?: bool }` | as `GET /ediabas/describe` |
+| `job` | the body of `POST /ediabas/job` | as `POST /ediabas/job` |
+| `jobs` | the body of `POST /ediabas/jobs` | as `POST /ediabas/jobs` |
+| `vehicle` | `{}` | as `GET /ediabas/vehicle` |
+| `health` | `{}` | `{ "engine": "ediabasd-net", "version", "kline", "ecuPath", "cable": { "state": "absent" \| "present" \| "several" \| "unknown", "port" }, "policyVersion" }` |
+
+Unknown params are `bad_request`. `health` never opens the cable: it reads USB identities only.
+
+**What differs from the VM.**
+- **Describe never touches the cable.** `_` jobs (`_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`,
+  `_RESULTS`, …) run on an offline EdiabasLib instance that does not run `INITIALISIERUNG`.
+  Real EDIABAS runs it first even for `_JOBS`; for an SGBD whose INIT sends a telegram, the
+  native describe therefore works without the car where the VM's does not. Deliberate.
+- **Group files** (`.grp`): describe uses the variant the group last resolved to at the car,
+  cached in `$XDG_STATE_HOME/bimmer-bridge/variants.json` and keyed by the `.grp` file's hash.
+  With no entry it fails with `needs_car`. A `job`, `jobs` or `vehicle` request on a group
+  resolves it at the car (EdiabasLib runs its `IDENTIFIKATION`, as EDIABAS does) and stores it.
+- No process conflict check: the cable's lock (`flock` and exclusive open) does that job, and a
+  cable held by another program is `cable_in_use`.
+
+**Errors only the native engine gives** (the reason comes from `libkline`):
+
+| `code` | When |
+|---|---|
+| `cable_unsupported` | the serial device is not an FTDI FT232R (USB `0403:6001`) |
+| `cable_permission` | the device cannot be opened for lack of permission (on Linux, the udev rule) |
+| `frame_refused` | the cable layer's frame gate refused a telegram that could write to the car or reconfigure the cable. The whole request fails, whatever the SGBD made of the send error, and nothing more is sent on that port until it closes |
+| `needs_car` | a describe on a group file whose variant is not cached yet |
+
+An `ediabas_error` for IFH-0003 with no cable-layer reason says to check the cable switch is on
+K-line. In `details`, `errorCode` is EDIABAS's code, or one of 9001–9007 when the cable layer
+gave the reason (`no_device`, `locked`, `not_ftdi`, `permission`, `gate_refused`, a group with
+no cached variant, an echo mismatch).
+
+**A job that does not stop.** If a job is still busy 2 s after it was broken off, `ediabasd`
+writes that request's response and exits with code 3; the next request starts a fresh one.
+
+**Config** (`$XDG_CONFIG_HOME/bimmer-bridge/config.json`, default `~/.config/…`): `ecuPath`
+(required), `port` (optional when exactly one cable is present), `jobTimeoutSeconds` (30),
+`maxJobTimeoutSeconds` (60, at most 60), `voltageSources`, `reviewedJobs` (read at start),
+`traceDir`, `recordDir`. Unknown keys are errors. The audit log is
+`$XDG_STATE_HOME/bimmer-bridge/audit.log` (default `~/.local/state/…`), in the format below,
+with `stdio` or `cli` as the remote address and the method as the request.
+
+The same methods run from a shell: `ediabasd ecus [FILTER]`, `ediabasd describe ECU [JOB]
+[--filter X] [--no-comments]`, `ediabasd job ECU JOB [--args A] [--results R] [--timeout N]`,
+`ediabasd vehicle`, `ediabasd health`, each with `--config PATH`. Exit 0 ok, 1 error response,
+2 usage, 3 stuck, 78 config error.
