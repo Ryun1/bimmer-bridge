@@ -613,6 +613,18 @@ class Startup(unittest.TestCase):
         self.assertNotIn("-w '", text)
         self.assertIn("'SendToken'", text)
 
+    def test_options_do_not_stick_in_the_window(self):
+        # The pasted line sets its options in the global session; each script removes the ones
+        # it read, so a later paste in the same window does not inherit them.
+        setup = serve.REPO_ROOT / "vm-setup"
+        for script, names in (("install.ps1", ("Elevated", "SendToken")),
+                              ("uninstall.ps1", ("KeepData",))):
+            text = (setup / script).read_text(encoding="ascii")
+            self.assertIn("Remove-Variable -Name $Name -Scope Global", text, script)
+            for name in names:
+                self.assertIn("Get-OneShotVar '%s'" % name, text, script)
+                self.assertNotIn("Get-OptionalVar '%s'" % name, text, script)
+
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
 

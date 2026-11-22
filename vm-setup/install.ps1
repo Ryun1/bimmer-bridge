@@ -31,6 +31,14 @@
         return Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
     }
 
+    # An option from the pasted line: read once, then removed from the window's global scope,
+    # so a later paste in the same window does not inherit it.
+    function Get-OneShotVar([string]$Name) {
+        $value = Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+        Remove-Variable -Name $Name -Scope Global -ErrorAction SilentlyContinue
+        return $value
+    }
+
     function Write-Step([string]$Text) {
         Write-Host ('==> ' + $Text) -ForegroundColor Cyan
     }
@@ -261,6 +269,10 @@
 
     $tmp = $null
     try {
+        # Options first, so they are cleared even when a check below stops the script.
+        $runElevated = ((Get-OneShotVar 'Elevated') -eq $true)
+        $sendToken = ((Get-OneShotVar 'SendToken') -eq $true)
+
         Assert-Elevated
         Assert-WindowsPowerShell
 
@@ -278,9 +290,6 @@
             $base = 'http://' + $gateway + ':8000'
         }
         $base = ([string]$base).TrimEnd('/')
-        $elevatedVar = Get-OptionalVar 'Elevated'
-        $runElevated = ($elevatedVar -eq $true)
-        $sendToken = ((Get-OptionalVar 'SendToken') -eq $true)
 
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $userName = $identity.Name

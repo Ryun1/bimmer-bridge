@@ -19,8 +19,12 @@
     $RuleName = 'ediabas-bridge agent'
     $Keep = @('config.json', 'token.txt', 'logs')
 
-    function Get-OptionalVar([string]$Name) {
-        return Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+    # An option from the pasted line: read once, then removed from the window's global scope,
+    # so a later paste in the same window does not inherit it.
+    function Get-OneShotVar([string]$Name) {
+        $value = Get-Variable -Name $Name -ValueOnly -ErrorAction SilentlyContinue
+        Remove-Variable -Name $Name -Scope Global -ErrorAction SilentlyContinue
+        return $value
     }
 
     function Write-Step([string]$Text) {
@@ -47,9 +51,10 @@
     }
 
     try {
+        # Options first, so they are cleared even when a check below stops the script.
+        $keepData = ((Get-OneShotVar 'KeepData') -eq $true)
         Assert-Elevated
         Assert-WindowsPowerShell
-        $keepData = ((Get-OptionalVar 'KeepData') -eq $true)
 
         # ---- task ----
         $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
