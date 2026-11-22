@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); section 7 tests pass on Linux in a container, its hardware half still open; **section 9 next.**
+Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); section 7 tests pass on Linux in a container, its hardware half still open; section 8 skipped; section 9 decided (2026-11-22).
 
 ---
 
@@ -354,11 +354,11 @@ milliseconds.
 
 | Question | Decision |
 |---|---|
-| Concepts M3 must port (always including DS2, for the E46 M3) | |
-| Fast init (0x010C) in M2? | |
-| Opcode work for M3 | |
-| Does `NoInitForVJobs = true` match real EDIABAS? | |
-| Did latency 1 ms take effect (macOS / Linux)? | |
+| Concepts M3 must port (always including DS2, for the E46 M3) | **BMW-FAST (0x010F) and DS2 (0x0006) only.** Every E61 module is BMW-FAST (section 2); DS2 is for the E46 M3. KWP2000\*, D-CAN, DS1 and 5-baud wait until a car needs them. |
+| Fast init (0x010C) in M2? | **No.** Only `mrrbt.prg` uses it, and it is not an E61 module. Section 8 is skipped. |
+| Opcode work for M3 | **None.** No SGBD in the folder uses an opcode EdiabasLib leaves unimplemented (section 3). |
+| Does `NoInitForVJobs = true` match real EDIABAS? | **No** (section 4). **Decision: split by path.** The offline describe path keeps `NoInitForVJobs = true`, as it never touches the cable; the live path runs `INITIALISIERUNG` before the first job, as EDIABAS does. The difference is deliberate and goes in the M1 design. |
+| Did latency 1 ms take effect (macOS / Linux)? | **Unknown.** macOS accepts it (section 5) but Apple's FTDI driver does not report it, so only the echo test can tell. **Decision: M2 starts with the echo test** on a cheap 12 V source (a 12 V adapter or 8×AA pack on an OBD pigtail: + to pin 16, − to 4/5, nothing else). If 1 ms does not take effect, M2 uses longer receive timeouts (`ObdAddRecTimeout`). On Linux, `/sys/bus/usb-serial/devices/ttyUSB0/latency_timer` shows it without 12 V. |
 
 ### Found while building M0, for the M1 plan
 
