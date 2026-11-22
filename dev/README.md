@@ -5,6 +5,7 @@
 | `serve.py` | the Mac-side deploy server: serves `vm-setup/*.ps1` and `release/EdiabasAgent.zip` to the VM's address only, takes the agent token into the Keychain with `--accept-token` (and then puts `$SendToken=$true` on the Install line), prints the hash-checked lines to paste. Contract: [docs/deploy.md](../docs/deploy.md) |
 | `test_serve.py` | its tests: `python3 -m unittest dev/test_serve.py` |
 | `replay-agent.ts` | a stand-in VM agent that answers only from recorded fixtures, on 127.0.0.1 |
+| `record-server.ts`, `recorder.ts`, `ts-resolve.mjs` | the MCP server with a recording `fetch`: writes every agent exchange to `EDIABAS_RECORD_DIR` (how to run it: [docs/development.md](../docs/development.md#recording-and-scrubbing)) |
 | `scrub-fixtures.ts` | copies a raw recording (`EDIABAS_RECORD_DIR`) into `fixtures/<scenario>/` with identifiers removed |
 | `fixtures/` | recorded scenarios (`idle`, `inpa-open`): [fixtures/README.md](fixtures/README.md) |
 | `test/` | vitest tests for the replay agent and scrubber, run from `mac-mcp`; `fixtures-clean.test.ts` checks that every committed fixture needs no scrubbing |

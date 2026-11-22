@@ -28,7 +28,8 @@ car-session line and the longer idle time below are all untested there.
       not unloaded and reloaded after every pause between reads. Unlike `reviewedJobs`, this
       key is read only when the agent starts: restart Windows in the VM afterwards. While it is
       90, the bridge keeps EDIABAS loaded for 90 s after its last call.
-- [ ] To record fixtures, register or start the MCP server with `EDIABAS_RECORD_DIR` set to a
+- [ ] To record fixtures, register the recording server (`dev/record-server.ts`, see
+      [development.md](development.md#recording-and-scrubbing)) in place of the production one, with `EDIABAS_RECORD_DIR` set to a
       folder **outside the repo**, for example `~/ediabas-recordings/nve-faults`, one folder
       per scenario ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
       Restart Claude so the server picks it up.
@@ -91,8 +92,8 @@ car-session line and the longer idle time below are all untested there.
 ## Afterwards
 
 - [ ] Set `ediabasIdleReleaseSeconds` back to 20 (or remove it) and restart Windows in the VM.
-- [ ] Remove `EDIABAS_RECORD_DIR` from the MCP registration and restart Claude, so later
-      sessions do not record.
+- [ ] Register the production MCP server again (not `dev/record-server.ts`) and restart
+      Claude, so later sessions do not record.
 - [ ] Scrub each recording folder into `dev/fixtures/<scenario>/` and review every file and
       screenshot ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
 - [ ] Fill the skill reference entries that waited for the car (vehicle-status field names,

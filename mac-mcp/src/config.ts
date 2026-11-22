@@ -42,8 +42,6 @@ export interface Config {
   /** Keychain generic-password item. */
   keychainService: string;
   keychainAccount: string;
-  /** Folder to record every agent exchange into (fixtures). Off when undefined. */
-  recordDir: string | undefined;
   /** Extra voltage readings ediabas_vehicle_status runs, in order (config.local.json only). */
   voltageSources: VoltageSource[];
 }
@@ -216,9 +214,6 @@ export function loadConfig(
 
   const vmName = nonEmpty(env.EDIABAS_VM_NAME) ?? local.vmName ?? DEFAULTS.vmName;
 
-  const recordText = nonEmpty(env.EDIABAS_RECORD_DIR);
-  const recordDir = recordText === undefined ? undefined : expandHome(recordText, home);
-
   return {
     config: {
       agentUrl,
@@ -230,7 +225,6 @@ export function loadConfig(
       auditLogPath,
       keychainService: DEFAULTS.keychainService,
       keychainAccount: DEFAULTS.keychainAccount,
-      recordDir,
       voltageSources: local.voltageSources ?? [],
     },
     warnings,

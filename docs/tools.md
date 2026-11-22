@@ -116,6 +116,9 @@ use …`. Codes (also the audit outcome):
 | `path_not_allowed`, `file_not_found` | agent | logs: outside the allowed folders, or no such file |
 
 ## Recording (for fixtures)
-With `EDIABAS_RECORD_DIR` set, the server writes every agent exchange (method, path, query,
-request body, status, response body or image bytes; never the token) to that folder. Off by
-default. `dev/replay-agent.ts` serves a scrubbed copy of such a folder.
+The production server never records. The dev entry point `dev/record-server.ts` (register it
+instead of the server for a recording session, with `EDIABAS_RECORD_DIR` set) writes every agent
+exchange (method, path, query, request body, status, response body or image bytes; never the
+token or request headers, and not `/hello`) to that folder; see
+[development.md](development.md#recording-and-scrubbing). `dev/replay-agent.ts` serves a
+scrubbed copy of such a folder.

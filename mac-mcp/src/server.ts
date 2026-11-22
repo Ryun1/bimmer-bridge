@@ -11,7 +11,6 @@ import { BATCH_MAX, readFaults, runBatch, runJobBatch } from "./faults.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
 import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle, vehicleBatch } from "./formatEdiabas.js";
 import { PolicyGuard } from "./policy.js";
-import { FolderRecorder } from "./recorder.js";
 import { CarSession } from "./carSession.js";
 import { TEXT_BUDGET, fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
@@ -528,8 +527,6 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
   const policy = deps.policy ?? PolicyGuard.load();
   if (policy.error) log(`warning: job policy not loaded (${policy.error}); every ediabas_* tool will refuse with policy_unavailable.`);
   for (const e of voltageSourceErrors(config.voltageSources, policy)) log(`config error: ${e} ediabas_vehicle_status refuses until it is fixed.`);
-  const recorder = config.recordDir ? new FolderRecorder(config.recordDir, { warn: log, redact: (t) => tokens.redact(t) }) : undefined;
-  if (recorder) log(`recording every agent exchange to ${config.recordDir}`);
   const client = new AgentClient({
     config,
     tokens,
@@ -539,7 +536,6 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     ediabasTimeoutMs: deps.ediabasTimeoutMs,
     probeTimeoutMs: deps.probeTimeoutMs,
     log,
-    recorder,
   });
   const audit = new AuditLog(config.auditLogPath, { warn: log });
   return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources });

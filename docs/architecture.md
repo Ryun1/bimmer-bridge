@@ -113,10 +113,10 @@ Mac's. Plain-words rules: [safety.md](safety.md#the-job-policy-in-plain-words).
 | VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | `--selftest` | the last self-test report |
 | Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=`, and `approvals_changed=1` when the approvals watch flagged a change |
 | Mac | stderr (in the desktop app: `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log`) | the MCP server | discovery, failed probes, warnings |
-| Mac | a folder of your choice (`EDIABAS_RECORD_DIR`) | `mac-mcp/src/recorder.ts` | off by default; every agent exchange, for fixtures ([development.md](development.md#recording-and-scrubbing)) |
+| Mac | a folder of your choice (`EDIABAS_RECORD_DIR`, read only by `dev/record-server.ts`) | `dev/recorder.ts` | only when the dev recording server is registered instead of the production one; every agent exchange, for fixtures ([development.md](development.md#recording-and-scrubbing)) |
 
 The two VM logs roll over to a `.1` file at 5 MB. The token is never logged on either side, and
-the recorder never records request headers.
+the dev recorder never records request headers.
 
 ## Trust boundaries
 
@@ -130,7 +130,7 @@ the recorder never records request headers.
   address set by hand. Before the Mac sends the token to an address, that address must prove
   it holds the token through `GET /hello`: an HMAC of a fresh nonce keyed with the token's
   SHA-256, which the Mac checks in constant time. This holds for discovered addresses and for
-  `EDIABAS_AGENT_URL` alike. `/hello` exchanges are not recorded with `EDIABAS_RECORD_DIR`.
+  `EDIABAS_AGENT_URL` alike. `/hello` exchanges are not recorded by the dev recording server.
 - **The bind address.** The agent listens on one literal IPv4 address on UTM's shared network
   (`bindAddress: "auto"` picks it; never a wildcard, loopback, link-local or public address),
   HTTP/1 only. The Windows firewall rule `ediabas-bridge agent` allows TCP 8765 from the VM's

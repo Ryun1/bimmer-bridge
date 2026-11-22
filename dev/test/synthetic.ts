@@ -26,7 +26,7 @@ export interface SynthExchange {
 
 let seq = 0;
 
-/** Write one recording in the format mac-mcp/src/recorder.ts uses. Returns its file name. */
+/** Write one recording in the format dev/recorder.ts uses. Returns its file name. */
 export function writeRecording(dir: string, x: SynthExchange, name?: string): string {
   mkdirSync(dir, { recursive: true });
   seq++;

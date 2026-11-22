@@ -16,7 +16,6 @@ import {
   vmNotRunning,
   wrongService,
 } from "./errors.js";
-import type { ExchangeRecorder } from "./recorder.js";
 import { helloKey } from "./token.js";
 import { VmLocator, bridgeSubnets, hostPort, isOnLink, type CallContext, type DiscoverySources } from "./vmAddress.js";
 
@@ -235,8 +234,6 @@ export interface AgentClientOptions {
   probeTimeoutMs?: number | undefined;
   /** Diagnostics (stderr). Never receives the token. */
   log?: ((message: string) => void) | undefined;
-  /** Recording mode (EDIABAS_RECORD_DIR). */
-  recorder?: ExchangeRecorder | undefined;
 }
 
 type FailureKind = "unreachable" | "refused" | "timeout";
@@ -294,7 +291,7 @@ interface RequestSpec {
    * connection was never made, never after a failure that may have followed delivery.
    */
   runsJob?: boolean;
-  /** Sent without the token (`GET /hello` only), and not recorded. */
+  /** Sent without the token (`GET /hello` only). */
   anonymous?: boolean;
 }
 
@@ -707,21 +704,6 @@ export class AgentClient {
       out = { status: res.status, bytes, headers: kept };
     } catch (e) {
       throw classify(e);
-    }
-    // `/hello` is not recorded: its proof is derived from the token, and the replay agent
-    // answers it itself.
-    if (this.opts.recorder && !spec.anonymous) {
-      // The token is not part of the exchange: no request headers are recorded.
-      await this.opts.recorder.record({
-        time: new Date(),
-        method: spec.method,
-        path: spec.path,
-        query,
-        requestBody: spec.body ?? null,
-        status: out.status,
-        responseHeaders: out.headers,
-        body: out.bytes,
-      });
     }
     return out;
   }

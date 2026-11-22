@@ -7,7 +7,7 @@ README's [Releasing](../README.md#releasing) section; deployment to the VM in
 ## Prerequisites
 
 - **Node 24 or later** (`brew install node`). The MCP server itself needs Node 20+, but the dev
-  tools (`dev/replay-agent.ts`, `dev/scrub-fixtures.ts`) are run directly by Node through type
+  tools (`dev/replay-agent.ts`, `dev/scrub-fixtures.ts`, `dev/record-server.ts`) are run directly by Node through type
   stripping, which needs 24+.
 - **.NET 10 SDK** (`brew install dotnet@10`). It is keg-only; `release.sh` and
   `vm-agent/build.sh` find it in the Homebrew folder by themselves. To run `dotnet` by hand, see
@@ -69,9 +69,19 @@ registration for an eval session, the scenario format and the matching rules are
 
 Fixtures come only from real sessions; nothing is written by hand.
 
-1. Run the MCP server with `EDIABAS_RECORD_DIR` set to a folder **outside the repo** (it holds
-   real vehicle data). Every agent exchange is written there as one JSON file, screenshots
-   beside it; the token never is.
+1. Register the recording server in place of the production one for the session, with
+   `EDIABAS_RECORD_DIR` set to a folder **outside the repo** (it holds real vehicle data):
+   command `node`, arguments `--experimental-transform-types --import
+   /path/to/repo/dev/ts-resolve.mjs /path/to/repo/dev/record-server.ts`, and the same `env`
+   as the production registration plus `EDIABAS_RECORD_DIR`. From a shell:
+   `EDIABAS_RECORD_DIR=~/ediabas-recordings/x node --experimental-transform-types --import ./dev/ts-resolve.mjs dev/record-server.ts`. It is the production server
+   (`mac-mcp/src`) with a recording `fetch` (`dev/recorder.ts`); the production server itself
+   never writes exchanges. Every agent exchange except `GET /hello` is written as one JSON file
+   named `<UTC time>-<sequence>-<METHOD>-<path>[-<ECU>-<JOB>].json`, screenshots beside it; the
+   token and request headers never are. No build and no extra dependency: Node's type
+   stripping needs `--experimental-transform-types` for `mac-mcp/src`'s parameter properties,
+   and `dev/ts-resolve.mjs` maps its `./x.js` imports to `./x.ts` and the MCP SDK to
+   `mac-mcp/node_modules`.
 2. Scrub into the fixtures folder, first with `--dry-run`:
    `node dev/scrub-fixtures.ts <raw-folder> <scenario> --dry-run`, then without it.
 3. Review every file and every screenshot before committing (screenshots are copied

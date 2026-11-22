@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -1102,52 +1102,5 @@ describe("car session line", () => {
     expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" })).text).not.toMatch(/Car session/);
     // The stub's vehicle status has one voltage read from NVE_65: that is a read from the car.
     expect((await call("ediabas_vehicle_status")).text).toMatch(/Car session: 0 s/);
-  });
-});
-
-describe("recording", () => {
-  it("writes one file per exchange, images separately, never the token", async () => {
-    const rec = join(dir, "rec");
-    const { call } = await connect({ env: { EDIABAS_RECORD_DIR: rec } });
-    await call("vm_health");
-    await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
-    await call("vm_screenshot", { window: "INPA" });
-    override("GET /logs", () => agentErr(403, "path_not_allowed", "no", { reason: "x" }));
-    await call("vm_logs_list");
-    const files = (await readdir(rec)).sort();
-    // vm_health, the job's own /health, the job, the screenshot and the logs listing; discovery's
-    // /hello is not recorded (its proof comes from the token, and the replay agent answers it itself)
-    expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(5);
-    expect(files.filter((f) => f.endsWith(".jpg"))).toHaveLength(1);
-    expect(files.some((f) => /^\d{8}T\d{9}Z-0003-POST-ediabas_job-NVE_65-IDENT\.json$/.test(f))).toBe(true);
-    expect(files.some((f) => f.includes("hello"))).toBe(false);
-    const all = await Promise.all(files.filter((f) => f.endsWith(".json")).map((f) => readFile(join(rec, f), "utf8")));
-    for (const t of all) {
-      expect(t).not.toContain(AGENT_TOKEN);
-      expect(t.toLowerCase()).not.toContain("authorization");
-    }
-    const job = JSON.parse(all.find((t) => t.includes('"/ediabas/job"'))!);
-    expect(job.request).toEqual({ method: "POST", path: "/ediabas/job", query: {}, body: { ecu: "NVE_65", job: "IDENT" } });
-    expect(job.response.status).toBe(200);
-    expect(job.response.body.ecu).toBe("NVE_65");
-    const shot = JSON.parse(all.find((t) => t.includes('"/screen/capture"'))!);
-    expect(shot.request.query).toEqual({ window: "INPA", maxEdge: "1600" });
-    expect(shot.response.headers["x-capture-method"]).toBe("printwindow");
-    expect(files).toContain(shot.response.imageFile);
-    const err = JSON.parse(all.find((t) => t.includes('"/logs"'))!);
-    expect(err.response).toMatchObject({ status: 403, body: { error: { code: "path_not_allowed" } } });
-  });
-
-  it("is off by default", async () => {
-    const { call } = await connect();
-    await call("vm_health");
-    expect(await readdir(dir)).toEqual(["logs"]);
-  });
-
-  it("a recording failure does not fail the tool call", async () => {
-    const { call, logs } = await connect({ env: { EDIABAS_RECORD_DIR: "/dev/null/cannot" } });
-    const r = await call("vm_health");
-    expect(r.isError).toBeFalsy();
-    expect(logs.some((l) => /could not record/.test(l))).toBe(true);
   });
 });

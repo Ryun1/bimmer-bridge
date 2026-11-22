@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Fixture scrubber: copies a raw recording folder (written by the MCP server with
+ * Fixture scrubber: copies a raw recording folder (written by dev/record-server.ts with
  * EDIABAS_RECORD_DIR; never committed) into dev/fixtures/<scenario>/ with identifiers removed.
  *
  *   node dev/scrub-fixtures.ts <raw-folder> <scenario> [--fixtures dev/fixtures] [--dry-run]

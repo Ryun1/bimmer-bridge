@@ -10,7 +10,7 @@
  * never hold it). Binds to 127.0.0.1 only. A request with no matching recording gets a 404
  * `no_recording` naming what was asked: this file never makes up an answer.
  *
- * A scenario is a folder of recordings in the format mac-mcp/src/recorder.ts writes, plus an
+ * A scenario is a folder of recordings in the format dev/recorder.ts writes, plus an
  * optional scenario.json (see dev/fixtures/README.md) that can name a base scenario to overlay
  * and routes that serve one recorded response for a whole path prefix.
  *
@@ -96,7 +96,7 @@ function sortedPairs(q: Record<string, string>): [string, string][] {
   return Object.entries(q).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-/** Parse one recording file (mac-mcp/src/recorder.ts format). Throws ReplayConfigError. */
+/** Parse one recording file (dev/recorder.ts format). Throws ReplayConfigError. */
 export function parseRecording(dir: string, file: string): Recording {
   const where = join(dir, file);
   let raw: unknown;

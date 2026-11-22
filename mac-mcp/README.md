@@ -91,7 +91,6 @@ is only ever sent to an address that proved it holds that same token.
 | `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for messages and finding the VM's MAC in UTM's config |
 | `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none; the only token used with `EDIABAS_AGENT_URL` |
 | `EDIABAS_AUDIT_LOG` | `~/Library/Logs/ediabas-bridge/audit.log` | audit log path |
-| `EDIABAS_RECORD_DIR` | — | record every agent exchange into this folder (see Recording) |
 
 **`config.local.json`.** Settings for one machine can also go in `config.local.json` at the repo
 root (git-ignored; copy `config.local.example.json`). It is read once at start-up (restart Claude
@@ -139,7 +138,9 @@ refusal, `rule=…`. A write failure is reported on stderr and does not fail the
 
 ## Recording
 
-With `EDIABAS_RECORD_DIR` set, every agent exchange except the `/hello` probe is written to
+This server never records. For fixtures, the dev entry point `dev/record-server.ts` runs this
+same server with a recording `fetch` (how: [development.md](../docs/development.md#recording-and-scrubbing)):
+with `EDIABAS_RECORD_DIR` set, every agent exchange except the `/hello` probe is written to
 that folder as one JSON file named
 `<UTC time>-<sequence>-<METHOD>-<path>[-<ECU>-<JOB>].json`, e.g.
 `20261121T150405123Z-0003-POST-ediabas_job-NVE_65-IDENT.json`:
@@ -154,8 +155,8 @@ The response has `body` (JSON), `bodyText` (anything else) or, for a screenshot,
 the name of the `.jpg`/`.png` written next to it. Response headers kept are `content-type` and
 the agent's `x-*` headers. Request headers are not recorded, so the token and the
 Authorization header never are; any token value in a body is replaced with `[redacted]`.
-Recordings contain real vehicle data: scrub them before committing (`dev/`). Off by default;
-a recording failure is logged on stderr and never fails the tool call.
+Recordings contain real vehicle data: scrub them before committing (`dev/`). A recording
+failure is logged on stderr and never fails the tool call.
 
 ## Registering with Claude
 

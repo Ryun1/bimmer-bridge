@@ -17,7 +17,7 @@ One folder per scenario, named with letters, digits, `-` and `_`:
 
 ```
 dev/fixtures/<scenario>/
-  <time>-<seq>-<METHOD>-<path>[-<ECU>-<JOB>].json   one recorded exchange (mac-mcp/src/recorder.ts format)
+  <time>-<seq>-<METHOD>-<path>[-<ECU>-<JOB>].json   one recorded exchange (dev/recorder.ts format)
   <same base>.jpg | .png                            a screenshot, referenced by `imageFile`
   scenario.json                                     optional: description, base, routes
 ```
@@ -69,8 +69,10 @@ MCP server sends what Claude passed).
 
 1. Pick a raw folder **outside the repo** (it holds real vehicle data and is never committed),
    for example `~/ediabas-recordings/nve-faults`.
-2. Run the MCP server with `EDIABAS_RECORD_DIR` set to it (in the MCP registration's `env`, or
-   for one Claude Code session), then use the tools as the scenario says. Every agent
+2. Run the recording server `dev/record-server.ts` instead of the production MCP server, with
+   `EDIABAS_RECORD_DIR` set to it (the command is in
+   [docs/development.md](../../docs/development.md#recording-and-scrubbing)), then use the
+   tools as the scenario says. Every agent
    exchange except the `/hello` probe lands in the folder as one JSON file; screenshots as
    a `.jpg`/`.png` beside it. The token is never recorded, and neither is the `/hello` proof:
    the replay agent computes it from its own token.

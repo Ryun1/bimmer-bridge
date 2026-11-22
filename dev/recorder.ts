@@ -2,10 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * Recording mode (docs/tools.md "Recording"): with EDIABAS_RECORD_DIR set, every agent
- * exchange is written to that folder as one JSON file, images as a separate file next to it.
- * The token and the Authorization header are never part of an exchange. dev/replay-agent.ts
- * serves a scrubbed copy of such a folder.
+ * Recording (docs/development.md "Recording and scrubbing"): dev/record-server.ts wraps the
+ * MCP server's `fetch` so every agent exchange is written to a folder as one JSON file, images
+ * as a separate file next to it. The token and request headers are never part of an exchange,
+ * and `GET /hello` is never recorded (its proof is derived from the token; the replay agent
+ * computes it live). dev/replay-agent.ts serves a scrubbed copy of such a folder. This is dev
+ * tooling: the production server has no recording code.
  */
 
 export interface Exchange {
@@ -107,4 +109,73 @@ export class FolderRecorder implements ExchangeRecorder {
       this.opts.warn(`warning: could not record agent exchange ${base}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+}
+
+/** The text of a request body that is a string (what the MCP server sends), else null. */
+function bodyText(body: RequestInit["body"]): string | null {
+  return typeof body === "string" ? body : null;
+}
+
+function parseJson(text: string | null): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * A `fetch` that records every exchange of `inner` with FolderRecorder, except `GET /hello`.
+ * Pass it as `AppDeps.fetch`. Recording never changes the call: the caller gets the response
+ * (read from a clone) or the transport error as `inner` produced it. Besides `redact`, any
+ * bearer token seen in a request's Authorization header is removed from the written text.
+ */
+export function recordingFetch(
+  dir: string,
+  redact: (text: string) => string,
+  opts: { fetch?: typeof fetch; warn?: (message: string) => void } = {},
+): typeof fetch {
+  const inner = opts.fetch ?? fetch;
+  const warn = opts.warn ?? ((m: string) => console.error(m));
+  const seen = new Set<string>();
+  const recorder = new FolderRecorder(dir, {
+    warn,
+    redact: (text) => {
+      let t = redact(text);
+      for (const token of seen) t = t.split(token).join("[redacted]");
+      return t;
+    },
+  });
+  return async (input, init) => {
+    const res = await inner(input, init);
+    try {
+      const request = input instanceof Request ? input : null;
+      const url = new URL(request ? request.url : String(input));
+      const method = (init?.method ?? request?.method ?? "GET").toUpperCase();
+      const auth = new Headers(init?.headers ?? request?.headers).get("authorization");
+      const token = auth?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (token) seen.add(token);
+      if (url.pathname === "/hello") return res;
+      const responseHeaders: Record<string, string> = {};
+      res.headers.forEach((value, name) => {
+        const n = name.toLowerCase();
+        if (n === "content-type" || n.startsWith("x-")) responseHeaders[n] = value;
+      });
+      const reqText = init?.body !== undefined ? bodyText(init.body) : request ? await request.clone().text() : null;
+      await recorder.record({
+        time: new Date(),
+        method,
+        path: url.pathname,
+        query: Object.fromEntries(url.searchParams),
+        requestBody: parseJson(reqText),
+        status: res.status,
+        responseHeaders,
+        body: new Uint8Array(await res.clone().arrayBuffer()),
+      });
+    } catch (e) {
+      warn(`warning: could not record agent exchange: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    return res;
+  };
 }
