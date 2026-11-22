@@ -19,6 +19,9 @@ public sealed record ConflictingProcess(string Name, int Pid);
 /// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.</summary>
 public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck);
 
+/// <summary>How many <c>reviewedJobs</c> entries are pinned to a description and how many approve by name only.</summary>
+public sealed record ApprovalCounts(int Pinned, int Unpinned);
+
 public sealed record HealthResponse(
     string Agent,
     string Version,
@@ -35,7 +38,8 @@ public sealed record HealthResponse(
     EdiabasInfo Ediabas,
     string? LastCableUseAt,
     int? PolicyVersion,
-    IReadOnlyList<string> Capabilities)
+    IReadOnlyList<string> Capabilities,
+    ApprovalCounts Approvals)
 {
     public const string AgentName = "ediabas-bridge-agent";
 }
@@ -72,6 +76,8 @@ public static class ApiErrors
     public const string WindowNotFound = "window_not_found";
     public const string WindowMinimized = "window_minimized";
     public const string DesktopUnavailable = "desktop_unavailable";
+    public const string CaptureBusy = "capture_busy";
+    public const string CaptureFailed = "capture_failed";
 
     public static ErrorBody Create(string code, string message, object? details = null) =>
         new(new ErrorDetail(code, message, details));
@@ -86,7 +92,8 @@ public static class ApiErrors
         MethodNotAllowed => 405,
         CableInUse or WindowMinimized => 409,
         EdiabasError or CableNotFound => 502,
-        EdiabasUnavailable or NotRun or DesktopUnavailable => 503,
+        EdiabasUnavailable or NotRun or DesktopUnavailable or CaptureBusy => 503,
+        CaptureFailed => 500,
         JobTimeout => 504,
         _ => 500,
     };

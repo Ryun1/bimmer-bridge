@@ -40,14 +40,14 @@ internal static class WindowCapture
         var height = CaptureNative.GetSystemMetrics(CaptureNative.SM_CYSCREEN);
         if (!CaptureRules.UsableSourceSize(width, height))
         {
-            return CaptureRules.DesktopUnavailable("the screen size could not be read");
+            return CaptureRules.Failed("the screen size could not be read");
         }
 
         var pixels = Grab(width, height, (mem, screen) =>
             CaptureNative.BitBlt(mem, 0, 0, width, height, screen, 0, 0, CaptureNative.SRCCOPY | CaptureNative.CAPTUREBLT));
         if (pixels is null)
         {
-            return CaptureRules.DesktopUnavailable("the screen could not be read");
+            return CaptureRules.Failed("the screen could not be read");
         }
 
         return Encode(pixels, width, height, new PixelRect(0, 0, width, height), request,
@@ -121,7 +121,7 @@ internal static class WindowCapture
                     CaptureNative.SRCCOPY | CaptureNative.CAPTUREBLT));
             if (shot is null)
             {
-                return CaptureRules.DesktopUnavailable("the window could not be read from the screen");
+                return CaptureRules.Failed("the window could not be read from the screen");
             }
 
             result = Encode(shot, visible.Width, visible.Height, new PixelRect(0, 0, visible.Width, visible.Height), request,

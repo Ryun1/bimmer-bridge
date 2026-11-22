@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "namePattern": "^[A-Za-z0-9_]{1,64}$",
   "maxArgLength": 200,
   "allow": {
@@ -19,6 +19,7 @@
       "DATEN_REFERENZ_LESEN",
       "PRUEFSTEMPEL_LESEN",
       "C_FG_LESEN",
+      "C_FA_LESEN",
       "_JOBS",
       "_JOBCOMMENTS",
       "_ARGUMENTS",
@@ -31,6 +32,18 @@
       "^STATUS_[A-Z0-9_]+$"
     ],
     "restrictedEcus": {
+      "E60": [
+        "INFO",
+        "IDENT_FUNKTIONAL",
+        "FS_LESEN_FUNKTIONAL",
+        "_JOBS",
+        "_JOBCOMMENTS",
+        "_ARGUMENTS",
+        "_RESULTS",
+        "_VERSIONINFO",
+        "_TABLES",
+        "_TABLE"
+      ],
       "TMODE": [
         "INFO",
         "LESE_INTERFACE_TYP",
@@ -99,7 +112,12 @@
       "loesch",
       "lösch",
       "setz",
-      "programm",
+      "program",
+      "einstell",
+      "verstell",
+      "aender",
+      "änder",
+      "adjust",
       "reset",
       "lernen",
       "abgleich",

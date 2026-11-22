@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
+import { DescribeJobSchema, EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead } from "../src/format.js";
 import {
   formatDescribeJob,
@@ -92,7 +92,7 @@ describe("fault tables", () => {
       false,
     );
     expect(t).toContain("NVE_65\n  Fault memory: no faults stored.");
-    expect(t).toContain("D_MOTOR\n  Fault memory: error: There is no SGBD or group file named D_MOTOR");
+    expect(t).toContain("D_MOTOR\n  Fault memory: error: [ecu_not_found] There is no SGBD or group file named D_MOTOR");
     expect(t).toContain("X\n  Fault memory: error: The VM does not appear to be running.");
   });
 });
@@ -114,7 +114,7 @@ describe("job results", () => {
   });
 
   it("maps per-item errors, and unknown codes with their message", () => {
-    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("weird_code: something odd");
+    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("[weird_code] something odd");
     expect(itemErrorText(null)).toMatch(/no error/);
   });
 });
@@ -139,6 +139,58 @@ describe("describe / ecus", () => {
     expect(t).toContain("Results: none listed");
   });
 
+  describe("description hash", () => {
+    const body = (review: string, hash?: string | null) => ({
+      ecu: "NVE_65",
+      variant: "NVE_65",
+      job: "STATUS_X",
+      comment: "Liest Status",
+      ...(hash === undefined ? {} : { descriptionHash: hash }),
+      verdict: { allowed: true, rule: "allow.pattern", review },
+      arguments: [],
+      results: [],
+      durationMs: 5,
+    });
+    const mac = { allowed: true, rule: "allow.pattern", screen: true };
+    const approve =
+      'To approve this job as it is described now, Ryan adds "NVE_65:STATUS_X@0123456789ab" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).';
+
+    it("needs_review: the hash and the line to paste, directly under the description", () => {
+      const lines = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", "0123456789ab")), mac).split("\n");
+      const at = lines.indexOf("Description: Liest Status");
+      expect(lines[at + 1]).toBe("Description hash: 0123456789ab");
+      expect(lines[at + 2]).toBe(approve);
+    });
+
+    it("reviewed: only the hash", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("reviewed", "0123456789ab")), mac);
+      expect(t).toContain("\nDescription hash: 0123456789ab\n");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("not_required: neither", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("not_required", "0123456789ab")), mac);
+      expect(t).not.toContain("Description hash");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("a hash that is not 12 lower-case hex digits: neither (the line would approve nothing)", () => {
+      for (const hash of ["0123456789AB", "0123456789a", "0123456789abc", 'x" , "CAS:Y']) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
+
+    it("null hash, or an older agent without the field: neither", () => {
+      for (const hash of [null, undefined]) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
+  });
+
   it("ECU list, with truncation", () => {
     const t = formatEcus(
       EcusSchema.parse({ ecuPath: "C:\\EDIABAS\\ECU", count: 5000, truncated: true, files: [{ name: "A", type: "prg" }, { name: "G", type: "grp" }] }),
@@ -146,6 +198,19 @@ describe("describe / ecus", () => {
     );
     expect(t).toMatch(/^2 files in C:\\EDIABAS\\ECU \(truncated: 5000 matched; narrow the filter\):/);
     expect(formatEcus(EcusSchema.parse({ ecuPath: null, count: 0, truncated: false, files: [] }), "zz")).toBe('No SGBD or group files matching "zz".');
+  });
+
+  it("ECU list prints at most 500 names, then how many more", () => {
+    const files = [
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `G${i}`, type: "grp" })),
+      ...Array.from({ length: 4990 }, (_, i) => ({ name: `P${String(i).padStart(4, "0")}`, type: "prg" })),
+    ];
+    const t = formatEcus(EcusSchema.parse({ ecuPath: null, count: 5000, truncated: false, files }), undefined);
+    expect(t).toMatch(/^5000 files:/);
+    expect(t).toContain("Groups (grp): G0, G1");
+    expect(t).toContain("P0489");
+    expect(t).not.toContain("P0490");
+    expect(t.split("\n").at(-1)).toBe("4500 more; use filter to narrow the list.");
   });
 });
 
@@ -169,7 +234,7 @@ describe("health, capture, logs", () => {
     expect(formatLogList({ roots: [], files: [], truncated: false })).toBe("Log folders:\n  none configured in the agent\n\nNo matching files.");
   });
 
-  it("log text is capped", () => {
+  it("log text is not capped here (the tool's text budget applies)", () => {
     const r = LogReadSchema.parse({
       path: "C:\\a.log",
       sizeBytes: 1,
@@ -182,7 +247,25 @@ describe("health, capture, logs", () => {
     });
     const t = formatLogRead(r);
     expect(t).toMatch(/^C:\\a\.log: bytes 0-1 of 1, encoding windows-1252, modified unknown, truncated: yes\n\n/);
-    expect(t.length).toBeLessThan(301_000);
-    expect(t).toMatch(/cut at 300000 characters\)$/);
+    expect(t).not.toMatch(/cut at/);
+  });
+});
+
+describe("results that could not be read", () => {
+  const text = (details: unknown) => itemErrorText({ code: "ediabas_error", message: "The job finished but its results could not be read.", details });
+  const head = "[ediabas_error] The job finished but its results could not be read";
+  const tail = " Ask Ryan before trying again.";
+
+  it("shows the number and text EDIABAS gave, or whichever one it gave, or neither", () => {
+    expect(text({ errorCode: 134, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 134: SYS-0002).${tail}`);
+    expect(text({ errorCode: 134, resultsUnread: true })).toBe(`${head} (EDIABAS error 134).${tail}`);
+    expect(text({ errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS SYS-0002).${tail}`);
+    expect(text({ resultsUnread: true })).toBe(`${head}.${tail}`);
+  });
+
+  it("is only used when the agent sets resultsUnread to true", () => {
+    for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
+      expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
+    }
   });
 });

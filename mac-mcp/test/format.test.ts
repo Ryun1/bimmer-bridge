@@ -32,6 +32,19 @@ describe("formatHealth", () => {
     expect(t).toMatch(/last cable use: never/i);
   });
 
+  it("starts with the Mac server's version and start time, then the agent's", () => {
+    const startedAt = new Date(2026, 10, 22, 9, 5, 7); // local time
+    const lines = formatHealth(health({ version: "0.3.0" }), null, { version: "0.3.0", startedAt }).split("\n");
+    expect(lines[0]).toBe("Mac server 0.3.0, started 2026-11-22 09:05:07");
+    expect(lines[1]).toMatch(/^Agent: ediabas-bridge-agent 0\.3\.0, up /);
+    expect(lines.join("\n")).not.toMatch(/different versions/);
+  });
+
+  it("warns when the Mac server and the agent are different versions", () => {
+    const t = formatHealth(health({ version: "0.2.2" }), null, { version: "0.3.0", startedAt: new Date() });
+    expect(t.split("\n")[2]).toBe("WARNING: The Mac server and the agent are different versions; restart Claude or update the agent.");
+  });
+
   it("warns that screenshots will not work in session 0", () => {
     const t = formatHealth(health({ sessionId: 0 }));
     expect(t).toMatch(/not .*interactive/i);
@@ -70,6 +83,31 @@ describe("formatHealth", () => {
     expect(t).toMatch(/^EDIABAS: STUCK: .*did not stop after apiBreak.*restart/m);
     expect(t).not.toMatch(/loaded now/);
     expect(formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: false } }))).not.toMatch(/STUCK/);
+  });
+
+  describe("approvals", () => {
+    const UNPINNED = "Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.";
+    const after = (approvals: unknown) => {
+      const lines = formatHealth(health({ policyVersion: 3, capabilities: [], ...(approvals === undefined ? {} : { approvals }) }), 3).split("\n");
+      return lines.slice(lines.findIndex((l) => l.startsWith("Job policy:")) + 1);
+    };
+
+    it("0 pinned, 0 unpinned", () => {
+      expect(after({ pinned: 0, unpinned: 0 })).toEqual(["Approved jobs: 0 pinned, 0 unpinned."]);
+    });
+
+    it("2 pinned, 0 unpinned", () => {
+      expect(after({ pinned: 2, unpinned: 0 })).toEqual(["Approved jobs: 2 pinned, 0 unpinned."]);
+    });
+
+    it("1 pinned, 3 unpinned: says what unpinned misses", () => {
+      expect(after({ pinned: 1, unpinned: 3 })).toEqual(["Approved jobs: 1 pinned, 3 unpinned.", UNPINNED]);
+    });
+
+    it("an older agent without the field: nothing", () => {
+      expect(after(undefined)).toEqual([]);
+      expect(formatHealth(health())).not.toContain("Approved jobs");
+    });
   });
 
   it("strips control characters from agent strings", () => {

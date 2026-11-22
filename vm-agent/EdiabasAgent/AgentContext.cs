@@ -14,7 +14,7 @@ internal sealed class AgentContext : IDisposable
     /// <summary>The endpoint groups this build has (docs/api.md /health <c>capabilities</c>).</summary>
     public static readonly IReadOnlyList<string> Capabilities = ["ediabas", "capture", "logs"];
 
-    public AgentContext(AgentConfig config, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
+    public AgentContext(AgentConfig config, string configPath, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
     {
         Config = config;
         Auth = auth;
@@ -25,20 +25,22 @@ internal sealed class AgentContext : IDisposable
         Conflicts = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll);
         Policy = JobPolicy.Embedded;
         Logs = new LogService(config.LogRoots, new LogAccess());
+        Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
         Runner = new EdiabasRunner(
             () => new EdiabasService(
                 new Api32(config.EdiabasDll),
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
-                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, config.ReviewedJobs),
+                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, Approvals),
                 new SystemRunnerClock(),
                 CableUse,
                 new EdiabasLogAdapter(log),
                 DllState,
                 config.JobTimeoutSeconds,
                 config.MaxJobTimeoutSeconds,
-                config.EdiabasIdleReleaseSeconds),
+                config.EdiabasIdleReleaseSeconds,
+                new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log))),
             log);
     }
 
@@ -61,6 +63,9 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>The config's <c>reviewedJobs</c> as the runner uses them, for /health.</summary>
+    public ApprovalState Approvals { get; }
 
     /// <summary>Whether the runner has api32.dll loaded right now, for /health.</summary>
     public DllLoadState DllState { get; } = new();

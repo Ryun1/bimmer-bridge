@@ -18,6 +18,22 @@ export const DEFAULT_POLICY_PATH = fileURLToPath(new URL("../../policy/policy.js
 // so the Mac never silently ignores a rule the agent would refuse to load.
 const INT32_MAX = 2147483647;
 const Names = z.array(z.string().min(1));
+/**
+ * Upper-case names (allow and deny lists, restricted ECU keys). Evaluation compares them with
+ * the upper-cased ECU and job as written, so anything else could never match. Unchanged by
+ * upper-casing and no lower-case letter (ß has no single upper-case form): the agent applies
+ * the same two tests.
+ */
+const isUpper = (s: string) => s === s.toUpperCase() && !/\p{Ll}/u.test(s);
+const UpperName = z.string().min(1).refine(isUpper, "must be upper-case");
+const UpperNames = z.array(UpperName);
+/**
+ * allow.patterns: compiled here by JavaScript and in the VM by .NET. The dialects differ on
+ * escapes (\d, \w, \p{..}, \_) and on non-ASCII, and agree without them.
+ */
+const Patterns = z.array(
+  z.string().min(1).refine((s) => !/[\\\u0080-\uffff]/.test(s), "must not contain a backslash or a non-ASCII character"),
+);
 /** Lower-case, non-empty and each listed once (descriptionScreen.ignore). */
 const LowerNames = z
   .array(z.string().min(1).refine((s) => s === s.toLowerCase(), "must be lower-case"))
@@ -28,11 +44,11 @@ const PolicySchema = z.strictObject({
   namePattern: z.string().min(1),
   maxArgLength: z.number().int().nonnegative().max(INT32_MAX),
   allow: z.strictObject({
-    globalExact: Names,
-    patterns: Names,
-    restrictedEcus: z.record(z.string().min(1), Names),
+    globalExact: UpperNames,
+    patterns: Patterns,
+    restrictedEcus: z.record(UpperName, UpperNames),
   }),
-  deny: z.strictObject({ substrings: Names, tokens: Names }),
+  deny: z.strictObject({ substrings: UpperNames, tokens: UpperNames }),
   descriptionScreen: z.strictObject({ terms: Names.min(1), ignore: LowerNames }),
 });
 
@@ -73,6 +89,48 @@ export function findDuplicateKey(text: string): string | null {
   return null;
 }
 
+/** Keys whose value must be written as an integer literal: `JSON.parse` reads `3.0` and `3e0`
+ * as 3, the agent refuses them. */
+const INTEGER_KEYS = new Set(["version", "maxArgLength"]);
+
+/**
+ * The first top-level key in INTEGER_KEYS whose number is not written as a plain integer
+ * (`-?digits`), else null. `text` must already be valid JSON.
+ */
+export function findNonIntegerLiteral(text: string): string | null {
+  let depth = 0;
+  let expectKey = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      if (expectKey && depth === 1) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        expectKey = false;
+        if (INTEGER_KEYS.has(key)) {
+          const m = /^\s*:\s*(-?[0-9][0-9.eE+-]*)/.exec(text.slice(j + 1));
+          if (m && !/^-?(0|[1-9][0-9]*)$/.test(m[1]!)) return key;
+        }
+      }
+      i = j;
+    } else if (ch === "{" || ch === "[") {
+      depth++;
+      expectKey = ch === "{";
+    } else if (ch === "}" || ch === "]") {
+      depth--;
+      expectKey = false;
+    } else if (ch === ",") {
+      // Only objects are nested at depth 1 (the file is an object), and keys there follow a comma.
+      expectKey = depth === 1;
+    }
+  }
+  return null;
+}
+
+/** A UTF-16 surrogate that is not half of a pair: the agent cannot read such a string. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
+
 export interface Policy {
   version: number;
   maxArgLength: number;
@@ -102,9 +160,16 @@ export interface JobRequest {
 
 /** Parse and compile a policy. Throws on anything malformed (the caller fails closed). */
 export function parsePolicy(text: string): Policy {
-  const json: unknown = JSON.parse(text);
+  let loneSurrogate = false;
+  const json: unknown = JSON.parse(text, (k: string, v: unknown) => {
+    if (LONE_SURROGATE.test(k) || (typeof v === "string" && LONE_SURROGATE.test(v))) loneSurrogate = true;
+    return v;
+  });
+  if (loneSurrogate) throw new Error("it has text that is not valid Unicode (a lone surrogate)");
   const duplicate = findDuplicateKey(text);
   if (duplicate !== null) throw new Error(`it has the key "${duplicate}" twice in one object`);
+  const nonInteger = findNonIntegerLiteral(text);
+  if (nonInteger !== null) throw new Error(`"${nonInteger}" must be written as a whole number`);
   const raw = PolicySchema.parse(json);
   const compile = (p: string) => new RegExp(p);
   return {
@@ -114,7 +179,7 @@ export function parsePolicy(text: string): Policy {
     globalExact: new Set(raw.allow.globalExact),
     patterns: raw.allow.patterns.map(compile),
     restrictedEcus: new Map(Object.entries(raw.allow.restrictedEcus).map(([k, v]) => [k, new Set(v)])),
-    denySubstrings: raw.deny.substrings.filter((s) => s.length > 0),
+    denySubstrings: raw.deny.substrings,
     denyTokens: raw.deny.tokens,
     screenIgnore: raw.descriptionScreen.ignore,
   };
@@ -143,10 +208,10 @@ export function evaluate(policy: Policy, req: JobRequest): Verdict {
   const ecu = req.ecu.toUpperCase();
   const job = req.job.toUpperCase();
 
-  // 3. Deny. Entries are compared upper-cased: that can only refuse more, never less.
-  for (const s of policy.denySubstrings) if (job.includes(s.toUpperCase())) return deny(`deny.substring:${s}`);
+  // 3. Deny. Entries are upper-case (the parser refuses others) and compared as written, as the agent does.
+  for (const s of policy.denySubstrings) if (job.includes(s)) return deny(`deny.substring:${s}`);
   const tokens = job.split("_").filter((t) => t.length > 0);
-  for (const t of policy.denyTokens) if (tokens.includes(t.toUpperCase())) return deny(`deny.token:${t}`);
+  for (const t of policy.denyTokens) if (tokens.includes(t)) return deny(`deny.token:${t}`);
 
   // 4. Restricted ECU: nothing else applies to it
   const restricted = policy.restrictedEcus.get(ecu);

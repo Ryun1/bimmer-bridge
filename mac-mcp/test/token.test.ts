@@ -68,7 +68,7 @@ describe("TokenProvider", () => {
     const err = await tp.get().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(BridgeError);
     expect((err as BridgeError).code).toBe("no_token");
-    expect((err as BridgeError).message).toContain("security add-generic-password -s ediabas-bridge -a agent -w");
+    expect((err as BridgeError).message).toContain("python3 dev/serve.py --accept-token");
     // installed afterwards: picked up on the next call (absence is not cached)
     value = KEYCHAIN_TOKEN;
     expect(await tp.get()).toBe(KEYCHAIN_TOKEN);

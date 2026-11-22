@@ -40,7 +40,9 @@ In order, the first step that decides wins:
    `CODIER`, `FLASH`, ...) or has a write-like word between underscores (`START`, `STOP`,
    `LERN`, `PROG`, ...) is refused, whatever else applies.
 4. **Restricted ECUs.** `TMODE` and `UTILITY` contain dangerous jobs beside their reads, so
-   only the jobs listed for them by name may run.
+   only the jobs listed for them by name may run. `E60` is restricted the same way: only
+   `INFO`, `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL` (whole-car ident and fault reads) and the
+   `_` info jobs.
 5. **Allowed by name.** A fixed list of reads (`IDENT`, `FS_LESEN`, `IS_LESEN`, the `_JOBS`
    family, ...) may run on any other ECU.
 6. **Allowed by pattern.** Any other `STATUS_...` job may run only if its description passes
@@ -60,7 +62,11 @@ quoting it, when:
 
 - the description is empty, or only a label such as `Jobbeschreibung:`; or
 - it contains a write-like term from `descriptionScreen.terms` (`start`, `schreib`, `loesch`,
-  `setz`, `reset`, `write`, `clear`, ...), case-insensitively.
+  `setz`, `program`, `einstell`, `reset`, `write`, `clear`, ...), case-insensitively.
+
+When such a job is called with arguments, the agent also reads the description of its
+arguments (`_ARGUMENTS`) and screens every argument name and comment the same way. Arguments
+with no description at all are refused too.
 
 Before the terms are matched, the labels in `descriptionScreen.ignore` (`beschreibung`,
 `umsetzer`) are removed, because they contain a term without meaning one: `Jobbeschreibung:`
@@ -69,7 +75,7 @@ contains `setz`. Nothing broader is ignored. Exact rules: [api.md](api.md#job-po
 "Description screen". The Mac does not screen; it only knows that the agent will.
 
 `ediabas_describe` shows the result per job: `passed`, `needs_review`, `reviewed`, or
-`not_checked` when the description was not read.
+`not_checked` when the description was not read. It gives the same answer a run would.
 
 ## Approving one job
 
@@ -77,17 +83,32 @@ A `job_needs_review` refusal is Ryan's decision, made for one job at a time afte
 description. The safe default is not to run it, and approving must never become routine. The
 approval list lives only in the VM, in the agent's config, not in this repo.
 
-1. In the VM, open `C:\ProgramData\EdiabasBridge\config.json` as an administrator (the folder
-   grants users read access only).
-2. Add the job to the `reviewedJobs` list as `"ECU:JOB"`, upper case, with the ECU name as it
-   is asked for (not the variant a group name resolves to). The match is exact. For example
-   `"reviewedJobs": ["NVE_65:STATUS_EXAMPLE"]`.
-3. Restart Windows. The agent reads its config only at start-up. (Stopping and starting the
-   scheduled task `ediabas-bridge agent` and the `EdiabasAgent` process the way
-   `vm-setup/update.ps1` does has the same effect.)
-4. `ediabas_describe` now shows the job as `reviewed`. If the config has an error the agent does
-   not start; `agent.log` says why and the agent re-reads the file every 30 s.
+An entry in `reviewedJobs` takes one of two forms:
 
-An approval skips only the description screen, never the name rules: a job refused by name
-stays refused. The jobs approved so far are listed in the README's
+- `"ECU:JOB@<12 hex>"`, pinned: approves the job only while its description is the one Ryan
+  read. If the SGBD's description changes, the job is refused again with `job_needs_review`.
+  This is the recommended form.
+- `"ECU:JOB"`, unpinned: approves the job by name, whatever its description says now or later.
+
+Steps:
+
+1. Run `ediabas_describe` on the job (with `job`). Under the description it prints
+   `Description hash: <hash>`, and for a job that needs review the exact line to paste:
+   `To approve this job as it is described now, Ryan adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
+2. In the VM, open `C:\ProgramData\EdiabasBridge\config.json` as an administrator (the folder
+   grants users read access only).
+3. Add the entry to the `reviewedJobs` list, upper case, with the ECU name as it is asked for
+   (not the variant a group name resolves to). The match is exact. For example
+   `"reviewedJobs": ["NVE_65:STATUS_EXAMPLE@3f1c0a9b2d4e"]`. Save the file.
+4. Nothing to restart. The agent re-reads `reviewedJobs` at its next EDIABAS request after
+   config.json changed. `ediabas_describe` then shows the job as `reviewed`.
+
+An entry of the wrong shape is a warning in `agent.log` and approves nothing; the agent keeps
+running. If the saved file is not a valid config, the agent keeps the previous list and logs a
+warning; the next good save is picked up. `vm_health` shows how many approvals of each form are
+in force.
+
+An approval skips only the description screen (and the argument screen), never the name rules:
+a job refused by name stays refused, and an approval only applies to a job the policy allows by
+the `STATUS_` pattern. The jobs approved so far are listed in the README's
 [Troubleshooting](../README.md#troubleshooting) table.

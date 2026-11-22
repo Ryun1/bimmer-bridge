@@ -250,6 +250,131 @@
    "name": "an empty file",
    "valid": false,
    "text": ""
+  },
+  {
+   "name": "upper-case names with digits and underscores",
+   "valid": true,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"_JOBS\",\"C_FA_LESEN\",\"PRUEFSTEMPEL_LESEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"E60\":[\"FS_LESEN_FUNKTIONAL\",\"_JOBS\"],\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"POWER_DOWN\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a lower-case deny substring",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"loesch\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a mixed-case deny token",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"Start\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a lower-case globalExact name",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"fs_lesen\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a lower-case restricted ECU key",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a mixed-case restricted ECU key",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"Tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a lower-case restricted job name",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"lese_interface_typ\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "an allow name with ß (no single upper-case form)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"STRAßE\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny substring with a lower-case ligature",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"ﬂASH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny token with a lower-case letter outside the BMP",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"𐐨\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a pattern with a backslash escape (\\d)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\d+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a pattern with a Unicode class (\\p{Lu})",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\p{Lu}+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a pattern with an escaped underscore",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS\\\\_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a pattern with a non-ASCII character",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-ZÄÖÜ]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "version written as 3.0",
+   "valid": false,
+   "text": "{\"version\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "version written as 3e0",
+   "valid": false,
+   "text": "{\"version\":3e0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "version written as 3E+0",
+   "valid": false,
+   "text": "{\"version\":3E+0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "maxArgLength written as 10.0",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10.0,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "maxArgLength written as 1e1",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":1e1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "version 3.0 under an escaped key (\\u0076ersion)",
+   "valid": false,
+   "text": "{\"\\u0076ersion\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "an integer version and maxArgLength with spaces around them",
+   "valid": true,
+   "text": "{\"version\" :  3 ,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":\n10\n,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "an allow name with a lone surrogate (\\ud800)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"ID\\ud800\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny substring with a title-case letter (ǅ)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ǅ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny substring with a circled lower-case letter (ⓐ)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ⓐ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny substring with a combining mark that upper-cases (U+0345)",
+   "valid": false,
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"LOESCHͅ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   }
  ]
 }

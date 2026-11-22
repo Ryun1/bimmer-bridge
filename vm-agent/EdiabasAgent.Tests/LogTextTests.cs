@@ -99,7 +99,7 @@ public class LogTextTests
     {
         var regex = LogText.CompileGrep("ERR|warn", out var bad)!;
         Assert.Null(bad);
-        var text = LogText.Grep("ok\r\nERR one\r\nfine\nwarn two\n\nERR", regex, out var n);
+        var text = LogText.Grep("ok\r\nERR one\r\nfine\nwarn two\n\nERR", regex, () => 0, out var n);
         Assert.Equal("ERR one\nwarn two\nERR", text);
         Assert.Equal(3, n);
     }
@@ -108,7 +108,7 @@ public class LogTextTests
     public void Grep_NoMatches()
     {
         var regex = LogText.CompileGrep("nothing", out _)!;
-        Assert.Equal("", LogText.Grep("a\nb", regex, out var n));
+        Assert.Equal("", LogText.Grep("a\nb", regex, () => 0, out var n));
         Assert.Equal(0, n);
     }
 
@@ -116,7 +116,31 @@ public class LogTextTests
     public void Grep_InlineCaseInsensitive()
     {
         var regex = LogText.CompileGrep("(?i)error", out _)!;
-        Assert.Equal("ERROR x", LogText.Grep("ERROR x\nok", regex, out _));
+        Assert.Equal("ERROR x", LogText.Grep("ERROR x\nok", regex, () => 0, out _));
+    }
+
+    // One 5 s deadline for the whole request, not 5 s per line: a long range of lines that are
+    // each just under the limit must still stop.
+    [Fact]
+    public void Grep_StopsAtOneDeadlineAcrossAllLines()
+    {
+        var regex = LogText.CompileGrep("x", out _)!;
+        long now = 0;
+        long Tick() => now += 1000; // every look at the clock is one second later
+
+        var ex = Assert.Throws<System.Text.RegularExpressions.RegexMatchTimeoutException>(
+            () => LogText.Grep("x\nx\nx\nx\nx\nx\nx\nx\nx\nx", regex, Tick, out _));
+        Assert.NotNull(ex);
+        Assert.True(now <= 1000 + LogText.GrepDeadlineMs + 1000, $"kept going until {now} ms");
+    }
+
+    [Fact]
+    public void Grep_WithinTheDeadline_AllLines()
+    {
+        var regex = LogText.CompileGrep("x", out _)!;
+        long now = 0;
+        Assert.Equal("x\nx\nx", LogText.Grep("x\ny\nx\nx", regex, () => now += 1000, out var n));
+        Assert.Equal(3, n);
     }
 
     [Fact]
@@ -126,7 +150,7 @@ public class LogTextTests
         var regex = LogText.CompileGrep("^(a+)+$", out _)!;
         var line = new string('a', 50000) + "!";
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        LogText.Grep(line, regex, out var n);
+        LogText.Grep(line, regex, () => 0, out var n);
         Assert.Equal(0, n);
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5));
     }

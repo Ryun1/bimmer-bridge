@@ -37,7 +37,7 @@ internal sealed class EdiabasEndpoints
             return;
         }
 
-        var outcome = await _ctx.Runner.Run((svc, _) => svc.ListEcus(filter), http.RequestAborted);
+        var outcome = await _ctx.Runner.Run((svc, _, _) => svc.ListEcus(filter), http.RequestAborted);
         await Answer(http, audit, outcome);
     }
 
@@ -78,12 +78,12 @@ internal sealed class EdiabasEndpoints
 
         if (job is null)
         {
-            var list = await _ctx.Runner.Run((svc, ct) => svc.DescribeList(ecu, filter, comments.Value, audit, ct), http.RequestAborted);
+            var list = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeList(ecu, filter, comments.Value, audit, ct, queuedMs), http.RequestAborted);
             await Answer(http, audit, list);
         }
         else
         {
-            var one = await _ctx.Runner.Run((svc, ct) => svc.DescribeJob(ecu, job, audit, ct), http.RequestAborted);
+            var one = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeJob(ecu, job, audit, ct, queuedMs), http.RequestAborted);
             await Answer(http, audit, one);
         }
     }
@@ -107,7 +107,7 @@ internal sealed class EdiabasEndpoints
         var request = parsed.Value!;
         audit.Ecu = request.Request.Ecu;
         audit.Job = request.Request.Job;
-        var outcome = await _ctx.Runner.Run((svc, ct) => svc.RunJob(request.Request, request.TimeoutSeconds, audit, ct), http.RequestAborted);
+        var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.RunJob(request.Request, request.TimeoutSeconds, audit, ct, queuedMs), http.RequestAborted);
         await Answer(http, audit, outcome);
     }
 
@@ -130,7 +130,7 @@ internal sealed class EdiabasEndpoints
         var request = parsed.Value!;
         try
         {
-            var outcome = await _ctx.Runner.Run((svc, ct) => svc.RunJobs(request.Items, request.TimeoutSeconds, audit, ct), http.RequestAborted);
+            var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.RunJobs(request.Items, request.TimeoutSeconds, audit, ct, queuedMs), http.RequestAborted);
             await Answer(http, audit, outcome);
         }
         finally
@@ -150,7 +150,7 @@ internal sealed class EdiabasEndpoints
         var sources = _ctx.Config.VoltageSources;
         try
         {
-            var outcome = await _ctx.Runner.Run((svc, ct) => svc.Vehicle(sources, audit, ct), http.RequestAborted);
+            var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.Vehicle(sources, audit, ct, queuedMs), http.RequestAborted);
             await Answer(http, audit, outcome);
         }
         finally

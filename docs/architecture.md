@@ -7,7 +7,7 @@ tools) and [deploy.md](deploy.md) (Mac to VM deployment); this page is the overv
 
 | Component | Where it runs | What it is |
 |---|---|---|
-| MCP server (`mac-mcp/`) | the Mac, started by Claude Code or the desktop app over stdio | TypeScript, Node 20+. Offers the ten tools, finds the VM, holds the policy check on the Mac side, writes the Mac audit log. Built to `mac-mcp/dist/index.js` |
+| MCP server (`mac-mcp/`) | the Mac, started by Claude Code or the desktop app over stdio | TypeScript, Node 20+. Offers the eleven tools, finds the VM, holds the policy check on the Mac side, writes the Mac audit log. Built to `mac-mcp/dist/index.js` |
 | agent (`vm-agent/`) | the Windows VM in UTM, in Ryan's logged-in session | `EdiabasAgent.exe`, C# on .NET 10, self-contained win-x86 single file (32-bit, because `api32.dll` is). An HTTP server (Kestrel) on port 8765 that calls EDIABAS, lists and captures windows and reads trace files |
 | EDIABAS | the VM (`C:\EDIABAS`) | BMW's diagnostic runtime: `api32.dll` loads the SGBD files (`.prg`, `.grp`) from the Ecu folder and talks to the K+DCAN cable |
 | job policy (`policy/policy.json`) | both sides | default-deny list of what may run. Embedded in the agent at build time; read by the Mac server at start-up |
@@ -29,14 +29,15 @@ interactive session and can see the desktop for screenshots. A second copy exits
    as a local `bridge*` interface is contacted, and only one whose `GET /health` answers as
    `ediabas-bridge-agent` is used. The URL is cached (`mac-mcp/src/vmAddress.ts`).
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
-   Timeouts: 15 s, or 75 s for `/ediabas/*`. A request that runs an EDIABAS job is never sent
-   twice; only a refused connection (nothing sent) is retried.
+   Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
+   the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
+   only a connection that was never made (refused, or a connect timeout) is retried.
 5. In the agent, `vm-agent/EdiabasAgent/Middleware.cs` runs, in order: source address (only
    the VM's default gateway, which is the Mac), token, path, method. Every request, refused or
    not, gets an audit line.
 6. An EDIABAS handler (`EdiabasEndpoints.cs`) queues the work on the EDIABAS thread and waits.
 7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; `apiInit`;
-   for each job the policy, the Ecu file, the description screen where needed, the conflict
+   for each job the policy, the Ecu file, the description and argument screens where needed, the conflict
    check again, `apiJob`, polling `apiState` every 50 ms until done or timed out (`apiBreak` on
    timeout), reading the result sets; `apiEnd`.
 8. EDIABAS sends the telegrams over the K+DCAN cable (USB, passed through to the VM by UTM)
@@ -87,7 +88,7 @@ Mac's. Plain-words rules: [safety.md](safety.md#the-job-policy-in-plain-words).
 | Side | File | Written by | Holds |
 |---|---|---|---|
 | VM | `C:\ProgramData\EdiabasBridge\logs\agent.log` | `vm-agent/EdiabasAgent/Logging/AgentLog.cs` | start-up, bind decisions, config problems, errors with details |
-| VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | `vm-agent/EdiabasAgent/Audit/AuditLog.cs` | one tab-separated line per request: time, remote address, method, path, status, error code, duration, ECU, job, rule (refusals only), target (log path or window asked for). Query strings are reduced to their keys; control characters are replaced. Batches add one line per item |
+| VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | `vm-agent/EdiabasAgent/Audit/AuditLog.cs` | one tab-separated line per request: time, remote address, method, path, status, error code, duration, ECU, job, rule (refusals only), target (log path or window asked for). Query strings are reduced to their keys; control and Unicode format characters are replaced. Batches add one line per item |
 | VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | `--selftest` | the last self-test report |
 | Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=` |
 | Mac | stderr (in the desktop app: `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log`) | the MCP server | discovery, failed probes, warnings |

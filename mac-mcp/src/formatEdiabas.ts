@@ -1,5 +1,5 @@
 import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, Vehicle } from "./agentClient.js";
-import { cleanText, describeAgentError } from "./errors.js";
+import { cleanText, describeAgentError, errorText } from "./errors.js";
 import type { Verdict } from "./policy.js";
 
 /**
@@ -87,8 +87,8 @@ function plural(n: number, one: string, many = `${one}s`): string {
 /** Error text for a per-item error: the known message, else code and the agent's message. */
 export function itemErrorText(err: AgentErrorInfo | null | undefined): string {
   if (!err) return "failed (the agent gave no error)";
-  const code = cleanText(err.code, 64) || "error";
-  return describeAgentError(code, err.message, err.details) ?? `${code}: ${cleanText(err.message || "(no message)")}`;
+  const code = cleanText(err.code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") || "error";
+  return errorText(code, describeAgentError(code, err.message, err.details) ?? cleanText(err.message || "(no message)"));
 }
 
 // ---------------------------------------------------------------------------
@@ -198,9 +198,11 @@ export interface FaultReport {
   info?: BatchItem | { error: string } | undefined;
 }
 
-function itemSection(item: BatchItem | { error: string }, label: string): string[] {
+function itemSection(item: BatchItem | { error: string }, label: string, info = false): string[] {
   if ("ok" in item) {
     if (item.ok && item.result) return formatFaultTable(item.result, label);
+    // Not every module has an info memory; its SGBD then has no IS_LESEN. That is not a failure.
+    if (info && item.error?.code === "job_not_found") return [`  ${label}: no info memory on this module.`];
     return [`  ${label}: ${item.ok ? "no result returned" : `error: ${itemErrorText(item.error)}`}`];
   }
   return [`  ${label}: error: ${item.error}`];
@@ -214,7 +216,7 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
     out.push("");
     out.push(`${cleanName(r.ecu)}${variant && variant !== r.ecu.toUpperCase() ? ` (variant ${variant})` : ""}`);
     out.push(...itemSection(r.faults, "Fault memory"));
-    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory"));
+    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", true));
   }
   return out.join("\n");
 }
@@ -248,11 +250,8 @@ function cleanDeep(v: unknown): unknown {
   return v;
 }
 
-const RAW_MAX = 200_000;
-
 export function formatJobRaw(r: JobResult): string {
-  const t = JSON.stringify(cleanDeep(r), null, 2);
-  return t.length > RAW_MAX ? `${t.slice(0, RAW_MAX)}\n… (cut at ${RAW_MAX} characters)` : t;
+  return JSON.stringify(cleanDeep(r), null, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,11 +290,27 @@ function paramLines(ps: DescribeJob["arguments"]): string[] {
   return ps.map((p) => `  ${cleanName(p.name)}${p.type ? ` (${cleanText(p.type, 30)})` : ""}${p.comment ? ` — ${cleanText(p.comment, 200)}` : ""}`);
 }
 
+/** The description hash, and for a job that needs review the reviewedJobs entry that pins it. */
+function hashLines(d: DescribeJob): string[] {
+  const review = cleanText(d.verdict.review, 30);
+  // Only the shape the agent's config accepts: anything else would make a line that approves nothing.
+  const hash = d.descriptionHash && /^[0-9a-f]{12}$/.test(d.descriptionHash) ? d.descriptionHash : "";
+  if (review === "not_required" || !hash) return [];
+  const out = [`Description hash: ${hash}`];
+  if (review === "needs_review") {
+    out.push(
+      `To approve this job as it is described now, Ryan adds "${cleanName(d.ecu)}:${cleanName(d.job)}@${hash}" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).`,
+    );
+  }
+  return out;
+}
+
 export function formatDescribeJob(d: DescribeJob, mac: Verdict | null): string {
   const v = verdictText(d.verdict, mac);
   const variant = d.variant && d.variant.toUpperCase() !== d.ecu.toUpperCase() ? ` (variant ${valueText(d.variant, 64)})` : "";
   const out = [`${cleanName(d.ecu)}${variant} ${cleanName(d.job)}: ${v.text}`];
   out.push(`Description: ${d.comment ? cleanText(d.comment, 600) : "(none)"}`);
+  out.push(...hashLines(d));
   out.push(d.arguments.length ? "Arguments:" : "Arguments: none");
   out.push(...paramLines(d.arguments));
   out.push(d.results.length ? "Results:" : "Results: none listed");
@@ -332,6 +347,9 @@ export function formatVehicle(v: Vehicle): string {
   return out.join("\n");
 }
 
+/** The most ECU names one listing prints. */
+const ECU_NAMES_MAX = 500;
+
 export function formatEcus(e: EcuList, filter: string | undefined): string {
   const where = e.ecuPath ? ` in ${cleanText(e.ecuPath, 200)}` : "";
   const match = filter ? ` matching "${cleanText(filter, 64)}"` : "";
@@ -341,8 +359,16 @@ export function formatEcus(e: EcuList, filter: string | undefined): string {
   const grp = by("grp");
   const other = e.files.filter((f) => !["prg", "grp"].includes(f.type.toLowerCase())).map((f) => `${cleanName(f.name)} (${cleanText(f.type, 10)})`);
   const out = [`${plural(e.files.length, "file")}${match}${where}${e.truncated ? ` (truncated: ${e.count > e.files.length ? `${e.count} matched; ` : ""}narrow the filter)` : ""}:`];
-  if (grp.length) out.push(`Groups (grp): ${grp.join(", ")}`);
-  if (prg.length) out.push(`SGBDs (prg): ${prg.join(", ")}`);
-  if (other.length) out.push(`Other: ${other.join(", ")}`);
+  let left = ECU_NAMES_MAX;
+  const line = (label: string, names: string[]) => {
+    const shown = names.slice(0, left);
+    left -= shown.length;
+    if (shown.length) out.push(`${label}: ${shown.join(", ")}`);
+  };
+  line("Groups (grp)", grp);
+  line("SGBDs (prg)", prg);
+  line("Other", other);
+  const more = grp.length + prg.length + other.length - ECU_NAMES_MAX;
+  if (more > 0) out.push(`${more} more; use filter to narrow the list.`);
   return out.join("\n");
 }

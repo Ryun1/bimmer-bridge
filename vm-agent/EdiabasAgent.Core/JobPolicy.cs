@@ -74,6 +74,12 @@ public sealed class JobPolicy
     /// <summary>Parses and validates policy JSON. Never throws.</summary>
     public static JobPolicy Parse(string json)
     {
+        // JsonDocument would read a lone surrogate as U+FFFD and load the file; the Mac refuses it.
+        if (HasLoneSurrogate(json))
+        {
+            return new JobPolicy("policy.json: it has text that is not valid Unicode (a lone surrogate)");
+        }
+
         try
         {
             using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
@@ -96,6 +102,11 @@ public sealed class JobPolicy
         {
             // A pattern that does not compile.
             return new JobPolicy($"policy.json: bad regular expression: {ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            // A string escape such as \ud800 that is not valid Unicode.
+            return new JobPolicy($"policy.json: it has text that cannot be read: {ex.Message}");
         }
     }
 
@@ -139,13 +150,20 @@ public sealed class JobPolicy
         var policy = new JobPolicy(version, namePattern, maxArgLength);
 
         var allow = Obj(top["allow"], "allow", AllowKeys);
-        foreach (var s in StrArray(allow["globalExact"], "allow.globalExact"))
+        foreach (var s in UpperArray(allow["globalExact"], "allow.globalExact"))
         {
             policy._globalExact.Add(s);
         }
 
+        // Compiled here and by JavaScript on the Mac. The two dialects differ on escapes
+        // (\d, \w, \p{..}, \_) and on non-ASCII, and agree without them.
         foreach (var s in StrArray(allow["patterns"], "allow.patterns"))
         {
+            if (s.Any(c => c == '\\' || c > '\x7f'))
+            {
+                throw new PolicyFormatException($"allow.patterns entry '{s}' must not contain a backslash or a non-ASCII character");
+            }
+
             policy._patterns.Add(Compile(s));
         }
 
@@ -157,15 +175,16 @@ public sealed class JobPolicy
 
         foreach (var ecu in restrictedEl.EnumerateObject())
         {
-            if (ecu.Name.Length == 0 || !policy._restricted.TryAdd(ecu.Name, new HashSet<string>(StrArray(ecu.Value, $"allow.restrictedEcus.{ecu.Name}"), StringComparer.Ordinal)))
+            RequireUpper(ecu.Name, "allow.restrictedEcus key");
+            if (ecu.Name.Length == 0 || !policy._restricted.TryAdd(ecu.Name, new HashSet<string>(UpperArray(ecu.Value, $"allow.restrictedEcus.{ecu.Name}"), StringComparer.Ordinal)))
             {
                 throw new PolicyFormatException($"allow.restrictedEcus has an empty or duplicate key '{ecu.Name}'");
             }
         }
 
         var deny = Obj(top["deny"], "deny", DenyKeys);
-        policy._denySubstrings.AddRange(StrArray(deny["substrings"], "deny.substrings"));
-        policy._denyTokens.AddRange(StrArray(deny["tokens"], "deny.tokens"));
+        policy._denySubstrings.AddRange(UpperArray(deny["substrings"], "deny.substrings"));
+        policy._denyTokens.AddRange(UpperArray(deny["tokens"], "deny.tokens"));
 
         var screen = Obj(top["descriptionScreen"], "descriptionScreen", ScreenKeys);
         policy._screenTerms.AddRange(StrArray(screen["terms"], "descriptionScreen.terms"));
@@ -370,6 +389,46 @@ public sealed class JobPolicy
         }
 
         return el.EnumerateArray().Select(x => Str(x, where + " entry")).ToList();
+    }
+
+    /// <summary>Names are compared with the upper-cased ECU and job exactly as written, so an
+    /// entry that is not upper-case could never match: refused rather than left dead.</summary>
+    private static List<string> UpperArray(JsonElement el, string where)
+    {
+        var list = StrArray(el, where);
+        foreach (var s in list)
+        {
+            RequireUpper(s, where + " entry");
+        }
+
+        return list;
+    }
+
+    /// <summary>Unchanged by upper-casing and no lower-case letter (such as ß, which has no
+    /// single upper-case form). The Mac's parser applies the same two tests.</summary>
+    private static void RequireUpper(string s, string where)
+    {
+        if (!string.Equals(s, s.ToUpperInvariant(), StringComparison.Ordinal) || s.EnumerateRunes().Any(Rune.IsLower))
+        {
+            throw new PolicyFormatException($"{where} '{s}' must be upper-case");
+        }
+    }
+
+    private static bool HasLoneSurrogate(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            if (char.IsHighSurrogate(s[i]) && i + 1 < s.Length && char.IsLowSurrogate(s[i + 1]))
+            {
+                i++;
+            }
+            else if (char.IsSurrogate(s[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed class PolicyFormatException(string message) : Exception(message);

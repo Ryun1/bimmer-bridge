@@ -102,6 +102,54 @@ public class AgentConfigTests
         Assert.Equal(8765, c.Port);
     }
 
+    // A typo in a key is otherwise silent: "reviewJobs" would leave every approval unused.
+    [Fact]
+    public void UnknownTopLevelKey_IsAWarning_LoadStillSucceeds()
+    {
+        var r = AgentConfig.Parse("""{ "reviewJobs": ["NVE_65:STATUS_X"], "port": 8765, /* note */ }""");
+        Assert.True(r.Ok);
+        Assert.Empty(r.Config!.ReviewedJobs);
+        var w = Assert.Single(r.Warnings);
+        Assert.Contains("\"reviewJobs\"", w);
+        Assert.Contains("ignored", w);
+        Assert.Equal(r.Warnings, r.Config.Warnings);
+    }
+
+    [Fact]
+    public void KnownKeys_AnyCase_NoWarnings()
+    {
+        var r = AgentConfig.Parse("""{ "Port": 8765, "reviewedJobs": [], "EDIABASIDLERELEASESECONDS": 20, "voltageSources": [ { "ecu": "A", "job": "B", "extra": 1 } ] }""");
+        Assert.True(r.Ok);
+        Assert.Empty(r.Warnings);
+    }
+
+    [Fact]
+    public void Defaults_NoWarnings()
+    {
+        Assert.Empty(AgentConfig.Parse("{}").Warnings);
+        Assert.Empty(new AgentConfig().Warnings);
+    }
+
+    [Fact]
+    public void LogRootThePathRulesRefuse_IsAWarning()
+    {
+        var r = AgentConfig.Parse("""{ "logRoots": ["C:/EDIABAS/TRACE", "C:\\NCSEXPER\\WORK\\", "C:\\"] }""");
+        Assert.True(r.Ok);
+        Assert.Equal(2, r.Warnings.Count);
+        Assert.Contains("logRoots[0]", r.Warnings[0]);
+        Assert.Contains("C:/EDIABAS/TRACE", r.Warnings[0]);
+        Assert.Contains(PathRules.ForwardSlash, r.Warnings[0]);
+        Assert.Contains("logRoots[2]", r.Warnings[1]);
+    }
+
+    [Fact]
+    public void ConfigThatFails_HasNoWarnings()
+    {
+        var r = AgentConfig.Parse("""{ "port": 0, "reviewJobs": [] }""");
+        Assert.False(r.Ok);
+        Assert.Empty(r.Warnings);
+    }
+
     [Fact]
     public void Utf8Bom_Tolerated()
     {

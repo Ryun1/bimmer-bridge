@@ -206,9 +206,19 @@ public static class CaptureRules
     public static bool DesktopAvailable(int sessionId, string? inputDesktopName) =>
         sessionId != 0 && string.Equals(inputDesktopName, "Default", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Only for a locked screen, the secure desktop or session 0: the answer tells Ryan to unlock the VM.</summary>
     public static ApiFailure DesktopUnavailable(string why) =>
         ApiFailure.Of(ApiErrors.DesktopUnavailable,
             $"The VM's desktop cannot be captured: {why}. Unlock the VM (sign in) and try again.");
+
+    /// <summary>The one-at-a-time capture queue did not free up in time. Nothing was captured.</summary>
+    public static ApiFailure Busy() =>
+        ApiFailure.Of(ApiErrors.CaptureBusy,
+            "The screenshot was not taken: another capture is still running. Try again in a moment.");
+
+    /// <summary>The desktop was available but the GDI copy or the screen size read failed.</summary>
+    public static ApiFailure Failed(string why) =>
+        ApiFailure.Of(ApiErrors.CaptureFailed, $"The capture failed: {why}.");
 
     /// <summary>
     /// True when every pixel of a 32-bit BGRX image is black, which is how PrintWindow fails

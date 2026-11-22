@@ -72,14 +72,16 @@ describe("MCP server", () => {
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);
     expect(instr.split(/\s+/).length).toBeLessThanOrEqual(180);
-    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_vehicle_status"]) {
+    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_jobs", "ediabas_vehicle_status"]) {
       expect(instr).toContain(tool);
     }
     expect(instr).toMatch(/Call vm_health first/);
     // Evals showed vm_health batched with ediabas_* calls; it is a gate, not an ordering hint.
     expect(instr).toMatch(/vm_health first and on its own; read its answer before any other tool/);
-    expect(instr).toMatch(/agent_outdated is not installed in the VM yet/);
-    expect(instr).toMatch(/Never retry a refusal/);
+    expect(instr).toMatch(/\[agent_outdated\]: that tool is not installed in the VM yet; say so/);
+    expect(instr).toMatch(/Errors start with a code in brackets/);
+    expect(instr).toContain("[ediabas_request_lost]");
+    expect(instr).toMatch(/Never retry a refusal \(\[job_not_allowed\], \[job_needs_review\]\)/);
     expect(instr).toMatch(/never guess names/);
     expect(instr).toMatch(/read-only/i);
     expect(instr).toContain("vm_health");
@@ -90,7 +92,7 @@ describe("MCP server", () => {
   it("lists the tools with read-only annotations, titles and descriptions", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.description && t.description.length).toBeGreaterThan(40);
@@ -178,10 +180,10 @@ describe("MCP server", () => {
 
   it("reports a missing token with the fix, and the server still serves tools/list", async () => {
     const { client } = await connect({ ...discovery({ EDIABAS_AGENT_TOKEN: "" }), keychain: null });
-    expect((await client.listTools()).tools).toHaveLength(10);
+    expect((await client.listTools()).tools).toHaveLength(11);
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("security add-generic-password -s ediabas-bridge -a agent -w");
+    expect(textOf(r)).toContain("python3 dev/serve.py --accept-token");
     expect(agent.requests).toHaveLength(0);
   });
 
@@ -240,6 +242,13 @@ describe("MCP server", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\tvm_health\tok\t\d+$/);
     expect(lines[1]).toMatch(/\tvm_list_windows\tok\t\d+$/);
+  });
+
+  it("redacts the token from every stderr line, including audit warnings", async () => {
+    const { client, logs } = await connect({ env: { EDIABAS_AUDIT_LOG: `/dev/null/${AGENT_TOKEN}/audit.log` } });
+    await client.callTool({ name: "vm_health", arguments: {} });
+    expect(logs.some((l) => /audit/i.test(l))).toBe(true);
+    expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
   });
 
   it("does not fail the call when the audit log cannot be written", async () => {

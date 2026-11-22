@@ -26,8 +26,9 @@ public sealed class RequestAudit
 /// <summary>
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
-/// <para>Per request: conflict check → (lazily, at the first job that will really run) apiInit
-/// → per job: policy → Ecu file → description screen where required → conflict check again
+/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) apiInit
+/// → per job: policy → Ecu file → description screen where required (and, for a call with
+/// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
 /// reused) → apiJob → poll apiState
 /// every 50 ms until not busy or timeout (apiBreak on timeout) → read every result set →
@@ -60,6 +61,7 @@ public sealed class EdiabasService
     private readonly CableUse _cableUse;
     private readonly IEdiabasLog _log;
     private readonly DllLoadState _dll;
+    private readonly ApprovalReloader? _approvals;
     private readonly int _defaultTimeoutSeconds;
     private readonly int _maxTimeoutSeconds;
     private readonly long _idleReleaseMs;
@@ -87,7 +89,8 @@ public sealed class EdiabasService
         DllLoadState dll,
         int defaultTimeoutSeconds,
         int maxTimeoutSeconds,
-        int idleReleaseSeconds)
+        int idleReleaseSeconds,
+        ApprovalReloader? approvals = null)
     {
         _api = api;
         _conflicts = conflicts;
@@ -98,6 +101,7 @@ public sealed class EdiabasService
         _cableUse = cableUse;
         _log = log;
         _dll = dll;
+        _approvals = approvals;
         _maxTimeoutSeconds = Math.Max(1, maxTimeoutSeconds);
         _defaultTimeoutSeconds = Math.Clamp(defaultTimeoutSeconds, 1, _maxTimeoutSeconds);
         _idleReleaseMs = (long)Math.Clamp(idleReleaseSeconds, AgentConfig.MinIdleReleaseSeconds, AgentConfig.MaxIdleReleaseSeconds) * 1000;
@@ -165,6 +169,7 @@ public sealed class EdiabasService
 
     public Outcome<EcusResponse> ListEcus(string? filter)
     {
+        _approvals?.Refresh();
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -178,18 +183,23 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/job
 
-    public Outcome<JobResult> RunJob(JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct)
+    public Outcome<JobResult> RunJob(JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = request.Ecu;
         audit.Job = request.Job;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), start, recheckConflicts: false, ct);
+        using var session = new Session(this, queuedMs);
+        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), recheckConflicts: false, ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
         audit.Rule = run.Rule;
@@ -208,11 +218,17 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/jobs
 
-    public Outcome<BatchResponse> RunJobs(IReadOnlyList<JobRequest> items, int? timeoutSeconds, RequestAudit audit, CancellationToken ct)
+    public Outcome<BatchResponse> RunJobs(IReadOnlyList<JobRequest> items, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         if (items.Count is < 1 or > MaxBatchItems)
         {
             return ApiFailure.Of(ApiErrors.BadRequest, $"items must hold 1 to {MaxBatchItems} jobs.", new ParameterDetails("items"));
+        }
+
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
         }
 
         if (ConflictFailure() is { } busy)
@@ -220,9 +236,9 @@ public sealed class EdiabasService
             return busy;
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), start, audit, ct);
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
+        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -233,8 +249,14 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/vehicle
 
-    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct)
+    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -249,9 +271,9 @@ public sealed class EdiabasService
         items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL30"));
         items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL15"));
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var batch = RunBatch(session, items, _defaultTimeoutSeconds, start, audit, ct);
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
+        var batch = RunBatch(session, items, _defaultTimeoutSeconds, audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -267,9 +289,15 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/describe
 
-    public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct)
+    public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = ecu;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -280,8 +308,8 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, ecu, audit, ct, out var variant, out var upperEcu);
         if (!jobs.Ok)
         {
@@ -302,7 +330,7 @@ public sealed class EdiabasService
             var verdict = _policy.Evaluate(upperEcu, name);
             string? comment = null;
             var fetch = DescriptionFetch.Skipped;
-            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && !OverBudget(start))
+            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && session.BudgetLeftMs > 0)
             {
                 var d = ReadDescription(session, upperEcu!, name, timeout, ct);
                 if (d.Ok)
@@ -322,10 +350,16 @@ public sealed class EdiabasService
         return new DescribeListResponse(upperEcu!, variant, entries.Count, entries, _clock.ElapsedMs - start);
     }
 
-    public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct)
+    public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = ecu;
         audit.Job = job;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -347,8 +381,8 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, verdict.Ecu, audit, ct, out var variant, out _);
         if (!jobs.Ok)
         {
@@ -396,6 +430,7 @@ public sealed class EdiabasService
             variant,
             verdict.Job,
             comment,
+            comment is null ? null : CommentScreen.DescriptionHash(comment),
             ToJobVerdict(verdict, fetch, comment),
             arguments.Value!,
             results.Value!,
@@ -420,13 +455,13 @@ public sealed class EdiabasService
         public string Text => string.Join("\n", Lines);
     }
 
-    private BatchRun RunBatch(Session session, IReadOnlyList<JobRequest> items, int timeout, long start, RequestAudit audit, CancellationToken ct)
+    private BatchRun RunBatch(Session session, IReadOnlyList<JobRequest> items, int timeout, RequestAudit audit, CancellationToken ct)
     {
         var results = new List<BatchItem>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
             var itemStart = _clock.ElapsedMs;
-            var run = RunItem(session, items[i], timeout, start, recheckConflicts: i > 0, ct);
+            var run = RunItem(session, items[i], timeout, recheckConflicts: i > 0, ct);
             if (run.WholeRequest is { } whole)
             {
                 audit.Items.Add(new ItemAudit(i, run.Ecu, run.Job, run.Rule, whole.Error.Code, _clock.ElapsedMs - itemStart));
@@ -440,7 +475,7 @@ public sealed class EdiabasService
         return new BatchRun(results, null);
     }
 
-    private ItemRun RunItem(Session session, JobRequest request, int timeout, long requestStart, bool recheckConflicts, CancellationToken ct)
+    private ItemRun RunItem(Session session, JobRequest request, int timeout, bool recheckConflicts, CancellationToken ct)
     {
         var itemStart = _clock.ElapsedMs;
         string? ecu = request.Ecu;
@@ -458,7 +493,7 @@ public sealed class EdiabasService
             return Fail(NotRun("An earlier job did not stop after apiBreak; no further jobs are started."));
         }
 
-        if (OverBudget(requestStart))
+        if (session.BudgetLeftMs <= 0)
         {
             return Fail(NotRun($"The request reached its {_maxTimeoutSeconds} s limit before this job started."));
         }
@@ -488,38 +523,129 @@ public sealed class EdiabasService
             return new ItemRun(new BatchItem(false, null, initFailure.Error), ecu, job, null, initFailure);
         }
 
-        if (verdict.Screen && !_screen.IsReviewed(verdict.Ecu!, verdict.Job!))
+        if (verdict.Screen && ScreenJob(session, verdict.Ecu!, verdict.Job!, request.Args, timeout, ct) is { } screenFailure)
         {
-            var d = ReadDescription(session, verdict.Ecu!, verdict.Job!, timeout, ct);
-            if (!d.Ok)
-            {
-                return Fail(d.Failure!);
-            }
-
-            var description = NullIfBlank(d.Value!.Text);
-            var screened = _screen.Screen(description);
-            if (!screened.Passed)
-            {
-                return Fail(
-                    ApiFailure.Of(
-                        ApiErrors.JobNeedsReview,
-                        description is null
-                            ? $"{verdict.Job} has no description, so it cannot be shown to be a read. Ryan can approve it in the agent config."
-                            : $"The description of {verdict.Job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config.",
-                        new JobReviewDetails(verdict.Ecu!, verdict.Job!, description, screened.Matched)),
-                    RequestAudit.ScreenRule);
-            }
+            return Fail(screenFailure, screenFailure.Error.Code == ApiErrors.JobNeedsReview ? RequestAudit.ScreenRule : null);
         }
 
         var run = Execute(session, verdict.Ecu!, verdict.Job!, request.Args ?? "", request.Results ?? "", timeout, ct);
         if (!run.Ok)
         {
-            return Fail(run.Failure!);
+            return Fail(NotInJobList(session, verdict.Ecu!, verdict.Job!, run.Failure!, ct) ?? run.Failure!);
         }
 
         var read = run.Value!;
         var result = new JobResult(verdict.Ecu!, verdict.Job!, read.Variant, read.JobStatus, read.SystemResults, read.Sets, _clock.ElapsedMs - itemStart);
         return new ItemRun(new BatchItem(true, result, null), ecu, job, null, null);
+    }
+
+    /// <summary>
+    /// The screen for a job allowed only by the name pattern. Null when the job may run. An
+    /// unpinned approval skips it without reading anything. Otherwise the description is read;
+    /// a pinned approval then runs the job only when the description still hashes to the pin,
+    /// and an unapproved job goes through the description and argument screens. A failure that
+    /// is about the request (time, cancel, a BMW tool) keeps its own code.
+    /// </summary>
+    private ApiFailure? ScreenJob(Session session, string ecu, string job, string? args, int timeout, CancellationToken ct)
+    {
+        var approval = _screen.Approval(ecu, job);
+        if (approval.Kind == ApprovalKind.Unpinned)
+        {
+            return null;
+        }
+
+        var d = ReadDescription(session, ecu, job, timeout, ct);
+        if (approval.Kind == ApprovalKind.Pinned)
+        {
+            return CheckPin(approval, d, ecu, job);
+        }
+
+        if (!d.Ok)
+        {
+            return d.Failure!;
+        }
+
+        var description = NullIfBlank(d.Value!.Text);
+        var screened = _screen.Screen(description);
+        if (!screened.Passed)
+        {
+            return ApiFailure.Of(
+                ApiErrors.JobNeedsReview,
+                description is null
+                    ? $"{job} has no description, so it cannot be shown to be a read. Ryan can approve it in the agent config."
+                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config.",
+                new JobReviewDetails(ecu, job, description, screened.Matched));
+        }
+
+        return string.IsNullOrEmpty(args) ? null : ScreenArguments(session, ecu, job, timeout, ct);
+    }
+
+    /// <summary>
+    /// A pinned approval holds only for the description Ryan read: one that changed, is empty or
+    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips both screens.
+    /// </summary>
+    private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
+    {
+        if (!read.Ok && read.Failure!.Error.Code != ApiErrors.EdiabasError)
+        {
+            return read.Failure;
+        }
+
+        var description = read.Ok ? NullIfBlank(read.Value!.Text) : null;
+        if (approval.Matches(description))
+        {
+            return null;
+        }
+
+        var message = description is not null
+            ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). Ryan can approve it again in the agent config."
+            : read.Ok
+                ? $"{job} has no description now, so its approval cannot be checked. Ryan can approve it again in the agent config."
+                : $"The description of {job} could not be read, so its approval cannot be checked.";
+        return ApiFailure.Of(ApiErrors.JobNeedsReview, message, new JobReviewDetails(ecu, job, description, []));
+    }
+
+    /// <summary>
+    /// <c>job_not_found</c> when a client job failed with <c>ediabas_error</c> and the SGBD's own
+    /// <c>_JOBS</c> list does not have it; else null, and the caller keeps the first error. No
+    /// EDIABAS error number is assumed to mean "no such job": the list decides. Only for a
+    /// <c>.prg</c> file, whose list comes from the file; a group file would have to reach the car
+    /// again to pick its variant. Not for underscore info jobs, which the list may not show. The
+    /// <c>_JOBS</c> call goes through <see cref="Execute"/>, so cancel, budget and cable gates apply.
+    /// </summary>
+    private ApiFailure? NotInJobList(Session session, string ecu, string job, ApiFailure failure, CancellationToken ct)
+    {
+        if (failure.Error.Code != ApiErrors.EdiabasError || job.StartsWith('_') || session.Poisoned || !IsPrgFile(ecu))
+        {
+            return null;
+        }
+
+        var verdict = _policy.Evaluate(ecu, "_JOBS");
+        if (!verdict.Allowed)
+        {
+            return null;
+        }
+
+        var list = Execute(session, verdict.Ecu!, verdict.Job!, "", "", _defaultTimeoutSeconds, ct);
+        if (!list.Ok)
+        {
+            return null;
+        }
+
+        var listed = list.Value!.Sets.Any(s =>
+            s.TryGetValue("JOBNAME", out var v) && v is string name && string.Equals(name, job, StringComparison.OrdinalIgnoreCase));
+        return listed
+            ? null
+            : ApiFailure.Of(ApiErrors.JobNotFound, $"{ecu} has no job {job}.", new EcuJobDetails(ecu, job));
+    }
+
+    /// <summary>True when the name is a <c>.prg</c> file and not also a <c>.grp</c> file.</summary>
+    private bool IsPrgFile(string ecu)
+    {
+        var files = _ecus.List(ecu, EcuFolder.MaxEntries)?.Files
+            .Where(f => string.Equals(f.Name, ecu, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return files is not null && files.Any(f => f.Type == "prg") && !files.Any(f => f.Type == "grp");
     }
 
     /// <summary>
@@ -587,16 +713,58 @@ public sealed class EdiabasService
         return new TextList(lines);
     }
 
+    /// <summary>
+    /// The argument screen for a screened job called with arguments: the job's own description
+    /// passed, but the arguments it takes could still select a write. Every <c>ARG</c> name and
+    /// <c>ARGCOMMENT</c> goes through the same screen. Null when the call may go ahead; a failed
+    /// read or no argument rows at all is <c>job_needs_review</c>, because nothing then shows the
+    /// arguments are harmless. A failure that is about the request (time, cancel, a BMW tool)
+    /// keeps its own code.
+    /// </summary>
+    private ApiFailure? ScreenArguments(Session session, string ecu, string job, int timeout, CancellationToken ct)
+    {
+        var rows = ReadParameterRows(session, ecu, "_ARGUMENTS", job, "ARG", "ARGTYPE", "ARGCOMMENT", timeout, ct);
+        if (!rows.Ok && rows.Failure!.Error.Code != ApiErrors.EdiabasError)
+        {
+            return rows.Failure;
+        }
+
+        var text = rows.Ok
+            ? NullIfBlank(string.Join("\n", rows.Value!.SelectMany(a => new[] { a.Name, a.Comment }).OfType<string>().Where(t => t.Length > 0)))
+            : null;
+        var screened = _screen.Screen(text);
+        if (screened.Passed)
+        {
+            return null;
+        }
+
+        return ApiFailure.Of(
+            ApiErrors.JobNeedsReview,
+            screened.Matched.Count > 0
+                ? $"The argument description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config."
+                : $"{job} takes arguments but they are not described, so the call cannot be shown to be a read. Ryan can approve it in the agent config.",
+            new JobReviewDetails(ecu, job, text, screened.Matched));
+    }
+
+    /// <summary>For describe: a failed read counts as no rows.</summary>
     private Outcome<List<JobParameterInfo>> ReadParameterTable(
+        Session session, string ecu, string infoJob, string job, string nameKey, string typeKey, string commentPrefix, int timeout, CancellationToken ct)
+    {
+        var rows = ReadParameterRows(session, ecu, infoJob, job, nameKey, typeKey, commentPrefix, timeout, ct);
+
+        // A job without arguments may make EDIABAS report an error rather than no sets.
+        return !rows.Ok && rows.Failure!.Error.Code == ApiErrors.EdiabasError
+            ? new List<JobParameterInfo>()
+            : rows;
+    }
+
+    private Outcome<List<JobParameterInfo>> ReadParameterRows(
         Session session, string ecu, string infoJob, string job, string nameKey, string typeKey, string commentPrefix, int timeout, CancellationToken ct)
     {
         var run = AgentJob(session, ecu, infoJob, job, timeout, ct);
         if (!run.Ok)
         {
-            // A job without arguments may make EDIABAS report an error rather than no sets.
-            return run.Failure!.Error.Code == ApiErrors.EdiabasError
-                ? new List<JobParameterInfo>()
-                : run.Failure!;
+            return run.Failure!;
         }
 
         var list = run.Value!.Sets
@@ -638,9 +806,16 @@ public sealed class EdiabasService
             throw new InvalidOperationException("apiJob without a successful apiInit");
         }
 
+        // The one gate every apiJob passes: a client that has gone starts nothing more, whether
+        // the next job is its own or one of the agent's info jobs.
+        if (ct.IsCancellationRequested)
+        {
+            return NotRun($"The request was abandoned before {job} started.");
+        }
+
         // The request budget binds every job, not only the decision to start an item: no job may
         // run past it, so the whole request ends within maxJobTimeoutSeconds plus the break grace.
-        var budgetLeftMs = session.StartMs + (long)_maxTimeoutSeconds * 1000 - _clock.ElapsedMs;
+        var budgetLeftMs = session.BudgetLeftMs;
         if (budgetLeftMs <= 0)
         {
             return NotRun($"The request reached its {_maxTimeoutSeconds} s limit before {job} started.");
@@ -688,7 +863,17 @@ public sealed class EdiabasService
         }
 
         var read = ResultShaping.ReadAll(_api);
-        return read is null ? EdiabasFailure(ecu, job) : read;
+        return read is null ? UnreadableResults(ecu, job) : read;
+    }
+
+    /// <summary>The job ended ready but apiResultSets failed. EDIABAS may or may not have an error
+    /// code for that, so whatever it says goes in the details, not in the message.</summary>
+    private ApiFailure UnreadableResults(string ecu, string job)
+    {
+        var code = _api.ErrorCode();
+        var text = _api.ErrorText();
+        _log.Warn($"{ecu} {job}: finished but its results could not be read (EDIABAS error {code}: {text})");
+        return ApiFailure.Of(ApiErrors.EdiabasError, "The job finished but its results could not be read.", new EdiabasErrorDetails(code, text, ResultsUnread: true));
     }
 
     private void BreakAndSettle(Session session, string ecu, string job)
@@ -730,9 +915,22 @@ public sealed class EdiabasService
             return new JobVerdict(v.Allowed, v.Rule, Review.NotRequired);
         }
 
-        if (_screen.IsReviewed(v.Ecu!, v.Job!))
+        // The same decision a run would make (ScreenJob).
+        var approval = _screen.Approval(v.Ecu!, v.Job!);
+        if (approval.Kind == ApprovalKind.Unpinned)
         {
             return new JobVerdict(true, v.Rule, Review.Reviewed);
+        }
+
+        if (approval.Kind == ApprovalKind.Pinned)
+        {
+            var pinned = fetch switch
+            {
+                DescriptionFetch.Skipped => Review.NotChecked,
+                DescriptionFetch.Read when approval.Matches(comment) => Review.Reviewed,
+                _ => Review.NeedsReview,
+            };
+            return new JobVerdict(true, v.Rule, pinned);
         }
 
         var review = fetch switch
@@ -794,7 +992,12 @@ public sealed class EdiabasService
                 new ProcessesDetails(running))
             : null;
 
-    private bool OverBudget(long requestStart) => _clock.ElapsedMs - requestStart >= (long)_maxTimeoutSeconds * 1000;
+    /// <summary><c>not_run</c> for a request that spent its whole budget queued behind another
+    /// one: the client has given up or is about to, so EDIABAS is not even loaded.</summary>
+    private ApiFailure? WaitedTooLong(long queuedMs) =>
+        queuedMs >= (long)_maxTimeoutSeconds * 1000
+            ? NotRun($"The request waited behind another EDIABAS request for the whole {_maxTimeoutSeconds} s limit; nothing was started.")
+            : null;
 
     private static ApiFailure Refused(string? ecu, string? job, string rule) =>
         ApiFailure.Of(ApiErrors.JobNotAllowed, $"The job policy refuses this job (rule {rule}).", new JobRefusalDetails(ecu ?? "", job ?? "", rule));
@@ -819,18 +1022,25 @@ public sealed class EdiabasService
         private bool _initCalled;
         private ApiFailure? _initFailure;
 
-        public Session(EdiabasService owner)
+        /// <param name="queuedMs">How long the request waited for the runner thread: it counts
+        /// against the budget, because the client's own deadline started when it sent the request.</param>
+        public Session(EdiabasService owner, long queuedMs)
         {
             this.owner = owner;
-            StartMs = owner._clock.ElapsedMs;
-            LastConflictCheckMs = StartMs;
+            var now = owner._clock.ElapsedMs;
+            StartMs = now - Math.Max(0, queuedMs);
+            LastConflictCheckMs = now;
 
             // Counted so the DLL is never released while a request is running.
             owner._openSessions++;
         }
 
-        /// <summary>When the request began, for its overall budget.</summary>
+        /// <summary>When the request arrived (before any time in the queue), for its overall budget.</summary>
         public long StartMs { get; }
+
+        /// <summary>What is left of the request's <c>maxJobTimeoutSeconds</c> budget; zero or
+        /// less means no further job may start.</summary>
+        public long BudgetLeftMs => StartMs + (long)owner._maxTimeoutSeconds * 1000 - owner._clock.ElapsedMs;
 
         public bool Initialised { get; private set; }
 
@@ -907,10 +1117,10 @@ public sealed class EdiabasService
                 }
                 catch (Exception ex)
                 {
-                    // A handle may still be open: the DLL must not be unloaded under it, ever.
+                    // A handle may still be open: the DLL must not be unloaded under it, ever. Not
+                    // rethrown: the job's result was already read, and the client should get it.
                     owner._handleMayBeOpen = true;
                     owner._log.Warn($"apiEnd threw {ex.GetType().Name}: {ex.Message}; api32.dll stays loaded until the agent restarts");
-                    throw;
                 }
             }
             finally

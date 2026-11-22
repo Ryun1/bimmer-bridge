@@ -4,6 +4,7 @@ import {
   BridgeError,
   agentError,
   agentNotAnswering,
+  ediabasBusy,
   ediabasRequestLost,
   agentOutdated,
   badResponse,
@@ -52,6 +53,8 @@ export const HealthSchema = z.object({
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
+  // reviewedJobs entries pinned to a description and approving by name only; older agents omit it.
+  approvals: z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }).nullable().optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 
@@ -132,6 +135,8 @@ export const DescribeJobSchema = z.object({
   variant: z.string().nullable().optional(),
   job: z.string(),
   comment: z.string().nullable().optional(),
+  // 12 lower-case hex digits, what a pinned reviewedJobs entry holds; older agents omit it.
+  descriptionHash: z.string().nullable().optional(),
   verdict: VerdictSchema,
   arguments: z.array(ParamSchema),
   results: z.array(ParamSchema),
@@ -196,6 +201,11 @@ export interface AgentClientOptions {
   requestTimeoutMs?: number | undefined;
   /** Per-request timeout for /ediabas/* calls. Default 75 s. */
   ediabasTimeoutMs?: number | undefined;
+  /**
+   * How long an /ediabas/* call may wait behind another one on this Mac before it is answered
+   * `ediabas_busy` without being sent. Default 120 s.
+   */
+  ediabasQueueWaitMs?: number | undefined;
   /** Timeout for discovery probes. Default 3 s. */
   probeTimeoutMs?: number | undefined;
   /** Diagnostics (stderr). Never receives the token. */
@@ -228,7 +238,10 @@ function classify(e: unknown): ConnectionFailure {
   if (err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout", "TimeoutError");
   const code = String(err?.cause?.code ?? err?.code ?? "");
   const detail = code || err?.cause?.name || name || "unknown";
-  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
+  // A connect timeout means the TCP handshake never completed: nothing was sent, and the VM may
+  // be on another address now. ETIMEDOUT can also come after the request was written.
+  if (code === "UND_ERR_CONNECT_TIMEOUT") return new ConnectionFailure("unreachable", detail, true);
+  if (code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
   if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
   // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
   // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
@@ -243,7 +256,11 @@ interface RequestSpec {
   path: string;
   query?: Record<string, QueryValue>;
   body?: unknown;
-  /** /ediabas/*: the long timeout, and never re-sent after a timeout (the job may have run). */
+  /**
+   * /ediabas/*: sent one at a time (the agent runs them one at a time, and a request waiting
+   * in its queue would use up this side's timeout), the long timeout, and never re-sent after
+   * a timeout (the job may have run).
+   */
   ediabas?: boolean;
   /**
    * Runs an EDIABAS job in the VM (job, jobs, vehicle, describe): re-sent only when the
@@ -295,13 +312,17 @@ export class AgentClient {
   private readonly requestTimeoutMs: number;
   private readonly ediabasTimeoutMs: number;
   private readonly probeTimeoutMs: number;
+  private readonly ediabasQueueWaitMs: number;
   private readonly log: (message: string) => void;
+  /** Settles when the last queued /ediabas/* call has finished. */
+  private ediabasTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly opts: AgentClientOptions) {
     this.fetchFn = opts.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 15_000;
     this.ediabasTimeoutMs = opts.ediabasTimeoutMs ?? 75_000;
     this.probeTimeoutMs = opts.probeTimeoutMs ?? 3_000;
+    this.ediabasQueueWaitMs = opts.ediabasQueueWaitMs ?? 120_000;
     this.log = opts.log ?? (() => {});
     this.locator = new VmLocator(opts.config, opts.sources, (baseUrl, ctx) => this.probe(baseUrl, ctx), this.log);
   }
@@ -352,7 +373,8 @@ export class AgentClient {
     return this.json({ method: "GET", path: "/ediabas/ecus", query: { filter }, ediabas: true }, EcusSchema);
   }
 
-  describeJobs(q: { ecu: string; filter?: string | undefined }): Promise<DescribeList> {
+  /** `comments: false`: names only, no `_JOBCOMMENTS` per job (verdicts then say `not_checked`). */
+  describeJobs(q: { ecu: string; filter?: string | undefined; comments?: boolean | undefined }): Promise<DescribeList> {
     return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeListSchema);
   }
 
@@ -364,13 +386,22 @@ export class AgentClient {
     return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
   }
 
-  runJob(body: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }): Promise<JobResult> {
+  runJob(body: {
+    ecu: string;
+    job: string;
+    args?: string | undefined;
+    results?: string | undefined;
+    timeoutSeconds?: number | undefined;
+  }): Promise<JobResult> {
     return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true, runsJob: true }, JobResultSchema);
   }
 
-  /** 1..20 items; the caller chunks. */
-  runJobs(items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[]): Promise<JobsResponse> {
-    return this.json({ method: "POST", path: "/ediabas/jobs", body: { items }, ediabas: true, runsJob: true }, JobsResponseSchema);
+  /** 1..20 items; the caller chunks. `timeoutSeconds` applies to each item. */
+  runJobs(
+    items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[],
+    timeoutSeconds?: number,
+  ): Promise<JobsResponse> {
+    return this.json({ method: "POST", path: "/ediabas/jobs", body: timeoutSeconds === undefined ? { items } : { items, timeoutSeconds }, ediabas: true, runsJob: true }, JobsResponseSchema);
   }
 
   private json<T>(spec: RequestSpec, schema: z.ZodType<T>): Promise<T> {
@@ -392,7 +423,39 @@ export class AgentClient {
     });
   }
 
-  private async call<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
+  private call<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
+    return spec.ediabas ? this.queued(() => this.callNow(spec, parse)) : this.callNow(spec, parse);
+  }
+
+  /**
+   * Runs `fn` after every /ediabas/* call queued before it (FIFO). A call that waits longer
+   * than the limit is answered `ediabas_busy` and never sent. The request timeout starts
+   * inside `fn`, so time spent waiting here does not count against it.
+   */
+  private async queued<T>(fn: () => Promise<T>): Promise<T> {
+    const before = this.ediabasTail;
+    let release!: () => void;
+    const mine = new Promise<void>((resolve) => (release = resolve));
+    this.ediabasTail = before.then(() => mine);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const turn = await Promise.race([
+      before.then(() => true),
+      new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), this.ediabasQueueWaitMs))),
+    ]);
+    clearTimeout(timer);
+    if (!turn) {
+      release();
+      this.log("an EDIABAS request waited too long behind another one and was not sent");
+      throw ediabasBusy();
+    }
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  }
+
+  private async callNow<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
     const ctx: CallContext = { tokenRefreshed: false };
     const first = await this.locator.resolve(ctx);
     try {

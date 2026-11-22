@@ -13,8 +13,7 @@ a module screen needs a recording of that screen first.)
 Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
 installed (bmw-standard-tools, ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
-without-skill run fails or does worse. Fixtures come from real recorded sessions (Phases 2 and
-6); until the scenario exists, this case cannot be run.
+without-skill run fails or does worse. Its fixture was recorded at the desk on 2026-11-21.
 
 ## Must
 - Takes a screenshot (`vm_list_windows` then `vm_screenshot`) before answering.

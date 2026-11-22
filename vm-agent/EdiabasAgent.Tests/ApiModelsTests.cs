@@ -19,6 +19,18 @@ public class ApiModelsTests
         Assert.Equal("""{"error":{"code":"job_not_allowed","message":"m","details":{"ecu":"NVE_65","job":"FS_LOESCHEN","rule":"deny.substring:LOESCH"}}}""", json);
     }
 
+    [Fact]
+    public void EdiabasError_ResultsUnread_OnlyWhenSet()
+    {
+        // An ordinary ediabas_error keeps its shape byte for byte; only unreadable results add the flag.
+        Assert.Equal(
+            """{"error":{"code":"ediabas_error","message":"m","details":{"errorCode":19,"errorText":"SYS-0008"}}}""",
+            ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(19, "SYS-0008"))));
+        Assert.Equal(
+            """{"error":{"code":"ediabas_error","message":"m","details":{"errorCode":0,"errorText":"","resultsUnread":true}}}""",
+            ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(0, "", ResultsUnread: true))));
+    }
+
     [Theory]
     [InlineData("bad_request", 400)]
     [InlineData("job_not_allowed", 403)]
@@ -35,6 +47,8 @@ public class ApiModelsTests
     [InlineData("window_not_found", 404)]
     [InlineData("window_minimized", 409)]
     [InlineData("desktop_unavailable", 503)]
+    [InlineData("capture_busy", 503)]
+    [InlineData("capture_failed", 500)]
     [InlineData("something_new", 500)]
     public void Status(string code, int status)
     {
@@ -63,9 +77,9 @@ public class ApiModelsTests
             """{"ecu":"NVE_65","variant":null,"jobCount":1,"jobs":[{"name":"FS_LESEN","comment":null,"verdict":{"allowed":true,"rule":"allow.global","review":"not_required"}}],"durationMs":4}""",
             ApiJson.Serialize(list));
 
-        var one = new DescribeJobResponse("NVE_65", "NVE_65", "FS_LESEN", "c", new JobVerdict(true, "allow.global", Review.NotRequired), [new JobParameterInfo("A", "int", null)], [], 5);
+        var one = new DescribeJobResponse("NVE_65", "NVE_65", "FS_LESEN", "c", "84a516841ba7", new JobVerdict(true, "allow.global", Review.NotRequired), [new JobParameterInfo("A", "int", null)], [], 5);
         Assert.Equal(
-            """{"ecu":"NVE_65","variant":"NVE_65","job":"FS_LESEN","comment":"c","verdict":{"allowed":true,"rule":"allow.global","review":"not_required"},"arguments":[{"name":"A","type":"int","comment":null}],"results":[],"durationMs":5}""",
+            """{"ecu":"NVE_65","variant":"NVE_65","job":"FS_LESEN","comment":"c","descriptionHash":"84a516841ba7","verdict":{"allowed":true,"rule":"allow.global","review":"not_required"},"arguments":[{"name":"A","type":"int","comment":null}],"results":[],"durationMs":5}""",
             ApiJson.Serialize(one));
 
         Assert.Equal(
@@ -102,7 +116,8 @@ public class ApiModelsTests
             Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true),
             LastCableUseAt: null,
             PolicyVersion: 1,
-            Capabilities: ["ediabas"]);
+            Capabilities: ["ediabas"],
+            Approvals: new ApprovalCounts(2, 1));
 
         using var doc = JsonDocument.Parse(ApiJson.Serialize(h));
         var root = doc.RootElement;
@@ -110,7 +125,7 @@ public class ApiModelsTests
         [
             "agent", "version", "startedAt", "uptimeSeconds", "os", "user", "elevated", "sessionId",
             "bindAddress", "port", "gateway", "conflictingProcesses", "ediabas", "lastCableUseAt",
-            "policyVersion", "capabilities",
+            "policyVersion", "capabilities", "approvals",
         ];
         Assert.Equal(expected, root.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal("ediabas-bridge-agent", root.GetProperty("agent").GetString());
@@ -130,6 +145,7 @@ public class ApiModelsTests
         Assert.Equal(["dllPath", "dllFound", "loaded", "stuck"], ed.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
+        Assert.Equal("""{"pinned":2,"unpinned":1}""", root.GetProperty("approvals").GetRawText());
     }
 
     [Fact]

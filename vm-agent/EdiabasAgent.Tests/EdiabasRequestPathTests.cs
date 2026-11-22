@@ -1,0 +1,370 @@
+using EdiabasAgent.Core;
+
+namespace EdiabasAgent.Tests;
+
+/// <summary>The request path's gates after the second review: cancel, queue time, apiEnd,
+/// unreadable results, the argument screen and jobs the SGBD does not have.</summary>
+public class EdiabasRequestPathTests
+{
+    private readonly FakeEdiabasApi _api = new();
+    private readonly FakeClock _clock = new();
+    private readonly FakeConflicts _conflicts = new();
+    private readonly FakeLog _log = new();
+    private readonly RequestAudit _audit = new();
+
+    private EdiabasService Service(IEnumerable<string>? reviewed = null, int defaultTimeout = 30, int maxTimeout = 60, params string[] ecus) =>
+        new(
+            _api,
+            _conflicts,
+            new FakeEcus(ecus.Length == 0 ? ["NVE_65", "TMODE", "UTILITY", "D_MOTOR"] : ecus),
+            JobPolicy.Embedded,
+            new CommentScreen(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, reviewed ?? []),
+            _clock,
+            new CableUse(),
+            _log,
+            new DllLoadState(),
+            defaultTimeout,
+            maxTimeout,
+            20);
+
+    private static FakeResult Text(string name, string value) => new(name, ApiResultFormat.Text, value);
+
+    // ---------------------------------------------------------------- A1: cancel is checked before every apiJob
+
+    [Fact]
+    public void CancelledDuringTheScreen_ClientJobNeverStarts()
+    {
+        using var cts = new CancellationTokenSource();
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+        _api.DuringJob = cts.Cancel;
+
+        var r = Service().RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, cts.Token);
+
+        Assert.Equal("not_run", r.Failure!.Error.Code);
+        Assert.Equal("The request was abandoned before STATUS_X started.", r.Failure.Error.Message);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_X] []"], _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void CancelledAfterJobsInDescribeJob_NoFurtherInfoJob()
+    {
+        using var cts = new CancellationTokenSource();
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+        _api.On("NVE_65 _JOBCOMMENTS IDENT", FakeJob.Comments("Ident"));
+        _api.DuringJob = cts.Cancel;
+
+        var r = Service().DescribeJob("NVE_65", "IDENT", _audit, cts.Token);
+
+        Assert.Equal("not_run", r.Failure!.Error.Code);
+        Assert.Equal(["Job NVE_65 _JOBS [] []"], _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    // ---------------------------------------------------------------- A2: queue time counts against the budget
+
+    [Fact]
+    public void Queued50sOf60_LeavesTenSecondsForTheJob()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true });
+
+        var r = Service(maxTimeout: 60).RunJob(new JobRequest("NVE_65", "IDENT"), 30, _audit, default, queuedMs: 50_000);
+
+        Assert.Equal("job_timeout", r.Failure!.Error.Code);
+        Assert.Contains("60 s limit", r.Failure.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(10_000, _clock.ElapsedMs);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void Queued50sOf60_BatchLeftoversAreNotRun()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { BusyPolls = 200, Sets = [[]] }); // 10 s
+
+        var r = Service(maxTimeout: 60).RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "IDENT")], 30, _audit, default, queuedMs: 50_000);
+
+        var items = r.Value!.Items;
+        Assert.True(items[0].Ok);
+        Assert.Equal("not_run", items[1].Error!.Code);
+        Assert.Single(_api.JobCalls);
+
+        // durationMs is the time the request ran, not the time it waited.
+        Assert.Equal(10_000, r.Value.DurationMs);
+    }
+
+    public static TheoryData<string> Requests => ["job", "jobs", "vehicle", "describe-list", "describe-job"];
+
+    [Theory]
+    [MemberData(nameof(Requests))]
+    public void QueuedTheWholeBudget_StartsNothing(string kind)
+    {
+        const string message = "The request waited behind another EDIABAS request for the whole 60 s limit; nothing was started.";
+        var svc = Service(maxTimeout: 60);
+        const long queued = 60_000;
+
+        ApiFailure? f = kind switch
+        {
+            "job" => svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queued).Failure,
+            "jobs" => svc.RunJobs([new("NVE_65", "IDENT")], null, _audit, default, queued).Failure,
+            "vehicle" => svc.Vehicle([], _audit, default, queued).Failure,
+            "describe-list" => svc.DescribeList("NVE_65", null, true, _audit, default, queued).Failure,
+            _ => svc.DescribeJob("NVE_65", "IDENT", _audit, default, queued).Failure,
+        };
+
+        Assert.Equal("not_run", f!.Error.Code);
+        Assert.Equal(message, f.Error.Message);
+        Assert.Empty(_api.Calls);
+    }
+
+    [Fact]
+    public void QueueTime_DoesNotMakeTheConflictCheckStale()
+    {
+        // The request's own conflict check just ran; the first job reuses it however long the wait.
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+
+        Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queuedMs: 5_000).Ok);
+        Assert.Equal(1, _conflicts.Calls);
+    }
+
+    // ---------------------------------------------------------------- A3: a failed apiEnd keeps the result
+
+    [Fact]
+    public void ApiEndThrows_TheResultIsStillReturned_AndTheDllIsNeverReleased()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Ok([Text("JOB_STATUS", "OKAY")]));
+        _api.EndThrows = true;
+        var svc = Service();
+
+        var r = svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
+
+        Assert.True(r.Ok);
+        Assert.Equal("OKAY", r.Value!.JobStatus);
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN apiEnd threw", StringComparison.Ordinal));
+
+        _clock.ElapsedMs += 100_000;
+        Assert.False(svc.ReleaseIfIdle());
+        Assert.Equal(0, _api.Count("Unload"));
+    }
+
+    // ---------------------------------------------------------------- A4: unreadable results
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(134, "SYS-0002: SOMETHING")]
+    public void ResultsCannotBeRead_HasItsOwnMessage(int code, string text)
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { ResultSetsFail = true, ErrorCode = code, ErrorText = text });
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal("The job finished but its results could not be read.", f.Error.Message);
+        Assert.Equal(new EdiabasErrorDetails(code, text, ResultsUnread: true), f.Error.Details);
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN NVE_65 IDENT: finished but its results could not be read", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ResultsCannotBeRead_InABatch_IsFlaggedOnTheItem()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { ResultSetsFail = true, ErrorCode = 134, ErrorText = "SYS-0002: SOMETHING" });
+        _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT", "FS_LESEN"));
+
+        var items = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "FS_LESEN")], null, _audit, default).Value!.Items;
+
+        Assert.Equal("ediabas_error", items[0].Error!.Code);
+        Assert.Equal(new EdiabasErrorDetails(134, "SYS-0002: SOMETHING", ResultsUnread: true), items[0].Error!.Details);
+        Assert.True(items[1].Ok);
+    }
+
+    // ---------------------------------------------------------------- A5: arguments are screened
+
+    private const string Approve = " Ryan can approve it in the agent config.";
+
+    private void ScriptStatusX(FakeJob arguments)
+    {
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_X", arguments);
+        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+    }
+
+    private static FakeJob ArgRows(params List<FakeResult>[] rows) => new() { Sets = [[], .. rows] };
+
+    [Fact]
+    public void ArgumentScreen_DescribedArguments_Pass_InCallOrder()
+    {
+        ScriptStatusX(ArgRows([Text("ARG", "KANAL"), Text("ARGTYPE", "int"), Text("ARGCOMMENT0", "Kanalnummer 1-4")], [Text("ARG", "MODUS"), Text("ARGTYPE", "int")]));
+
+        var r = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1;2"), null, _audit, default);
+
+        Assert.True(r.Ok);
+        Assert.Equal(
+            ["Job NVE_65 _JOBCOMMENTS [STATUS_X] []", "Job NVE_65 _ARGUMENTS [STATUS_X] []", "Job NVE_65 STATUS_X [1;2] []"],
+            _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void ArgumentScreen_MatchedTerm_IsNeedsReview()
+    {
+        ScriptStatusX(ArgRows([Text("ARG", "MODUS"), Text("ARGCOMMENT0", "1 = Selbsttest starten")]));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        var d = Assert.IsType<JobReviewDetails>(f.Error.Details);
+        Assert.Equal($"The argument description of STATUS_X mentions: {string.Join(", ", d.Matched)}.{Approve}", f.Error.Message);
+        Assert.Contains("start", d.Matched);
+        Assert.Equal("MODUS\n1 = Selbsttest starten", d.Description);
+        Assert.Equal(RequestAudit.ScreenRule, _audit.Rule);
+        Assert.DoesNotContain("Job NVE_65 STATUS_X [1] []", _api.JobCalls);
+    }
+
+    [Fact]
+    public void ArgumentScreen_ReadFails_IsNeedsReview()
+    {
+        ScriptStatusX(FakeJob.Error(100, "SYS-0010"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        Assert.Equal($"STATUS_X takes arguments but they are not described, so the call cannot be shown to be a read.{Approve}", f.Error.Message);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_NoRows_IsNeedsReview()
+    {
+        ScriptStatusX(ArgRows());
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default).Failure!;
+
+        Assert.Equal("job_needs_review", f.Error.Code);
+        Assert.Equal($"STATUS_X takes arguments but they are not described, so the call cannot be shown to be a read.{Approve}", f.Error.Message);
+        var d = Assert.IsType<JobReviewDetails>(f.Error.Details);
+        Assert.Null(d.Description);
+        Assert.Empty(d.Matched);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_TimeoutKeepsItsOwnCode()
+    {
+        ScriptStatusX(new FakeJob { NeverFinishes = true });
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), 2, _audit, default).Failure!;
+
+        Assert.Equal("job_timeout", f.Error.Code);
+        Assert.Equal(2, _api.JobCalls.Count());
+    }
+
+    [Fact]
+    public void ArgumentScreen_NotForCallsWithoutArgs_ReviewedOrUnscreenedJobs()
+    {
+        ScriptStatusX(ArgRows());
+        _api.On("NVE_65 STATUS_Y", FakeJob.Ok());
+        _api.On("NVE_65 FS_LESEN_DETAIL", FakeJob.Ok());
+        var svc = Service(reviewed: ["NVE_65:STATUS_Y"]);
+
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X"), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X", ""), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_Y", "1"), null, new RequestAudit(), default).Ok);
+        Assert.True(svc.RunJob(new JobRequest("NVE_65", "FS_LESEN_DETAIL", "0x4711"), null, new RequestAudit(), default).Ok);
+
+        Assert.DoesNotContain(_api.JobCalls, c => c.Contains("_ARGUMENTS", StringComparison.Ordinal));
+    }
+
+    // ---------------------------------------------------------------- A6: a job the SGBD does not have
+
+    [Fact]
+    public void MissingJob_SingleRun_IsJobNotFound()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008: JOB NOT FOUND"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT", "FS_LESEN"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal(404, f.Status);
+        Assert.Equal("job_not_found", f.Error.Code);
+        Assert.Equal("NVE_65 has no job IS_LESEN.", f.Error.Message);
+        Assert.Equal(new EcuJobDetails("NVE_65", "IS_LESEN"), f.Error.Details);
+        Assert.Equal(["Job NVE_65 IS_LESEN [] []", "Job NVE_65 _JOBS [] []"], _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void MissingJob_AsABatchItem_IsJobNotFound()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+
+        var r = Service().RunJobs([new("NVE_65", "IS_LESEN"), new("NVE_65", "IDENT")], null, _audit, default).Value!;
+
+        Assert.Equal("job_not_found", r.Items[0].Error!.Code);
+        Assert.True(r.Items[1].Ok);
+        Assert.Equal("job_not_found", _audit.Items[0].ErrorCode);
+    }
+
+    [Fact]
+    public void MissingJob_JobListFails_KeepsTheFirstError()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.On("NVE_65 _JOBS", FakeJob.Error(20, "OTHER"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(new EdiabasErrorDetails(19, "SYS-0008"), f.Error.Details);
+    }
+
+    [Fact]
+    public void JobThatExists_KeepsItsError()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("ident"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(19, ((EdiabasErrorDetails)f.Error.Details!).ErrorCode);
+    }
+
+    [Fact]
+    public void GroupFile_StartsNoJobList()
+    {
+        // Listing a group file's jobs would reach the car again to pick the variant.
+        _api.On("D_MOTOR IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+
+        var f = Service(ecus: ["D_MOTOR.grp", "NVE_65"]).RunJob(new JobRequest("D_MOTOR", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(["Job D_MOTOR IS_LESEN [] []"], _api.JobCalls);
+    }
+
+    [Fact]
+    public void InfoJobRequestedByTheClient_StartsNoJobList()
+    {
+        _api.On("NVE_65 _JOBCOMMENTS", FakeJob.Error(19, "SYS-0008"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "_JOBCOMMENTS", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Single(_api.JobCalls);
+    }
+
+    [Fact]
+    public void MissingJob_AfterCancel_StartsNoJobList()
+    {
+        using var cts = new CancellationTokenSource();
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.DuringJob = cts.Cancel;
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, cts.Token).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Single(_api.JobCalls);
+    }
+}

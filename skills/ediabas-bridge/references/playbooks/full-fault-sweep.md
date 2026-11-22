@@ -1,53 +1,34 @@
 # Playbook: full fault sweep
 
 Reading the fault memory of every module Ryan cares about, in as little ignition-on time as
-possible.
+possible. The session routine in `../../SKILL.md` applies; this file adds only what is specific.
 
-**Status: procedure only.** No sweep has been run on this car yet, so this playbook names no
-SGBD as confirmed. Once one has, the list of ECUs that answered goes into `../ecu-map.md` and
-the sweep reads from there.
+**Status: procedure only.** No sweep has been run on this car yet, and no SGBD has answered
+from it. Once one has, the modules that answered go into `../ecu-map.md`.
 
 ## Before the ignition goes on
 
-1. `vm_health`. If a BMW tool is listed as running, name it, ask Ryan to close it when he has
-   finished with it, and stop until he says it is closed. Never hurry him out of WinKFP or NCS
-   Expert.
-2. Agree the scope with Ryan: every module, or the systems behind a symptom. A narrower sweep
-   is quicker and drains less. Ask him to have the cable plugged in and passed through to the
-   VM in UTM: checking the ECU list below needs it.
-3. Build the ECU list:
-   - If `../ecu-map.md` has entries, use those names.
-   - Otherwise search with `ediabas_list_ecus` (use `filter`; the VM holds well over a
-     thousand SGBD files, most for other cars). Group names (`grp`) resolve to a specific
-     SGBD variant when read, and the tool reports which `variant` they resolved to, so they
-     help where the exact variant is not known. Confirm each candidate has a runnable
-     fault-memory job with `ediabas_describe`.
-   - `ediabas_describe` needs the cable passed through to the VM, but neither the car nor the
-     ignition: on 2026-11-21 it failed with `cable_not_found` without the cable, and worked
-     with the cable in the VM and not plugged into the car. So do all of this job discovery
-     now, before asking for the ignition. Use `filter` where you can: a full describe of
-     `NVE_65` with comments took about 15 s.
-   - If you cannot tell which name fits this car, ask Ryan rather than including guesses.
-     Every wrong name is an error result that still costs time.
-4. Tell Ryan the plan: how many ECUs, one `ediabas_read_faults` call (two if more than 20, or
-   more than 10 with info memory), whether info memory is included, and a rough time (the
-   first EDIABAS call after a pause can take 10–15 s while the agent loads EDIABAS again;
-   that is normal). Ask him to switch the ignition on and say when it is. Note the time.
+- Agree the scope with Ryan: every module, or the systems behind a symptom. A narrower sweep is
+  quicker and drains less.
+- If `../ecu-map.md` has modules confirmed from the car, use those names. Otherwise plan to start
+  with the whole-car read (below) and build the list from what it returns. Where a name has to
+  be found by hand: the VM holds well over a thousand SGBD files, most for other cars, so search
+  with a `filter`. A group name (`grp`) resolves to a variant when read and the tool reports
+  which, so it helps where the exact variant is not known. If you cannot tell which name fits
+  this car, ask Ryan rather than including guesses: every wrong name costs time.
+- Tell Ryan the number of calls: one `ediabas_read_faults` per 20 ECUs, and whether info memory
+  is included (it doubles the reads).
 
-## With the ignition on
+## With the ignition on (not yet run at the car)
 
-5. `ediabas_vehicle_status`. Report what it shows as returned. If nothing answers, the
-   ignition may not be on: ask, rather than starting the reads.
-6. One `ediabas_read_faults` call with the whole list. Add `includeInfoMemory` only if Ryan
-   wants it; it doubles the reads.
-7. Do not go back for extra detail per fault unless Ryan asks; each extra call is more
-   ignition time. Keep the total under 10 minutes.
+1. `E60` `FS_LESEN_FUNKTIONAL` reads the faults of every module that answers in one job, and
+   `IDENT_FUNKTIONAL` lists those modules. If that answers the question, stop there.
+2. Otherwise one `ediabas_read_faults` call with the modules wanted (from the list above), for
+   the detail per module. Add `includeInfoMemory` only if Ryan wants it.
+3. Do not go back for extra detail per fault unless Ryan asks.
 
 ## After
 
-8. Say "ignition off".
-9. Report per ECU: faults as returned (miles first), "no faults", or the error and why.
-   List ECUs that did not answer separately; do not treat silence as "no faults".
-10. Hand the codes, with date and mileage, to the `bmw-e61` skill for interpretation and the
-    fault log.
-11. Tell Ryan which names answered, so they can be recorded in `../ecu-map.md`.
+- Report per ECU: faults as returned, "no faults", or the error and why. List ECUs that did not
+  answer separately; do not treat silence as "no faults".
+- Tell Ryan which names answered, so they can be recorded in `../ecu-map.md`.

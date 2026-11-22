@@ -14,16 +14,21 @@ the VM); nothing here is a way around them.
 
 ## The tools and their risk
 
-| Tool | What it is for | Uses the cable | Risk |
-|---|---|---|---|
-| INPA | Diagnostics: fault memory, live values, activations | Yes | Low to medium: it can activate components and clear faults |
-| Tool32 | Runs any single EDIABAS job from any SGBD | Yes | High: any job, including writes |
-| NCS Expert | Reads and writes module coding | Yes | High: wrong coding disables functions |
-| WinKFP | Flashes module firmware | Yes | Very high: an interrupted flash can brick a module |
-| NCS Dummy | Offline viewer/editor for NCS Expert trace files | No | Low, but its edits are what NCS Expert later writes to the car |
-| BMW Coding Tool | Copies SP-Daten into the NCS Expert, WinKFP and EDIABAS folders | No | Medium: replaces SGBD and data files |
+Process names are from the VM discovery run of 2026-11-21; `vm_health` lists any of these
+except NCS Dummy as "BMW tools running", because the bridge treats them as holding the cable.
+What each tool does and how risky it is, is general knowledge about these programs, not
+something recorded on this car.
 
-More detail, and what each risk means in practice, is in `references/risk.md`.
+| Tool | Process | What it is for | Uses the cable | Risk |
+|---|---|---|---|---|
+| INPA | `INPALOAD` | Diagnostics: fault memory, live values, activations | Yes | Low to medium: reading is safe; clearing loses evidence and an activation moves real parts |
+| Tool32 | `TOOL32` | Runs any single EDIABAS job from any SGBD | Yes | High: any job, including writes |
+| NCS Expert | `NCSEXPER` | Reads and writes module coding | Yes | High: wrong coding disables functions |
+| WinKFP | `WINKFPT` | Flashes module firmware | Yes | Very high: an interrupted flash (power, cable, VM or Mac sleep, closing it) can brick a module, and recovery may not be possible at home |
+| NCS Dummy | `NcsDummy` | Offline viewer/editor for NCS Expert trace files | No | Low, but its edits are what NCS Expert later writes to the car |
+| BMW Coding Tool | `BMW Coding Tool` | Copies SP-Daten into the NCS Expert, WinKFP and EDIABAS folders | No | Medium: replaces the SGBD and data files every other tool and the bridge use |
+
+Nothing in Tool32, NCS Expert or WinKFP stops a write; care and a backup do.
 
 ## What you do and what Ryan does
 
@@ -34,7 +39,9 @@ car, and the person at the car needs to be the one deciding.
 
 ## Watching mode
 
-When Ryan wants help with a screen ("what do I press", "what does this show"):
+When Ryan wants help with a screen ("what do I press", "what does this show"). It uses only
+`vm_list_windows` and `vm_screenshot`, which work while INPA is open; only the bridge's
+`ediabas_*` calls are refused while a BMW tool holds the cable.
 
 1. `vm_list_windows` to see what is open, then `vm_screenshot` of that window.
 2. Describe what is on the screen, in plain English (much of it is in German): title, the
@@ -44,7 +51,8 @@ When Ryan wants help with a screen ("what do I press", "what does this show"):
 
 Read the labels from the screenshot rather than reciting INPA menus from memory: INPA scripts
 differ by version and by car, and `references/inpa-screens.md` holds only screens seen on this
-install (none yet). If a label is unreadable, ask for a larger screenshot or ask Ryan.
+install (so far one: the loader menu). If a label is unreadable, ask for a larger screenshot
+or ask Ryan.
 
 Point out any key on screen that writes or actuates (clear, delete, activate, code, program,
 or German labels like "löschen", "Ansteuern") before he presses anything near it.
@@ -69,7 +77,8 @@ exactly what the refusal was guarding against.
 
 Never present coding or flashing as routine, even for a popular change such as folding
 mirrors on lock. Explain what is involved, what can go wrong, and let Ryan decide. A coding or
-flashing answer tells him each of these before he starts:
+flashing answer tells him each of these before he starts (general practice for these tools,
+not steps verified on this car):
 
 - **Back up first.** Read and save the module's current coding (NCS Expert can read it out)
   and keep the trace files, so the change can be reversed.
@@ -77,7 +86,8 @@ flashing answer tells him each of these before he starts:
   steady supply for the whole job; a voltage drop mid-flash is a common way to brick a module.
   A battery charger or power supply on the car is the usual precaution.
 - **Never interrupt.** Do not close NCS Expert or WinKFP, unplug the cable, switch off the
-  ignition or let the VM or the Mac sleep in the middle of a job.
+  ignition or let the VM or the Mac sleep in the middle of a job. When it is finished, unplug
+  the cable from the car's OBD port.
 - **You cannot read the car during the job.** Tell Ryan that while NCS Expert or WinKFP is
   open the bridge refuses the cable (`cable_in_use`), on purpose, so you cannot read the car
   until he closes it, and that you will not ask him to close it mid-job so the bridge can read.
@@ -102,8 +112,7 @@ his fault log. Distances miles first: `121,609 mi (195,712 km)`.
 
 ## References
 
-- `references/risk.md` — each tool's risk and the precautions that go with it.
 - `references/inpa-screens.md` — INPA screens and keys seen on this install (built from real
-  screenshots; empty until then).
+  screenshots only).
 - `references/trace-files.md` — what `FSW_PSW.TRC` and `NETTODAT.TRC` are for, and where
   traces live on this install.

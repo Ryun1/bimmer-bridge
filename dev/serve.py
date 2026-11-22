@@ -525,6 +525,9 @@ def pinned_line(base, script, script_sha, zip_sha=None, prefix=""):
     when their SHA-256 is the one printed here. The trust is in the pasted line, not in what
     answers on the network. The bytes are run with iex, not as a .ps1 file, so the execution
     policy does not block them and nothing can swap the file between check and run.
+
+    The temp file is deleted first and a failed download stops the line with a plain message,
+    so neither a raw .NET error nor a stale file from an earlier run is what the owner sees.
     """
     parts = []
     if prefix:
@@ -534,13 +537,17 @@ def pinned_line(base, script, script_sha, zip_sha=None, prefix=""):
         parts.append("$sha='%s'" % zip_sha)
     parts += [
         '$ebFile="$env:TEMP\\ediabas-bridge-%s"' % script,
-        'iwr "$base/%s" -UseBasicParsing -OutFile $ebFile' % script,
-        "$ebBytes=[IO.File]::ReadAllBytes($ebFile)",
+        "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue",
+        "$ebOk=$false",
+        'try { iwr "$base/%s" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } '
+        "catch { Write-Host 'download failed: the Mac did not serve %s (is serve.py running?)' "
+        "-ForegroundColor Red }" % (script, script),
+        "if ($ebOk) { $ebBytes=[IO.File]::ReadAllBytes($ebFile); "
         "if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create()"
         ".ComputeHash($ebBytes)) -replace '-','') -eq '%s') "
         "{ iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } "
         "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart "
-        "serve.py and paste the line it prints.' -ForegroundColor Red }" % (script_sha, script),
+        "serve.py and paste the line it prints.' -ForegroundColor Red } }" % (script_sha, script),
     ]
     return "; ".join(parts)
 
@@ -568,11 +575,15 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
     zip_path = Path(release_dir) / ZIP_NAME
     if zip_path.is_file():
         sha = sha256_file(zip_path)
-        lines += ["", "Install:"] + line("install.ps1", sha)
+        # install.ps1 sends the token on a first install, or when told to: only when this run
+        # will take it.
+        send_token = "$SendToken=$true" if accept_token else ""
+        lines += ["", "Install:"] + line("install.ps1", sha, send_token)
         lines += ["Update:"] + line("update.ps1", sha)
     else:
         lines += ["", "(release/%s not built; install/update lines not shown)" % ZIP_NAME]
-    lines += ["Uninstall (add $KeepData=$true; at the start to keep config, token and logs):"]
+    lines += ["Uninstall (keeps config, token and logs; add $Purge=$true; at the start to "
+              "remove them too):"]
     lines += line("uninstall.ps1")
     if accept_token:
         lines += ["", "Accepting one agent token on PUT /token for this run."]

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace EdiabasAgent.Core;
 
 // Response and error-detail records for the EDIABAS endpoints (docs/api.md). Property order
@@ -58,11 +60,14 @@ public sealed record DescribeListResponse(
 
 public sealed record JobParameterInfo(string? Name, string? Type, string? Comment);
 
+/// <summary><c>DescriptionHash</c>: <see cref="CommentScreen.DescriptionHash"/> of <c>Comment</c>, what a
+/// pinned <c>reviewedJobs</c> entry holds; null when the description is empty or could not be read.</summary>
 public sealed record DescribeJobResponse(
     string Ecu,
     string? Variant,
     string Job,
     string? Comment,
+    string? DescriptionHash,
     JobVerdict Verdict,
     IReadOnlyList<JobParameterInfo> Arguments,
     IReadOnlyList<JobParameterInfo> Results,
@@ -86,7 +91,12 @@ public sealed record EcuJobDetails(string Ecu, string Job);
 
 public sealed record ProcessesDetails(IReadOnlyList<ConflictingProcess> Processes);
 
-public sealed record EdiabasErrorDetails(int ErrorCode, string ErrorText);
+/// <summary><c>ResultsUnread</c>: true only when the job finished but its results could not be read,
+/// so the ECU is not to blame. Left out of the JSON otherwise, so every other error keeps its shape.</summary>
+public sealed record EdiabasErrorDetails(
+    int ErrorCode,
+    string ErrorText,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? ResultsUnread = null);
 
 public sealed record ReasonDetails(string Reason);
 

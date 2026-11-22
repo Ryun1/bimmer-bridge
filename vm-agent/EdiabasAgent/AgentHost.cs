@@ -36,6 +36,12 @@ internal sealed class AgentHost
 
     public async Task RunAsync(CancellationToken stop)
     {
+        // Config problems that do not stop the agent (an unknown key, an unusable log root).
+        foreach (var warning in _ctx.Config.Warnings)
+        {
+            Log.Warn(warning);
+        }
+
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
         try
@@ -43,7 +49,27 @@ internal sealed class AgentHost
             string? lastWaitReason = null;
             while (!stop.IsCancellationRequested)
             {
-                var selection = AdapterProbe.Resolve(_ctx.Config);
+                // A probe that throws (adapters changing under it) must not end the bind loop:
+                // the agent would stop listening until the VM restarts.
+                BindSelection selection;
+                try
+                {
+                    selection = AdapterProbe.Resolve(_ctx.Config);
+                }
+                catch (Exception ex)
+                {
+                    // Logged once per distinct failure, as the wait below is, so a lasting fault does not fill the log.
+                    var reason = "adapter probe failed: " + ex.Message;
+                    if (reason != lastWaitReason)
+                    {
+                        Log.Error($"could not read network adapters; retrying every {RetryDelay.TotalSeconds:0} s", ex);
+                        lastWaitReason = reason;
+                    }
+
+                    await Delay(RetryDelay, stop);
+                    continue;
+                }
+
                 if (!selection.Available)
                 {
                     if (selection.Reason != lastWaitReason)
