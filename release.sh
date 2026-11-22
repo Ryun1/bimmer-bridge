@@ -82,7 +82,7 @@ fi
 # ------------------------------------------------------------------------------ git tree
 step "Checking the git tree"
 DIRTY_STOP=0
-DIRTY="$(git status --porcelain)" || die "not a git checkout"
+DIRTY="$(git status --porcelain --untracked-files=no)" || die "not a git checkout"
 if [ -z "$DIRTY" ]; then
   echo "  clean at $(git rev-parse --short HEAD)"
 elif [ "$ALLOW_DIRTY" -eq 1 ]; then

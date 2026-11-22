@@ -42,7 +42,7 @@ done
 # Which commit the zip was built from: version.txt stays exactly the version, commit.txt says this.
 git -C "$REPO" rev-parse --git-dir >/dev/null 2>&1 || die "$REPO is not a git checkout"
 COMMIT="$(git -C "$REPO" rev-parse --short HEAD)" || die "could not read the git commit"
-if [ -n "$(git -C "$REPO" status --porcelain)" ]; then
+if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]; then
   [ "$ALLOW_DIRTY" -eq 1 ] || die "the git tree has uncommitted changes (git status); commit them, or pass --allow-dirty for a build that is not a release"
   COMMIT="$COMMIT-dirty"
 fi
