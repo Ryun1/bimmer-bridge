@@ -90,7 +90,7 @@ DIRTY_STOP=0
 # folders, and the tests, the .ps1 parse and the Update line read mac-mcp/, dev/ and vm-setup/.
 # Untracked scratch elsewhere (notes under docs/, say) does not count.
 # Keep RELEASE_INPUTS and this check the same as in vm-agent/build.sh.
-RELEASE_INPUTS=(VERSION vm-agent policy mac-mcp vm-setup dev skills)
+RELEASE_INPUTS=(VERSION global.json vm-agent policy mac-mcp vm-setup dev skills)
 CHANGED="$(git status --porcelain --untracked-files=no)" || die "not a git checkout"
 UNTRACKED="$(git status --porcelain --untracked-files=normal -- "${RELEASE_INPUTS[@]}" | sed -n 's/^?? //p')" \
   || die "git status failed"
@@ -130,14 +130,17 @@ fi
 
 # ------------------------------------------------------------------------------ .NET
 if [ "$SKIP_DOTNET" -eq 0 ]; then
-  # Find the .NET 10 SDK the way vm-agent/build.sh does: PATH first, then the Homebrew keg.
-  if ! command -v dotnet >/dev/null 2>&1; then
-    if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
-      export DOTNET_ROOT="${DOTNET_ROOT:-/opt/homebrew/opt/dotnet@10/libexec}"
-      export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
-    elif [ "$DRY_RUN" -eq 0 ]; then
-      die "dotnet not found (need the .NET 10 SDK; or --skip-dotnet, which is not a release)"
-    fi
+  # The .NET 10 SDK, the way vm-agent/build.sh finds it: the Homebrew keg first (Homebrew's plain
+  # `dotnet` may be a newer major, which global.json refuses), then PATH.
+  if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
+    export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
+    export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
+  elif ! command -v dotnet >/dev/null 2>&1 && [ "$DRY_RUN" -eq 0 ]; then
+    die "dotnet not found (need the .NET 10 SDK: brew install dotnet@10; or --skip-dotnet, which is not a release)"
+  fi
+  if [ "$DRY_RUN" -eq 0 ]; then
+    SDK="$(dotnet --version 2>/dev/null)" || die "no .NET SDK that global.json allows (10.0.x) is installed for $(command -v dotnet): brew install dotnet@10"
+    case "$SDK" in 10.*) echo "  .NET SDK $SDK" ;; *) die "dotnet $SDK is not a .NET 10 SDK (global.json pins 10.0.x)" ;; esac
   fi
   export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
   step "Agent tests (dotnet)"

@@ -50,8 +50,10 @@ python3 --version          # Python 3, for dev/serve.py (the macOS one is enough
 ```
 
 `dotnet@10` is keg-only, so it is not on `PATH` by default. `release.sh` and `vm-agent/build.sh`
-find it in the Homebrew folder by themselves; to run `dotnet` by hand, add these to your shell
-profile:
+use it from the Homebrew folder by themselves, ahead of any other `dotnet` on `PATH`, and stop if
+the SDK is not 10.0.x. `global.json` at the repo root pins the SDK to 10.0.x, so a newer one (for
+example the .NET 11 that `brew install powershell` brings in as plain `dotnet`) is refused
+rather than used. To run `dotnet` by hand, add these to your shell profile:
 
 ```sh
 export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
