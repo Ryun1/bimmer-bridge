@@ -8,11 +8,13 @@ pub const sys = struct {
 
 pub const port = @import("port.zig");
 pub const identity = @import("identity.zig");
+pub const gate = @import("gate.zig");
 pub const Port = port.Port;
 
 test {
     _ = port;
     _ = identity;
+    _ = gate;
     _ = sys.darwin;
     _ = sys.linux;
 }
