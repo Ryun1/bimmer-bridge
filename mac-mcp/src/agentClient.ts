@@ -53,6 +53,8 @@ export const HealthSchema = z.object({
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
+  // reviewedJobs entries pinned to a description and approving by name only; older agents omit it.
+  approvals: z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }).nullable().optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 
@@ -133,6 +135,8 @@ export const DescribeJobSchema = z.object({
   variant: z.string().nullable().optional(),
   job: z.string(),
   comment: z.string().nullable().optional(),
+  // 12 lower-case hex digits, what a pinned reviewedJobs entry holds; older agents omit it.
+  descriptionHash: z.string().nullable().optional(),
   verdict: VerdictSchema,
   arguments: z.array(ParamSchema),
   results: z.array(ParamSchema),

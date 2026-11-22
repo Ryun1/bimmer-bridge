@@ -161,8 +161,22 @@ public class EdiabasRequestPathTests
 
         Assert.Equal("ediabas_error", f.Error.Code);
         Assert.Equal("The job finished but its results could not be read.", f.Error.Message);
-        Assert.Equal(new EdiabasErrorDetails(code, text), f.Error.Details);
+        Assert.Equal(new EdiabasErrorDetails(code, text, ResultsUnread: true), f.Error.Details);
         Assert.Contains(_log.Lines, l => l.StartsWith("WARN NVE_65 IDENT: finished but its results could not be read", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ResultsCannotBeRead_InABatch_IsFlaggedOnTheItem()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { ResultSetsFail = true, ErrorCode = 134, ErrorText = "SYS-0002: SOMETHING" });
+        _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT", "FS_LESEN"));
+
+        var items = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "FS_LESEN")], null, _audit, default).Value!.Items;
+
+        Assert.Equal("ediabas_error", items[0].Error!.Code);
+        Assert.Equal(new EdiabasErrorDetails(134, "SYS-0002: SOMETHING", ResultsUnread: true), items[0].Error!.Details);
+        Assert.True(items[1].Ok);
     }
 
     // ---------------------------------------------------------------- A5: arguments are screened

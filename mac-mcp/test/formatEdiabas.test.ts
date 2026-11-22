@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
+import { DescribeJobSchema, EcusSchema, HealthSchema, JobResultSchema, LogReadSchema } from "../src/agentClient.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead } from "../src/format.js";
 import {
   formatDescribeJob,
@@ -139,6 +139,58 @@ describe("describe / ecus", () => {
     expect(t).toContain("Results: none listed");
   });
 
+  describe("description hash", () => {
+    const body = (review: string, hash?: string | null) => ({
+      ecu: "NVE_65",
+      variant: "NVE_65",
+      job: "STATUS_X",
+      comment: "Liest Status",
+      ...(hash === undefined ? {} : { descriptionHash: hash }),
+      verdict: { allowed: true, rule: "allow.pattern", review },
+      arguments: [],
+      results: [],
+      durationMs: 5,
+    });
+    const mac = { allowed: true, rule: "allow.pattern", screen: true };
+    const approve =
+      'To approve this job as it is described now, Ryan adds "NVE_65:STATUS_X@0123456789ab" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).';
+
+    it("needs_review: the hash and the line to paste, directly under the description", () => {
+      const lines = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", "0123456789ab")), mac).split("\n");
+      const at = lines.indexOf("Description: Liest Status");
+      expect(lines[at + 1]).toBe("Description hash: 0123456789ab");
+      expect(lines[at + 2]).toBe(approve);
+    });
+
+    it("reviewed: only the hash", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("reviewed", "0123456789ab")), mac);
+      expect(t).toContain("\nDescription hash: 0123456789ab\n");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("not_required: neither", () => {
+      const t = formatDescribeJob(DescribeJobSchema.parse(body("not_required", "0123456789ab")), mac);
+      expect(t).not.toContain("Description hash");
+      expect(t).not.toContain("To approve");
+    });
+
+    it("a hash that is not 12 lower-case hex digits: neither (the line would approve nothing)", () => {
+      for (const hash of ["0123456789AB", "0123456789a", "0123456789abc", 'x" , "CAS:Y']) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
+
+    it("null hash, or an older agent without the field: neither", () => {
+      for (const hash of [null, undefined]) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
+  });
+
   it("ECU list, with truncation", () => {
     const t = formatEcus(
       EcusSchema.parse({ ecuPath: "C:\\EDIABAS\\ECU", count: 5000, truncated: true, files: [{ name: "A", type: "prg" }, { name: "G", type: "grp" }] }),
@@ -196,5 +248,24 @@ describe("health, capture, logs", () => {
     const t = formatLogRead(r);
     expect(t).toMatch(/^C:\\a\.log: bytes 0-1 of 1, encoding windows-1252, modified unknown, truncated: yes\n\n/);
     expect(t).not.toMatch(/cut at/);
+  });
+});
+
+describe("results that could not be read", () => {
+  const text = (details: unknown) => itemErrorText({ code: "ediabas_error", message: "The job finished but its results could not be read.", details });
+  const head = "[ediabas_error] The job finished but its results could not be read";
+  const tail = " Ask Ryan before trying again.";
+
+  it("shows the number and text EDIABAS gave, or whichever one it gave, or neither", () => {
+    expect(text({ errorCode: 134, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 134: SYS-0002).${tail}`);
+    expect(text({ errorCode: 134, resultsUnread: true })).toBe(`${head} (EDIABAS error 134).${tail}`);
+    expect(text({ errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS SYS-0002).${tail}`);
+    expect(text({ resultsUnread: true })).toBe(`${head}.${tail}`);
+  });
+
+  it("is only used when the agent sets resultsUnread to true", () => {
+    for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
+      expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
+    }
   });
 });

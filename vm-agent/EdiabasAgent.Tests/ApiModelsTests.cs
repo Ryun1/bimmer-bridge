@@ -19,6 +19,18 @@ public class ApiModelsTests
         Assert.Equal("""{"error":{"code":"job_not_allowed","message":"m","details":{"ecu":"NVE_65","job":"FS_LOESCHEN","rule":"deny.substring:LOESCH"}}}""", json);
     }
 
+    [Fact]
+    public void EdiabasError_ResultsUnread_OnlyWhenSet()
+    {
+        // An ordinary ediabas_error keeps its shape byte for byte; only unreadable results add the flag.
+        Assert.Equal(
+            """{"error":{"code":"ediabas_error","message":"m","details":{"errorCode":19,"errorText":"SYS-0008"}}}""",
+            ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(19, "SYS-0008"))));
+        Assert.Equal(
+            """{"error":{"code":"ediabas_error","message":"m","details":{"errorCode":0,"errorText":"","resultsUnread":true}}}""",
+            ApiJson.Serialize(ApiErrors.Create(ApiErrors.EdiabasError, "m", new EdiabasErrorDetails(0, "", ResultsUnread: true))));
+    }
+
     [Theory]
     [InlineData("bad_request", 400)]
     [InlineData("job_not_allowed", 403)]

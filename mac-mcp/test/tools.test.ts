@@ -508,6 +508,13 @@ describe("ediabas_job", () => {
       { errorCode: 16, errorText: "IFH-0006: COMMAND NOT ACCEPTED" },
       /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
     ],
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 134, errorText: "SYS-0002: SOMETHING", resultsUnread: true },
+      /^\[ediabas_error\] The job finished but its results could not be read \(EDIABAS error 134: SYS-0002: SOMETHING\)\. Ask Ryan before trying again\.$/,
+    ],
+    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009", resultsUnread: false }, /^\[ediabas_error\] EDIABAS reported error 159: IFH-0009\. This often means the ECU did not answer/],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
     ["job_not_found", 404, { ecu: "NVE_65", job: "STATUS_X" }, /^\[job_not_found\] NVE_65 has no job STATUS_X\./],
     ["job_not_found", 404, null, /^\[job_not_found\] The SGBD has no such job\./],
@@ -683,6 +690,22 @@ describe("ediabas_jobs", () => {
     expect(r.isError).toBeFalsy();
     expect(r.text).toMatch(/^1 of 2 ran\./);
     expect(r.text).toContain("\n\nBAD IDENT: [job_not_found] BAD has no job IDENT.");
+  });
+
+  it("a batch item whose results could not be read is not blamed on the ECU", async () => {
+    override("POST /ediabas/jobs", () => ({
+      status: 200,
+      body: {
+        items: [{ ok: false, result: null, error: { code: "ediabas_error", message: "x", details: { errorCode: 134, errorText: "SYS-0002", resultsUnread: true } } }],
+        durationMs: 5,
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] });
+    expect(r.text).toContain(
+      "\n\nNVE_65 IDENT: [ediabas_error] The job finished but its results could not be read (EDIABAS error 134: SYS-0002). Ask Ryan before trying again.",
+    );
+    expect(r.text).not.toMatch(/did not answer|cable/i);
   });
 
   it("returns the agent's JSON per item with raw: true", async () => {
