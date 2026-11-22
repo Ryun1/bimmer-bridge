@@ -152,6 +152,44 @@ refused `TMODE` jobs include every `SETZE_*` job (`deny.substring:SETZE`), the t
 (`deny.substring:TELEGR`), and `REICHE_AN_INTERFACE_DURCH`, `INITIALISIERUNG` and the
 remaining jobs (`ecu_restricted`).
 
+### `UTILITY` — a utility SGBD, not a car module
+
+`ediabas_describe` on 2026-11-22 (policy version 4, cable in the VM, not in the car): 10 jobs,
+3 runnable. `ediabas_vehicle_status` sends the two `STATUS_` jobs. Neither has been run.
+
+| Job | Verdict | Description as returned | Results declared | *(gloss)* |
+|---|---|---|---|---|
+| `INFO` | runnable | `Information SGBD` | not described on its own | information about the SGBD file |
+| `STATUS_UBATT` | runnable | `Auslesen der Spannungsversorgung` | `JOB_STATUS` (string, `OKAY, wenn fehlerfrei`), `STAT_UBATT` (int, no unit declared) | read the supply voltage |
+| `STATUS_ZUENDUNG` | runnable | `Auslesen der Klemme 15` | `JOB_STATUS` (string, `"OKAY","ERROR_UBATT"`), `STAT_ZUENDUNG` (int) | read terminal 15 (ignition) |
+
+Refused: `INITIALISIERUNG`, `ABS_RELAIS`, `INTERFACE`, `TIME_AND_DATE`, `OGW_CAN_TEST`
+(`ecu_restricted`), `IF_RESET` (`deny.substring:RESET`), `PARALLELE_CODIERUNG_EIN`
+(`deny.substring:CODIER`). What `STAT_UBATT` and `STAT_ZUENDUNG` mean as numbers (units,
+values for on and off) is not declared; it comes from Phase 6.
+
+### Whole-car and vehicle-order jobs (described 2026-11-22, not yet run)
+
+Each described on its own with `ediabas_describe` and `job`, policy version 4, cable in the VM
+and not in the car. All runnable. The result names are as the SGBD declares them.
+
+| ECU | Job | Description (first line) | Arguments | Results declared |
+|---|---|---|---|---|
+| `E60` | `IDENT_FUNKTIONAL` | `Identdaten` — `KWP2000: $1A ReadECUIdentification` | `FUNKTIONALE_ADRESSE` (string, default `ALL`); `GRUPPENDATEI` (string, optional, not with `FUNKTIONALE_ADRESSE`) | per module: `ECU_ADR`, `ECU_GROBNAME`, `ID_SG_ADR`, `ECU_NAME`, `ECU_SGBD`, `ECU_GRUPPE`, `ID_BMW_NR`, `ID_HW_NR`, `ID_COD_INDEX`, `ID_DIAG_INDEX`, `ID_VAR_INDEX`, `ID_DATUM*`, `ID_LIEF_NR`, `ID_LIEF_TEXT`, `ID_SW_NR_MCV/FSV/OSV/RES`, `SERIENNUMMER`; plus `JOB_STATUS` |
+| `E60` | `FS_LESEN_FUNKTIONAL` | `Fehlerspeicher lesen (alle Fehler / Ort und Art)` — `KWP2000: $18 ReadDiagnosticTroubleCodesByStatus` | `FUNKTIONALE_ADRESSE` (default `ALL`); `FEHLER_GRUPPE` (default `AG`, all fault groups) | per module: `ECU_ADR`, `ECU_GROBNAME`, `ID_SG_ADR`, `F_ANZ`, then `F_ORTi_NR` (fault code) and `F_ARTi_NR` (fault type) for i = 1..`F_ANZ`; plus `JOB_STATUS` |
+| `CAS` | `C_FA_LESEN` | `Dieser Job liest den Fahrzeugauftrag` — `$22 ReadDataByCommonIdentifier $3F00 - $3F13` | none | `FAHRZEUGAUFTRAG` (string, up to 320 bytes), `SPEICHER_STATUS` (`BELEGT` / `UNBELEGT`), `JOB_STATUS` |
+| `LM_60` | `C_FA_LESEN` | `Fahrzeugauftrag lesen` — `$22 ReadDataByCommonIdentifier $3F00 - $3F7F` | none | `FAHRZEUGAUFTRAG`, `SPEICHER_STATUS`, `JOB_STATUS` |
+| `NVE_65` | `FS_LESEN` | `Fehlerspeicher lesen (alle Fehler / Ort und Art)` | none | `F_VERSION`, `F_HEX_CODE`, `F_ORT_NR`, `F_ORT_TEXT`, `F_SYMPTOM_NR/TEXT`, `F_READY_NR/TEXT`, `F_VORHANDEN_NR/TEXT`, `F_WARNUNG_NR/TEXT`, `JOB_STATUS` |
+
+`FS_LESEN_FUNKTIONAL` declares fault codes and types as numbers only, with no text result:
+the texts come from each module's own `FS_LESEN` (through `ediabas_read_faults`). `IDENT_FUNKTIONAL`'s
+`SERIENNUMMER` and `C_FA_LESEN`'s `FAHRZEUGAUFTRAG` identify the car; the fixture scrubber
+replaces `SERIENNUMMER`, but check `FAHRZEUGAUFTRAG` by hand when reviewing fixtures.
+
+`D_MOTOR` (the engine group) could not be described at the desk: `ediabas_describe` with
+`job` `IDENT` gave `ediabas_error` 13 `IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED`
+(2026-11-22). A group file picks its variant by asking the module, so it needs the car.
+
 ## Battery-drain related jobs (desk, 2026-11-21/22, not yet run)
 
 The job lists below were read with the cable in the VM and **not plugged into the car**; the

@@ -1,0 +1,99 @@
+{
+  "recordedAt": "2026-11-22T20:15:20.190Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/describe",
+    "query": {
+      "ecu": "NVE_65",
+      "filter": "STATUS_"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "NVE_65",
+      "variant": "NVE_65",
+      "jobCount": 8,
+      "jobs": [
+        {
+          "name": "FLASH_PROGRAMMIER_STATUS_LESEN",
+          "comment": "Programmierstatus des SG lesen\nKWP2000: $31 StartRoutineByLocalIdentifier\n$0A CheckProgrammingStatus\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:FLASH",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "STATUS_TASTER",
+          "comment": "Die Spannung (mV) und wird dezimal ausgegeben\nTaster-Status\n0 : 2,53V - 0,20V  =>  Taster gedrueckt\n1 : 4,20V - 2,96V  =>  Taster nicht gedrueckt\n2 : > 4,20V Taster nicht angeschlossen\n3 : 4,96V - 2,53V  =>  nicht definiert\n4 : <0,20V  =>  Kurzschluss",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_KLEMMEN",
+          "comment": "read clamp status",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_BORDNETZSPANNUNG",
+          "comment": "Bordnetzspannung in Volt",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_ENERGIESPARMODUS",
+          "comment": "read out status of energy saving mode",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_PAIRING",
+          "comment": "Gibt den Pairing-Status aus zwischen ECU und CAM\n00  (0x00) -> Pairing erfolgreich (NIVI Kamera ist freigeschaltet für dieses Fahrzeug)\n254 (0xFE) -> Pairing nicht erfolgt (NIVI Kamera ist NICHT freigeschaltet für dieses Fahrzeug)",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "needs_review"
+          }
+        },
+        {
+          "name": "STATUS_NIVI",
+          "comment": "Liest den Status von NIVI",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_FSC_LESEN",
+          "comment": "gibt den detaillierten Status des Freischaltcodes aus\nfür die einfache Überprüfung des FSC-Status\nden Job 'Status Pairing'verwenden",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        }
+      ],
+      "durationMs": 3569
+    }
+  }
+}

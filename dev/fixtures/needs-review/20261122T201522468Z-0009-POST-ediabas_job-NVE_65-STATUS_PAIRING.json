@@ -1,0 +1,33 @@
+{
+  "recordedAt": "2026-11-22T20:15:22.468Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/job",
+    "query": {},
+    "body": {
+      "ecu": "NVE_65",
+      "job": "STATUS_PAIRING"
+    }
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "error": {
+        "code": "job_needs_review",
+        "message": "The description of STATUS_PAIRING mentions: schaltet. The user can approve it in the agent config.",
+        "details": {
+          "ecu": "NVE_65",
+          "job": "STATUS_PAIRING",
+          "description": "Gibt den Pairing-Status aus zwischen ECU und CAM\n00  (0x00) -> Pairing erfolgreich (NIVI Kamera ist freigeschaltet für dieses Fahrzeug)\n254 (0xFE) -> Pairing nicht erfolgt (NIVI Kamera ist NICHT freigeschaltet für dieses Fahrzeug)",
+          "matched": [
+            "schaltet"
+          ]
+        }
+      }
+    }
+  }
+}

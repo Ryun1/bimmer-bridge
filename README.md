@@ -155,11 +155,9 @@ to 0.5.1 has been run at the car.**
 
 Open:
 - **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Re-record the skill references' job verdicts under policy version 4**
-  (`dev/record-server.ts`, [docs/development.md](docs/development.md)).
 - **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
-  eval 04's `needs-review` fixture can be recorded at the desk
-  ([dev/fixtures/README.md](dev/fixtures/README.md)).
+  eval 04's `needs-review` fixture was recorded at the desk on 2026-11-22, so eval 04 can be
+  run ([dev/fixtures/README.md](dev/fixtures/README.md)).
 - **Eval acceptance**: 07 and 08 still need a run without the skills that does worse.
 - **Skill reference entries that need car recordings**: the vehicle-status field names, the
   engine SGBD, and the SGBDs that can only be described with the control unit answering.
