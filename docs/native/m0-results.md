@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); **waiting for section 7.**
+Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); section 7 tests pass on Linux in a container, its hardware half still open; **section 9 next.**
 
 ---
 
@@ -310,14 +310,31 @@ On a Linux machine (a UTM Linux VM with the cable passed through is fine), with 
 
 | | Result |
 |---|---|
-| `zig build test` (pass/skip counts) | |
-| Linux constants tests ran and passed | |
-| `kline list` | |
-| `kline probe` (paste below) | |
-| Loopback latency 1 / 16 (min/median/max) | |
+| `zig build test` (pass/skip counts) | 27 pass, 3 skip (2 macOS-only header tests, the 7O1 pty test), plus 7 CLI tests pass |
+| Linux constants tests ran and passed | yes (both, against the container's kernel headers) |
+| `kline list` | runs, finds no cable (none reachable from the container) |
+| `kline probe` (paste below) | not run on hardware |
+| Loopback latency 1 / 16 (min/median/max) | not run (no bench supply) |
+
+**Partly done (2026-11-22), in a Docker container, not with the cable.** Debian bookworm,
+linux/arm64, kernel 6.6.12-linuxkit, the official Zig 0.16.0 (SHA-256 checked), the code
+mounted read-only. Docker Desktop on macOS cannot pass USB devices through, so the tests ran
+but `list` and `probe` could not see the cable. A Linux machine or VM with the cable is still
+needed for the hardware half: FTDI identity via sysfs, termios2 10400 on `ftdi_sio`,
+`ASYNC_LOW_LATENCY`, and the udev rule.
+
+The first run failed 3 tests, which led to one fix (commit "kline: clear exclusive mode on
+close…"):
+- `TIOCEXCL` outlives the fd on Linux while the tty stays alive (a pty's master keeps it), so
+  reopening gave EBUSY. `close()` now clears it with `TIOCNXCL`.
+- A Linux pty forces CS8 and no parity whatever is set, so data bits and parity cannot be
+  read back from a pty on Linux. Those checks are macOS-only in the tests; `kline probe`
+  checks framing on the cable.
+
+Both behaviours were confirmed with a small C program on the same kernel, outside kline.
 
 ```
-(kline probe on Linux)
+(kline probe on Linux: not run, no cable in the container)
 ```
 
 ## 8. Break width (only if section 2 found 0x010C)
