@@ -174,6 +174,14 @@ describe("describe / ecus", () => {
       expect(t).not.toContain("To approve");
     });
 
+    it("a hash that is not 12 lower-case hex digits: neither (the line would approve nothing)", () => {
+      for (const hash of ["0123456789AB", "0123456789a", "0123456789abc", 'x" , "CAS:Y']) {
+        const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);
+        expect(t).not.toContain("Description hash");
+        expect(t).not.toContain("To approve");
+      }
+    });
+
     it("null hash, or an older agent without the field: neither", () => {
       for (const hash of [null, undefined]) {
         const t = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", hash)), mac);

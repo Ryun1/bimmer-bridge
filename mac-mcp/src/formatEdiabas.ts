@@ -293,7 +293,8 @@ function paramLines(ps: DescribeJob["arguments"]): string[] {
 /** The description hash, and for a job that needs review the reviewedJobs entry that pins it. */
 function hashLines(d: DescribeJob): string[] {
   const review = cleanText(d.verdict.review, 30);
-  const hash = d.descriptionHash ? cleanText(d.descriptionHash, 64) : "";
+  // Only the shape the agent's config accepts: anything else would make a line that approves nothing.
+  const hash = d.descriptionHash && /^[0-9a-f]{12}$/.test(d.descriptionHash) ? d.descriptionHash : "";
   if (review === "not_required" || !hash) return [];
   const out = [`Description hash: ${hash}`];
   if (review === "needs_review") {
