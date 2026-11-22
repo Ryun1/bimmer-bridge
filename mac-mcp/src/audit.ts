@@ -49,10 +49,13 @@ export interface AuditSink {
 
 /** Appends to the Mac-side audit log. Never throws: failures are reported through `warn`. */
 export class AuditLog implements AuditSink {
-  constructor(
-    private readonly path: string,
-    private readonly opts: { warn: (message: string) => void },
-  ) {}
+  private readonly path: string;
+  private readonly opts: { warn: (message: string) => void };
+
+  constructor(path: string, opts: { warn: (message: string) => void }) {
+    this.path = path;
+    this.opts = opts;
+  }
 
   async record(entry: AuditEntry): Promise<void> {
     try {

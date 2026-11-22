@@ -75,6 +75,15 @@ never look for another tool, job or route (and never computer use on the VM wind
   while the agent and `vm_health` stay up. Other files may give other codes after a sleep. If
   the Mac may have slept since the cable last worked, ask the user to tick the cable for the VM
   again in UTM's USB menu before suggesting anything about the car.
+- **`[ediabas_error]`: read the hint, which depends on EDIABAS's code.** The cable codes (12 `IFH-0002`,
+  13 `IFH-0003`) mean check the OBD plug and UTM before blaming the ECU; the voltage codes (17, 25, 47)
+  mean stop reading until a charger is on; 19 `IFH-0009` is the ECU not answering; 26/42 is the
+  ignition off. Pass the hint on to the user; do not retry to see if it changes. With the cable
+  in the VM but not in the car, every real SGBD and group file gave 13 `IFH-0003` (rehearsal,
+  2026-11-22).
+- **`ediabas_vehicle_status` battery and KL30 are not evidence the car is awake.** With no car
+  connected they read `STAT_UBATT=1` and KL30 `E02E0000` (rehearsal, 2026-11-22): they come from
+  the cable. Only a voltage source (a module's reading) shows the car answered.
 - **`[ediabas_error]` "The job finished but its results could not be read".** The job ran.
   Report EDIABAS's code and text; do not run it again without asking the user.
 - **`[ediabas_request_lost]`.** Tell the user the job may have run. Call `vm_health`; repeat

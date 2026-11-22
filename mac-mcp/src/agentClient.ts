@@ -241,14 +241,17 @@ type FailureKind = "unreachable" | "refused" | "timeout";
 
 /** A transport-level failure (no HTTP response). */
 class ConnectionFailure extends Error {
-  constructor(
-    readonly kind: FailureKind,
-    /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
-    readonly detail: string,
-    /** The connection was never made, so the request cannot have reached the agent. */
-    readonly neverSent = false,
-  ) {
+  readonly kind: FailureKind;
+  /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
+  readonly detail: string;
+  /** The connection was never made, so the request cannot have reached the agent. */
+  readonly neverSent: boolean;
+
+  constructor(kind: FailureKind, detail: string, neverSent = false) {
     super(`connection failure: ${kind}`);
+    this.kind = kind;
+    this.detail = detail;
+    this.neverSent = neverSent;
   }
 }
 
@@ -347,7 +350,10 @@ export class AgentClient {
   /** Settles when the last queued /ediabas/* call has finished. */
   private ediabasTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly opts: AgentClientOptions) {
+  private readonly opts: AgentClientOptions;
+
+  constructor(opts: AgentClientOptions) {
+    this.opts = opts;
     this.fetchFn = opts.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 15_000;
     this.ediabasTimeoutMs = opts.ediabasTimeoutMs ?? 75_000;

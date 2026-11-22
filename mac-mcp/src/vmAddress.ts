@@ -225,12 +225,17 @@ export class VmLocator {
   private cached: string | undefined;
   private inflight: Promise<string> | undefined;
 
-  constructor(
-    private readonly config: Config,
-    private readonly sources: DiscoverySources,
-    private readonly probe: ProbeFn,
-    private readonly log: (message: string) => void = () => {},
-  ) {}
+  private readonly config: Config;
+  private readonly sources: DiscoverySources;
+  private readonly probe: ProbeFn;
+  private readonly log: (message: string) => void;
+
+  constructor(config: Config, sources: DiscoverySources, probe: ProbeFn, log: (message: string) => void = () => {}) {
+    this.config = config;
+    this.sources = sources;
+    this.probe = probe;
+    this.log = log;
+  }
 
   /** The accepted base URL, from cache or by discovery. */
   async resolve(ctx: CallContext): Promise<{ baseUrl: string; fromCache: boolean }> {

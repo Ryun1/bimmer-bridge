@@ -1,6 +1,18 @@
-# What changed in 0.3.0 to 0.5.1
+# What changed in 0.3.0 to 0.6.0
 
 > Historical record: the release notes of earlier versions, moved from the README. For the current state, see the [README's Status](../../README.md#status).
+
+## What changed in 0.6.0
+
+- **The project is now bimmer-bridge** (it was ediabas-bridge). The MCP server registers as
+  `bimmer-bridge`, so its tools are `mcp__bimmer-bridge__*`, and the skill is `bimmer-bridge`.
+  Re-register the server and reinstall the skills: see
+  [docs/install.md](../install.md#upgrading-to-060).
+- Names an existing install depends on keep the old name, so the VM agent needs no reinstall:
+  `C:\ProgramData\EdiabasBridge`, the task and firewall rule, the Keychain service, the Mac audit
+  log folder and the agent's handshake.
+- The README is shorter and starts with a use-at-your-own-risk disclaimer.
+- Licensed under MIT ([LICENSE](../../LICENSE)).
 
 ## Checks of 0.5.0 in the VM and the phase table
 

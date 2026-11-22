@@ -271,12 +271,16 @@ export function jobNotAllowed(ecu: string, job: string, rule: string): BridgeErr
  * fails closed with `policy_unavailable` when loading failed.
  */
 export class PolicyGuard {
-  private constructor(
-    private readonly policy: Policy | null,
-    private readonly loadError: string | null,
-    /** SHA-256 (lower-case hex) of the exact bytes parsed; null when nothing loaded from a file. */
-    readonly sha256: string | null = null,
-  ) {}
+  private readonly policy: Policy | null;
+  private readonly loadError: string | null;
+  /** SHA-256 (lower-case hex) of the exact bytes parsed; null when nothing loaded from a file. */
+  readonly sha256: string | null;
+
+  private constructor(policy: Policy | null, loadError: string | null, sha256: string | null = null) {
+    this.policy = policy;
+    this.loadError = loadError;
+    this.sha256 = sha256;
+  }
 
   static load(path: string = DEFAULT_POLICY_PATH, read: (p: string) => string | Buffer = (p) => readFileSync(p)): PolicyGuard {
     try {

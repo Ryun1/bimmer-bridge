@@ -33,7 +33,7 @@ export const INSTRUCTIONS = [
   "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
-  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition, battery, interface KL30/KL15 and Mac-configured voltages.",
+  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition and voltages; battery/KL30 are cable readings.",
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or car.",
   "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
   "[agent_outdated]: that tool is not installed in the VM yet; say so.",
@@ -372,7 +372,8 @@ export function buildServer(parts: ServerParts): McpServer {
       title: "Vehicle status",
       description:
         "Read ignition (UTILITY STATUS_ZUENDUNG), battery (UTILITY STATUS_UBATT), the interface's KL30/KL15 voltages (TMODE) and any voltage sources configured on the Mac, in one EDIABAS request. " +
-        "Each reading's result fields are shown as returned. Use it to check the car is awake before reading faults. Read-only.",
+        "Each reading's result fields are shown as returned. The battery and KL30 readings come from the cable's own lines and read the same with no car connected; " +
+          "only a configured voltage source (a module) shows the car is awake. Read-only.",
       annotations: { title: "Vehicle status", ...READ_ONLY },
     },
     async () => {

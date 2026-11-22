@@ -30,11 +30,27 @@ car-session line and the longer idle time below are all untested there.
       90, the bridge keeps EDIABAS loaded for 90 s after its last call.
 - [ ] To record fixtures, register the recording server (`dev/record-server.ts`, see
       [development.md](development.md#recording-and-scrubbing)) in place of the production one, with `EDIABAS_RECORD_DIR` set to a
-      folder **outside the repo**, for example `~/ediabas-recordings/car-<date>`. Use **one
+      folder **outside the repo**, for example `~/ediabas-recordings/car-YYYYMMDD`. Use **one
       folder for the whole car session**: changing the folder means restarting Claude, which
       the ignition-on time cannot afford. Afterwards the folder is scrubbed once per scenario
       ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
-      Restart Claude so the server picks it up, and check with `vm_health` that it answers.
+      The commands (the server name goes **before** `-e`: `-e` takes several values and would
+      swallow it, and the add then fails while the remove has already happened):
+
+      ```sh
+      claude mcp remove bimmer-bridge -s user
+      claude mcp add --scope user bimmer-bridge -e EDIABAS_RECORD_DIR=$HOME/ediabas-recordings/car-YYYYMMDD -- /opt/homebrew/bin/node --import "$PWD/dev/ts-resolve.mjs" "$PWD/dev/record-server.ts"
+      claude mcp get bimmer-bridge   # must show record-server.ts and EDIABAS_RECORD_DIR
+      ```
+
+      Replace `YYYYMMDD` with the date. If `claude mcp get bimmer-bridge` shows any
+      `Environment` entries for the production server (such as `EDIABAS_AGENT_URL`), add each
+      as another `-e KEY=value` after the name in both the recording and the restore command.
+      Run them from the repo root, with the same `node` as the production registration (macOS's
+      Local Network permission is tied to its path). Restart Claude, call `vm_health`, then
+      **check the folder has a `GET-health` file**: a desk rehearsal on 2026-11-22 ran against
+      the production server without anyone noticing, and recorded nothing. Afterwards:
+      `claude mcp remove bimmer-bridge -s user && claude mcp add --scope user bimmer-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"`.
 - [ ] Know which scenarios to record at the car: `nve-faults` (evals 01 and 03) and `battery`
       (eval 06). `needs-review` (eval 04) was recorded at the desk on 2026-11-22. What each
       needs is in [dev/fixtures/README.md](../dev/fixtures/README.md#scenarios-the-evals-use-skillsevals);
@@ -87,6 +103,10 @@ car-session line and the longer idle time below are all untested there.
       ignition and voltage fields it returns, for the skill references. Voltages from a module
       (e.g. `NVE_65` `STATUS_BORDNETZSPANNUNG` on an E60/E61 with night vision) need
       `voltageSources` in `config.local.json` on the Mac, set before Claude starts.
+      `UTILITY` `STAT_UBATT` and the cable's KL30 do **not** show the car is awake: with the
+      cable in the VM and no car (rehearsal, 2026-11-22) they read `STAT_UBATT=1` and KL30
+      `E02E0000` (12000 read little-endian), values from the cable's own lines. The "voltage in
+      volts" for the acceptance comes from the voltage source (`NVE_65`), not from these.
 - [ ] On an E60/E61, the whole-car read: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` (which modules
       answer) and `FS_LESEN_FUNKTIONAL` (their faults in one job), and `C_FA_LESEN` on `CAS` or
       `LM_60` (the vehicle order).

@@ -68,7 +68,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -146,7 +146,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 409 | `cable_in_use` | a BMW tool or another `api32.dll` user is running. No override | `{ processes: [ { name, pid } ] }` |
 | 409 | `window_minimized` | the window is minimised; the agent never restores it | `{ handle, title }` |
 | 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
-| 502 | `ediabas_error` | EDIABAS reported an error for the job; or the job finished but its results could not be read (message "The job finished but its results could not be read.", with whatever EDIABAS reported in `details` and `resultsUnread: true` there) | `{ errorCode: 159, errorText: "IFH-0009: …" }`; plus `resultsUnread: true` only in the unread-results case |
+| 502 | `ediabas_error` | EDIABAS reported an error for the job; or the job finished but its results could not be read (message "The job finished but its results could not be read.", with whatever EDIABAS reported in `details` and `resultsUnread: true` there) | `{ errorCode: 19, errorText: "IFH-0009: …" }`; plus `resultsUnread: true` only in the unread-results case |
 | 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted) | `{ reason }` |
 | 500 | `capture_failed` | the desktop was available but the copy failed or the screen size could not be read | `null` |
 | 503 | `desktop_unavailable` | only a locked screen, the secure desktop, or session 0 | `null` |

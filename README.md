@@ -64,20 +64,27 @@ already talk to the car. Full steps: [docs/install.md](docs/install.md#setup-fro
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.6.0, job policy version 4, eleven MCP tools. Built and tested at the desk; **nothing
+Version 0.6.1, job policy version 4, eleven MCP tools. Built and tested at the desk; **nothing
 from 0.3.0 on has been run at the car.**
 
-### What changed in 0.6.0
+### What changed in 0.6.1
 
-- **The project is now bimmer-bridge** (it was ediabas-bridge). The MCP server registers as
-  `bimmer-bridge`, so its tools are `mcp__bimmer-bridge__*`, and the skill is `bimmer-bridge`.
-  Re-register the server and reinstall the skills: see
-  [docs/install.md](docs/install.md#upgrading-to-060).
-- Names an existing install depends on keep the old name, so the VM agent needs no reinstall:
-  `C:\ProgramData\EdiabasBridge`, the task and firewall rule, the Keychain service, the Mac audit
-  log folder and the agent's handshake.
-- The README is shorter and starts with a use-at-your-own-risk disclaimer.
-- Licensed under MIT ([LICENSE](LICENSE)).
+Hardening for the first session at the car, from a desk rehearsal of the at-the-car sequence
+(2026-11-22, cable in the VM, not in the car). Only the Mac server changed; the agent is
+rebuilt for the version number.
+
+- **`ediabas_error` advice by EDIABAS code** (code table from EdiabasLib, checked against every
+  code seen at the desk): the cable codes (`IFH-0002`, `IFH-0003`), low or wrong battery voltage,
+  a module that did not answer (`IFH-0009`), a disturbed answer, ignition off and `SYS-0010` each
+  say what to check. Cable, voltage and ignition codes no longer send Claude to
+  `ediabas_vehicle_status`, and no `IFH-` code suggests a wrong job name.
+- **`ediabas_vehicle_status` says its battery and KL30 readings come from the cable**: with no
+  car connected they read `STAT_UBATT=1` and KL30 12000. Only a voltage source (a module) shows
+  the car is awake. Fixture `dev/fixtures/no-car`.
+- **The recording server runs on Node 26**, which removed `--experimental-transform-types`:
+  `mac-mcp/src` and `dev/` now use only syntax Node can strip (`erasableSyntaxOnly`).
+- `docs/at-the-car.md` has the tested commands to register the recording server (the name goes
+  before `-e`) and a check that the folder fills.
 
 Open: the at-the-car checks ([docs/at-the-car.md](docs/at-the-car.md)), evals 01, 03 and 06
 (they need fixtures recorded at the car), and a run without the skills that does worse for evals

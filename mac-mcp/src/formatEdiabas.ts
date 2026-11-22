@@ -366,6 +366,13 @@ export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: st
   ];
 }
 
+// Rehearsal, 2026-11-22, cable in the VM and not in the car: STAT_UBATT=1 and KL30 E02E0000.
+// EdiabasLib's serial driver likewise reports a fixed 12000 mV whenever the cable's DSR line is set.
+const VEHICLE_NOTE =
+  "Note: STAT_UBATT and the cable's KL30 come from the cable's own lines, not from the car: with no car connected (desk, 2026-11-22) " +
+  "they read STAT_UBATT=1 and KL30 E02E0000 (12000 read little-endian). They do not show that the car is awake or how charged " +
+  "the battery is; only a reading from a module (a voltage source) shows that.";
+
 /** `r` answers `vehicleBatch(sources)`, one item per item sent. */
 export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
   const it = r.items;
@@ -377,6 +384,7 @@ export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: st
   if (n === 0) out.push("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
   out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(it[2 + n]!)}`);
   out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(it[3 + n]!)}`);
+  out.push(VEHICLE_NOTE);
   return out.join("\n");
 }
 

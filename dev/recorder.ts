@@ -61,10 +61,13 @@ function nameHints(x: Exchange): string[] {
 export class FolderRecorder implements ExchangeRecorder {
   private seq = 0;
 
-  constructor(
-    private readonly dir: string,
-    private readonly opts: { warn: (message: string) => void; redact: (text: string) => string },
-  ) {}
+  private readonly dir: string;
+  private readonly opts: { warn: (message: string) => void; redact: (text: string) => string };
+
+  constructor(dir: string, opts: { warn: (message: string) => void; redact: (text: string) => string }) {
+    this.dir = dir;
+    this.opts = opts;
+  }
 
   /** Stable, readable base name: time, sequence, method, path, then ecu/job when present. */
   fileBase(x: Exchange, seq: number): string {
