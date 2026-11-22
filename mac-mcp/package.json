@@ -1,6 +1,6 @@
 {
   "name": "bimmer-bridge-mcp",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Local stdio MCP server that reads BMW diagnostic data from the bimmer-bridge VM agent (read-only).",
   "private": true,
   "type": "module",
