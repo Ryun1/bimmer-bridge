@@ -53,7 +53,7 @@ first line is quoted and the KWP2000 service line, if any, follows after " — "
 (`durationMs` 14745). Cable in the VM, not in the car. Under policy version 4 (2026-11-22,
 `durationMs` 16545): 22 allowed, 21 runnable; the one change is `STATUS_PAIRING`, below.
 
-**Runnable (allowed by the policy):**
+**Allowed by the policy** (all runnable under version 4 except `STATUS_PAIRING`, which now needs review):
 
 | Job | Rule (review) | Description as returned | *(gloss)* |
 |---|---|---|---|
@@ -188,8 +188,11 @@ with 20 jobs not checked, among them `STATUS_WAKEUP_HISTORY`, `STATUS_WUP` and `
 described one at a time (below) all three are runnable.
 
 **Needs review under policy version 4**, with the screen term each description matched (found by
-checking the recorded description against `policy/policy.json`, after the ignored words
-`beschreibung` and `umsetzer` are removed; the refusal itself names the terms):
+checking the recorded description against `policy/policy.json` the way the agent does: the
+ignored words `beschreibung` and `umsetzer` replaced by a space, then each term looked for
+anywhere, ignoring case; an empty or label-only description needs review too). The `CAS` rows
+combine the full list (4) and the `STATUS` filter (6): `STATUS_RDL`, `STATUS_RDU` and
+`STATUS_THS_HANDSENDER1` were not checked in the full list.
 
 | File | Job | Matched |
 |---|---|---|
@@ -218,8 +221,8 @@ empty for all of them). Result names are listed as declared, in the SGBD's order
 
 **How the screen got here.** Version 2 (agent 0.2.2) made the screen ignore the words
 "Beschreibung" and "Umsetzer" before matching, so the label "Jobbeschreibung:" no longer flags a
-job by itself; version 3 and version 4 added switching and triggering terms (version 4:
-`schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`, `trigger`, `oeffnen`,
+job by itself; version 3 added more terms, and version 4 added switching and triggering terms
+(`schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`, `trigger`, `oeffnen`,
 `öffnen`). That is why some jobs flagged under version 1 pass now, and why `NVE_65`
 `STATUS_PAIRING` and `LM_60` `STATUS_XENON_AL_EINSCHALTVERSUCHE` are flagged under version 4.
 
