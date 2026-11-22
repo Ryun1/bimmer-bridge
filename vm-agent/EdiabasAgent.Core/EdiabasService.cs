@@ -178,18 +178,22 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/job
 
-    public Outcome<JobResult> RunJob(JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct)
+    public Outcome<JobResult> RunJob(JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
         audit.Ecu = request.Ecu;
         audit.Job = request.Job;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), start, recheckConflicts: false, ct);
+        using var session = new Session(this, queuedMs);
+        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), session.StartMs, recheckConflicts: false, ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
         audit.Rule = run.Rule;
@@ -208,11 +212,16 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/jobs
 
-    public Outcome<BatchResponse> RunJobs(IReadOnlyList<JobRequest> items, int? timeoutSeconds, RequestAudit audit, CancellationToken ct)
+    public Outcome<BatchResponse> RunJobs(IReadOnlyList<JobRequest> items, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
         if (items.Count is < 1 or > MaxBatchItems)
         {
             return ApiFailure.Of(ApiErrors.BadRequest, $"items must hold 1 to {MaxBatchItems} jobs.", new ParameterDetails("items"));
+        }
+
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
         }
 
         if (ConflictFailure() is { } busy)
@@ -220,9 +229,9 @@ public sealed class EdiabasService
             return busy;
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), start, audit, ct);
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
+        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), session.StartMs, audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -233,8 +242,13 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/vehicle
 
-    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct)
+    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -249,9 +263,9 @@ public sealed class EdiabasService
         items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL30"));
         items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL15"));
 
-        using var session = new Session(this);
-        var start = session.StartMs;
-        var batch = RunBatch(session, items, _defaultTimeoutSeconds, start, audit, ct);
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
+        var batch = RunBatch(session, items, _defaultTimeoutSeconds, session.StartMs, audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -267,9 +281,14 @@ public sealed class EdiabasService
 
     // ---------------------------------------------------------------- /ediabas/describe
 
-    public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct)
+    public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
         audit.Ecu = ecu;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -280,8 +299,8 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, ecu, audit, ct, out var variant, out var upperEcu);
         if (!jobs.Ok)
         {
@@ -302,7 +321,7 @@ public sealed class EdiabasService
             var verdict = _policy.Evaluate(upperEcu, name);
             string? comment = null;
             var fetch = DescriptionFetch.Skipped;
-            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && !OverBudget(start))
+            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && !OverBudget(session.StartMs))
             {
                 var d = ReadDescription(session, upperEcu!, name, timeout, ct);
                 if (d.Ok)
@@ -322,10 +341,15 @@ public sealed class EdiabasService
         return new DescribeListResponse(upperEcu!, variant, entries.Count, entries, _clock.ElapsedMs - start);
     }
 
-    public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct)
+    public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
         audit.Ecu = ecu;
         audit.Job = job;
+        if (WaitedTooLong(queuedMs) is { } waited)
+        {
+            return waited;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -347,8 +371,8 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
-        using var session = new Session(this);
-        var start = session.StartMs;
+        var start = _clock.ElapsedMs;
+        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, verdict.Ecu, audit, ct, out var variant, out _);
         if (!jobs.Ok)
         {
@@ -801,6 +825,13 @@ public sealed class EdiabasService
                 new ProcessesDetails(running))
             : null;
 
+    /// <summary><c>not_run</c> for a request that spent its whole budget queued behind another
+    /// one: the client has given up or is about to, so EDIABAS is not even loaded.</summary>
+    private ApiFailure? WaitedTooLong(long queuedMs) =>
+        queuedMs >= (long)_maxTimeoutSeconds * 1000
+            ? NotRun($"The request waited behind another EDIABAS request for the whole {_maxTimeoutSeconds} s limit; nothing was started.")
+            : null;
+
     private bool OverBudget(long requestStart) => _clock.ElapsedMs - requestStart >= (long)_maxTimeoutSeconds * 1000;
 
     private static ApiFailure Refused(string? ecu, string? job, string rule) =>
@@ -826,17 +857,20 @@ public sealed class EdiabasService
         private bool _initCalled;
         private ApiFailure? _initFailure;
 
-        public Session(EdiabasService owner)
+        /// <param name="queuedMs">How long the request waited for the runner thread: it counts
+        /// against the budget, because the client's own deadline started when it sent the request.</param>
+        public Session(EdiabasService owner, long queuedMs)
         {
             this.owner = owner;
-            StartMs = owner._clock.ElapsedMs;
-            LastConflictCheckMs = StartMs;
+            var now = owner._clock.ElapsedMs;
+            StartMs = now - Math.Max(0, queuedMs);
+            LastConflictCheckMs = now;
 
             // Counted so the DLL is never released while a request is running.
             owner._openSessions++;
         }
 
-        /// <summary>When the request began, for its overall budget.</summary>
+        /// <summary>When the request arrived (before any time in the queue), for its overall budget.</summary>
         public long StartMs { get; }
 
         public bool Initialised { get; private set; }

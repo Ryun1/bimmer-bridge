@@ -61,4 +61,69 @@ public class EdiabasRequestPathTests
         Assert.Equal(["Job NVE_65 _JOBS [] []"], _api.JobCalls);
         Assert.Equal(1, _api.Count("End"));
     }
+
+    // ---------------------------------------------------------------- A2: queue time counts against the budget
+
+    [Fact]
+    public void Queued50sOf60_LeavesTenSecondsForTheJob()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true });
+
+        var r = Service(maxTimeout: 60).RunJob(new JobRequest("NVE_65", "IDENT"), 30, _audit, default, queuedMs: 50_000);
+
+        Assert.Equal("job_timeout", r.Failure!.Error.Code);
+        Assert.Contains("60 s limit", r.Failure.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(10_000, _clock.ElapsedMs);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void Queued50sOf60_BatchLeftoversAreNotRun()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { BusyPolls = 200, Sets = [[]] }); // 10 s
+
+        var r = Service(maxTimeout: 60).RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "IDENT")], 30, _audit, default, queuedMs: 50_000);
+
+        var items = r.Value!.Items;
+        Assert.True(items[0].Ok);
+        Assert.Equal("not_run", items[1].Error!.Code);
+        Assert.Single(_api.JobCalls);
+
+        // durationMs is the time the request ran, not the time it waited.
+        Assert.Equal(10_000, r.Value.DurationMs);
+    }
+
+    public static TheoryData<string> Requests => ["job", "jobs", "vehicle", "describe-list", "describe-job"];
+
+    [Theory]
+    [MemberData(nameof(Requests))]
+    public void QueuedTheWholeBudget_StartsNothing(string kind)
+    {
+        const string message = "The request waited behind another EDIABAS request for the whole 60 s limit; nothing was started.";
+        var svc = Service(maxTimeout: 60);
+        const long queued = 60_000;
+
+        ApiFailure? f = kind switch
+        {
+            "job" => svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queued).Failure,
+            "jobs" => svc.RunJobs([new("NVE_65", "IDENT")], null, _audit, default, queued).Failure,
+            "vehicle" => svc.Vehicle([], _audit, default, queued).Failure,
+            "describe-list" => svc.DescribeList("NVE_65", null, true, _audit, default, queued).Failure,
+            _ => svc.DescribeJob("NVE_65", "IDENT", _audit, default, queued).Failure,
+        };
+
+        Assert.Equal("not_run", f!.Error.Code);
+        Assert.Equal(message, f.Error.Message);
+        Assert.Empty(_api.Calls);
+    }
+
+    [Fact]
+    public void QueueTime_DoesNotMakeTheConflictCheckStale()
+    {
+        // The request's own conflict check just ran; the first job reuses it however long the wait.
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+
+        Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queuedMs: 5_000).Ok);
+        Assert.Equal(1, _conflicts.Calls);
+    }
 }
