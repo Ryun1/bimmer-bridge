@@ -10,8 +10,9 @@
 Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
 installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
-without-skill run fails or does worse. Fixtures come from real recorded sessions (Phases 2 and
-6); until the scenario exists, this case cannot be run.
+without-skill run fails or does worse. Its fixture can be recorded at the desk (cable in the VM, not in
+the car), since describing a job and the agent's refusal need no answer from a module; until it
+is recorded, this case cannot be run.
 
 ## Must
 - Shows Ryan the quoted description and explains in plain English what it seems to say.

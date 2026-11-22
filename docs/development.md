@@ -23,8 +23,8 @@ README's [Releasing](../README.md#releasing) section; deployment to the VM in
 | agent | `(cd vm-agent && dotnet test EdiabasAgent.Tests)` | xUnit tests of `EdiabasAgent.Core` against fakes: config, policy (every shared case), description screen, path rules, conflict matching, EDIABAS service against a fake API, result shaping, audit lines |
 | MCP server | `(cd mac-mcp && npm run typecheck && npm test)` | vitest: every tool against a stub agent, policy (every shared case), VM lookup, token, formatting (km to miles), audit |
 | deploy server | `python3 -m unittest dev/test_serve.py` | routes, address rules, upload caps, token hand-off, the pasted lines |
-| dev tools | `(cd mac-mcp && npm run typecheck:dev && npm run test:dev)` | replay agent, scrubber, and a session of the real MCP server answering tool calls from the replay agent, all on synthetic recordings in temporary folders |
-| everything | `./release.sh --no-build` | the four above plus the version check |
+| dev tools | `(cd mac-mcp && npm run typecheck:dev && npm run test:dev)` | replay agent, scrubber, and a session of the real MCP server answering tool calls from the replay agent, all on synthetic recordings in temporary folders; and a check that every committed fixture needs no scrubbing |
+| everything | `./release.sh --no-build` | the four above plus the version check, the git tree check (it stops on uncommitted changes; add `--allow-dirty`) and, when `pwsh` is installed, a parse check of the `vm-setup/*.ps1` scripts |
 
 The agent tests cover only `EdiabasAgent.Core`, which has no Windows dependencies. The Windows
 host (`vm-agent/EdiabasAgent/`: Kestrel, P/Invoke into `api32.dll`, window capture, file
@@ -76,6 +76,14 @@ Fixtures come only from real sessions; nothing is written by hand.
    `node dev/scrub-fixtures.ts <raw-folder> <scenario> --dry-run`, then without it.
 3. Review every file and every screenshot before committing (screenshots are copied
    unchanged).
+
+Besides fields named for a chassis number, VIN or serial number, the scrubber replaces any
+17-character VIN-shaped text, and a BMW VIN (`WB…`) in any case whatever touches it. In hex
+results (binary values) any 17-character run of the VIN alphabet with a letter and a digit is
+scrubbed in place. Percent-encoded strings (such as the `X-Window-Title` header) are checked
+decoded too. `dev/test/fixtures-clean.test.ts` runs the scrubber over every committed fixture
+and fails if it would change anything: an identifier was committed, or the rules grew and the
+fixture needs scrubbing again.
 
 The full procedure, and which scenarios the evals still need, are in
 [dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario).

@@ -1,9 +1,11 @@
 # Trace files
 
-What the common trace files are for, in general terms. **Not yet checked on this install:**
-no NCS Expert or EDIABAS trace has been read through the bridge, so file names, locations and
-contents below are general knowledge to confirm against a real file before relying on them.
-Read files with `vm_logs_list` and `vm_logs_read`; the bridge only reads them.
+What the common trace files are for, in general terms. **Mostly not yet checked on this
+install:** one file, `ABLAUF.TRC`, was read through the bridge at the desk on 2026-11-21 (the
+Phase 5 check); which folder it was in and what it held were not recorded. No NCS Expert
+module trace has been read. The file names, locations and contents below are general knowledge
+to confirm against a real file before relying on them. Read files with `vm_logs_list` and
+`vm_logs_read`; the bridge only reads them.
 
 ## What the VM discovery found (2026-11-21)
 
@@ -33,5 +35,7 @@ diagnose communication failures. On this install tracing is off (see above), so 
 
 ## Entries confirmed on this install
 
-None yet. When a real file has been read, record its path, what it contained and the date
-here.
+- `ABLAUF.TRC`: listed and read through the bridge, 2026-11-21 (desk). Path and contents not
+  recorded.
+
+When a real file has been read, record its path, what it contained and the date here.

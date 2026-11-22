@@ -7,8 +7,9 @@ responses, no edited values. If a scenario needs an answer nobody has recorded y
 scenario waits for a session that records it.
 
 Two scenarios exist, recorded at the desk on 2026-11-21: `idle` and `inpa-open` (an overlay on
-`idle`). The others in the table below wait for Phase 6, at the car
-([docs/at-the-car.md](../../docs/at-the-car.md)).
+`idle`, which also serves the screenshot of the INPA loader menu). `needs-review` can be
+recorded at the desk, with the cable in the VM and not in the car; `nve-faults` and `battery`
+wait for Phase 6, at the car ([docs/at-the-car.md](../../docs/at-the-car.md)).
 
 ## Layout
 
@@ -59,10 +60,9 @@ MCP server sends what Claude passed).
 |---|---|
 | `idle` | the agent up, no BMW tool open: `vm_health`, `vm_list_windows` |
 | `nve-faults` | ignition on, no BMW tool open: `vm_health`, `ediabas_list_ecus`, `ediabas_describe` on the night-vision SGBD, `ediabas_vehicle_status`, `ediabas_read_faults` |
-| `inpa-open` | overlay on `idle` or `nve-faults`: `vm_health` and one `ediabas_*` call with INPA open (the agent answers `cable_in_use`), plus a route sending that answer for `/ediabas/` |
-| `needs-review` | `ediabas_describe` of an SGBD with a `STATUS_` job the agent marks `needs_review`, and `ediabas_job` on it (the agent answers `job_needs_review`) |
-| `battery` | the engine group and a few status jobs: `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_job` |
-| `inpa-screen` | INPA open on a menu: `vm_list_windows`, `vm_screenshot` |
+| `inpa-open` | overlay on `idle` or `nve-faults`: `vm_health` and one `ediabas_*` call with INPA open (the agent answers `cable_in_use`), plus a route sending that answer for `/ediabas/` (eval 02); `vm_list_windows` and `vm_screenshot` of the INPA window (eval 07) |
+| `needs-review` | at the desk: `ediabas_describe` of an SGBD with a `STATUS_` job the agent marks `needs_review`, and `ediabas_job` on it (the agent answers `job_needs_review` before the job is sent) |
+| `battery` | the engine group and a few status jobs: `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_jobs` |
 | `unreachable` | no folder: start no replay agent, point `EDIABAS_AGENT_URL` at a closed port |
 
 ## Recording a scenario
@@ -80,8 +80,10 @@ MCP server sends what Claude passed).
    node dev/scrub-fixtures.ts ~/ediabas-recordings/nve-faults nve-faults
    ```
 
-   It replaces anything shaped like a 17-character VIN (also inside hex binary results), the
-   values of fields whose names say chassis number, VIN or serial number (`FG_NR`,
+   It replaces anything shaped like a 17-character VIN; a BMW VIN (`WB` and 15 more) in any
+   case and whatever text touches it; in hex binary results, any 17-character run of the VIN
+   alphabet with a letter and a digit; and the same inside percent-encoded strings (the window
+   title header), checked decoded. Also the values of fields whose names say chassis number, VIN or serial number (`FG_NR`,
    `FAHRGESTELL*`, `VIN`, `SERIENNUMMER`, `SERIAL*`, `CHASSIS*`, ...), the user and host name
    in `/health`, and the folder name after `\Users\` in Windows paths. Placeholders keep the
    shape (`XXXXX00000XXXX000`). It prints every replacement (file, field, placeholder; never
@@ -123,6 +125,9 @@ EDIABAS_AGENT_TOKEN=replay-dev-token node dev/replay-agent.ts --scenario nve-fau
 ```sh
 cd mac-mcp && npm run test:dev && npm run typecheck:dev
 ```
+
+One test runs every committed recording under `dev/fixtures/` through the scrubber and fails if
+it would replace anything.
 
 They build synthetic recordings in temporary folders only, and include a session of the real
 MCP server (from `mac-mcp/src`) answering tool calls from the replay agent.
