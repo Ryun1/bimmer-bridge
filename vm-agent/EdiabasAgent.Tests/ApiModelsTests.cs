@@ -35,6 +35,8 @@ public class ApiModelsTests
     [InlineData("window_not_found", 404)]
     [InlineData("window_minimized", 409)]
     [InlineData("desktop_unavailable", 503)]
+    [InlineData("capture_busy", 503)]
+    [InlineData("capture_failed", 500)]
     [InlineData("something_new", 500)]
     public void Status(string code, int status)
     {

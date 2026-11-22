@@ -72,6 +72,8 @@ public static class ApiErrors
     public const string WindowNotFound = "window_not_found";
     public const string WindowMinimized = "window_minimized";
     public const string DesktopUnavailable = "desktop_unavailable";
+    public const string CaptureBusy = "capture_busy";
+    public const string CaptureFailed = "capture_failed";
 
     public static ErrorBody Create(string code, string message, object? details = null) =>
         new(new ErrorDetail(code, message, details));
@@ -86,7 +88,8 @@ public static class ApiErrors
         MethodNotAllowed => 405,
         CableInUse or WindowMinimized => 409,
         EdiabasError or CableNotFound => 502,
-        EdiabasUnavailable or NotRun or DesktopUnavailable => 503,
+        EdiabasUnavailable or NotRun or DesktopUnavailable or CaptureBusy => 503,
+        CaptureFailed => 500,
         JobTimeout => 504,
         _ => 500,
     };

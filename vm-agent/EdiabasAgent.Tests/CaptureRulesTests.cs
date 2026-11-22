@@ -239,6 +239,28 @@ public class CaptureRulesTests
         Assert.Null(f.Error.Details);
     }
 
+    // Three different answers: only a locked screen, secure desktop or session 0 tells Ryan to
+    // unlock the VM. A capture queued too long and a failed GDI copy say what happened.
+    [Fact]
+    public void CaptureFailures_MapToTheirOwnCodes()
+    {
+        var locked = CaptureRules.DesktopUnavailable("the screen is locked");
+        Assert.Equal((503, "desktop_unavailable"), (locked.Status, locked.Error.Code));
+        Assert.Contains("Unlock the VM", locked.Error.Message);
+
+        var busy = CaptureRules.Busy();
+        Assert.Equal((503, "capture_busy"), (busy.Status, busy.Error.Code));
+        Assert.Contains("another capture is still running", busy.Error.Message);
+        Assert.DoesNotContain("Unlock", busy.Error.Message);
+        Assert.Null(busy.Error.Details);
+
+        var failed = CaptureRules.Failed("the screen could not be read");
+        Assert.Equal((500, "capture_failed"), (failed.Status, failed.Error.Code));
+        Assert.Contains("the screen could not be read", failed.Error.Message);
+        Assert.DoesNotContain("Unlock", failed.Error.Message);
+        Assert.Null(failed.Error.Details);
+    }
+
     [Fact]
     public void IsAllBlack()
     {
