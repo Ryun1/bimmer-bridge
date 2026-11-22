@@ -105,7 +105,7 @@ public class JobPolicyTests
     public void Embedded_Loads()
     {
         Assert.True(JobPolicy.Embedded.Loaded, JobPolicy.Embedded.LoadError);
-        Assert.Equal(2, JobPolicy.Embedded.Version);
+        Assert.Equal(3, JobPolicy.Embedded.Version);
         Assert.Contains("lösch", JobPolicy.Embedded.ScreenTerms);
         Assert.Equal(["beschreibung", "umsetzer"], JobPolicy.Embedded.ScreenIgnore);
     }
@@ -173,8 +173,8 @@ public class JobPolicyTests
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "umsetzer")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = "umsetzer"),
-        Text().Replace("\"version\": 2,", "\"version\": 2, \"version\": 3,", StringComparison.Ordinal),
-        Text().Replace("\"version\": 2,", "// comment\n\"version\": 2,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 3,", "\"version\": 3, \"version\": 4,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 3,", "// comment\n\"version\": 3,", StringComparison.Ordinal),
     ];
 
     [Theory]
@@ -193,6 +193,32 @@ public class JobPolicyTests
             var v = policy.Evaluate(ecu, job);
             Assert.False(v.Allowed);
             Assert.Equal(JobPolicy.RuleUnavailable, v.Rule);
+        }
+    }
+
+    /// <summary>A lone surrogate, written raw in the text or as a JSON escape, is a refusal
+    /// like any other bad policy: Parse never throws. (A fact, not a theory: test data
+    /// serialisation would turn a lone surrogate into U+FFFD.)</summary>
+    [Fact]
+    public void LoneSurrogate_IsARefusal()
+    {
+        (string Entry, string Replacement)[] cases =
+        [
+            ("\"IDENT\"", "\"ID" + (char)0xD800 + "\""),
+            ("\"LOESCH\"", "\"" + (char)0xDC00 + "\""),
+            ("\"IDENT\"", "\"ID\\ud800\""),
+            ("\"start\"", "\"st\\udfffart\""),
+            ("\"TMODE\"", "\"\\ud800\""),
+        ];
+
+        var text = Text();
+        foreach (var (entry, replacement) in cases)
+        {
+            Assert.Contains(entry, text);
+            var policy = JobPolicy.Parse(text.Replace(entry, replacement, StringComparison.Ordinal));
+            Assert.False(policy.Loaded, replacement);
+            Assert.NotNull(policy.LoadError);
+            Assert.Equal(JobPolicy.RuleUnavailable, policy.Evaluate("NVE_65", "IDENT").Rule);
         }
     }
 

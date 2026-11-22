@@ -90,6 +90,8 @@ public class CommentScreenTests
     [Theory]
     [InlineData("Status Bordnetzspannung")]
     [InlineData("Read the battery voltage")]
+    [InlineData("Status des Steuergeraets lesen")]
+    [InlineData("Status des Steuergeräts lesen")]
     public void Passes(string description)
     {
         Assert.True(Screen.Screen(description).Passed);
@@ -104,7 +106,13 @@ public class CommentScreenTests
     [InlineData("Write data", "write")]
     [InlineData("Erase memory", "erase")]
     [InlineData("Re-learn", "learn")]
-    [InlineData("Programmierung", "programm")]
+    [InlineData("Programmierung", "program")]
+    [InlineData("Program default value", "program")]
+    [InlineData("Stellmotor auf Wert einstellen", "einstell")]
+    [InlineData("Klappe verstellen", "verstell")]
+    [InlineData("Wert aendern", "aender")]
+    [InlineData("Wert ändern", "änder")]
+    [InlineData("Adjust idle speed", "adjust")]
     public void Fails(string description, string term)
     {
         var r = Screen.Screen(description);
@@ -178,6 +186,16 @@ public class CommentScreenTests
         var r = Screen.Screen(description);
         Assert.False(r.Passed);
         Assert.Empty(r.Matched);
+    }
+
+    /// <summary>"steuer" would match "Steuergerät" (control unit), which nearly every
+    /// description names; "control" likewise. Neither is a term.</summary>
+    [Fact]
+    public void ControlUnitWords_AreNotTerms()
+    {
+        Assert.DoesNotContain("steuer", JobPolicy.Embedded.ScreenTerms);
+        Assert.DoesNotContain("control", JobPolicy.Embedded.ScreenTerms);
+        Assert.DoesNotContain("programm", JobPolicy.Embedded.ScreenTerms);
     }
 
     [Fact]

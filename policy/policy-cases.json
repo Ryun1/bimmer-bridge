@@ -954,6 +954,153 @@
    "rule": "shape.args",
    "screen": false,
    "note": "shape is checked before the denylist"
+  },
+  {
+   "ecu": "E60",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "whole-car fault read, KWP $18 (recorded at the desk 2026-11-21)"
+  },
+  {
+   "ecu": "E60",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "whole-car identification, KWP $1A (recorded at the desk 2026-11-21)"
+  },
+  {
+   "ecu": "e60",
+   "job": "fs_lesen_funktional",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false,
+   "note": "lower case"
+  },
+  {
+   "ecu": "E60",
+   "job": "_JOBS",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "INFO",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "FS_LOESCHEN_FUNKTIONAL",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "IS_LOESCHEN_FUNKTIONAL",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "SLEEP_MODE_FUNKTIONAL",
+   "allowed": false,
+   "rule": "deny.substring:SLEEP",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "CBS_RESET_FUNKTIONAL",
+   "allowed": false,
+   "rule": "deny.substring:RESET",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "ENERGIESPARMODE_FUNKTIONAL",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "MOST_CAN_GATEWAY_DISABLE",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "I_STUFE_SCHREIBEN",
+   "allowed": false,
+   "rule": "deny.substring:SCHREIB",
+   "screen": false
+  },
+  {
+   "ecu": "E60",
+   "job": "IDENT",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "E60 allows its own list only, not the global names"
+  },
+  {
+   "ecu": "E60",
+   "job": "STATUS_X",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "no pattern on a restricted ECU"
+  },
+  {
+   "ecu": "E60",
+   "job": "C_FA_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false
+  },
+  {
+   "ecu": "KOMB60",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": false,
+   "rule": "default_deny",
+   "screen": false,
+   "note": "the functional jobs are allowed on E60 only"
+  },
+  {
+   "ecu": "CAS",
+   "job": "C_FA_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "vehicle order, KWP $22 (recorded at the desk 2026-11-21)"
+  },
+  {
+   "ecu": "LM_60",
+   "job": "C_FA_LESEN",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false
+  },
+  {
+   "ecu": "CAS",
+   "job": "C_FA_SCHREIBEN",
+   "allowed": false,
+   "rule": "deny.substring:SCHREIB",
+   "screen": false
+  },
+  {
+   "ecu": "CAS",
+   "job": "C_FA_AUFTRAG",
+   "allowed": false,
+   "rule": "deny.substring:AUFTRAG",
+   "screen": false
   }
  ]
 }

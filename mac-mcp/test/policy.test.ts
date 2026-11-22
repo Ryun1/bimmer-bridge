@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, parsePolicy } from "../src/policy.js";
+import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
 import { BridgeError } from "../src/errors.js";
 
 const REPO_POLICY = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
@@ -76,16 +76,34 @@ describe("findDuplicateKey", () => {
   });
 });
 
+describe("findNonIntegerLiteral (JSON.parse reads 3.0 as 3; the agent refuses it)", () => {
+  it.each([
+    ['{"version":3,"maxArgLength":10}', null],
+    ['{"version":-0,"maxArgLength":0}', null],
+    ['{"version":3.0}', "version"],
+    ['{"version" : 3e0}', "version"],
+    ['{"a":1,"maxArgLength":\n1E+1}', "maxArgLength"],
+    ['{"\\u0076ersion":3.5}', "version"],
+    ['{"allow":{"version":3.0}}', null],
+    ['{"x":[{"version":3.0}],"version":3}', null],
+    ['{"x":"\\"version\\":3.0","version":3}', null],
+    ['{"version":"3.0"}', null],
+  ] as const)("%s → %s", (text, key) => {
+    JSON.parse(text); // the cases are valid JSON
+    expect(findNonIntegerLiteral(text)).toBe(key);
+  });
+});
+
 describe("policy loading", () => {
   it("resolves the repo's policy/policy.json by default", () => {
     expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
     const g = PolicyGuard.load();
     expect(g.error).toBeNull();
-    expect(g.version).toBe(2);
+    expect(g.version).toBe(3);
   });
 
   it("reads descriptionScreen.ignore (the agent runs the screen; the Mac only validates it)", () => {
-    expect(policy.version).toBe(2);
+    expect(policy.version).toBe(3);
     expect(policy.screenIgnore).toEqual(["beschreibung", "umsetzer"]);
   });
 
