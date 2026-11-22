@@ -472,7 +472,10 @@ Newest first.
   disk (network, removable, optical) grants nothing and is never opened (`/logs` shows it with
   `exists: false`). Refused with `path_not_allowed`: `..` segments, relative paths, UNC and
   device paths (`\\?\`, `\\.\`), alternate data streams, DOS device names (`CON`, `NUL`,
-  `COM1`, …), junction or symlink escapes, and 8.3 short names that resolve outside the roots.
+  `COM1`, …), junction escapes, and 8.3 short names that resolve outside the roots. A log file
+  that is itself a symbolic link is opened as the link and refused (`file_not_found`), whatever
+  it points at; before, it was followed and checked by final path. A link is never followed, so
+  one planted in a root that points at a device is never opened.
 
 ```json
 { "path": "C:\\EDIABAS\\TRACE\\api.trc", "sizeBytes": 20480, "modifiedAt": "2026-11-21T16:40:02Z",
