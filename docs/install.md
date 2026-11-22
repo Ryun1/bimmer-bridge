@@ -73,7 +73,7 @@ has no `.git` and `release.sh` stops without one, then use the release's prebuil
 build only the Mac server:
 
 ```sh
-git clone --branch v0.5.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
+git clone --branch v0.5.0 https://github.com/Ryun1/bimmer-bridge && cd bimmer-bridge
 mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
 shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
 (cd mac-mcp && npm ci && npm run build)
@@ -108,7 +108,7 @@ SHA-256. It stops at the first failure with `release.sh: FAILED: <reason>`. Deta
 
    ```
    Install:
-     $SendToken=$true; $base='http://<Mac bridge address>:8000'; $sha='<zip sha256>'; $ebFile="$env:TEMP\ediabas-bridge-install.ps1"; Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; $ebOk=$false; try { iwr "$base/install.ps1" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } catch { Write-Host 'download failed: the Mac did not serve install.ps1 (is serve.py running?)' -ForegroundColor Red }; if ($ebOk) { $ebBytes=[IO.File]::ReadAllBytes($ebFile); if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '<install.ps1 sha256>') { iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } else { Write-Host 'install.ps1 is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red } }
+     $SendToken=$true; $base='http://<Mac bridge address>:8000'; $sha='<zip sha256>'; $ebFile="$env:TEMP\bimmer-bridge-install.ps1"; Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; $ebOk=$false; try { iwr "$base/install.ps1" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } catch { Write-Host 'download failed: the Mac did not serve install.ps1 (is serve.py running?)' -ForegroundColor Red }; if ($ebOk) { $ebBytes=[IO.File]::ReadAllBytes($ebFile); if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '<install.ps1 sha256>') { iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } else { Write-Host 'install.ps1 is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red } }
    ```
 
    The Update, Discovery and Uninstall lines have the same shape. If it says
@@ -126,7 +126,7 @@ SHA-256. It stops at the first failure with `release.sh: FAILED: <reason>`. Deta
    - `Agent is up.` Usually with the note that it answered 403 because the request came from
      the VM itself; that is expected and proves the listener works.
    - `token stored in the Mac's Keychain`
-   - `Done. ediabas-bridge agent <version> listens on port 8765.`
+   - `Done. bimmer-bridge agent <version> listens on port 8765.`
 
    On the Mac, `serve.py` logs `PUT /token 204 token stored`. The token went straight into the
    Keychain (service `ediabas-bridge`, account `agent`); nobody copies it.
@@ -165,10 +165,10 @@ that a Node upgrade does not break the registration. The server must stay at
 **Claude Code** (all projects), from the repo root:
 
 ```sh
-claude mcp add --scope user ediabas-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"
+claude mcp add --scope user bimmer-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"
 ```
 
-**Claude desktop app:** quit the app, then add an `ediabas-bridge` entry under `mcpServers` in
+**Claude desktop app:** quit the app, then add an `bimmer-bridge` entry under `mcpServers` in
 `~/Library/Application Support/Claude/claude_desktop_config.json`. Keep every other key in the
 file as it is; create the `mcpServers` key if it is not there. `<repo>` is the absolute path of
 this repo (`pwd` in the repo root prints it):
@@ -176,7 +176,7 @@ this repo (`pwd` in the repo root prints it):
 ```json
 {
   "mcpServers": {
-    "ediabas-bridge": {
+    "bimmer-bridge": {
       "command": "/opt/homebrew/bin/node",
       "args": ["<repo>/mac-mcp/dist/index.js"]
     }
@@ -196,7 +196,7 @@ The token needs no configuration: the server reads it from the Keychain.
 skills/install.sh
 ```
 
-It links each skill (`ediabas-bridge`, `bmw-standard-tools`) into `~/.claude/skills/` for
+It links each skill (`bimmer-bridge`, `bmw-standard-tools`) into `~/.claude/skills/` for
 Claude Code, so edits in the repo take effect at once, and builds `skills/dist/<skill>.zip`.
 It refuses, and leaves alone, anything already in `~/.claude/skills/` under the same name that
 is not its own link. Upload the two zips in claude.ai's Skills settings for the desktop app and
@@ -212,7 +212,7 @@ original owner's `bmw-e61` skill; adapt the names.
 Start a new Claude Code session (or a new chat in the desktop app) and ask "is the BMW VM up?".
 Claude should call `vm_health` and report the agent's version, the Windows session it runs in,
 any BMW tools that are open, whether the EDIABAS DLL was found, the agent's features and the
-job policy version on both sides. In Claude Code, `/mcp` shows whether `ediabas-bridge` is
+job policy version on both sides. In Claude Code, `/mcp` shows whether `bimmer-bridge` is
 connected.
 
 If it reports an error, the message says what to do; the [Troubleshooting](#troubleshooting)
@@ -237,7 +237,7 @@ After a code change, or to install a newer build:
    read is left alone with a warning), makes the firewall rule again for the current
    gateway, restarts the agent and waits up to 60 s for it to answer `/health` (`Agent is
    up.`, always with the 403 note, as at install). It ends with
-   `Updated to ediabas-bridge agent <version>`. If the copy fails, or the new agent does not
+   `Updated to bimmer-bridge agent <version>`. If the copy fails, or the new agent does not
    come up, it puts the backup back, starts it and says so (`Rolled back to <old version>`),
    asks `/health` once more for up to 60 s and says plainly when the restored agent does not
    answer either (then the fault is in `config.json` or the network, not the new exe), then a
@@ -287,7 +287,7 @@ or wherever the exe is installed). Expected: PASS, including "link to a device i
    seven defaults (C printed `Recorded in conflictDefaultsOffered in config.json: ...`).
    If C printed `config.json has been offered every default conflict process before`, C did
    not write `config.json.bak` and there is nothing to compare.
-2. Run the Update line a second time. Expected: `Updated to ediabas-bridge agent 0.5.0` and
+2. Run the Update line a second time. Expected: `Updated to bimmer-bridge agent 0.5.0` and
    `config.json has been offered every default conflict process before
    (conflictDefaultsOffered); not changed.` It is a no-op for the agent, but
    it copies the running 0.5.0 exe to `EdiabasAgent.exe.bak`, replacing the 0.4.0 backup, and it
@@ -303,7 +303,7 @@ or wherever the exe is installed). Expected: PASS, including "link to a device i
    reads the same `config.json`, so it does not come up either, and Update says so:
    `The restored agent (0.5.0) does not answer at ... either`, then a red `ERROR:`. To undo:
    copy `config.json.keep` back over `config.json` and run the Update line again. Expected:
-   `Updated to ediabas-bridge agent 0.5.0`, and `vm_health` from the Mac works.
+   `Updated to bimmer-bridge agent 0.5.0`, and `vm_health` from the Mac works.
 
 **F. Desk checks** (cable not in the car, confirmed).
 1. `TMODE INFO` runs.
@@ -339,12 +339,12 @@ It leaves the sleep setting as the installer set it, and prints how to restore i
 On the Mac:
 
 ```sh
-claude mcp remove --scope user ediabas-bridge              # Claude Code
-rm ~/.claude/skills/ediabas-bridge ~/.claude/skills/bmw-standard-tools   # the skill links only
+claude mcp remove --scope user bimmer-bridge              # Claude Code
+rm ~/.claude/skills/bimmer-bridge ~/.claude/skills/bmw-standard-tools   # the skill links only
 security delete-generic-password -s ediabas-bridge -a agent # the token in the Keychain
 ```
 
-For the desktop app, delete the `ediabas-bridge` entry from `mcpServers` in
+For the desktop app, delete the `bimmer-bridge` entry from `mcpServers` in
 `~/Library/Application Support/Claude/claude_desktop_config.json` and restart the app. Remove
 the uploaded skills in claude.ai if you uploaded them. Keep the Keychain item if you uninstalled
 without `$Purge` and mean to reinstall: the kept `token.txt` still matches it.
@@ -436,6 +436,12 @@ hashes it prints are those of the files when it started.
   second copy exits at once, so this only matters after a crash).
 - Firewall rule display name: `ediabas-bridge agent`.
 
+The project was called ediabas-bridge before it became bimmer-bridge. The names an existing
+install depends on keep the old name so installs keep working: the `EdiabasBridge` folder above,
+the task and firewall rule, the Mac's Keychain service `ediabas-bridge` and audit log folder
+`~/Library/Logs/ediabas-bridge/`, and the agent's `ediabas-bridge-agent` / `ediabas-bridge-hello-v1`
+handshake.
+
 ---
 
 ## Troubleshooting
@@ -448,7 +454,7 @@ codes are listed in [tools.md](tools.md#errors).
 | **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or the bridge is looking for a different VM: the VM is not named `Windows` and `vmName` / `EDIABAS_VM_NAME` is not set, or `vmMac` / `EDIABAS_VM_MAC` is not this VM's MAC, or the VM has no DHCP lease yet | Start the VM in UTM and log in. If it is running, set `vmName` (or `vmMac`) in `config.local.json` ([Setup from scratch](#setup-from-scratch)) and restart Claude |
 | **agent_not_answering**: "The VM is up but the agent is not answering" | Nobody is logged in to Windows (the agent starts at log-on), or the agent is not installed or has stopped | Log in to Windows and wait about 30 s. If it persists, read `agent.log` in the VM (see logs below) and re-run the Install line |
 | **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
-| **wrong_service**: "answered as the ediabas-bridge agent but could not prove it holds this Mac's token", or **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install). The Mac checks the agent's `/hello` proof before it sends the token, so a mismatch usually shows as the first; the token was not sent | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a failed proof (and uses it at once if the proof then matches) or a 401 (the next call proves the address with it first) |
+| **wrong_service**: "answered as the bimmer-bridge agent but could not prove it holds this Mac's token", or **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install). The Mac checks the agent's `/hello` proof before it sends the token, so a mismatch usually shows as the first; the token was not sent | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a failed proof (and uses it at once if the proof then matches) or a 401 (the next call proves the address with it first) |
 | **no_token** | Nothing in the Keychain (the first install's hand-off failed) | As for `unauthorized` |
 | **forbidden** | The agent or its firewall refused the Mac's address: requests are accepted only from the VM's default gateway | Re-run the Install or the Update line; both recreate the firewall rule for the VM's current gateway. `agent.log` in the VM shows the address and gateway the agent chose |
 | **agent_outdated**, or `vm_health` says "Agent features: not reported" | The agent in the VM is an older build that lacks that endpoint | [Updating](#updating): run the Update line |
@@ -494,7 +500,7 @@ codes are listed in [tools.md](tools.md#errors).
 | VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | one line per request: endpoint, ECU, job, outcome, rule for refusals |
 | VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | the last `--selftest` report |
 | Mac | `~/Library/Logs/ediabas-bridge/audit.log` | one line per tool call: tool, outcome, duration, ECU and job |
-| Mac | `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log` | the MCP server's stderr when the desktop app runs it (discovery, failed probes; never the token) |
+| Mac | `~/Library/Logs/Claude/mcp-server-bimmer-bridge.log` | the MCP server's stderr when the desktop app runs it (discovery, failed probes; never the token) |
 | Mac | the terminal running `serve.py` | one line per request it served, including `PUT /token` |
 
 `agent.log` and `audit.log` in the VM each roll over to a `.1` file at 5 MB (one old file is

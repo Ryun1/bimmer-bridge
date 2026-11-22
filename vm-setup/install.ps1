@@ -1,4 +1,4 @@
-# ediabas-bridge - install or upgrade the VM agent.
+# bimmer-bridge - install or upgrade the VM agent.
 #
 # Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Install line that
 # dev/serve.py prints. That line downloads this file, checks its SHA-256 against the value in
@@ -362,7 +362,7 @@
         $userName = $identity.Name
         $userSid = $identity.User
 
-        Write-Step ('Installing ediabas-bridge agent for ' + $userName + ' from ' + $base)
+        Write-Step ('Installing bimmer-bridge agent for ' + $userName + ' from ' + $base)
 
         # ---- 1. download and verify, in a folder only Administrators can write ----
         $tmp = New-AdminOnlyDirectory
@@ -546,7 +546,7 @@
         }
         $token = $null
 
-        Write-Step ('Done. ediabas-bridge agent ' + $version + ' listens on port ' + $port + '.')
+        Write-Step ('Done. bimmer-bridge agent ' + $version + ' listens on port ' + $port + '.')
     } catch {
         Write-Host ('ERROR: ' + $_.Exception.Message) -ForegroundColor Red
     } finally {

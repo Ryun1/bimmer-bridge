@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mac-side deploy/discovery server for ediabas-bridge.
+"""Mac-side deploy/discovery server for bimmer-bridge.
 
 Implements the routes in docs/deploy.md and nothing else:
 
@@ -364,7 +364,7 @@ def _printable(text, limit=200):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    server_version = "ediabas-bridge-serve"
+    server_version = "bimmer-bridge-serve"
     sys_version = ""
     timeout = 60  # socket timeout, so a stalled client cannot hold a thread forever
 
@@ -620,7 +620,7 @@ def pinned_line(base, script, script_sha, zip_sha=None, prefix=""):
     if zip_sha:
         parts.append("$sha='%s'" % zip_sha)
     parts += [
-        '$ebFile="$env:TEMP\\ediabas-bridge-%s"' % script,
+        '$ebFile="$env:TEMP\\bimmer-bridge-%s"' % script,
         "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue",
         "$ebOk=$false",
         'try { iwr "$base/%s" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } '
@@ -650,7 +650,7 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
             return ["  (%s not found in vm-setup; no line)" % script]
         return ["  " + pinned_line(base, script, script_sha[script], zip_sha, prefix)]
 
-    lines = ["ediabas-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port)]
+    lines = ["bimmer-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port)]
     if client:
         lines.append("Serving the VM at %s only; every other address is refused." % client)
     lines += ["", "Each line below checks the script's SHA-256 before running it.",
@@ -676,7 +676,7 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="ediabas-bridge deploy/discovery server")
+    parser = argparse.ArgumentParser(description="bimmer-bridge deploy/discovery server")
     parser.add_argument("--bind", help="IPv4 address to bind (default: UTM bridge1xx address)")
     parser.add_argument("--client", help="the VM's IPv4 address, the only one served (default: "
                         "the latest DHCP lease for the VM's MAC: %s, else vmMac in "

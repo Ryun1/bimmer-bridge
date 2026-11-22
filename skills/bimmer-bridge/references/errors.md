@@ -1,8 +1,8 @@
-# ediabas-bridge errors that need judgement
+# bimmer-bridge errors that need judgement
 
 Every failed call starts with its code in brackets (`[job_not_allowed] ...`) and then says what
 happened and what to do. Relay that message. What each code means is listed once, in the
-"Errors" section of `docs/tools.md` in the ediabas-bridge repository (not part of this skill);
+"Errors" section of `docs/tools.md` in the bimmer-bridge repository (not part of this skill);
 this file covers only what to tell the user where the message is not enough.
 
 General rule: tell the user what to do, do not retry in a loop, and call `vm_health` once more

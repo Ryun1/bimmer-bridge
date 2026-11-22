@@ -7,9 +7,9 @@
 `inpa-open` — `vm_health` lists `INPALOAD` as running; every `ediabas_*` call returns `cable_in_use` naming INPA.
 
 ## How to run
-Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
-installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
+installed (bimmer-bridge) and without them. The skill passes when the with-skill run passes and the
 without-skill run fails or does worse. Its fixture was recorded at the desk on 2026-11-21.
 
 ## Must

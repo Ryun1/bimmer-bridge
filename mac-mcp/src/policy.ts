@@ -237,7 +237,7 @@ export function policyUnavailable(reason: string): BridgeError {
   return new BridgeError(
     "policy_unavailable",
     `The job policy file could not be loaded on this Mac (${cleanText(reason, 200)}), so every EDIABAS tool refuses and nothing was sent to the VM. ` +
-      "The user needs to restore a valid policy/policy.json in the ediabas-bridge repo and restart the MCP server (restart Claude).",
+      "The user needs to restore a valid policy/policy.json in the bimmer-bridge repo and restart the MCP server (restart Claude).",
   );
 }
 

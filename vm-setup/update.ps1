@@ -1,4 +1,4 @@
-# ediabas-bridge - replace the VM agent's exe with a new build.
+# bimmer-bridge - replace the VM agent's exe with a new build.
 #
 # Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Update line that
 # dev/serve.py prints. That line downloads this file, checks its SHA-256 against the value in
@@ -572,7 +572,7 @@
         $version = (Get-Content -LiteralPath $versionFile -Raw).Trim()
         $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $newExe).Hash
         $oldVersion = Get-ExeVersion $ExePath
-        Write-Step ('Updating ediabas-bridge agent ' + $oldVersion + ' to ' + $version)
+        Write-Step ('Updating bimmer-bridge agent ' + $oldVersion + ' to ' + $version)
 
         # ---- 1-2. task disabled (so its 5-minute trigger cannot start the exe mid-copy), agent stopped ----
         Write-Step 'Disabling the scheduled task and stopping the agent'
@@ -684,7 +684,7 @@
             $token = $null
         }
 
-        Write-Step ('Updated to ediabas-bridge agent ' + $version)
+        Write-Step ('Updated to bimmer-bridge agent ' + $version)
     } catch {
         Write-Host ('ERROR: ' + $_.Exception.Message) -ForegroundColor Red
     } finally {

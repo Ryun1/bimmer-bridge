@@ -7,9 +7,9 @@
 `unreachable` — no replay agent running; `EDIABAS_AGENT_URL` points at a closed port, so `vm_health` fails (expected `agent_not_answering`; `vm_not_running` is also acceptable).
 
 ## How to run
-Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at a closed port, with no replay agent running. Run twice: with the skills
-installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
+installed (bimmer-bridge) and without them. The skill passes when the with-skill run passes and the
 without-skill run fails or does worse. It needs no fixture.
 
 ## Must

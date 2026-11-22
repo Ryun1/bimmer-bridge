@@ -1,11 +1,11 @@
 ---
-name: ediabas-bridge
-description: Operate the read-only ediabas-bridge tools (vm_* and ediabas_*) that look into the Windows VM in UTM on the user's Mac, where BMW Standard Tools and EDIABAS talk to the user's BMW over the cable. Use this skill whenever the user wants to read the faults, fault codes or live values from their BMW (night vision, engine, any module), asks about a battery drain, mentions EDIABAS, an SGBD or a .prg/.grp file, asks "is the VM up" or what is open in the VM, or wants a screenshot of the VM or an EDIABAS / NCS Expert trace file, even if they do not name the bridge. Covers the health check to run first, keeping ignition-on time short, finding ECUs and jobs with ediabas_list_ecus and ediabas_describe instead of guessing, what each error and refusal means and what to tell the user, and handing results to a car-specific skill if one is installed.
+name: bimmer-bridge
+description: Operate the read-only bimmer-bridge tools (vm_* and ediabas_*) that look into the Windows VM in UTM on the user's Mac, where BMW Standard Tools and EDIABAS talk to the user's BMW over the cable. Use this skill whenever the user wants to read the faults, fault codes or live values from their BMW (night vision, engine, any module), asks about a battery drain, mentions EDIABAS, an SGBD or a .prg/.grp file, asks "is the VM up" or what is open in the VM, or wants a screenshot of the VM or an EDIABAS / NCS Expert trace file, even if they do not name the bridge. Covers the health check to run first, keeping ignition-on time short, finding ECUs and jobs with ediabas_list_ecus and ediabas_describe instead of guessing, what each error and refusal means and what to tell the user, and handing results to a car-specific skill if one is installed.
 ---
 
-# ediabas-bridge
+# bimmer-bridge
 
-The `ediabas-bridge` MCP server lets you look into the Windows VM in UTM on the user's Mac. The
+The `bimmer-bridge` MCP server lets you look into the Windows VM in UTM on the user's Mac. The
 VM runs BMW Standard Tools (INPA, Tool32, NCS Expert, WinKFP) over EDIABAS and a cable (usually
 K+DCAN) to the user's BMW. Which car it is, and which modules it has, comes from the car and
 the VM (`ediabas_list_ecus`, `ediabas_describe`), not from this skill. The bridge was built on a

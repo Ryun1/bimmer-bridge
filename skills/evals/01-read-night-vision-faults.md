@@ -7,9 +7,9 @@
 `nve-faults` — healthy agent, no BMW tool running; `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status` and `ediabas_read_faults` answered from a real night-vision session (fault memory with at least one fault carrying a mileage).
 
 ## How to run
-Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
-installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
+installed (bimmer-bridge) and without them. The skill passes when the with-skill run passes and the
 without-skill run fails or does worse. Its fixture has to be recorded at the car (Phase 6); until then
 this case cannot be run.
 

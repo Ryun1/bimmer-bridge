@@ -691,7 +691,7 @@ class Startup(unittest.TestCase):
         for script in ("install.ps1", "update.ps1"):
             expected = (
                 "  $base='http://192.168.64.1:8000'; $sha='%s'; "
-                "$ebFile=\"$env:TEMP\\ediabas-bridge-%s\"; "
+                "$ebFile=\"$env:TEMP\\bimmer-bridge-%s\"; "
                 "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; "
                 "$ebOk=$false; "
                 "try { iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } "
@@ -840,7 +840,7 @@ class Startup(unittest.TestCase):
         # does not answer either is named; an exception in the merge never stops the update.
         text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
         after = text[text.index("'Rolled back to ' + $oldVersion"):]
-        after = after[:after.index("Write-Step ('Updated to ediabas-bridge agent '")]
+        after = after[:after.index("Write-Step ('Updated to bimmer-bridge agent '")]
         self.assertIn("$restored = Wait-AgentAnswer $url $token 60", after)
         self.assertIn("if (Test-AgentAnswered $restored) {", after)
         self.assertIn("does not answer at ' + $url + ' either", after)
