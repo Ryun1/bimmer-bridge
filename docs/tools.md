@@ -53,11 +53,19 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   name)". With `job`, for a screened job (review is not `not_required`) it prints
   `Description hash: <hash>` under the description, and when the job needs review also:
   `To approve this job as it is described now, the user adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
-- `vm_health`, when the agent reports approvals: `Approved jobs: N pinned, M ignored.`, and
-  when M > 0 also `M approval entries are ignored (unpinned or malformed); ediabas_describe
-  prints the pinned entry for each.` A 0.4.0 agent's counts print as `Approved jobs: N pinned,
+- `vm_health`, when the agent reports approvals: `Approved jobs: N pinned, M ignored.`, then
+  each pinned entry on its own line, and when M > 0 also `M approval entries are ignored
+  (unpinned, malformed or not upper case); ediabas_describe prints the pinned entry for each.`
+  (`1 approval entry is ignored ...` for one). A 0.4.0 agent's counts print as `Approved jobs: N pinned,
   M unpinned.`, and when M > 0 also `M unpinned approvals skip the description screen on this
   older agent and approve nothing from 0.5.0; ediabas_describe prints the pinned entry for each.`
+- **Approvals changed.** Every `ediabas_*` call, and `vm_health`, reads `/health` first (one
+  extra round trip; it never loads the DLL; if it fails, the tool fails as its own request
+  would). The Mac server remembers the agent's `approvals.hash`; when it differs from the last
+  one seen, the result starts with `[approvals changed] reviewedJobs in the VM changed since this
+  server started: now <entries, or none>. Only the owner should change it.` (the result may be an
+  error too), and the Mac audit line gets the field `approvals_changed=1`. The first call after
+  the server starts only sets the baseline. An agent that does not report `hash` is never flagged.
 - **Car session.** The results of `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and
   `ediabas_vehicle_status` (errors too) end with "Car session: X min Y s since the first read
   from the car (aim to finish within 10 min)." The session starts at the first successful read

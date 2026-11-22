@@ -75,7 +75,7 @@ public class ApprovalReloadTests
 
         _file.Write(Config($"NVE_65:STATUS_B@{StartetBHash}"));
         Assert.True(RunB(svc).Ok);
-        Assert.Equal(new ApprovalCounts(1, 0), state.Current.Counts);
+        ApprovalTests.AssertCounts(1, 0, state.Current.Counts);
         Assert.Equal(["INFO reviewedJobs re-read: 1 pinned, 0 ignored"], ReReads);
         Assert.DoesNotContain(_log.Lines, l => l.Contains(StartetBHash, StringComparison.Ordinal));
     }
@@ -119,7 +119,7 @@ public class ApprovalReloadTests
         reloader.Refresh();
 
         Assert.Single(Warnings);
-        Assert.Equal(new ApprovalCounts(1, 0), state.Current.Counts);
+        ApprovalTests.AssertCounts(1, 0, state.Current.Counts);
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public class ApprovalReloadTests
         reloader.Refresh();
 
         Assert.Single(Warnings);
-        Assert.Equal(new ApprovalCounts(1, 0), state.Current.Counts);
+        ApprovalTests.AssertCounts(1, 0, state.Current.Counts);
     }
 
     [Theory]
@@ -189,7 +189,7 @@ public class ApprovalReloadTests
         _file.Write(Config("NVE_65:STATUS_B"));
         Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
         Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
-        Assert.Equal(new ApprovalCounts(0, 1), state.Current.Counts);
+        ApprovalTests.AssertCounts(0, 1, state.Current.Counts);
         Assert.Equal(["INFO reviewedJobs re-read: 0 pinned, 1 ignored"], ReReads);
         var w = Assert.Single(Warnings);
         Assert.Contains("\"NVE_65:STATUS_B\" is unpinned", w);
@@ -230,7 +230,7 @@ public class ApprovalReloadTests
         _file.Write("""{ "reviewedJobs": ["NVE_65:STATUS_B@7b69322a754f"], "jobTimeoutSeconds": 2, "maxJobTimeoutSeconds": 5, "conflictProcesses": [], "ediabasIdleReleaseSeconds": 5 }""");
         Assert.True(RunB(svc).Ok);
 
-        Assert.Equal(new ApprovalCounts(1, 0), state.Current.Counts);
+        ApprovalTests.AssertCounts(1, 0, state.Current.Counts);
         Assert.Equal(30, svc.EffectiveTimeout(null));
         Assert.Equal(60, svc.EffectiveTimeout(600));
     }

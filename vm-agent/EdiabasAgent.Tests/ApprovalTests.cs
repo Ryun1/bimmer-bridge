@@ -226,6 +226,38 @@ public class ApprovalTests
         Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_X] []"], _api.JobCalls);
     }
 
+    internal static void AssertCounts(int pinned, int ignored, ApprovalCounts counts)
+    {
+        Assert.Equal(pinned, counts.Pinned);
+        Assert.Equal(ignored, counts.Ignored);
+    }
+
+    [Fact]
+    public void Health_Approvals_HashIsStableForSameEntries_DiffersWhenOneAdded()
+    {
+        var a = new ApprovalList(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f"]).Counts;
+        var reordered = new ApprovalList(["NVE_65:STATUS_Y@7b69322a754f", "NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_X@b8ae0dd9d242"]).Counts;
+        var added = new ApprovalList(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f", "NVE_65:STATUS_Z@b8ae0dd9d242"]).Counts;
+        Assert.Equal(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f"], a.Entries);
+        Assert.Matches("^[0-9a-f]{12}$", a.Hash);
+        Assert.Equal(a.Hash, reordered.Hash);
+        Assert.NotEqual(a.Hash, added.Hash);
+        // SHA-256("") starts e3b0c44298fc
+        Assert.Equal("e3b0c44298fc", ApprovalList.Empty.Counts.Hash);
+    }
+
+    [Fact]
+    public void ApprovalList_LowerCaseEcuOrJob_CountsIgnored_NotInEntries_WarningSaysUpperCase()
+    {
+        var list = new ApprovalList(["nve_65:STATUS_X@b8ae0dd9d242", "NVE_65:status_x@b8ae0dd9d242", "NVE_65:STATUS_X@b8ae0dd9d242"]);
+        Assert.Equal(1, list.PinnedCount);
+        Assert.Equal(2, list.IgnoredCount);
+        Assert.Equal(["NVE_65:STATUS_X@b8ae0dd9d242"], list.Entries);
+        var r = AgentConfig.Parse("{ \"reviewedJobs\": [\"nve_65:STATUS_X@b8ae0dd9d242\"] }");
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        Assert.Contains("upper case", Assert.Single(r.Warnings));
+    }
+
     [Fact]
     public void ApprovalList_UnpinnedEntry_ApprovesNothing_CountsIgnored()
     {
@@ -234,7 +266,7 @@ public class ApprovalTests
         Assert.Equal(0, list.PinnedCount);
         Assert.Equal(1, list.IgnoredCount);
         Assert.Empty(list.Entries);
-        Assert.Equal(new ApprovalCounts(0, 1), list.Counts);
+        AssertCounts(0, 1, list.Counts);
     }
 
     [Fact]

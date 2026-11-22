@@ -82,7 +82,7 @@ remove any `EdiabasBridge-staging-*` folder left behind by an earlier run that w
 | Path | Purpose | Agent's access |
 |---|---|---|
 | `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe` | the agent | read, execute |
-| `C:\ProgramData\EdiabasBridge\config.json` | configuration | read |
+| `C:\ProgramData\EdiabasBridge\config.json` | configuration (the folder grants users read access only; with UAC off, any program the owner runs in the VM can still edit it, so `vm_health` lists the approved jobs and every `ediabas_*` result is flagged `[approvals changed]` when they change) | read |
 | `C:\ProgramData\EdiabasBridge\token.txt` | bearer token | read |
 | `C:\ProgramData\EdiabasBridge\logs\agent.log` | agent's own log | write |
 | `C:\ProgramData\EdiabasBridge\logs\audit.log` | one line per request | write |

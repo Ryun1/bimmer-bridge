@@ -269,9 +269,13 @@ public sealed class AgentConfig
         for (var i = 0; i < ReviewedJobs.Count; i++)
         {
             var entry = ReviewedJobs[i];
-            if (!ApprovalList.TryParseEntry(entry, out _, out var hash))
+            if (!ApprovalList.TryParseEntry(entry, out var key, out var hash))
             {
                 warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits, the \"ECU:JOB@<hash>\" line ediabas_describe prints");
+            }
+            else if (hash is not null && !ApprovalList.IsUpperCase(key))
+            {
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; the ECU and JOB must be upper case, as ediabas_describe prints them");
             }
             else if (hash is null)
             {

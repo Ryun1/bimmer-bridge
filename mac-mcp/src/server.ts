@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { AgentClient } from "./agentClient.js";
+import { AgentClient, type Health } from "./agentClient.js";
+import { ApprovalWatch } from "./approvalWatch.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import type { Config } from "./config.js";
 import { BridgeError, errorText, toBridgeError } from "./errors.js";
@@ -84,6 +85,12 @@ export interface ServerParts {
   now?: (() => number) | undefined;
 }
 
+/** Per call: what run() adds to the result besides the tool's own text. */
+interface CallContext {
+  /** The approvals watch's message, shown first in the result. */
+  notice: string | null;
+}
+
 type ToolOutput = string | { text: string; image: { data: string; mimeType: string } };
 
 /** What the audit line records about an ediabas_* call. */
@@ -126,21 +133,38 @@ export function buildServer(parts: ServerParts): McpServer {
   const car = new CarSession(parts.now);
   const mac = { version: SERVER_VERSION, startedAt: new Date((parts.now ?? Date.now)()) };
   const onOk = (ecu: string) => car.record(ecu);
+  const watch = new ApprovalWatch();
 
-  async function run(tool: string, body: () => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
+  const noticeOf = (h: Health): string | null => {
+    const a = h.approvals;
+    return watch.observe(a && "entries" in a && a.entries !== undefined && a.hash !== undefined ? { hash: a.hash, entries: a.entries } : undefined);
+  };
+
+  /**
+   * Called by the ediabas_* handlers before their own request: one /health round trip (it never
+   * loads the DLL) that feeds the approvals watch. A /health failure throws, as the tool's own
+   * request would have: the VM is unreachable either way.
+   */
+  async function preflight(): Promise<{ notice: string | null }> {
+    return { notice: noticeOf(await client.health()) };
+  }
+
+  async function run(tool: string, body: (ctx: CallContext) => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
     const started = performance.now();
     let outcome = "ok";
     let rule: string | undefined;
     let result: CallToolResult;
     let footer: string | null = null;
+    const ctx: CallContext = { notice: null };
     // The car-session line is added after the cut, so it is always the last line.
     const fit = (text: string) => {
-      const budget = TEXT_BUDGET - (footer ? footer.length + 2 : 0);
+      const notice = ctx.notice ? parts.redact(ctx.notice) : null;
+      const budget = TEXT_BUDGET - (footer ? footer.length + 2 : 0) - (notice ? notice.length + 2 : 0);
       const t = fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT, budget);
-      return footer ? `${t}\n\n${footer}` : t;
+      return [notice, t, footer].filter((x) => x !== null).join("\n\n");
     };
     try {
-      const out = await body();
+      const out = await body(ctx);
       if (CAR_TOOLS.has(tool)) footer = car.line();
       if (typeof out === "string") {
         result = { content: [{ type: "text", text: fit(out) }] };
@@ -161,7 +185,7 @@ export function buildServer(parts: ServerParts): McpServer {
       result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message)) }] };
     }
     try {
-      await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule });
+      await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule, approvalsChanged: ctx.notice !== null });
     } catch (e) {
       parts.log(`warning: audit failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -184,7 +208,12 @@ export function buildServer(parts: ServerParts): McpServer {
         "Call this first in a session, and again when another tool fails. Read-only.",
       annotations: { title: "VM agent health", ...READ_ONLY },
     },
-    async () => run("vm_health", async () => formatHealth(await client.health(), policy.version, mac)),
+    async () =>
+      run("vm_health", async (ctx) => {
+        const h = await client.health();
+        ctx.notice = noticeOf(h);
+        return formatHealth(h, policy.version, mac);
+      }),
   );
 
   server.registerTool(
@@ -283,8 +312,9 @@ export function buildServer(parts: ServerParts): McpServer {
       annotations: { title: "List EDIABAS ECU files", ...READ_ONLY },
     },
     async (a) =>
-      run("ediabas_list_ecus", async () => {
+      run("ediabas_list_ecus", async (ctx) => {
         policy.require();
+        ctx.notice = (await preflight()).notice;
         return formatEcus(await client.listEcus(a.filter), a.filter);
       }),
   );
@@ -310,8 +340,9 @@ export function buildServer(parts: ServerParts): McpServer {
     async (a) =>
       run(
         "ediabas_describe",
-        async () => {
+        async (ctx) => {
           policy.checkShape(a.ecu, a.job);
+          ctx.notice = (await preflight()).notice;
           if (a.job !== undefined) {
             const d = await client.describeJob({ ecu: a.ecu, job: a.job });
             return formatDescribeJob(d, policy.evaluate({ ecu: a.ecu, job: a.job }));
@@ -339,8 +370,9 @@ export function buildServer(parts: ServerParts): McpServer {
     async () =>
       run(
         "ediabas_vehicle_status",
-        async () => {
+        async (ctx) => {
           policy.require();
+          ctx.notice = (await preflight()).notice;
           const v = await client.vehicle();
           // Only the voltage sources are modules in the car; the rest read the cable.
           for (const s of v.voltages) if (s.ok && s.result && s.ecu) onOk(s.ecu);
@@ -372,9 +404,10 @@ export function buildServer(parts: ServerParts): McpServer {
     async (a) =>
       run(
         "ediabas_job",
-        async () => {
+        async (ctx) => {
           const req = { ecu: a.ecu, job: a.job, args: a.args, results: a.results };
           policy.check(req);
+          ctx.notice = (await preflight()).notice;
           const r = await client.runJob({ ...req, timeoutSeconds: a.timeoutSeconds });
           onOk(a.ecu);
           return a.raw ? formatJobRaw(r) : formatJobResult(r);
@@ -413,9 +446,10 @@ export function buildServer(parts: ServerParts): McpServer {
     async (a) =>
       run(
         "ediabas_jobs",
-        async () => {
+        async (ctx) => {
+          const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
           const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
-          return (await runJobBatch({ client, policy, onOk }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
+          return (await runJobBatch({ client, policy, onOk, beforeSend }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
         },
         { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
       ),
@@ -438,7 +472,14 @@ export function buildServer(parts: ServerParts): McpServer {
     async (a) => {
       const includeInfo = a.includeInfoMemory === true;
       const jobs = includeInfo ? "FS_LESEN,IS_LESEN" : "FS_LESEN";
-      return run("ediabas_read_faults", () => readFaults({ client, policy, onOk }, a.ecus, includeInfo), { ecu: a.ecus.join(","), job: jobs });
+      return run(
+        "ediabas_read_faults",
+        (ctx) => {
+          const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
+          return readFaults({ client, policy, onOk, beforeSend }, a.ecus, includeInfo);
+        },
+        { ecu: a.ecus.join(","), job: jobs },
+      );
     },
   );
 

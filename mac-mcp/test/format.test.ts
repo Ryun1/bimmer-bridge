@@ -102,7 +102,21 @@ describe("formatHealth", () => {
     it("1 pinned, 5 ignored: says they approve nothing and where the pinned entry comes from", () => {
       expect(after({ pinned: 1, ignored: 5 })).toEqual([
         "Approved jobs: 1 pinned, 5 ignored.",
-        "5 approval entries are ignored (unpinned or malformed); ediabas_describe prints the pinned entry for each.",
+        "5 approval entries are ignored (unpinned, malformed or not upper case); ediabas_describe prints the pinned entry for each.",
+      ]);
+    });
+
+    it("1 ignored: singular grammar", () => {
+      expect(after({ pinned: 0, ignored: 1 })[1]).toBe(
+        "1 approval entry is ignored (unpinned, malformed or not upper case); ediabas_describe prints the pinned entry for each.",
+      );
+    });
+
+    it("lists each entry on its own line under 'Approved jobs:'", () => {
+      expect(after({ pinned: 2, ignored: 0, entries: ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], hash: "0123456789ab" })).toEqual([
+        "Approved jobs: 2 pinned, 0 ignored.",
+        "  A:B@b8ae0dd9d242",
+        "  C:D@7b69322a754f",
       ]);
     });
 

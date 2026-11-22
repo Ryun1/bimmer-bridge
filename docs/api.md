@@ -58,7 +58,7 @@ Never touches the cable and never loads the EDIABAS DLL.
   "conflictingProcesses": [ { "name": "INPALOAD", "pid": 4312 } ],
   "ediabas": { "dllPath": "C:\\EDIABAS\\BIN\\api32.dll", "dllFound": true },
   "lastCableUseAt": null,
-  "approvals": { "pinned": 1, "ignored": 0 }
+  "approvals": { "pinned": 1, "ignored": 0, "entries": ["NVE_65:STATUS_EXAMPLE@3f1c0a9b2d4e"], "hash": "0123456789ab" }
 }
 ```
 
@@ -143,9 +143,13 @@ caught by the conflict check before EDIABAS is called.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 - `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
   does not stop"). Stays true until the agent restarts.
-- `approvals`: `{ "pinned": n, "ignored": m }`, the number of distinct `reviewedJobs` entries
-  in force now (see "Approvals"): pinned ones, and ignored ones (unpinned or of the wrong shape),
-  which approve nothing. A 0.4.0 agent sent `{ "pinned": n, "unpinned": m }`; the Mac server
+- `approvals`: `{ "pinned": n, "ignored": m, "entries": [...], "hash": "..." }`: the distinct
+  `reviewedJobs` entries in force now (see "Approvals"). `pinned` counts the pinned ones;
+  `ignored` counts those that approve nothing (unpinned, of the wrong shape, or with an ECU or
+  JOB that is not upper case). `entries` lists the pinned ones as written, sorted by ordinal
+  string comparison; `hash` is the first 12 lower-case hex digits of the SHA-256 of the entries
+  joined by `\n` (UTF-8; of the empty string when there are none). The Mac server remembers
+  the hash and flags a change (docs/tools.md). An agent before 0.5.0 sends neither field. A 0.4.0 agent sent `{ "pinned": n, "unpinned": m }`; the Mac server
   still reads that.
 
 ## Job policy
@@ -230,7 +234,8 @@ pins for one job any matching one approves. An unpinned `"ECU:JOB"` entry (0.4.0
 approves nothing since 0.5.0: it is a warning in `agent.log` naming the pinned form
 (`reviewedJobs[i]: "ECU:JOB" is unpinned and approves nothing since 0.5.0; run ediabas_describe
 on the job and use the "ECU:JOB@<hash>" line it prints`). An entry of any other shape is also a
-warning and approves nothing. Neither stops the agent; both count as `ignored` in `/health`.
+warning and approves nothing. So does an entry whose ECU or JOB is not upper case (it can never
+match; the warning says it must be upper case). None of these stops the agent; both count as `ignored` in `/health`.
 An approval only ever applies to a job the policy allows by the `STATUS_` pattern.
 
 The hash is the first 12 hex digits (lower case) of the SHA-256 of the UTF-8 bytes of the

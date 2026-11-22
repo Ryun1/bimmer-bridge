@@ -20,7 +20,7 @@ public sealed record ConflictingProcess(string Name, int Pid);
 public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck);
 
 /// <summary>How many distinct <c>reviewedJobs</c> entries are pinned to a description, and how many are ignored (unpinned or malformed: they approve nothing).</summary>
-public sealed record ApprovalCounts(int Pinned, int Ignored);
+public sealed record ApprovalCounts(int Pinned, int Ignored, IReadOnlyList<string> Entries, string Hash);
 
 public sealed record HealthResponse(
     string Agent,

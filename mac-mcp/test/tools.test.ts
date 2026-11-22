@@ -9,7 +9,7 @@ import { loadConfig } from "../src/config.js";
 import { PolicyGuard } from "../src/policy.js";
 import type { ExecFileFn } from "../src/vmAddress.js";
 import { AGENT_TOKEN, LOOPBACK_BRIDGE, healthBody, startFakeAgent, type FakeAgent } from "./fixtures.js";
-import { agentErr, jobResult, stubHandler, type Responder } from "./stubAgent.js";
+import { agentErr, jobResult, phase2Health, stubHandler, type Responder } from "./stubAgent.js";
 
 let dir: string;
 let agent: FakeAgent;
@@ -435,6 +435,38 @@ describe("ediabas_vehicle_status", () => {
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
     expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
     expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+  });
+});
+
+describe("approval changes", () => {
+  const approvals = (entries: string[], hash: string) => ({ pinned: entries.length, ignored: 0, entries, hash });
+
+  it("flags a change between two ediabas_job calls, and the audit line says so", async () => {
+    override("GET /health", () => ({ status: 200, body: phase2Health({ approvals: approvals(["NVE_65:STATUS_X@b8ae0dd9d242"], "aaaaaaaaaaaa") }) }));
+    const { call, auditLines } = await connect();
+    const first = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(first.text).not.toContain("[approvals changed]");
+    override("GET /health", () => ({
+      status: 200,
+      body: phase2Health({ approvals: approvals(["NVE_65:STATUS_X@b8ae0dd9d242", "D_MOTOR:IDENT@7b69322a754f"], "bbbbbbbbbbbb") }),
+    }));
+    const second = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(second.isError).toBeFalsy();
+    expect(second.text.startsWith("[approvals changed] reviewedJobs in the VM changed")).toBe(true);
+    expect(second.text).toContain("D_MOTOR:IDENT@7b69322a754f");
+    const lines = await auditLines();
+    expect(lines[0]).not.toContain("approvals_changed");
+    expect(lines[1]).toMatch(/\tediabas_job\tok\t\d+\tecu=NVE_65\tjob=IDENT\tapprovals_changed=1$/);
+    const third = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(third.text).not.toContain("[approvals changed]");
+  });
+
+  it("a health failure before an ediabas call gives the tool's usual unreachable error", async () => {
+    agent.setHandler((req) => req.socket.destroy());
+    const { call } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[/);
   });
 });
 
@@ -972,10 +1004,10 @@ describe("recording", () => {
     override("GET /logs", () => agentErr(403, "path_not_allowed", "no", { reason: "x" }));
     await call("vm_logs_list");
     const files = (await readdir(rec)).sort();
-    // discovery's /health probe, then vm_health, the job, the screenshot and the logs listing
-    expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(5);
+    // discovery's /health probe, then vm_health, the job's own /health, the job, the screenshot and the logs listing
+    expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(6);
     expect(files.filter((f) => f.endsWith(".jpg"))).toHaveLength(1);
-    expect(files.some((f) => /^\d{8}T\d{9}Z-0003-POST-ediabas_job-NVE_65-IDENT\.json$/.test(f))).toBe(true);
+    expect(files.some((f) => /^\d{8}T\d{9}Z-0004-POST-ediabas_job-NVE_65-IDENT\.json$/.test(f))).toBe(true);
     const all = await Promise.all(files.filter((f) => f.endsWith(".json")).map((f) => readFile(join(rec, f), "utf8")));
     for (const t of all) {
       expect(t).not.toContain(AGENT_TOKEN);

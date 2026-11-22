@@ -32,15 +32,14 @@ public sealed record JobApproval(ApprovalKind Kind, IReadOnlySet<string> Hashes)
 /// <c>ECU:JOB@hhhhhhhhhhhh</c> entries approve anything (12 lower-case hex digits, see
 /// <see cref="CommentScreen.DescriptionHash"/>); any of several pinned hashes approves. An
 /// unpinned <c>ECU:JOB</c> entry (0.4.0 and before) or a malformed one approves nothing and is
-/// counted as ignored. ECU and JOB are matched exactly: the contract says upper case, and a near
+/// counted as ignored, as is one whose ECU or JOB is not upper case. ECU and JOB are matched exactly: the contract says upper case, and a near
 /// miss must not approve anything.
 /// </summary>
 public sealed class ApprovalList
 {
     public const int HashLength = 12;
 
-    // Names: no whitespace, ':' or '@'. Their case is not checked here; a lower-case entry simply
-    // never matches, as before.
+    // Names: no whitespace, ':' or '@'. Case is checked separately (IsUpperCase).
     private static readonly Regex EntryShape = new(
         @"\A(?<key>[^\s:@]+:[^\s:@]+)(?:@(?<hash>[0-9a-f]{12}))?\z",
         RegexOptions.CultureInvariant,
@@ -65,7 +64,7 @@ public sealed class ApprovalList
             }
 
             _all.Add(e);
-            if (!TryParseEntry(e, out var key, out var hash) || hash is null)
+            if (!TryParseEntry(e, out var key, out var hash) || hash is null || !IsUpperCase(key))
             {
                 continue;
             }
@@ -94,7 +93,16 @@ public sealed class ApprovalList
     public IReadOnlyList<string> Entries { get; }
 
     /// <summary>For /health.</summary>
-    public ApprovalCounts Counts => new(PinnedCount, IgnoredCount);
+    public ApprovalCounts Counts => new(PinnedCount, IgnoredCount, Entries, EntriesHash(Entries));
+
+    /// <summary>First 12 lower-case hex digits of SHA-256 over the entries joined by newlines
+    /// (UTF-8): the Mac compares it to notice a change.</summary>
+    public static string EntriesHash(IReadOnlyList<string> entries) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", entries))))[..HashLength];
+
+    /// <summary>Matching is exact upper case, so an entry whose ECU or JOB is not upper case can
+    /// never match and is ignored.</summary>
+    public static bool IsUpperCase(string key) => key == key.ToUpperInvariant();
 
     /// <summary>True for <c>ECU:JOB</c> and <c>ECU:JOB@</c> plus 12 lower-case hex digits; only
     /// the second, with a hash, approves anything.</summary>

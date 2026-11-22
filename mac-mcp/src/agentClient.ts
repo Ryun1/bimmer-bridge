@@ -58,7 +58,13 @@ export const HealthSchema = z.object({
   // agents omit the field.
   approvals: z
     .union([
-      z.object({ pinned: z.number().int().nonnegative(), ignored: z.number().int().nonnegative() }),
+      z.object({
+        pinned: z.number().int().nonnegative(),
+        ignored: z.number().int().nonnegative(),
+        // Absent from an agent that predates the Mac's change watch.
+        entries: z.array(z.string()).optional(),
+        hash: z.string().optional(),
+      }),
       z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }),
     ])
     .nullable()

@@ -117,7 +117,7 @@ public class ApiModelsTests
             LastCableUseAt: null,
             PolicyVersion: 1,
             Capabilities: ["ediabas"],
-            Approvals: new ApprovalCounts(2, 1));
+            Approvals: new ApprovalCounts(2, 1, ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], "0123456789ab"));
 
         using var doc = JsonDocument.Parse(ApiJson.Serialize(h));
         var root = doc.RootElement;
@@ -145,7 +145,7 @@ public class ApiModelsTests
         Assert.Equal(["dllPath", "dllFound", "loaded", "stuck"], ed.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
-        Assert.Equal("""{"pinned":2,"ignored":1}""", root.GetProperty("approvals").GetRawText());
+        Assert.Equal("""{"pinned":2,"ignored":1,"entries":["A:B@b8ae0dd9d242","C:D@7b69322a754f"],"hash":"0123456789ab"}""", root.GetProperty("approvals").GetRawText());
     }
 
     [Fact]

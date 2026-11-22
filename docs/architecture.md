@@ -97,7 +97,7 @@ Mac's. Plain-words rules: [safety.md](safety.md#the-job-policy-in-plain-words).
 | VM | `C:\ProgramData\EdiabasBridge\logs\agent.log` | `vm-agent/EdiabasAgent/Logging/AgentLog.cs` | start-up, bind decisions, config problems, errors with details |
 | VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | `vm-agent/EdiabasAgent/Audit/AuditLog.cs` | one tab-separated line per request: time, remote address, method, path, status, error code, duration, ECU, job, rule (refusals only), target (log path or window asked for). Query strings are reduced to their keys; control and Unicode format characters are replaced. Batches add one line per item |
 | VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | `--selftest` | the last self-test report |
-| Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=` |
+| Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=`, and `approvals_changed=1` when the approvals watch flagged a change |
 | Mac | stderr (in the desktop app: `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log`) | the MCP server | discovery, failed probes, warnings |
 | Mac | a folder of your choice (`EDIABAS_RECORD_DIR`) | `mac-mcp/src/recorder.ts` | off by default; every agent exchange, for fixtures ([development.md](development.md#recording-and-scrubbing)) |
 

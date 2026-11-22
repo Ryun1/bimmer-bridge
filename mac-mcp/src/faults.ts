@@ -16,6 +16,8 @@ export interface BatchDeps {
   policy: PolicyGuard;
   /** Called with the ECU of each item that ran. */
   onOk?: ((ecu: string) => void) | undefined;
+  /** Awaited once the policy has passed every item, before the first request. */
+  beforeSend?: (() => Promise<void>) | undefined;
 }
 
 /** An item's outcome, or a whole-request error that stands in for it. */
@@ -63,6 +65,7 @@ export async function readFaults(deps: BatchDeps, ecusIn: string[], includeInfo:
 
   const items = ecus.flatMap((ecu) => jobs.map((job) => ({ ecu, job })));
   checkAll(deps.policy, items);
+  await deps.beforeSend?.();
 
   const results: ItemOutcome[] = [];
   let failure: BridgeError | null = null;
@@ -96,6 +99,7 @@ export async function runJobBatch(
   opts: { raw?: boolean | undefined; timeoutSeconds?: number | undefined } = {},
 ): Promise<{ text: string; items: BatchItem[] }> {
   checkAll(deps.policy, items);
+  await deps.beforeSend?.();
   const r = await runChunk(deps, items, opts.timeoutSeconds);
   const ran = r.items.filter((it) => it.ok && it.result).length;
   const blocks = r.items.map((it, i) => {

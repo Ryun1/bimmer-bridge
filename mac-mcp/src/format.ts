@@ -40,8 +40,10 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
   const a = h.approvals;
   if (a && "ignored" in a) {
     lines.push(`Approved jobs: ${a.pinned} pinned, ${a.ignored} ignored.`);
+    for (const e of a.entries ?? []) lines.push(`  ${clean(e)}`);
     if (a.ignored > 0) {
-      lines.push(`${a.ignored} approval entries are ignored (unpinned or malformed); ediabas_describe prints the pinned entry for each.`);
+      const n = a.ignored === 1 ? "1 approval entry is" : `${a.ignored} approval entries are`;
+      lines.push(`${n} ignored (unpinned, malformed or not upper case); ediabas_describe prints the pinned entry for each.`);
     }
   } else if (a) {
     // An agent before 0.5.0, which still approves unpinned entries by name.

@@ -99,7 +99,8 @@ Steps:
    `Description hash: <hash>`, and for a job that needs review the exact line to paste:
    `To approve this job as it is described now, the user adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
 2. In the VM, open `C:\ProgramData\EdiabasBridge\config.json` as an administrator (the folder
-   grants users read access only).
+   grants users read access only; with UAC off, any program the owner runs in the VM can edit it
+   too, so the Mac shows the approvals in `vm_health` and flags a change, see below).
 3. Add the entry to the `reviewedJobs` list, upper case, with the ECU name as it is asked for
    (not the variant a group name resolves to). The match is exact. For example
    `"reviewedJobs": ["NVE_65:STATUS_EXAMPLE@3f1c0a9b2d4e"]`. Save the file.
