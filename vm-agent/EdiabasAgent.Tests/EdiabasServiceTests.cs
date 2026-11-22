@@ -163,6 +163,7 @@ public class EdiabasServiceTests
     public void EdiabasError_ReturnsCodeAndText_AndLogsThem()
     {
         _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
         var r = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
 
         Assert.Equal(502, r.Failure!.Status);
@@ -367,6 +368,7 @@ public class EdiabasServiceTests
     {
         _api.On("NVE_65 FS_LESEN", FakeJob.Ok(Set(Text("JOB_STATUS", "OKAY"))));
         _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("FS_LESEN", "IDENT"));
         _api.On("D_MOTOR IDENT", FakeJob.Ok());
 
         var r = Service().RunJobs(
@@ -391,7 +393,7 @@ public class EdiabasServiceTests
         Assert.True(items[4].Ok);
         Assert.Equal(1, _api.Count("Init"));
         Assert.Equal(1, _api.Count("End"));
-        Assert.Equal(3, _api.JobCalls.Count());
+        Assert.Equal(4, _api.JobCalls.Count()); // the third item's error also lists _JOBS
 
         Assert.Equal(5, _audit.Items.Count);
         Assert.Equal("deny.substring:LOESCH", _audit.Items[1].Rule);
@@ -607,6 +609,7 @@ public class EdiabasServiceTests
         _api.On("NVE_65 STATUS_BORDNETZSPANNUNG", FakeJob.Ok());
         _api.On("TMODE LESE_SPANNUNG_KL30", FakeJob.Ok());
         _api.On("TMODE LESE_SPANNUNG_KL15", FakeJob.Error(20, "IFH-0010"));
+        _api.On("TMODE _JOBS", FakeJob.Jobs("LESE_SPANNUNG_KL30", "LESE_SPANNUNG_KL15"));
 
         var sources = new List<VoltageSource>
         {

@@ -261,4 +261,96 @@ public class EdiabasRequestPathTests
 
         Assert.DoesNotContain(_api.JobCalls, c => c.Contains("_ARGUMENTS", StringComparison.Ordinal));
     }
+
+    // ---------------------------------------------------------------- A6: a job the SGBD does not have
+
+    [Fact]
+    public void MissingJob_SingleRun_IsJobNotFound()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008: JOB NOT FOUND"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT", "FS_LESEN"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal(404, f.Status);
+        Assert.Equal("job_not_found", f.Error.Code);
+        Assert.Equal("NVE_65 has no job IS_LESEN.", f.Error.Message);
+        Assert.Equal(new EcuJobDetails("NVE_65", "IS_LESEN"), f.Error.Details);
+        Assert.Equal(["Job NVE_65 IS_LESEN [] []", "Job NVE_65 _JOBS [] []"], _api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void MissingJob_AsABatchItem_IsJobNotFound()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+
+        var r = Service().RunJobs([new("NVE_65", "IS_LESEN"), new("NVE_65", "IDENT")], null, _audit, default).Value!;
+
+        Assert.Equal("job_not_found", r.Items[0].Error!.Code);
+        Assert.True(r.Items[1].Ok);
+        Assert.Equal("job_not_found", _audit.Items[0].ErrorCode);
+    }
+
+    [Fact]
+    public void MissingJob_JobListFails_KeepsTheFirstError()
+    {
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.On("NVE_65 _JOBS", FakeJob.Error(20, "OTHER"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(new EdiabasErrorDetails(19, "SYS-0008"), f.Error.Details);
+    }
+
+    [Fact]
+    public void JobThatExists_KeepsItsError()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("ident"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(19, ((EdiabasErrorDetails)f.Error.Details!).ErrorCode);
+    }
+
+    [Fact]
+    public void GroupFile_StartsNoJobList()
+    {
+        // Listing a group file's jobs would reach the car again to pick the variant.
+        _api.On("D_MOTOR IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+
+        var f = Service(ecus: ["D_MOTOR.grp", "NVE_65"]).RunJob(new JobRequest("D_MOTOR", "IS_LESEN"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal(["Job D_MOTOR IS_LESEN [] []"], _api.JobCalls);
+    }
+
+    [Fact]
+    public void InfoJobRequestedByTheClient_StartsNoJobList()
+    {
+        _api.On("NVE_65 _JOBCOMMENTS", FakeJob.Error(19, "SYS-0008"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "_JOBCOMMENTS", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Single(_api.JobCalls);
+    }
+
+    [Fact]
+    public void MissingJob_AfterCancel_StartsNoJobList()
+    {
+        using var cts = new CancellationTokenSource();
+        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
+        _api.DuringJob = cts.Cancel;
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, cts.Token).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Single(_api.JobCalls);
+    }
 }

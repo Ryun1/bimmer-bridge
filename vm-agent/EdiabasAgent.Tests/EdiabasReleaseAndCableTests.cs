@@ -377,6 +377,7 @@ public class EdiabasReleaseAndCableTests
     public void SingleJob_OtherCode_StaysEdiabasError()
     {
         _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
         var r = Ident(Service());
         Assert.Equal(502, r.Failure!.Status);
         Assert.Equal("ediabas_error", r.Failure.Error.Code);

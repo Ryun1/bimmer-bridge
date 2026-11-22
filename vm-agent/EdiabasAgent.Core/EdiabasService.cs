@@ -544,12 +544,55 @@ public sealed class EdiabasService
         var run = Execute(session, verdict.Ecu!, verdict.Job!, request.Args ?? "", request.Results ?? "", timeout, ct);
         if (!run.Ok)
         {
-            return Fail(run.Failure!);
+            return Fail(NotInJobList(session, verdict.Ecu!, verdict.Job!, run.Failure!, ct) ?? run.Failure!);
         }
 
         var read = run.Value!;
         var result = new JobResult(verdict.Ecu!, verdict.Job!, read.Variant, read.JobStatus, read.SystemResults, read.Sets, _clock.ElapsedMs - itemStart);
         return new ItemRun(new BatchItem(true, result, null), ecu, job, null, null);
+    }
+
+    /// <summary>
+    /// <c>job_not_found</c> when a client job failed with <c>ediabas_error</c> and the SGBD's own
+    /// <c>_JOBS</c> list does not have it; else null, and the caller keeps the first error. No
+    /// EDIABAS error number is assumed to mean "no such job": the list decides. Only for a
+    /// <c>.prg</c> file, whose list comes from the file; a group file would have to reach the car
+    /// again to pick its variant. Not for underscore info jobs, which the list may not show. The
+    /// <c>_JOBS</c> call goes through <see cref="Execute"/>, so cancel, budget and cable gates apply.
+    /// </summary>
+    private ApiFailure? NotInJobList(Session session, string ecu, string job, ApiFailure failure, CancellationToken ct)
+    {
+        if (failure.Error.Code != ApiErrors.EdiabasError || job.StartsWith('_') || session.Poisoned || !IsPrgFile(ecu))
+        {
+            return null;
+        }
+
+        var verdict = _policy.Evaluate(ecu, "_JOBS");
+        if (!verdict.Allowed)
+        {
+            return null;
+        }
+
+        var list = Execute(session, verdict.Ecu!, verdict.Job!, "", "", _defaultTimeoutSeconds, ct);
+        if (!list.Ok)
+        {
+            return null;
+        }
+
+        var listed = list.Value!.Sets.Any(s =>
+            s.TryGetValue("JOBNAME", out var v) && v is string name && string.Equals(name, job, StringComparison.OrdinalIgnoreCase));
+        return listed
+            ? null
+            : ApiFailure.Of(ApiErrors.JobNotFound, $"{ecu} has no job {job}.", new EcuJobDetails(ecu, job));
+    }
+
+    /// <summary>True when the name is a <c>.prg</c> file and not also a <c>.grp</c> file.</summary>
+    private bool IsPrgFile(string ecu)
+    {
+        var files = _ecus.List(ecu, EcuFolder.MaxEntries)?.Files
+            .Where(f => string.Equals(f.Name, ecu, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        return files is not null && files.Any(f => f.Type == "prg") && !files.Any(f => f.Type == "grp");
     }
 
     /// <summary>
