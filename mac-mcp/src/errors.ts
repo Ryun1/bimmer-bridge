@@ -221,10 +221,14 @@ export function describeAgentError(code: string, message: string | undefined, de
       const n = detailNumber(details, "errorCode");
       const text = detailString(details, "errorText");
       const what = n !== null || text ? `${n !== null ? `error ${n}` : ""}${n !== null && text ? ": " : ""}${text ? cleanText(text, 200) : ""}` : cleanText(message ?? "no details", 200);
-      return (
-        `EDIABAS reported ${what}. This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ` +
-        "Check ediabas_vehicle_status, and ask Ryan before trying again."
-      );
+      // Error 16 (IFH-0006) on every real SGBD, seen on 2026-11-22 after the cable was replugged
+      // into the Mac: it was no longer attached to the VM until ticked again in UTM.
+      const why =
+        n === 16
+          ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (Ryan ticks it in UTM's USB menu). " +
+            "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
+          : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask Ryan before trying again.`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.

@@ -57,7 +57,7 @@ Codes (also the audit outcome):
 | `cable_in_use` | agent | a BMW tool is open, or was opened while the request ran (the agent checks again before every EDIABAS job); the message names it. Ask Ryan to close it. Do not retry in a loop. In `ediabas_describe`'s job list a tool opened midway does not fail the call: the descriptions not yet read show as not screened |
 | `ecu_not_found`, `job_not_found` | agent | use `ediabas_list_ecus` / `ediabas_describe`; never guess names |
 | `cable_not_found` | agent | EDIABAS could not initialise the interface (`IFH-0018`): the cable is not connected to the VM. Ryan plugs it into the Mac and passes it through in UTM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it |
-| `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU |
+| `ediabas_error` | agent | EDIABAS's own code and text, e.g. no response from the ECU. The hint says the ECU often did not answer; for error 16 (`IFH-0006: COMMAND NOT ACCEPTED`) it first says the cable may not be attached to the VM (after a replug UTM does not hand it back by itself; Ryan ticks it in UTM's USB menu) |
 | `ediabas_unavailable` | agent | DLL missing or EDIABAS would not start; or an earlier job did not stop after `apiBreak`, and the agent must be restarted (restart Windows in the VM) before EDIABAS can be used again |
 | `job_timeout` | agent | the job did not finish in time |
 | `window_not_found`, `window_minimized`, `desktop_unavailable` | agent | screenshots: wrong title, minimised window (Ryan restores it), locked screen |
