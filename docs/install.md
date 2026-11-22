@@ -71,7 +71,7 @@ has no `.git` and `release.sh` stops without one, then use the release's prebuil
 build only the Mac server:
 
 ```sh
-git clone --branch v0.4.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
+git clone --branch v0.5.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
 mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
 shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
 (cd mac-mcp && npm ci && npm run build)
@@ -234,10 +234,13 @@ After a code change, or to install a newer build:
    gateway, restarts the agent and waits up to 60 s for it to answer `/health` (`Agent is
    up.`, always with the 403 note, as at install). It ends with
    `Updated to ediabas-bridge agent <version>`. If the copy fails, or the new agent does not
-   come up, it puts the backup back, starts it and says so (`Rolled back to <old version>`,
-   then a red `ERROR:`). The token, ACLs and task settings are not touched. Each step, in
+   come up, it puts the backup back, starts it and says so (`Rolled back to <old version>`),
+   asks `/health` once more for up to 60 s and says plainly when the restored agent does not
+   answer either (then the fault is in `config.json` or the network, not the new exe), then a
+   red `ERROR:`. The token, ACLs and task settings are not touched. Each step, in
    order: [What Update does](#what-update-does). Running the same Update line a second time is
-   a no-op update and must also succeed. If it says the agent is not installed, or the
+   a no-op update and must also succeed (it does copy the running exe to
+   `EdiabasAgent.exe.bak`, replacing the older backup). If it says the agent is not installed, or the
    scheduled task is missing, use the Install line instead.
 4. Stop `serve.py` with Ctrl-C.
 5. **Restart Claude** so it starts the new MCP server from the rebuilt `mac-mcp/dist`: quit and
@@ -258,7 +261,8 @@ cable in the VM and **not in the car** (confirm this first).
 2. Run `ediabas_describe` for each approved job. Each prints its pinned `ECU:JOB@hash` line.
 3. In the VM, replace each entry in `C:\ProgramData\EdiabasBridge\config.json` `reviewedJobs`
    with that printed line. Unpinned entries approve nothing from 0.5.0.
-4. Run `vm_health` again. Expected on 0.4.0: `N pinned, 0 unpinned`.
+4. Run `ediabas_list_ecus` (0.4.0 re-reads the file only at an EDIABAS request), then
+   `vm_health`. Expected on 0.4.0: `N pinned, 0 unpinned`.
 
 **B. `voltageSources`.** If the VM's `config.json` has a non-empty `voltageSources`, move it to
 the Mac's `config.local.json` and delete the key from the VM file (0.5.0 warns while it is there).
@@ -272,21 +276,35 @@ approvals listed, 0 ignored.
 or wherever the exe is installed). Expected: PASS, including "link to a device is refused".
 
 **E. Update checks.**
-1. Run the Update line a second time. Expected: a no-op update that succeeds.
-2. Compare `config.json` with `config.json.bak`: `reviewedJobs` and the other keys are intact
-   and the only difference is any added `conflictProcesses` defaults (`WINKFP`, `ISTAGUI`).
-3. Optionally, on a copy of the config (not the live one), try: a file with no
-   `conflictProcesses` (the defaults are added), a file saved with a BOM (still read), and a
-   forced rollback, for example temporarily a wrong `bindAddress` so the agent does not come
-   up. Expected for the last: `Rolled back to 0.4.x` and `config.json` restored. Put the live
-   file back to its correct state afterwards.
+1. Right after C, compare `config.json` with `config.json.bak` in `C:\ProgramData\EdiabasBridge`:
+   `reviewedJobs` and the other keys are intact and the only difference is the
+   `conflictProcesses` defaults that C printed as added (`WINKFP`, `ISTAGUI` on a 0.4.0 file).
+   If C printed `config.json already lists every default conflict process`, C did not write
+   `config.json.bak` and there is nothing to compare.
+2. Run the Update line a second time. Expected: `Updated to ediabas-bridge agent 0.5.0` and
+   `config.json already lists every default conflict process`. It is a no-op for the agent, but
+   it copies the running 0.5.0 exe to `EdiabasAgent.exe.bak`, replacing the 0.4.0 backup, and it
+   leaves `config.json` and `config.json.bak` as they are.
+3. Optional: a forced rollback. Update reads and writes only the live
+   `C:\ProgramData\EdiabasBridge\config.json`, so this check changes that file. Copy it first
+   (for example to `config.json.keep`), then set its `bindAddress` to an address the VM does not
+   have, such as `"192.0.2.1"`, and run the Update line. Expected: `The new agent did not come up
+   within 60 s ... Rolling back.`, then `Rolled back to 0.5.0`: the version of the exe that was
+   in place when this run started, which this run's backup step copied to `EdiabasAgent.exe.bak`.
+   `config.json` is restored only when that same run added conflict defaults to it (not the case
+   here, so the line does not mention it and the wrong `bindAddress` stays). The restored exe
+   reads the same `config.json`, so it does not come up either, and Update says so:
+   `The restored agent (0.5.0) does not answer at ... either`, then a red `ERROR:`. To undo:
+   copy `config.json.keep` back over `config.json` and run the Update line again. Expected:
+   `Updated to ediabas-bridge agent 0.5.0`, and `vm_health` from the Mac works.
 
 **F. Desk checks** (cable not in the car, confirmed).
 1. `TMODE INFO` runs.
 2. `ediabas_vehicle_status` returns the TMODE lines.
 3. Open INPA while a `TMODE _JOBS` describe runs. Expected: `cable_in_use` or `not_run`.
-4. Edit `reviewedJobs` in the VM. Expected: the next `ediabas_*` result starts
-   `[approvals changed]`.
+4. Edit `reviewedJobs` in the VM. Expected: the next `vm_health` or `ediabas_*` result (whichever
+   comes first) starts `[approvals changed]`, and `vm_health` lists the entries as the file has
+   them now.
 5. `vm_screenshot` of INPA while it loads a script. Expected: a readable image.
 6. `ediabas_describe` on `E60` shows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` as allowed.
 7. Re-record the skill references' job verdicts under policy version 4
@@ -340,6 +358,9 @@ Uninstall must run in an elevated **Windows PowerShell** (5.1) window, not Power
 | `uninstall.ps1` | removes the task, the firewall rule and the program files; keeps `config.json`, `token.txt` and `logs\` by default (`$Purge=$true; ` at the start of the line removes them too; `$KeepData` is ignored) | Windows PowerShell 5.1, as administrator |
 | `discover.ps1` | read-only report of the VM (used once, for Phase 0); uploads it into `discovery/` on the Mac | Windows PowerShell 5.1 |
 
+Running the Install line over an existing install keeps `config.json` as it is, so it does not
+add new default conflict processes to it; the Update line does.
+
 Install and Update download, check and expand the zip in a new folder
 `C:\ProgramData\EdiabasBridge-staging-<guid>` that is created with an ACL granting only
 SYSTEM and Administrators (inheritance off, set at creation), never in the user's `%TEMP%`.
@@ -360,7 +381,9 @@ it lacks, compared without case, after the owner's own entries, and print the na
 with a warning; the new text must parse back with `conflictProcesses` an array equal to the
 merged list, every original top-level key present and as many `reviewedJobs` entries, or
 `config.json` is left untouched; it is written as UTF-8 without BOM, re-indented by
-`ConvertTo-Json`, as Install writes it, and the previous file is kept as `config.json.bak`);
+`ConvertTo-Json`, as Install writes it, and the previous file is kept as `config.json.bak`; an
+unexpected error in this step is a warning, `config.json` is left untouched and Update carries
+on);
 make the firewall rule again from the current default gateway (the same
 function as Install; if that fails, the error says the new exe is in place and the rule is
 missing, and to run the Install line again); enable and start the task; ask `/health` from inside the VM for up to
@@ -368,10 +391,14 @@ missing, and to run the Install line again); enable and start the task; ask `/he
 403 with the agent's `forbidden` error because the request came from the VM itself, counts as
 up), Update puts `EdiabasAgent.exe.bak` back (hash-checked against the backup's own hash), and
 `config.json.bak` too if it rewrote `config.json`, starts it and prints
-`Rolled back to <old version>` (naming `config.json` when it was restored). The task is enabled
+`Rolled back to <old version>` (naming `config.json` when it was restored). It then asks
+`/health` once more for up to 60 s; when the restored agent does not answer either, it says so
+(the cause is then `config.json`'s `bindAddress` or `port`, or the network, not the new exe),
+and the red `ERROR:` says the same. The task is enabled
 again on every way out; if it was disabled before the update, Update warns that it has been
 enabled and started. A second Update
-with the same zip is a no-op update and must succeed.
+with the same zip is a no-op update and must succeed; its backup step replaces
+`EdiabasAgent.exe.bak` with the exe already running.
 
 Rules for editing the scripts: they must stay ASCII-only and Windows PowerShell 5.1 compatible,
 because they run with `iex`; and `serve.py` must be restarted after any change, since the
@@ -418,7 +445,7 @@ codes are listed in [tools.md](tools.md#errors).
 | **ediabas_error** or **job_timeout** | EDIABAS reached the interface but the ECU did not answer: ignition off, cable not in the car, or that ECU is not fitted | Check `ediabas_vehicle_status`, then decide before trying again |
 | **ediabas_error** 16 `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD, after the cable was unplugged from the Mac and plugged back in | UTM does not hand a replugged cable back to the VM by itself | Tick the cable for the VM in UTM's USB menu, then ask again |
 | The first EDIABAS call after a pause takes about 10 s | Expected. The agent unloads EDIABAS after `ediabasIdleReleaseSeconds` (default 20 s) with no EDIABAS request, so that nothing holds the interface open; the next call loads it again | Nothing. The Mac waits up to 75 s for an EDIABAS call, counted from when it is sent. For a session at the car see [at-the-car.md](at-the-car.md) |
-| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | The owner decides. To allow that one job, `ediabas_describe` on it prints the entry to add to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM (`"ECU:JOB@hash"`, pinned to the description as it is now); the agent picks it up at the next EDIABAS call, no restart. With UAC off, any program the owner runs in the VM can edit that file, so `vm_health` lists the approved jobs and the next `ediabas_*` result starts with `[approvals changed]` after any change; if you did not make it, remove the entry and find out what edited the file. Steps in [safety.md](safety.md#approving-one-job). Never make this routine |
+| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | The owner decides. To allow that one job, `ediabas_describe` on it prints the entry to add to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM (`"ECU:JOB@hash"`, pinned to the description as it is now); the agent picks it up at the next EDIABAS call, no restart. With UAC off, any program the owner runs in the VM can edit that file, so `vm_health` lists the approved jobs as the file has them now, and the next `vm_health` or `ediabas_*` result after any change starts with `[approvals changed]`; if you did not make it, remove the entry and find out what edited the file. Steps in [safety.md](safety.md#approving-one-job). Never make this routine |
 | **ediabas_unavailable**, or `vm_health` says "EDIABAS: STUCK" | A job did not stop after `apiBreak`; the agent then leaves EDIABAS alone until it restarts (`/health` `ediabas.stuck`). The same code also means `api32.dll` is missing or EDIABAS would not start | Restart Windows in the VM, which restarts the agent. If `vm_health` says "EDIABAS DLL: NOT found", check `ediabasDll` in the VM's `config.json` |
 | **not_run** | The agent did not start the job, or stopped it: the request's time budget ran out, a BMW tool was opened during the request, an earlier job did not stop, or the request was abandoned. The message says which | Act on the message (close the tool, describe with a `filter`, ...). Do not retry in a loop |
 | **ediabas_request_lost**: the job may have run | The connection broke or timed out after the request may have reached the agent. Such requests are never sent a second time | Call `vm_health`; ask again only if the result is still needed |

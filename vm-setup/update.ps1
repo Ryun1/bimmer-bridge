@@ -9,7 +9,9 @@
 # to EdiabasAgent.exe.bak, puts the new exe in place, adds any default conflict process that
 # config.json lacks, makes the firewall rule again for the current gateway, enables and starts
 # the task, and waits up to 60 s for /health. If the copy fails or the new agent does not
-# answer, it puts the backup back and starts it. The task is enabled again on every way out.
+# answer, it puts the backup back (and config.json.bak, if this run merged config.json), starts
+# it and checks /health once more, saying so when the restored agent does not answer either.
+# The task is enabled again on every way out.
 # The token, the ACLs, the task settings and every other config.json setting are left as they are.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
 
@@ -306,6 +308,14 @@
             '"; Start-ScheduledTask -TaskName "' + $TaskName + '"')
     }
 
+    # True when /health answered as a working agent does: 200, or 403 forbidden (from inside
+    # the VM the agent serves the gateway only, so a 403 proves the listener works).
+    function Test-AgentAnswered($result) {
+        if ($null -eq $result) { return $false }
+        if ($result.Status -eq 200) { return $true }
+        return ($result.Status -eq 403 -and [string]$result.Body -like '*forbidden*')
+    }
+
     # Adds the default conflict processes that config.json's conflictProcesses lacks (compared
     # without case), after the owner's own entries. Everything else in the file (reviewedJobs
     # and the other keys) is kept. A file that cannot be read or parsed is left untouched.
@@ -505,7 +515,13 @@
 
         # ---- 5. conflict process defaults ----
         Write-Step 'Checking conflictProcesses in config.json'
-        $configMerged = Merge-ConflictDefaults
+        try {
+            $configMerged = Merge-ConflictDefaults
+        } catch {
+            # Never a reason to stop: the update carries on to the health check (and rollback).
+            $configMerged = $false
+            Write-Warn ('Merging the conflict process defaults failed unexpectedly (' + $_.Exception.Message + '); config.json left untouched, defaults not merged.')
+        }
 
         # ---- 6. firewall ----
         $existing = Read-ExistingConfig
@@ -539,7 +555,6 @@
             $url = 'http://' + $bindAddress + ':' + $port + '/health'
             Write-Step ('Waiting up to 60 s for the new agent at ' + $url)
             $result = Wait-AgentAnswer $url $token 60
-            $token = $null
             if ($null -ne $result -and $result.Status -eq 200) {
                 Write-Note 'Agent is up. /health:'
                 Write-Host $result.Body
@@ -570,8 +585,20 @@
                 $taskDisabled = $false
                 Start-ScheduledTask -TaskName $TaskName
                 Write-Host ('Rolled back to ' + $oldVersion + $configNote) -ForegroundColor Yellow
-                throw ('Agent ' + $version + ' did not start; ' + $oldVersion + ' was put back and started. Check ' + (Join-Path $LogDir 'agent.log'))
+
+                # One more check: if the restored agent does not answer either, the fault is not
+                # the new exe (config.json's bindAddress or port, the network), so say so.
+                Write-Step ('Waiting up to 60 s for the restored agent (' + $oldVersion + ') at ' + $url)
+                $restored = Wait-AgentAnswer $url $token 60
+                $token = $null
+                if (Test-AgentAnswered $restored) {
+                    Write-Note ('The restored agent (' + $oldVersion + ') answers /health.')
+                    throw ('Agent ' + $version + ' did not start; ' + $oldVersion + ' was put back, started and answers. Check ' + (Join-Path $LogDir 'agent.log'))
+                }
+                Write-Warn ('The restored agent (' + $oldVersion + ') does not answer at ' + $url + ' either, so the new exe is probably not the cause: check bindAddress and port in ' + $ConfigPath + ' and the VM network.')
+                throw ('Agent ' + $version + ' did not start, and the restored ' + $oldVersion + ' does not answer either. Check ' + $ConfigPath + ' and ' + (Join-Path $LogDir 'agent.log'))
             }
+            $token = $null
         }
 
         Write-Step ('Updated to ediabas-bridge agent ' + $version)

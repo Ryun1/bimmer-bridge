@@ -830,6 +830,25 @@ class Startup(unittest.TestCase):
         self.assertIn("[System.IO.File]::Copy($ConfigBackupPath, $ConfigPath, $true)", rollback)
         self.assertIn("'Rolled back to ' + $oldVersion + $configNote", text)
 
+    def test_update_rechecks_the_restored_agent_and_survives_a_failed_merge(self):
+        # Final review: after a rollback /health is asked once more, and a restored agent that
+        # does not answer either is named; an exception in the merge never stops the update.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        after = text[text.index("'Rolled back to ' + $oldVersion"):]
+        after = after[:after.index("Write-Step ('Updated to ediabas-bridge agent '")]
+        self.assertIn("$restored = Wait-AgentAnswer $url $token 60", after)
+        self.assertIn("if (Test-AgentAnswered $restored) {", after)
+        self.assertIn("does not answer at ' + $url + ' either", after)
+        self.assertIn("does not answer either. Check ' + $ConfigPath", after)
+        helper = text.split("function Test-AgentAnswered($result)", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("$result.Status -eq 200", helper)
+        merge_call = text[text.index("Write-Step 'Checking conflictProcesses in config.json'"):text.index("Set-FirewallRule $port")]
+        self.assertLess(merge_call.index("try {"), merge_call.index("$configMerged = Merge-ConflictDefaults"))
+        catch = merge_call[merge_call.index("} catch {"):]
+        self.assertIn("$configMerged = $false", catch)
+        self.assertIn("config.json left untouched", catch)
+        self.assertNotIn("throw", catch)
+
     def test_a_403_counts_as_up_only_with_the_forbidden_body(self):
         for script in ("install.ps1", "update.ps1"):
             text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
