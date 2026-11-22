@@ -719,7 +719,17 @@ public sealed class EdiabasService
         }
 
         var read = ResultShaping.ReadAll(_api);
-        return read is null ? EdiabasFailure(ecu, job) : read;
+        return read is null ? UnreadableResults(ecu, job) : read;
+    }
+
+    /// <summary>The job ended ready but apiResultSets failed. EDIABAS may or may not have an error
+    /// code for that, so whatever it says goes in the details, not in the message.</summary>
+    private ApiFailure UnreadableResults(string ecu, string job)
+    {
+        var code = _api.ErrorCode();
+        var text = _api.ErrorText();
+        _log.Warn($"{ecu} {job}: finished but its results could not be read (EDIABAS error {code}: {text})");
+        return ApiFailure.Of(ApiErrors.EdiabasError, "The job finished but its results could not be read.", new EdiabasErrorDetails(code, text));
     }
 
     private void BreakAndSettle(Session session, string ecu, string job)

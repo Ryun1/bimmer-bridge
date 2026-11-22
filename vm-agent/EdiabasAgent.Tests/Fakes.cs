@@ -27,6 +27,9 @@ public sealed class FakeJob
 
     public bool Throws { get; init; }
 
+    /// <summary>The job ends ready, but apiResultSets fails: its results cannot be read.</summary>
+    public bool ResultSetsFail { get; init; }
+
     public static FakeJob Ok(params List<FakeResult>[] jobSets) =>
         new() { Sets = [[new FakeResult("VARIANTE", ApiResultFormat.Text, "VAR")], .. jobSets] };
 
@@ -192,7 +195,7 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     public bool ResultSets(out int sets)
     {
         sets = (_current?.Sets.Count ?? 1) - 1;
-        return _current is not null;
+        return _current is not null && !_current.ResultSetsFail;
     }
 
     public bool ResultNumber(int set, out int count)

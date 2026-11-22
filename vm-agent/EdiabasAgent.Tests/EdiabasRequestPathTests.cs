@@ -146,4 +146,22 @@ public class EdiabasRequestPathTests
         Assert.False(svc.ReleaseIfIdle());
         Assert.Equal(0, _api.Count("Unload"));
     }
+
+    // ---------------------------------------------------------------- A4: unreadable results
+
+    [Theory]
+    [InlineData(0, "")]
+    [InlineData(134, "SYS-0002: SOMETHING")]
+    public void ResultsCannotBeRead_HasItsOwnMessage(int code, string text)
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { ResultSetsFail = true, ErrorCode = code, ErrorText = text });
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("ediabas_error", f.Error.Code);
+        Assert.Equal("The job finished but its results could not be read.", f.Error.Message);
+        Assert.Equal(new EdiabasErrorDetails(code, text), f.Error.Details);
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN NVE_65 IDENT: finished but its results could not be read", StringComparison.Ordinal));
+    }
 }
