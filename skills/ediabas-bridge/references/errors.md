@@ -13,11 +13,10 @@ never look for another tool, job or route (and never computer use on the VM wind
 - **`[local_network_blocked]`** is macOS blocking `node`, not the VM being off. Do not say the
   VM is down. The permission is tied to the `node` binary's path, so a Homebrew upgrade of
   node can bring the prompt back.
-- **`[no_token]`, `[unauthorized]`.** The message offers a `security add-generic-password`
-  command with the token "from the VM installer's output", but the installer no longer prints
-  the token. The fix to give Ryan: on the Mac, `python3 dev/serve.py --accept-token`, then
-  paste the **Install** line again in the VM (it keeps the VM's token and sends it to the
-  Keychain). Never ask him to paste the token into the chat or write it into a file.
+- **`[no_token]`, `[unauthorized]`.** Relay the fix from the message: on the Mac,
+  `python3 dev/serve.py --accept-token`, then paste the **Install** line it prints in the VM
+  (it keeps the VM's token and sends it to the Keychain; the installer never shows the token).
+  Never ask Ryan to paste the token into the chat or write it into a file.
 - **`[agent_outdated]`, `[bad_response]`, or a version warning in `vm_health`.** `vm_health`
   shows the Mac server's version and the agent's. If the Mac server is the older one, Claude
   is running a server from before an update: Ryan restarts Claude. If the agent is older, it

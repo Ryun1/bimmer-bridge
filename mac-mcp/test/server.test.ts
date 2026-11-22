@@ -183,7 +183,7 @@ describe("MCP server", () => {
     expect((await client.listTools()).tools).toHaveLength(11);
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("security add-generic-password -s ediabas-bridge -a agent -w");
+    expect(textOf(r)).toContain("python3 dev/serve.py --accept-token");
     expect(agent.requests).toHaveLength(0);
   });
 

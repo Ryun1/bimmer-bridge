@@ -4,8 +4,8 @@
  */
 
 export const TOKEN_FIX =
-  "Store the VM's token in the Keychain with: security add-generic-password -s ediabas-bridge -a agent -w '<token>' -U " +
-  "(the token is in the VM installer's output), or set EDIABAS_AGENT_TOKEN in the server's environment.";
+  "Hand the VM's token to this Mac again: in the repo run python3 dev/serve.py --accept-token and paste the Install line it prints " +
+  "into an Administrator Windows PowerShell in the VM (the installer never shows the token). Or set EDIABAS_AGENT_TOKEN in the server's environment.";
 
 export const MESSAGES = {
   vmNotRunning: (vmName: string) => `The VM does not appear to be running. Start the '${vmName}' VM in UTM and log in.`,
