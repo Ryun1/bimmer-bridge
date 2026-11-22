@@ -1,4 +1,4 @@
-# ediabas-bridge
+# bimmer-bridge
 
 A read-only bridge that lets Claude read diagnostics from a BMW through EDIABAS. The car is
 reached through a Windows VM in UTM on a Mac, where BMW Standard Tools (INPA, Tool32, NCS
@@ -96,7 +96,7 @@ already talk to the car. The full steps, with what success looks like at each, a
 3. Start the VM and log in. On the Mac run `python3 dev/serve.py --accept-token`, and paste the
    **Install** line it prints into **Windows PowerShell** run as administrator in the VM. Stop
    `serve.py` with Ctrl-C afterwards.
-4. Register the MCP server: `claude mcp add --scope user ediabas-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"`
+4. Register the MCP server: `claude mcp add --scope user bimmer-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"`
    from the repo root (the desktop app:
    [install.md step 4](docs/install.md#4-register-the-mcp-server)).
 5. Install the skills: `skills/install.sh`.

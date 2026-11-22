@@ -67,7 +67,7 @@ function textOf(result: unknown): string {
 describe("MCP server", () => {
   it("identifies itself with instructions", async () => {
     const { client } = await connect();
-    expect(client.getServerVersion()).toEqual({ name: "ediabas-bridge", version: SERVER_VERSION });
+    expect(client.getServerVersion()).toEqual({ name: "bimmer-bridge", version: SERVER_VERSION });
     expect(SERVER_VERSION).toBe(PACKAGE_VERSION);
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);

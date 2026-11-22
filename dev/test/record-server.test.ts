@@ -17,7 +17,7 @@ const inner: typeof fetch = async (input, init) => {
   const url = new URL(String(input));
   const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
-  if (url.pathname === "/hello") return json(200, { agent: "ediabas-bridge", proof: "derived-from-token" });
+  if (url.pathname === "/hello") return json(200, { agent: "bimmer-bridge", proof: "derived-from-token" });
   if (url.pathname === "/health") return json(200, { status: "ok" });
   if (url.pathname === "/ediabas/job") return json(200, { ecu: "SYNTH_ECU", echo: JSON.parse(String(init?.body)) });
   if (url.pathname === "/screen/capture") {

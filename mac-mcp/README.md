@@ -1,4 +1,4 @@
-# mac-mcp — ediabas-bridge MCP server
+# mac-mcp — bimmer-bridge MCP server
 
 Local stdio MCP server for Claude Code and the Claude desktop app. It finds the Windows VM
 in UTM, calls the VM agent over authenticated HTTP (`docs/api.md`) and exposes read-only
@@ -163,10 +163,10 @@ failure is logged on stderr and never fails the tool call.
 Use absolute paths, and a stable Node path (not an nvm version directory) so a Node upgrade
 does not break it. The full steps are in [docs/install.md](../docs/install.md#4-register-the-mcp-server).
 
-- Claude Code: `claude mcp add --scope user ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`
+- Claude Code: `claude mcp add --scope user bimmer-bridge -- <node> <repo>/mac-mcp/dist/index.js`
 - Claude desktop app: add to `mcpServers` in
   `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
   ```json
-  "ediabas-bridge": { "command": "<node>", "args": ["<repo>/mac-mcp/dist/index.js"] }
+  "bimmer-bridge": { "command": "<node>", "args": ["<repo>/mac-mcp/dist/index.js"] }
   ```

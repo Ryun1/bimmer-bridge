@@ -1,4 +1,4 @@
-# ediabas-bridge - remove the VM agent.
+# bimmer-bridge - remove the VM agent.
 #
 # Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Uninstall line that
 # dev/serve.py prints (it checks this file's SHA-256 before running it).

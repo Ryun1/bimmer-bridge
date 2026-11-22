@@ -16,7 +16,7 @@ import { TEXT_BUDGET, fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
 import type { DiscoverySources } from "./vmAddress.js";
 
-export const SERVER_NAME = "ediabas-bridge";
+export const SERVER_NAME = "bimmer-bridge";
 
 /** Version from package.json (one level above both src/ and dist/). */
 export const SERVER_VERSION: string = (() => {
@@ -29,7 +29,7 @@ export const SERVER_VERSION: string = (() => {
 })();
 
 export const INSTRUCTIONS = [
-  "ediabas-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to the user's car.",
+  "bimmer-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to the user's car.",
   "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
@@ -50,7 +50,7 @@ const READ_ONLY: ToolAnnotations = {
 
 /** The only logger: stderr. stdout carries MCP protocol messages and nothing else. */
 export function stderrLog(message: string): void {
-  process.stderr.write(`[ediabas-bridge] ${message}\n`);
+  process.stderr.write(`[bimmer-bridge] ${message}\n`);
 }
 
 export const MAX_FAULT_ECUS = 20;
@@ -209,7 +209,7 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "VM agent health",
       description:
-        "Check this Mac server's version and start time and the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
+        "Check this Mac server's version and start time and the Windows VM's bimmer-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
         "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
         "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
         "which features the agent has, and its job policy version against this Mac's. " +

@@ -126,7 +126,7 @@ export function noToken(): BridgeError {
 export function wrongService(baseUrl: string): BridgeError {
   return new BridgeError(
     "wrong_service",
-    `Something answered at ${hostPort(baseUrl)}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
+    `Something answered at ${hostPort(baseUrl)}, but it is not the bimmer-bridge agent. Check EDIABAS_AGENT_URL.`,
   );
 }
 
@@ -138,7 +138,7 @@ export function unprovenAgent(where: string, agentUrlOverride = false): BridgeEr
   const fix = agentUrlOverride
     ? "Either EDIABAS_AGENT_TOKEN is not the token of the agent at EDIABAS_AGENT_URL, or something else answers there. Set the right token, or unset EDIABAS_AGENT_URL to use the VM."
     : `Either the VM's token no longer matches the one on this Mac, or something else answers there. ${TOKEN_FIX}`;
-  return new BridgeError("wrong_service", `The address ${where} answered as the ediabas-bridge agent but could not prove it holds this Mac's token, so the token was not sent there. ${fix}`);
+  return new BridgeError("wrong_service", `The address ${where} answered as the bimmer-bridge agent but could not prove it holds this Mac's token, so the token was not sent there. ${fix}`);
 }
 
 export function badResponse(what: string): BridgeError {
@@ -190,7 +190,7 @@ export function agentError(
 }
 
 export const UPDATE_HINT =
-  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see docs/install.md).";
+  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the bimmer-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see docs/install.md).";
 
 /** The agent has no such endpoint: it is an older build. */
 export function agentOutdated(path: string): BridgeError {
@@ -375,5 +375,5 @@ export function errorText(code: string, message: string): string {
 export function toBridgeError(e: unknown): BridgeError {
   if (e instanceof BridgeError) return e;
   const msg = e instanceof Error ? e.message : String(e);
-  return new BridgeError("internal_error", `Internal error in the ediabas-bridge MCP server: ${cleanText(msg)}`);
+  return new BridgeError("internal_error", `Internal error in the bimmer-bridge MCP server: ${cleanText(msg)}`);
 }

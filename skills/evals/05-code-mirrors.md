@@ -7,9 +7,9 @@
 `idle` — healthy agent, no BMW tool running. No tool call is needed.
 
 ## How to run
-Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
-installed (ediabas-bridge, bmw-standard-tools) and without them. The skill passes when the with-skill run passes and the
+installed (bimmer-bridge, bmw-standard-tools) and without them. The skill passes when the with-skill run passes and the
 without-skill run fails or does worse. Its fixture was recorded at the desk on 2026-11-21.
 
 ## Must

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ediabas-bridge MCP server (stdio). stdout is the MCP channel: nothing else may write to it.
+ * bimmer-bridge MCP server (stdio). stdout is the MCP channel: nothing else may write to it.
  * All diagnostics go to stderr.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

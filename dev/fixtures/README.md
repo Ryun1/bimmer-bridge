@@ -120,7 +120,7 @@ other address set by hand). Without `EDIABAS_AGENT_TOKEN` it refuses with `no_to
 registration for an eval session:
 
 ```sh
-claude mcp add ediabas-bridge-replay \
+claude mcp add bimmer-bridge-replay \
   -e EDIABAS_AGENT_URL=http://127.0.0.1:8765 -e EDIABAS_AGENT_TOKEN=replay-dev-token \
   -- <node> <repo>/mac-mcp/dist/index.js
 EDIABAS_AGENT_TOKEN=replay-dev-token node dev/replay-agent.ts --scenario nve-faults

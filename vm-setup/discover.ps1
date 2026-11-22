@@ -1,11 +1,11 @@
-# ediabas-bridge - Phase 0 discovery (read-only)
+# bimmer-bridge - Phase 0 discovery (read-only)
 #
 # Run in the VM from Windows PowerShell 5.1: paste the Discovery line that dev/serve.py prints
 # (it checks this file's SHA-256 before running it with iex).
 #
 # This script only READS. It changes no setting, installs nothing, starts no BMW tool,
 # makes no EDIABAS call and does not touch the diagnostic cable. It writes one report,
-# ediabas-bridge-discovery.txt, to the Desktop and uploads it (plus api.h if found) to
+# bimmer-bridge-discovery.txt, to the Desktop and uploads it (plus api.h if found) to
 # dev/serve.py on the Mac. It never calls 'exit', because under iex that would
 # close the PowerShell window.
 
@@ -147,7 +147,7 @@ function Out-EbdRecentFiles {
     }
 }
 
-Write-Host 'ediabas-bridge discovery (read-only) starting...'
+Write-Host 'bimmer-bridge discovery (read-only) starting...'
 $EbdStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 # --------------------------------------------------------------------------- server URL
@@ -170,7 +170,7 @@ try {
     }
 } catch { }
 
-Out-EbdLine 'ediabas-bridge discovery report'
+Out-EbdLine 'bimmer-bridge discovery report'
 Out-EbdLine ('discover.ps1 version: ' + $EbdVersion)
 Out-EbdLine ('generated (local):    ' + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss zzz'))
 Out-EbdLine ('generated (UTC):      ' + (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss'))
@@ -613,7 +613,7 @@ $EbdBytes = $EbdUtf8.GetBytes($EbdText)
 $EbdReportPath = $null
 try {
     $EbdDesktop = [Environment]::GetFolderPath('Desktop')
-    $EbdReportPath = Join-Path $EbdDesktop 'ediabas-bridge-discovery.txt'
+    $EbdReportPath = Join-Path $EbdDesktop 'bimmer-bridge-discovery.txt'
     [System.IO.File]::WriteAllBytes($EbdReportPath, $EbdBytes)
     Write-Host ('Report saved: ' + $EbdReportPath)
 } catch {
@@ -658,4 +658,4 @@ if (-not $EbdOk) {
         Write-Host 'The report could be neither uploaded nor saved.' -ForegroundColor Red
     }
 }
-Write-Host ('ediabas-bridge discovery finished in {0:N1}s.' -f $EbdStopwatch.Elapsed.TotalSeconds)
+Write-Host ('bimmer-bridge discovery finished in {0:N1}s.' -f $EbdStopwatch.Elapsed.TotalSeconds)
