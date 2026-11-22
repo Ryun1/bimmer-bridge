@@ -306,7 +306,7 @@ public class AgentConfigTests
     public void MaxJobTimeout_AboveTheLimit_IsAnError(int value)
     {
         // The Mac gives up on an EDIABAS call after 75 s; a request may take the maximum plus
-        // the 2 s apiBreak grace, so the maximum stays at 60.
+        // the 10 s apiBreak grace, so the maximum stays at 60.
         var errors = LoadErrors($$"""{ "maxJobTimeoutSeconds": {{value}} }""");
         Assert.Contains(errors, e => e.StartsWith("maxJobTimeoutSeconds:", StringComparison.Ordinal) && e.Contains("60", StringComparison.Ordinal));
     }

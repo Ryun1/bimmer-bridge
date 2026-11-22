@@ -15,8 +15,9 @@ ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the e
 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the
 replay agent.
 
-Nothing added in 0.3.0 has been run at the car yet: the whole-car read, `ediabas_jobs`, the
-car-session line and the longer idle time below are all untested there.
+Nothing added from 0.3.0 on has been run at the car yet: the whole-car read, `ediabas_jobs`,
+the car-session line, voltage sources, pinned approvals and the longer idle time below are all
+untested there.
 
 ## Before going to the car
 
@@ -56,8 +57,17 @@ car-session line and the longer idle time below are all untested there.
       needs is in [dev/fixtures/README.md](../dev/fixtures/README.md#scenarios-the-evals-use-skillsevals);
       between them, the session must include `ediabas_list_ecus` and `ediabas_describe` for
       the night-vision SGBD and the engine group, `ediabas_vehicle_status`,
-      `ediabas_read_faults` (with `NVE_65` and at least one fault carrying a mileage, for eval
-      01) and one `ediabas_jobs` batch.
+      `ediabas_read_faults` with `NVE_65`, and one `ediabas_jobs` batch.
+- [ ] **Record the evals' own calls.** The replay agent answers only a request with the same
+      path, query and body as a recording ([dev/fixtures/README.md](../dev/fixtures/README.md#layout)):
+      a recorded `ediabas_read_faults` for ten ECUs does not answer eval 01's call for
+      `NVE_65` alone, and a `filter` or `includeInfoMemory` that differs misses too. So at the
+      car, with the `bimmer-bridge` skill installed (the current copy from this repo), type
+      the eval prompts themselves, in order, and let Claude make its calls: first
+      "Read the faults on night vision" (eval 01), then "Why is my battery draining?" (eval
+      06). Do the whole-car read and any other reads as separate calls after them; they cost
+      nothing to replay later and are not needed by the evals. `NVE_65` `FS_LESEN` declares
+      no mileage result, so eval 01 reports a distance only if the car returns one.
 
 ## At the car, ignition still off
 
@@ -86,11 +96,16 @@ car-session line and the longer idle time below are all untested there.
     desk and appear to need the module to answer. Leave them for the ignition-on part, and
     only if the session needs them. The engine group `D_MOTOR` gave error 13 `IFH-0003`
     (2026-11-22) for the same reason; its `IDENT` is allowed by name (`allow.global`), so
-    it can be run at the car without describing it first.
+    it can be run at the car without describing it first. Eval 06 does need a recorded
+    `ediabas_describe` of the engine group, so that one happens with the ignition on: use a
+    `filter` (e.g. `STATUS_`) and allow about a minute for it.
   - Already described at the desk on 2026-11-22, with their result names in the skill's
     `job-cookbook.md`: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL`, `C_FA_LESEN` on
     `CAS` and `LM_60`, `UTILITY` `STATUS_UBATT` and `STATUS_ZUENDUNG`, `NVE_65` `FS_LESEN`.
-    Check `vm_health`'s policy version is still 4; if so, these need no describing again.
+    Check `vm_health`'s policy version is still 4; if so, their verdicts and result names
+    are known. They still have to be described again in this session wherever a scenario
+    records a describe (`nve-faults` needs `ediabas_describe` of `NVE_65`): running the eval
+    prompts above does that by itself.
 - [ ] Agree the plan: which ECUs and jobs, in how many calls, and a rough time. The first
       EDIABAS call after a pause takes 10–15 s longer while the agent loads EDIABAS again
       (desk, 2026-11-21); with the idle time at 90 s that should happen once, not after every
@@ -110,9 +125,19 @@ car-session line and the longer idle time below are all untested there.
 - [ ] On an E60/E61, the whole-car read: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` (which modules
       answer) and `FS_LESEN_FUNKTIONAL` (their faults in one job), and `C_FA_LESEN` on `CAS` or
       `LM_60` (the vehicle order).
-- [ ] The rest, batched: one `ediabas_read_faults` for the ECUs wanted (up to 20) and the
-      status jobs in one `ediabas_jobs` call. For Phase 6: `IDENT` through `D_MOTOR`, and the
-      fault memory of `NVE_65`.
+  - Run each functional job as its **own** `ediabas_job` with `timeoutSeconds: 60`, after
+    `ediabas_vehicle_status` has loaded EDIABAS. A request gets at most 60 s, counted from
+    when the agent receives it, so loading EDIABAS (about 10 s) would come out of it. How long
+    a functional job takes on this car is not measured: note each one's time. A
+    `job_timeout` means it needed longer; do not retry it, read the modules one by one.
+  - If a job does not stop within 10 s of being timed out, the agent leaves EDIABAS alone
+    until Windows in the VM restarts (`ediabas_unavailable`; INPA may not get the cable
+    either). Restart the VM before any further read.
+- [ ] The rest, batched: one `ediabas_read_faults` for the ECUs wanted and the status jobs in
+      one `ediabas_jobs` call. For Phase 6: `IDENT` through `D_MOTOR`, and the fault memory
+      of `NVE_65`. Name only modules that `IDENT_FUNKTIONAL` showed answering: a module that
+      does not answer can use its whole job timeout, every item in a call shares the one 60 s
+      limit, and later items then come back `not_run`. Read those in a second call.
 - [ ] Watch the line at the end of each result: "Car session: … since the first read from the
       car (aim to finish within 10 min)." It counts from the first read, not from the
       ignition. At about 8 minutes Claude wraps up; at 10 it stops and asks before any further

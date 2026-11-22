@@ -1,6 +1,25 @@
-# What changed in 0.3.0 to 0.6.0
+# What changed in 0.3.0 to 0.6.1
 
 > Historical record: the release notes of earlier versions, moved from the README. For the current state, see the [README's Status](../../README.md#status).
+
+## What changed in 0.6.1
+
+Hardening for the first session at the car, from a desk rehearsal of the at-the-car sequence
+(2026-11-22, cable in the VM, not in the car). Only the Mac server changed; the agent is
+rebuilt for the version number.
+
+- **`ediabas_error` advice by EDIABAS code** (code table from EdiabasLib, checked against every
+  code seen at the desk): the cable codes (`IFH-0002`, `IFH-0003`), low or wrong battery voltage,
+  a module that did not answer (`IFH-0009`), a disturbed answer, ignition off and `SYS-0010` each
+  say what to check. Cable, voltage and ignition codes no longer send Claude to
+  `ediabas_vehicle_status`, and no `IFH-` code suggests a wrong job name.
+- **`ediabas_vehicle_status` says its battery and KL30 readings come from the cable**: with no
+  car connected they read `STAT_UBATT=1` and KL30 12000. Only a voltage source (a module) shows
+  the car is awake. Fixture `dev/fixtures/no-car`.
+- **The recording server runs on Node 26**, which removed `--experimental-transform-types`:
+  `mac-mcp/src` and `dev/` now use only syntax Node can strip (`erasableSyntaxOnly`).
+- `docs/at-the-car.md` has the tested commands to register the recording server (the name goes
+  before `-e`) and a check that the folder fills.
 
 ## What changed in 0.6.0
 

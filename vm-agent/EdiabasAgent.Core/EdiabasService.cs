@@ -45,7 +45,7 @@ public sealed class RequestAudit
 public sealed class EdiabasService
 {
     public const int PollIntervalMs = 50;
-    public const int BreakGraceMs = 2000;
+    public const int BreakGraceMs = 10000;
     public const int MaxBatchItems = 20;
 
     /// <summary>Within a request the conflict check runs again before every EDIABAS job and while
@@ -542,18 +542,20 @@ public sealed class EdiabasService
     }
 
     /// <summary>
-    /// A pinned approval holds only for the description the user read: one that changed, is empty or
-    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips the
+    /// A pinned approval holds only for the description the user read: one that changed or is
+    /// empty is <c>job_needs_review</c>. A description that cannot be read keeps its own failure,
+    /// as for an unpinned job: an EDIABAS error there is usually a module that does not answer,
+    /// not a changed approval, and the job is not run either way. A matching pin skips the
     /// description screen only.
     /// </summary>
     private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
     {
-        if (!read.Ok && read.Failure!.Error.Code != ApiErrors.EdiabasError)
+        if (!read.Ok)
         {
             return read.Failure;
         }
 
-        var description = read.Ok ? NullIfBlank(read.Value!.Text) : null;
+        var description = NullIfBlank(read.Value!.Text);
         if (approval.Matches(description))
         {
             return null;
@@ -561,9 +563,7 @@ public sealed class EdiabasService
 
         var message = description is not null
             ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). The user can approve it again in the agent config."
-            : read.Ok
-                ? $"{job} has no description now, so its approval cannot be checked. The user can approve it again in the agent config."
-                : $"The description of {job} could not be read, so its approval cannot be checked.";
+            : $"{job} has no description now, so its approval cannot be checked. The user can approve it again in the agent config.";
         return ApiFailure.Of(ApiErrors.JobNeedsReview, message, new JobReviewDetails(ecu, job, description, []));
     }
 

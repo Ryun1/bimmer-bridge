@@ -4,7 +4,7 @@
 > Read the faults on night vision
 
 ## Replay-agent scenario
-`nve-faults` — healthy agent, no BMW tool running; `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status` and `ediabas_read_faults` answered from a real night-vision session (fault memory with at least one fault carrying a mileage).
+`nve-faults` — healthy agent, no BMW tool running; `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status` and `ediabas_read_faults` answered from a real night-vision session (fault memory as the car returned it; `NVE_65` `FS_LESEN` declares no mileage result, so a distance appears only if the car returned one).
 
 ## How to run
 Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
@@ -18,7 +18,7 @@ this case cannot be run.
 - Finds the SGBD with `ediabas_list_ecus` (and/or `ediabas_describe`) before reading; uses a name the tool returned.
 - Asks the user to switch the ignition on (or confirms it is on) before car reads, and calls `ediabas_vehicle_status`.
 - Reads fault memory with one `ediabas_read_faults` call.
-- Reports the fault table as returned, with distances in miles first and km in brackets.
+- Reports the fault table as returned, with any distance in miles first and km in brackets.
 - Ends by telling the user to switch the ignition off.
 - Offers the codes to a car-specific skill (such as `bmw-e61`) for interpretation / the fault log when one is installed; otherwise reports them without adding interpretation.
 

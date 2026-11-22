@@ -203,12 +203,15 @@ public class ApprovalTests
     }
 
     [Fact]
-    public void Pinned_UnreadableDescription_IsNeedsReview()
+    public void Pinned_UnreadableDescription_IsTheEdiabasError_JobNotRun()
     {
-        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Error(100, "SYS-0010"));
+        // A module that does not answer (asleep, not fitted) is an EDIABAS error, as for an
+        // unpinned job, not a changed approval. The job itself is still never run.
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
         var r = Service($"NVE_65:STATUS_X@{StatusLesenHash}").RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
 
-        Assert.Equal("job_needs_review", r.Failure!.Error.Code);
+        Assert.Equal("ediabas_error", r.Failure!.Error.Code);
+        Assert.Equal(19, Assert.IsType<EdiabasErrorDetails>(r.Failure.Error.Details).ErrorCode);
         Assert.Single(_api.JobCalls);
     }
 
