@@ -112,8 +112,8 @@ function okResponse(body: unknown = healthBody()): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function connError(code: string): Error {
-  return Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) });
+function connError(code: string, syscall?: string): Error {
+  return Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code, ...(syscall ? { syscall } : {}) }) });
 }
 
 describe("AgentClient with EDIABAS_AGENT_URL", () => {
@@ -384,7 +384,7 @@ describe("AgentClient discovery", () => {
     for (const code of ["EHOSTUNREACH", "EHOSTDOWN", "ENETUNREACH", "ENETDOWN", "EADDRNOTAVAIL"]) {
       const { client, logs } = makeClient({
         fetch: vi.fn(async () => {
-          throw connError(code);
+          throw connError(code, "connect");
         }),
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
       });
@@ -590,7 +590,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
   it("never contacts an off-link candidate, and blames the local network for the on-link one", async () => {
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
       leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
@@ -602,7 +602,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const { client, logs } = makeClient({
       fetch: vi.fn(async (url) => {
         if (String(url).endsWith("/health")) return okResponse();
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
       leases: LEASES,
     });
@@ -614,7 +614,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     let blocked = false;
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(async (url) => {
-        if (blocked && String(url).endsWith("/windows")) throw connError("EHOSTUNREACH");
+        if (blocked && String(url).endsWith("/windows")) throw connError("EHOSTUNREACH", "connect");
         return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
       }),
       leases: LEASES,
@@ -635,7 +635,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     let blocked = false;
     const { client } = makeClient({
       fetch: vi.fn(async (url) => {
-        if (blocked) throw connError("EHOSTUNREACH");
+        if (blocked) throw connError("EHOSTUNREACH", "connect");
         return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
       }),
       leases: LEASES,
@@ -655,7 +655,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const { client } = makeClient({
       env: { EDIABAS_AGENT_URL: "http://10.9.9.9:8765" },
       fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
     });
     expect((await errorOf(client.health())).code).toBe("vm_not_running");
@@ -665,7 +665,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const { client } = makeClient({
       env: { EDIABAS_AGENT_URL: "http://192.168.64.3:8765" },
       fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
     });
     expect((await errorOf(client.health())).code).toBe("local_network_blocked");
@@ -687,7 +687,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const by = (a: () => Promise<Response>, b: () => Promise<Response>) =>
       vi.fn<typeof fetch>(async (url) => (String(url).includes(".3:") ? a() : b()));
     const unreachable = async (): Promise<Response> => {
-      throw connError("EHOSTUNREACH");
+      throw connError("EHOSTUNREACH", "connect");
     };
     const refused = async (): Promise<Response> => {
       throw connError("ECONNREFUSED");
@@ -798,6 +798,43 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       "http://192.168.64.3:8765/health",
       "http://192.168.64.3:8765/ediabas/job",
     ]);
+  });
+
+  it("runJob: EHOSTUNREACH with syscall 'write' is not re-sent and says it may have run", async () => {
+    let fail = false;
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.endsWith("/ediabas/job") && fail) throw connError("EHOSTUNREACH", "write");
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    await c.listWindows();
+    fail = true;
+    const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
+    expect(e.code).toBe("ediabas_request_lost");
+    expect(calledUrls(fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toHaveLength(1);
+  });
+
+  it("runJob: EHOSTUNREACH with syscall 'connect' rediscovers and sends once more", async () => {
+    let fail = false;
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.endsWith("/ediabas/job") && fail) {
+          fail = false;
+          throw connError("EHOSTUNREACH", "connect");
+        }
+        if (u.endsWith("/ediabas/job")) return okResponse(JOB);
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      }),
+      leases: LEASES,
+    });
+    await c.listWindows();
+    fail = true;
+    expect((await c.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
+    expect(calledUrls(fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toHaveLength(2);
   });
 
   describe("connect timeout (the TCP handshake never completed) against ETIMEDOUT", () => {

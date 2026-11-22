@@ -240,7 +240,7 @@ class ConnectionFailure extends Error {
 const UNREACHABLE = new Set(["EHOSTDOWN", "EHOSTUNREACH", "ENETUNREACH", "ENETDOWN", "EADDRNOTAVAIL"]);
 
 function classify(e: unknown): ConnectionFailure {
-  const err = e as { name?: string; code?: string; cause?: { code?: string; name?: string } } | undefined;
+  const err = e as { name?: string; code?: string; cause?: { code?: string; name?: string; syscall?: string } } | undefined;
   const name = err?.name ?? "";
   if (name === "TimeoutError" || name === "AbortError") return new ConnectionFailure("timeout", name);
   if (err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout", "TimeoutError");
@@ -250,7 +250,9 @@ function classify(e: unknown): ConnectionFailure {
   // be on another address now. ETIMEDOUT can also come after the request was written.
   if (code === "UND_ERR_CONNECT_TIMEOUT") return new ConnectionFailure("unreachable", detail, true);
   if (code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
-  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
+  // EHOSTUNREACH and friends can also come after the body was written (syscall "write"), so
+  // they prove nothing was sent only when the connect itself failed.
+  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, err?.cause?.syscall === "connect");
   // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
   // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
   return new ConnectionFailure("refused", detail, code === "ECONNREFUSED");
