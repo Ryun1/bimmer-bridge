@@ -9,6 +9,7 @@ const builtin = @import("builtin");
 pub extern "c" fn ioctl(fd: c_int, request: c_ulong, ...) c_int;
 
 pub const TIOCEXCL: c_ulong = 0x2000740d; // _IO('t', 13)
+pub const TIOCNXCL: c_ulong = 0x2000740e; // _IO('t', 14)
 pub const TIOCSBRK: c_ulong = 0x2000747b; // _IO('t', 123)
 pub const TIOCCBRK: c_ulong = 0x2000747a; // _IO('t', 122)
 pub const TIOCMBIS: c_ulong = 0x8004746c; // _IOW('t', 108, int)
@@ -97,6 +98,8 @@ test "darwin ioctl constants match the SDK headers" {
     comptime {
         std.debug.assert(@as(c_ulong, c.TIOCEXCL) == TIOCEXCL);
         std.debug.assert(@as(c_ulong, 0x2000740d) == TIOCEXCL);
+        std.debug.assert(@as(c_ulong, c.TIOCNXCL) == TIOCNXCL);
+        std.debug.assert(@as(c_ulong, 0x2000740e) == TIOCNXCL);
         std.debug.assert(@as(c_ulong, c.TIOCSBRK) == TIOCSBRK);
         std.debug.assert(@as(c_ulong, 0x2000747b) == TIOCSBRK);
         std.debug.assert(@as(c_ulong, c.TIOCCBRK) == TIOCCBRK);
@@ -118,6 +121,8 @@ test "darwin ioctl constants match the SDK headers" {
     }
     try std.testing.expectEqual(@as(c_ulong, c.TIOCEXCL), TIOCEXCL);
     try std.testing.expectEqual(@as(c_ulong, 0x2000740d), TIOCEXCL);
+    try std.testing.expectEqual(@as(c_ulong, c.TIOCNXCL), TIOCNXCL);
+    try std.testing.expectEqual(@as(c_ulong, 0x2000740e), TIOCNXCL);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCSBRK), TIOCSBRK);
     try std.testing.expectEqual(@as(c_ulong, 0x2000747b), TIOCSBRK);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCCBRK), TIOCCBRK);

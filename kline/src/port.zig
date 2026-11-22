@@ -100,9 +100,14 @@ pub const Port = struct {
         return p;
     }
 
-    /// Releases the device, then the lock.
+    /// Releases the device, then the lock. Exclusive mode is cleared first: on Linux it is a
+    /// flag on the tty, which outlives this fd wherever something else keeps the tty alive
+    /// (a pty's master does), and would refuse the next open with EBUSY.
     pub fn close(self: *Port) void {
-        if (self.fd >= 0) _ = std.c.close(self.fd);
+        if (self.fd >= 0) {
+            _ = sys.ioctl(self.fd, sys.TIOCNXCL);
+            _ = std.c.close(self.fd);
+        }
         self.fd = -1;
         if (self.lock_fd >= 0) _ = std.c.close(self.lock_fd);
         self.lock_fd = -1;
@@ -378,18 +383,27 @@ fn createLockFileFor(dir: []const u8, device: []const u8) !void {
     _ = std.c.close(fd);
 }
 
+// A Linux pty forces CS8 and no parity whatever is set (the kernel's pty_set_termios), so on
+// Linux only the baud rate can be read back from a pty; `kline probe` checks 8E1 on the cable.
+const pty_keeps_framing = is_darwin;
+
 test "open a pty, set 9600 8E1 and read it back" {
     var pty = try Pty.open();
     defer pty.close();
     var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });
     defer p.close();
     try p.setLine(.{ .baud = 9600, .data_bits = 8, .parity = .even });
-    try std.testing.expectEqual(LineSettings{ .baud = 9600, .data_bits = 8, .parity = .even }, try p.getLine());
+    if (pty_keeps_framing) {
+        try std.testing.expectEqual(LineSettings{ .baud = 9600, .data_bits = 8, .parity = .even }, try p.getLine());
+    } else {
+        try std.testing.expectEqual(@as(u32, 9600), (try p.getLine()).baud);
+    }
     try p.setLine(.{ .baud = 115200, .data_bits = 8, .parity = .none });
     try std.testing.expectEqual(@as(u32, 115200), (try p.getLine()).baud);
 }
 
 test "odd parity and 7 data bits read back" {
+    if (!pty_keeps_framing) return error.SkipZigTest;
     var pty = try Pty.open();
     defer pty.close();
     var p = try Port.open(pty.slave_path, .{ .require_ftdi = false });

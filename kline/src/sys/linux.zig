@@ -66,6 +66,7 @@ pub const TIOCSSERIAL: c_ulong = 0x541f;
 pub const ASYNC_LOW_LATENCY: c_int = 1 << 13;
 
 pub const TIOCEXCL: c_ulong = 0x540c;
+pub const TIOCNXCL: c_ulong = 0x540d;
 pub const TIOCSBRK: c_ulong = 0x5427;
 pub const TIOCCBRK: c_ulong = 0x5428;
 pub const TIOCMGET: c_ulong = 0x5415;
@@ -138,6 +139,7 @@ test "linux constants match the kernel headers" {
         std.debug.assert(@as(c_ulong, c.TIOCSSERIAL) == TIOCSSERIAL);
         std.debug.assert(@as(c_int, c.ASYNC_LOW_LATENCY) == ASYNC_LOW_LATENCY);
         std.debug.assert(@as(c_ulong, c.TIOCEXCL) == TIOCEXCL);
+        std.debug.assert(@as(c_ulong, c.TIOCNXCL) == TIOCNXCL);
         std.debug.assert(@as(c_ulong, c.TIOCSBRK) == TIOCSBRK);
         std.debug.assert(@as(c_ulong, c.TIOCCBRK) == TIOCCBRK);
         std.debug.assert(@as(c_ulong, c.TIOCMGET) == TIOCMGET);
@@ -161,6 +163,7 @@ test "linux constants match the kernel headers" {
     try std.testing.expectEqual(@as(c_ulong, c.TIOCSSERIAL), TIOCSSERIAL);
     try std.testing.expectEqual(@as(c_int, c.ASYNC_LOW_LATENCY), ASYNC_LOW_LATENCY);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCEXCL), TIOCEXCL);
+    try std.testing.expectEqual(@as(c_ulong, c.TIOCNXCL), TIOCNXCL);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCSBRK), TIOCSBRK);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCCBRK), TIOCCBRK);
     try std.testing.expectEqual(@as(c_ulong, c.TIOCMGET), TIOCMGET);
