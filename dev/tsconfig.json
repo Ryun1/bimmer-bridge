@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "typeRoots": ["../mac-mcp/node_modules/@types"],
+    "paths": {
+      "vitest": ["../mac-mcp/node_modules/vitest/dist/index.d.ts"],
+      "@modelcontextprotocol/sdk/*": ["../mac-mcp/node_modules/@modelcontextprotocol/sdk/dist/esm/*"]
+    },
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["*.ts", "test/**/*.ts"]
+}

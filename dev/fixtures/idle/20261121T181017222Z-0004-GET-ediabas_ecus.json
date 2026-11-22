@@ -1,0 +1,29 @@
+{
+  "recordedAt": "2026-11-21T18:10:17.222Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/ecus",
+    "query": {
+      "filter": "tmode"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecuPath": "C:\\EDIABAS\\ECU",
+      "count": 1,
+      "truncated": false,
+      "files": [
+        {
+          "name": "TMode",
+          "type": "prg"
+        }
+      ]
+    }
+  }
+}

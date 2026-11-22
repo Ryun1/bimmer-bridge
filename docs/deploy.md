@@ -5,6 +5,15 @@ How files move between the Mac and the VM. `dev/serve.py`, the `vm-setup/*.ps1` 
 
 ## The Mac-side server: `dev/serve.py`
 - Listens on the Mac's UTM bridge address, port **8000**. Never `0.0.0.0`.
+- Serves **only the VM's address**; every request from any other address (another VM on the
+  same UTM network included) is 403. The address is the one given with `--client <IPv4>`, or
+  else the latest-expiring lease in `/var/db/dhcpd_leases` for the VM's MAC (`EDIABAS_VM_MAC`,
+  default the MCP server's `F2:E5:81:1E:82:07`). No lease and no `--client`: it does not
+  start. It must be a host address on the bind address's /24. It never trusts whoever
+  connects first.
+- Per run, at most 10 uploads and 40 MB of uploads in all (each upload at most 20 MB). The
+  caps are taken before anything is written; a failed upload keeps its share. Past them,
+  413: restart `serve.py`.
 - Routes, and nothing else (no directory listing, every other path is 404):
 
 | Request | Behaviour |
@@ -12,11 +21,32 @@ How files move between the Mac and the VM. `dev/serve.py`, the `vm-setup/*.ps1` 
 | `GET /discover.ps1`, `/install.ps1`, `/update.ps1`, `/uninstall.ps1` | the file of that name from `vm-setup/`, as `text/plain; charset=utf-8` |
 | `GET /EdiabasAgent.zip` | `release/EdiabasAgent.zip`; 404 if not built |
 | `PUT /upload/<name>` | saved as `discovery/<UTC yyyyMMdd-HHmmss>-<name>`. `<name>` must match `^[A-Za-z0-9._-]{1,80}$`. Body limit 20 MB. Replies 201 `{"saved": "<file name>", "bytes": <n>}` |
-| `PUT /token` | only when started with `--accept-token`, otherwise 403. Body is the agent token, which must match `^[A-Za-z0-9_-]{43}$` (surrounding whitespace is ignored). Stored in the macOS Keychain (service `ediabas-bridge`, account `agent`), never written to disk or printed. Replies 204. One token per run |
+| `PUT /token` | only when started with `--accept-token`, otherwise 403. Body is the agent token, which must match `^[A-Za-z0-9_-]{43}$` (surrounding whitespace is ignored). Stored in the macOS Keychain (service `ediabas-bridge`, account `agent`), never written to disk or printed, then read back with `security find-generic-password -w` and compared; a mismatch is 500. Replies 204. Exactly one well-formed token per run, whether or not storing it worked: any later `PUT /token` is 403 until `serve.py` is restarted |
+
+## The pasted lines
+`serve.py` prints one line per script (Discovery, Install, Update, Uninstall), with the address
+filled in, the zip's SHA-256 as `$sha` for Install and Update, and the SHA-256 of the script
+file as it was at start-up. Each line, for Windows PowerShell 5.1:
+
+```powershell
+$base='http://<Mac bridge address>:8000'; $sha='<zip sha256>'; $ebFile="$env:TEMP\ediabas-bridge-install.ps1"; iwr "$base/install.ps1" -UseBasicParsing -OutFile $ebFile; $ebBytes=[IO.File]::ReadAllBytes($ebFile); if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($ebBytes)) -replace '-','') -eq '<install.ps1 sha256>') { iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } else { Write-Host 'install.ps1 is not the file serve.py checked; it was NOT run. Restart serve.py and paste the line it prints.' -ForegroundColor Red }
+```
+
+- The script is downloaded to a file, its bytes are read once, and those same bytes run (with
+  `iex`) only when their SHA-256 is the one in the line. Anything else answering on the
+  gateway address (a rogue listener, another VM spoofing the gateway) cannot run a script of
+  its own: the trust is in the pasted line, which came from the Mac's terminal.
+- The bytes run with `iex`, not as a `.ps1` file: the execution policy does not block them,
+  and nothing can swap the file between the check and the run.
+- Discovery and Uninstall lines have no `$sha`. For Uninstall, `$KeepData=$true; ` goes at the
+  start of the line.
+- The scripts are ASCII-only (they are decoded as UTF-8).
+- Edit a script, or rebuild the zip, after `serve.py` started, and the line refuses: restart
+  `serve.py` and paste the line it prints then.
 
 ## Variables the VM scripts read
-The scripts are run with `irm <url> | iex`, so they take input from variables set earlier on
-the same pasted line.
+The scripts run with `iex` in the PowerShell window's scope, so they take input from
+variables set earlier on the same pasted line.
 
 | Variable | Used by | Meaning |
 |---|---|---|
@@ -26,6 +56,12 @@ the same pasted line.
 | `$KeepData` | uninstall | `$true` to keep `config.json`, `token.txt` and `logs\`. Optional, default off |
 
 All three scripts must run in an elevated **Windows PowerShell** (5.1) window, not PowerShell 7.
+
+Install and Update download, check and expand the zip in a new folder
+`C:\ProgramData\EdiabasBridge-staging-<guid>` that is created with an ACL granting only
+SYSTEM and Administrators (inheritance off, set at creation), never in the user's `%TEMP%`.
+They hash `EdiabasAgent.exe` there, copy it into place, hash the copy, and delete it if the
+two differ. The staging folder is removed at the end.
 
 ## The release artefact
 `vm-agent/build.sh` writes:

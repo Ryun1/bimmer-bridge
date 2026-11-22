@@ -20,6 +20,8 @@ export interface Config {
   keychainAccount: string;
   /** Path of UTM's command-line tool. */
   utmctlPath: string;
+  /** Folder to record every agent exchange into (fixtures). Off when undefined. */
+  recordDir: string | undefined;
 }
 
 export const DEFAULTS = {
@@ -78,6 +80,9 @@ export function loadConfig(env: Env = process.env, home: string = homedir()): { 
     home,
   );
 
+  const recordText = nonEmpty(env.EDIABAS_RECORD_DIR);
+  const recordDir = recordText === undefined ? undefined : expandHome(recordText, home);
+
   return {
     config: {
       agentUrl,
@@ -89,6 +94,7 @@ export function loadConfig(env: Env = process.env, home: string = homedir()): { 
       keychainService: DEFAULTS.keychainService,
       keychainAccount: DEFAULTS.keychainAccount,
       utmctlPath: DEFAULTS.utmctlPath,
+      recordDir,
     },
     warnings,
   };

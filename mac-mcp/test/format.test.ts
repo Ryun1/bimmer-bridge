@@ -35,7 +35,7 @@ describe("formatHealth", () => {
   it("warns that screenshots will not work in session 0", () => {
     const t = formatHealth(health({ sessionId: 0 }));
     expect(t).toMatch(/not .*interactive/i);
-    expect(t).toMatch(/screenshots, when built, will not work/i);
+    expect(t).toMatch(/screenshots will not work/i);
     expect(formatHealth(health())).not.toMatch(/screenshot/i);
   });
 
@@ -52,6 +52,24 @@ describe("formatHealth", () => {
     expect(t).toMatch(/elevated: yes/i);
     expect(t).toMatch(/EDIABAS DLL: NOT found/);
     expect(t).toContain("2026-11-21T16:00:00Z");
+  });
+
+  it("says whether EDIABAS is loaded, and nothing when an older agent does not report it", () => {
+    const dll = { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true };
+    expect(formatHealth(health({ ediabas: { ...dll, loaded: true } }))).toMatch(/^EDIABAS: loaded now/m);
+    const off = formatHealth(health({ ediabas: { ...dll, loaded: false } }));
+    expect(off).toMatch(/^EDIABAS: not loaded \(released after idle\).*about 10 s longer.*normal/m);
+    const old = formatHealth(health());
+    expect(old).not.toMatch(/^EDIABAS: /m);
+    expect(old).not.toMatch(/EDIABAS: (not )?loaded/);
+  });
+
+  it("says when EDIABAS is stuck after a job ignored apiBreak, and that the agent must be restarted", () => {
+    const dll = { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true };
+    const t = formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: true } }));
+    expect(t).toMatch(/^EDIABAS: STUCK: .*did not stop after apiBreak.*restart/m);
+    expect(t).not.toMatch(/loaded now/);
+    expect(formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: false } }))).not.toMatch(/STUCK/);
   });
 
   it("strips control characters from agent strings", () => {

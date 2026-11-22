@@ -1,9 +1,9 @@
 # ediabas-bridge - remove the VM agent.
 #
-# Run in an elevated Windows PowerShell 5.1 window inside the VM:
-#   irm http://<mac>:8000/uninstall.ps1 | iex
-# To keep config.json, token.txt and logs\ for a later reinstall:
-#   $KeepData=$true; irm http://<mac>:8000/uninstall.ps1 | iex
+# Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Uninstall line that
+# dev/serve.py prints (it checks this file's SHA-256 before running it).
+# To keep config.json, token.txt and logs\ for a later reinstall, put $KeepData=$true; at the
+# start of that line.
 #
 # Stops and removes the scheduled task and the firewall rule and removes
 # C:\ProgramData\EdiabasBridge. Restores nothing else: the sleep setting changed by

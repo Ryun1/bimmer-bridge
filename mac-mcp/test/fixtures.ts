@@ -55,7 +55,7 @@ export type Handler = (req: IncomingMessage, res: ServerResponse) => void;
 export interface FakeAgent {
   url: string;
   port: number;
-  requests: { method: string; path: string; authorization: string | undefined }[];
+  requests: { method: string; path: string; authorization: string | undefined; body: string }[];
   setHandler(h: Handler): void;
   close(): Promise<void>;
 }
@@ -88,8 +88,14 @@ export async function startFakeAgent(handler: Handler = contractHandler()): Prom
   let current = handler;
   const requests: FakeAgent["requests"] = [];
   const server: Server = createServer((req, res) => {
-    requests.push({ method: req.method ?? "", path: req.url ?? "", authorization: req.headers.authorization });
-    current(req, res);
+    const chunks: Buffer[] = [];
+    req.on("data", (c: Buffer) => chunks.push(c));
+    req.on("end", () => {
+      const body = Buffer.concat(chunks).toString("utf8");
+      (req as IncomingMessage & { bodyText?: string }).bodyText = body;
+      requests.push({ method: req.method ?? "", path: req.url ?? "", authorization: req.headers.authorization, body });
+      current(req, res);
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;

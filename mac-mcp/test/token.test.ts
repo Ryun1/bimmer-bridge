@@ -96,4 +96,30 @@ describe("TokenProvider", () => {
     expect(text).not.toContain(ENV_TOKEN);
     expect(text).toContain("[redacted]");
   });
+
+  describe("with an overridden agent URL (envOnly)", () => {
+    it("uses the env token and never reads the Keychain, without the fallback warning", async () => {
+      const execFile = vi.fn(async () => KEYCHAIN_TOKEN);
+      const warn = vi.fn();
+      const tp = new TokenProvider({ execFile, envToken: ENV_TOKEN, envOnly: true, warn, service: "s", account: "a" });
+      expect(await tp.get()).toBe(ENV_TOKEN);
+      expect(await tp.refresh()).toBe(ENV_TOKEN);
+      expect(execFile).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(tp.redact(`x ${ENV_TOKEN} y`)).toBe("x [redacted] y");
+    });
+
+    it("without an env token: no_token saying why, and the Keychain is still not read", async () => {
+      const execFile = vi.fn(async () => KEYCHAIN_TOKEN);
+      const tp = new TokenProvider({ execFile, envOnly: true, warn: vi.fn(), service: "s", account: "a" });
+      const err = await tp.get().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(BridgeError);
+      expect((err as BridgeError).code).toBe("no_token");
+      expect((err as BridgeError).message).toMatch(/EDIABAS_AGENT_URL is set/);
+      expect((err as BridgeError).message).toMatch(/EDIABAS_AGENT_TOKEN/);
+      expect((err as BridgeError).message).toMatch(/Keychain token .* deliberately never sent/);
+      await tp.refresh().catch(() => undefined);
+      expect(execFile).not.toHaveBeenCalled();
+    });
+  });
 });

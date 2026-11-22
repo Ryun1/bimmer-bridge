@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,9 @@ import { createAppServer, INSTRUCTIONS, SERVER_VERSION } from "../src/server.js"
 import { loadConfig } from "../src/config.js";
 import type { ExecFileFn } from "../src/vmAddress.js";
 import { AGENT_TOKEN, LOOPBACK_BRIDGE, NO_BRIDGE, contractHandler, json, leaseFile, startFakeAgent, type FakeAgent } from "./fixtures.js";
+
+/** The version a release sets, so a version bump never needs this test changed. */
+const PACKAGE_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 let dir: string;
 let agent: FakeAgent;
@@ -30,7 +34,8 @@ interface Setup {
 
 async function connect(s: Setup = {}) {
   const auditPath = join(dir, "logs", "audit.log");
-  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
+  // With EDIABAS_AGENT_URL set the server uses EDIABAS_AGENT_TOKEN only; "" unsets it.
+  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: AGENT_TOKEN, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
   const { config } = loadConfig(env, dir);
   const logs: string[] = [];
   const keychain = s.keychain === undefined ? AGENT_TOKEN : s.keychain;
@@ -63,23 +68,29 @@ describe("MCP server", () => {
   it("identifies itself with instructions", async () => {
     const { client } = await connect();
     expect(client.getServerVersion()).toEqual({ name: "ediabas-bridge", version: SERVER_VERSION });
-    expect(SERVER_VERSION).toBe("0.1.0");
+    expect(SERVER_VERSION).toBe(PACKAGE_VERSION);
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);
-    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(140);
-    expect(instr).toMatch(/Only vm_health and vm_list_windows exist so far/);
-    expect(instr).toMatch(/not built yet/);
-    expect(instr).toMatch(/say they are not available yet rather than offering them/);
+    expect(instr.split(/\s+/).length).toBeLessThanOrEqual(180);
+    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_vehicle_status"]) {
+      expect(instr).toContain(tool);
+    }
+    expect(instr).toMatch(/Call vm_health first/);
+    // Evals showed vm_health batched with ediabas_* calls; it is a gate, not an ordering hint.
+    expect(instr).toMatch(/vm_health first and on its own; read its answer before any other tool/);
+    expect(instr).toMatch(/agent_outdated is not installed in the VM yet/);
+    expect(instr).toMatch(/Never retry a refusal/);
+    expect(instr).toMatch(/never guess names/);
     expect(instr).toMatch(/read-only/i);
     expect(instr).toContain("vm_health");
     expect(instr).toMatch(/cannot click, type, clear faults, code or flash/i);
     expect(instr).toMatch(/rather than retrying|instead of retrying|do not retry/i);
   });
 
-  it("lists both tools with read-only annotations, titles and descriptions", async () => {
+  it("lists the tools with read-only annotations, titles and descriptions", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["vm_health", "vm_list_windows"]);
+    expect(tools).toHaveLength(10);
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.description && t.description.length).toBeGreaterThan(40);
@@ -91,7 +102,9 @@ describe("MCP server", () => {
         openWorldHint: false,
       });
       expect(t.inputSchema.type).toBe("object");
-      expect(Object.keys(t.inputSchema.properties ?? {})).toEqual([]);
+      if (["vm_health", "vm_list_windows", "ediabas_vehicle_status"].includes(t.name)) {
+        expect(Object.keys(t.inputSchema.properties ?? {})).toEqual([]);
+      }
     }
   });
 
@@ -137,7 +150,7 @@ describe("MCP server", () => {
     const { client, auditPath, logs } = await connect();
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
-    expect(textOf(r)).toContain("The agent rejected the token.");
+    expect(textOf(r)).toContain("rejected the token.");
     const audit = await readFile(auditPath, "utf8");
     expect(audit).toMatch(/\tvm_health\tunauthorized\t\d+\n$/);
     for (const s of [JSON.stringify(r), audit, logs.join("\n")]) expect(s).not.toContain(AGENT_TOKEN);
@@ -157,17 +170,49 @@ describe("MCP server", () => {
     expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
   });
 
+  /** Discovery (no EDIABAS_AGENT_URL) finding the fake agent through a lease. */
+  const discovery = (env: Record<string, string> = {}) => ({
+    env: { EDIABAS_AGENT_URL: "", EDIABAS_AGENT_PORT: String(agent.port), ...env },
+    leases: leaseFile({ ip: "127.0.0.1", lease: 0x6b01baf4 }),
+  });
+
   it("reports a missing token with the fix, and the server still serves tools/list", async () => {
-    const { client } = await connect({ keychain: null });
-    expect((await client.listTools()).tools).toHaveLength(2);
+    const { client } = await connect({ ...discovery({ EDIABAS_AGENT_TOKEN: "" }), keychain: null });
+    expect((await client.listTools()).tools).toHaveLength(10);
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
     expect(textOf(r)).toContain("security add-generic-password -s ediabas-bridge -a agent -w");
     expect(agent.requests).toHaveLength(0);
   });
 
+  it("without an agent URL override: Keychain first, even when EDIABAS_AGENT_TOKEN is set", async () => {
+    agent.setHandler(contractHandler("keychain-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    const { client, execFile } = await connect({ ...discovery(), keychain: "keychain-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" });
+    expect((await client.callTool({ name: "vm_health", arguments: {} })).isError).toBeFalsy();
+    expect(execFile).toHaveBeenCalledWith("/usr/bin/security", expect.any(Array), expect.any(Object));
+  });
+
+  it("with EDIABAS_AGENT_URL: sends EDIABAS_AGENT_TOKEN and never queries the Keychain", async () => {
+    const { client, execFile, logs } = await connect({ keychain: "keychain-token-must-not-be-sent-xxxxxxxxxxxxx" });
+    expect((await client.callTool({ name: "vm_health", arguments: {} })).isError).toBeFalsy();
+    expect((await client.callTool({ name: "vm_list_windows", arguments: {} })).isError).toBeFalsy();
+    expect(execFile).not.toHaveBeenCalled();
+    expect(logs.join("\n")).not.toMatch(/EDIABAS_AGENT_TOKEN/); // no fallback warning: env is the rule here
+  });
+
+  it("with EDIABAS_AGENT_URL but no EDIABAS_AGENT_TOKEN: no_token saying why, Keychain not queried, nothing sent", async () => {
+    const { client, execFile, auditPath } = await connect({ env: { EDIABAS_AGENT_TOKEN: "" } });
+    const r = await client.callTool({ name: "vm_health", arguments: {} });
+    expect(r.isError).toBe(true);
+    expect(textOf(r)).toMatch(/EDIABAS_AGENT_URL is set, so this server needs EDIABAS_AGENT_TOKEN/);
+    expect(textOf(r)).toMatch(/Keychain token .* deliberately never sent/);
+    expect(execFile).not.toHaveBeenCalled();
+    expect(agent.requests).toHaveLength(0);
+    expect(await readFile(auditPath, "utf8")).toMatch(/\tvm_health\tno_token\t\d+\n$/);
+  });
+
   it("uses the env token as a fallback with one stderr warning", async () => {
-    const { client, logs } = await connect({ keychain: null, env: { EDIABAS_AGENT_TOKEN: AGENT_TOKEN } });
+    const { client, logs } = await connect({ ...discovery(), keychain: null });
     expect((await client.callTool({ name: "vm_health", arguments: {} })).isError).toBeFalsy();
     expect((await client.callTool({ name: "vm_list_windows", arguments: {} })).isError).toBeFalsy();
     const warnings = logs.filter((l) => l.includes("EDIABAS_AGENT_TOKEN"));

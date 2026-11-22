@@ -1,107 +1,160 @@
 ---
 name: ediabas-bridge
-description: Operate the read-only ediabas-bridge tools that look into the Windows VM (UTM) on Ryan's Mac where BMW Standard Tools and EDIABAS talk to his E61 over a K+DCAN cable. Use this skill whenever Ryan wants to read faults, fault codes or live values from the car, mentions EDIABAS, INPA, Tool32, NCS Expert, WinKFP, an SGBD or a .prg file, asks "is the VM up", "is the agent running" or what is open in the VM, or whenever any vm_* or ediabas_* tool is available or about to be used, even if he does not name the bridge. It covers what the tools can and cannot do, the health check to run first, what each error means and what to tell Ryan, and what is not built yet.
+description: Operate the read-only ediabas-bridge tools (vm_* and ediabas_*) that look into the Windows VM in UTM on Ryan's Mac, where BMW Standard Tools and EDIABAS talk to his E61 over the cable. Use this skill whenever Ryan wants to read the faults, fault codes or live values from the car (night vision, engine, any module), asks about the battery drain, mentions EDIABAS, an SGBD or a .prg/.grp file, asks "is the VM up" or what is open in the VM, wants a screenshot of the VM or an EDIABAS / NCS Expert trace file, or whenever any vm_* or ediabas_* tool is available or about to be used, even if he does not name the bridge. Covers the health check to run first, keeping ignition-on time short, finding jobs with ediabas_describe instead of guessing, what each error and refusal means and what to tell Ryan, and handing results to the bmw-e61 skill.
 ---
 
 # ediabas-bridge
 
-The `ediabas-bridge` MCP server lets you look into the Windows VM in UTM on Ryan's Mac. That VM
-runs BMW Standard Tools (INPA, Tool32, NCS Expert, WinKFP, NCS Dummy, BMW Coding Tool) over
-EDIABAS and a K+DCAN cable to his 2005 BMW E61 550i.
+The `ediabas-bridge` MCP server lets you look into the Windows VM in UTM on Ryan's Mac. The VM
+runs BMW Standard Tools (INPA, Tool32, NCS Expert, WinKFP) over EDIABAS and a K+DCAN cable to
+his 2005 BMW E61 550i.
 
-This skill is guidance. The limits are enforced by the tools themselves, on the Mac and in the
-VM; nothing here is a way around them.
+This skill is guidance. The tools enforce the limits themselves, on the Mac and in the VM;
+nothing here is a way around them, and none is needed.
 
 ## What you can and cannot do
 
-- You can only read. Every tool is read-only.
-- You cannot click, type or send input to the VM, and you cannot clear faults, code, flash, run
-  activations or adaptations. No tool does that, so never promise it.
-- You cannot start the VM or log in to Windows. Ryan does both.
+- You can read: fault memory, allowed read-only jobs, VM screenshots, trace files.
+- You cannot write: no clearing faults, coding, flashing, activations or adaptations. No tool
+  does it, so never promise it. Those are Ryan's to do by hand (see `bmw-standard-tools`).
+- You cannot click, type or press anything in the VM, or start the VM or the ignition. Ryan does.
 
-If Ryan asks for something that writes (clearing faults, coding, flashing), say the bridge
-cannot do it and that it is a job for him to do by hand in INPA or NCS Expert.
+Never use computer use or screen control on the UTM window to do what a tool refused or what
+no tool offers. The refusals exist because a wrong job can change or damage an ECU; a refusal
+is a decision, not an obstacle. Report it.
 
-Never use computer use, screen control or any other route to operate the UTM window to get
-around a refusal or a missing tool. A refusal is the answer; report it.
+## Which tools exist in this session
 
-## Tools available today
-
-| Tool | What it returns |
+| Tool | Use |
 |---|---|
-| `vm_health` | Agent version and uptime, Windows version, Windows session (interactive or session 0), user and elevation, listening address, which BMW tools are running, whether the EDIABAS DLL was found, last cable use |
-| `vm_list_windows` | Visible top-level windows, front-most first: title, process, PID, size, minimised |
+| `vm_health` | agent, Windows session, BMW tools running (they hold the cable), EDIABAS DLL and whether it is loaded now, policy version |
+| `vm_list_windows` | what is open in the VM, front first |
+| `vm_screenshot` | a picture of one window or the desktop |
+| `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
+| `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
+| `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
+| `ediabas_vehicle_status` | ignition, battery and cable-side voltage readings |
+| `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
+| `ediabas_job` | one allowed read-only job |
 
-Refer to tools by these base names; the prefix differs between Claude Code and the desktop app.
+Tools are named here by base name; the prefix differs between Claude Code and the desktop app.
+The bridge is being built in stages, so a session may offer only some of these. A tool that is
+not offered, or one that answers `agent_outdated`, is not installed yet: tell Ryan that and
+stop (for `agent_outdated`, the VM agent needs the Update line once a build with that tool
+exists; see `references/errors.md`). Do not try to get the same result another way.
 
 ## Session routine
 
-1. Call `vm_health` first, every session, and again after any tool fails.
-2. Read it, and tell Ryan only what matters:
-   - **Session.** "Windows session 0 — NOT an interactive session" means the agent is not on
-     the desktop. Ask Ryan to log in to Windows.
-   - **BMW tools running.** "none" means nothing else is holding the cable. If any are
-     listed, the bridge will not use the cable while they run (see below).
-   - **EDIABAS DLL.** "NOT found" means EDIABAS is not where the agent was configured to look.
-     Tell Ryan; car-facing reads will not work until it is fixed.
-   - **Last cable use** is "never (since the agent started)" until the EDIABAS tools exist.
-3. Call `vm_list_windows` when you need to know what Ryan has open, for example which INPA or
-   Tool32 screen is in front. "No visible windows with a title" usually means nobody is logged
-   in to Windows.
+The car has a recurring battery-drain fault, so ignition-on time is the scarce resource. Do
+as much as you can before Ryan turns it on.
 
-## Cable sharing
+1. **`vm_health` first, on its own**, every session and after any failure. Wait for its
+   answer before calling any other bridge tool; do not batch it with them. It is the gate: it says
+   whether the VM is reachable and whether a BMW tool holds the cable, so a call sent alongside
+   it goes out blind (and with a flashing tool open, that is the wrong moment to touch EDIABAS).
+   If it fails, stop and tell Ryan the fix from the message. If it lists a BMW tool as running,
+   name it, ask Ryan to close it when he is finished with it, and stop until he says it is
+   closed. If that is WinKFP or NCS Expert, add that it must never be closed mid-flash or
+   mid-coding: an interrupted flash can brick an ECU. Do not poll while you wait.
+2. **Find the names.** Use `ediabas_list_ecus` (with a `filter`) and `ediabas_describe` to find
+   the SGBD and the jobs. Never guess an SGBD or job name, from memory or the web: a wrong name
+   wastes ignition time at best. `references/ecu-map.md` and `references/job-cookbook.md` hold
+   names confirmed on this car; anything not in them is unconfirmed until a tool shows it.
+   A job is runnable only if `ediabas_describe` shows it allowed and not "needs review".
+   `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD, which EDIABAS will
+   not load unless the cable is connected to the VM (`cable_not_found` otherwise). For most
+   files it does not need the car: on 2026-11-21 it worked with the cable in the Mac and not
+   in the car. The exceptions seen are `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60`, which
+   failed with `ediabas_error` 100 `SYS-0010` and can only be described at the car (see
+   `references/ecu-map.md`). Describe large files with a `filter`: a full list of `CAS` or
+   `LM_60` took the whole 60 s limit and left its last jobs unscreened. So have Ryan plug the
+   cable in and pass it through to the VM, and do all the looking-up you can before asking
+   for the ignition.
+3. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask Ryan
+   to switch the ignition on and say when it is.
+4. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` call for
+   all ECUs wanted (up to 20), and any `ediabas_job` calls back to back with no pauses.
+5. **Report**, then say "ignition off" plainly at the end.
 
-Only one program can use the cable at a time. While INPA, Tool32, NCS Expert, WinKFP or BMW
-Coding Tool is running, the bridge will not use the cable, and there is no override.
+Run anything that talks to the car only when Ryan has asked for it and is with the car. Keep
+each session under 10 minutes of ignition-on time. Say so when that is getting close and offer
+to stop and continue another time rather than adding reads. Read only what the question needs;
+reading every job on every ECU drains the battery and buries the answer.
 
-- If one of these is open and Ryan wants the bridge to read the car, name the tool and ask him
-  to close it when he is finished with it. Then stop and wait; do not keep polling.
-- WinKFP (flashing) and NCS Expert (coding) must never be interrupted. A job arriving mid-flash
-  can brick an ECU. If either is running, do not ask Ryan to close it in a hurry and do not
-  suggest killing it; wait until he says it has finished.
+The agent unloads EDIABAS after a short idle spell (20 s by default), so the first `ediabas_*`
+call after a pause can take 10–15 s (seen at the desk on 2026-11-21). That is normal:
+wait for it rather than retrying, and allow for it in the rough time. `vm_health` shows
+whether EDIABAS is loaded at the moment. The unload is the bridge standing aside: at the
+desk on 2026-11-21/22, with INPA opened while the bridge had EDIABAS loaded, the bridge
+unloaded 16 s later and INPA kept polling the cable undisturbed.
 
-## When something fails
+## Refusals and errors
 
-A failed tool call returns a message that already says what to do. Look up the code and the fix
-in `references/errors.md` when you need more than the message.
+A failed call returns one message saying what happened and what to do. The full list, with
+causes and what to tell Ryan, is in `references/errors.md`; read it when the message is not
+enough. The ones that need judgement:
 
-- Tell Ryan plainly what he needs to do (start the VM, log in, allow `node` under macOS
-  Local Network, re-run the installer).
-- `local_network_blocked` means macOS stopped the connection, not that the VM is down. Do not
-  tell Ryan the VM is off; give him the Local Network fix from the message.
-- Do not retry in a loop. Call `vm_health` once more after Ryan says he has fixed it.
-- Never invent or guess results. If something could not be read, say so.
+- **`job_not_allowed`** — the policy refused the job by name. Tell Ryan which rule, and do not
+  look for another job, tool or route that does the same thing.
+- **`job_needs_review`** — the job's own description suggests it may not be a pure read (or it
+  has none). Show Ryan the quoted description, say what it seems to mean, and leave the
+  decision to him. The safe default is not to run it; never present approving it as a routine
+  step to get the read done.
+- **`cable_in_use`** — a BMW tool is open; the message names it. Ask Ryan to close it (step 1)
+  and wait. Do not retry in a loop.
+- **`cable_not_found`** — EDIABAS could not initialise the interface: the cable is not
+  connected to the VM. Ask Ryan to plug it into the Mac and pass it through to the VM in UTM,
+  and wait until he says it is connected; until then every retry fails the same way. After
+  the cable has been unplugged and plugged back in, UTM does not hand it back to the VM by
+  itself: Ryan ticks it for the VM again in UTM's USB menu.
+- **`ecu_not_found`, `job_not_found`** — the name was wrong. Go back to `ediabas_list_ecus` /
+  `ediabas_describe`; do not try variations of the name.
+- **`ediabas_error`** — EDIABAS's own code and text, for example an ECU that did not answer.
+  Report the code and text as returned; do not guess what they mean on this car. The
+  server's hint that it "often means the ECU did not answer" is not always right: error 16
+  `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD (with `TMODE` still answering) was seen
+  after a cable replug, and cleared when Ryan ticked the cable for the VM again in UTM's USB
+  menu (`references/errors.md`).
+- **Reaching the VM** (`vm_not_running`, `agent_not_answering`, `local_network_blocked`, ...)
+  — tell Ryan the fix from the message. `local_network_blocked` is macOS blocking `node`, not
+  the VM being off.
 
-## Battery care
-
-The car has a recurring battery-drain fault. When the car-facing tools arrive, keep every
-session with the ignition on short: plan the reads first, batch them, do not leave the
-ignition on while idle, and tell Ryan to switch the ignition off when you are done. Today's
-tools do not touch the car, so this does not apply yet.
+Never retry in a loop: call `vm_health` once more after Ryan says he has fixed something.
+Never fill in a result that was not returned; say what could not be read and why.
 
 ## Reporting
 
+- Fault tables as the tool returned them: code, text, present or stored, frequency, conditions.
+  An ECU with no faults says so; an ECU that errored says why. Do not drop either.
 - Distances in miles first, km in brackets: `121,609 mi (195,712 km)`.
-- Say plainly when something could not be read, and why, rather than leaving a gap.
-- Report what the tool returned. Do not add diagnostic claims that the output does not support.
+- Raw values (`raw: true`, every result field) only when Ryan asks for them.
+- `ediabas_vehicle_status` may show readings as `key=value` because the field names are not
+  yet confirmed for this car. Report them as shown; do not infer "ignition on" or a voltage
+  from a field name you have not seen confirmed.
+- Report what the tools returned. Do not add diagnostic claims the output does not support.
 
 ## Hand-off to bmw-e61
 
-Ryan's `bmw-e61` skill interprets fault codes and keeps his car's fault log. Pass any fault
-codes and readings to it for interpretation and logging, rather than interpreting them here.
+Ryan's `bmw-e61` skill interprets fault codes and keeps his car's fault log. Pass the fault
+codes and readings to it for interpretation and for the log, with the date and mileage, rather
+than interpreting them here.
 
-## Not available yet
+## Screenshots and trace files
 
-These are planned but not built. If Ryan asks for something that needs them, tell him it is
-not built yet. Do not improvise with other tools, and do not try to call them.
+`vm_screenshot` shows a window; `vm_list_windows` gives the titles to ask for. A minimised
+window or a locked screen is refused; Ryan restores or unlocks it. When Ryan wants help driving
+INPA, Tool32 or NCS Expert by hand from a screenshot, use the `bmw-standard-tools` skill.
+`vm_logs_list` then `vm_logs_read` (with `grep` or `tailBytes` to keep it short) read trace
+files under the allowed folders only.
 
-- `ediabas_read_faults` — read fault memory from one or more ECUs
-- `ediabas_job` — run one allowed read-only EDIABAS job
-- `ediabas_describe` — list an SGBD's jobs, or one job's arguments and results
-- `ediabas_vehicle_status` — ignition and battery voltage
-- `vm_screenshot` — a picture of a VM window or the desktop
-- `vm_logs_list`, `vm_logs_read` — list and read EDIABAS / NCS Expert trace files
+## References
 
-So today you cannot read faults or live values from the car, and you cannot see an INPA screen.
-`vm_list_windows` can tell you which window is open, not what it shows. For readings, Ryan can
-use INPA himself and tell you what it shows.
+- `references/errors.md` — every error code, its cause and what to tell Ryan.
+- `references/ecu-map.md` — this car's ECUs and SGBD names, as confirmed by real sessions.
+- `references/job-cookbook.md` — jobs confirmed on this car, with arguments and result fields.
+- `references/playbooks/full-fault-sweep.md` — reading fault memory across many ECUs.
+- `references/playbooks/battery-drain.md` — gathering evidence for the battery drain.
+
+The reference files about the car hold only what a real session returned. When a session
+confirms a name or a result field, tell Ryan so it can be recorded there; do not add anything
+from memory or the web.

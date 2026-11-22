@@ -66,6 +66,7 @@ internal sealed class RequestPipeline
         finally
         {
             sw.Stop();
+            var detail = http.Items.TryGetValue(EdiabasEndpoints.AuditKey, out var a) ? a as RequestAudit : null;
             _ctx.Audit.Write(
                 started,
                 http.Connection.RemoteIpAddress?.ToString(),
@@ -74,7 +75,11 @@ internal sealed class RequestPipeline
                 http.Request.QueryString.Value,
                 http.Response.StatusCode,
                 errorCode,
-                sw.ElapsedMilliseconds);
+                sw.ElapsedMilliseconds,
+                detail?.Ecu,
+                detail?.Job,
+                detail?.Rule,
+                http.Items.TryGetValue(HandlerSupport.AuditTargetKey, out var t) ? t as string : null);
         }
     }
 
@@ -119,7 +124,9 @@ internal sealed class RequestPipeline
         }
 
         await route.Handler(http);
-        return null;
+
+        // Handlers that answer with an error record its code for the audit line.
+        return http.Items.TryGetValue(EdiabasEndpoints.AuditKey, out var a) && a is RequestAudit audit ? audit.ErrorCode : null;
     }
 
     private static IPAddress? Normalize(IPAddress? address) =>

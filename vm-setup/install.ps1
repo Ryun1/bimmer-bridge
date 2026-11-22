@@ -1,7 +1,9 @@
 # ediabas-bridge - install or upgrade the VM agent.
 #
-# Run in an elevated Windows PowerShell 5.1 window inside the VM, on one line:
-#   $sha='<sha256 of EdiabasAgent.zip>'; irm http://<mac>:8000/install.ps1 | iex
+# Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Install line that
+# dev/serve.py prints. That line downloads this file, checks its SHA-256 against the value in
+# the line, and only then runs it (with iex), with these variables set:
+#   $sha      SHA-256 of EdiabasAgent.zip (required)
 # Optional variables set before it on the same line:
 #   $base     server URL (default http://<IPv4 default gateway>:8000)
 #   $Elevated $true to run the agent with highest privileges (default: limited)
@@ -79,6 +81,62 @@
 
     function Get-Sha256Hex([string]$Path) {
         return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
+    }
+
+    # A new, empty folder that only SYSTEM and Administrators can write to, created with that
+    # ACL in one step (no window in which another process could put a file in it). The zip is
+    # downloaded, checked and expanded here, never in the user's %TEMP%, so a non-elevated
+    # process cannot swap EdiabasAgent.exe between the hash check and the copy.
+    function New-AdminOnlyDirectory {
+        $path = Join-Path $env:ProgramData ('EdiabasBridge-staging-' + [guid]::NewGuid().ToString('N'))
+        if (Test-Path -LiteralPath $path) {
+            throw ('Staging folder ' + $path + ' already exists. Nothing was changed.')
+        }
+        $acl = New-Object System.Security.AccessControl.DirectorySecurity
+        $acl.SetAccessRuleProtection($true, $false)
+        $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                (New-Object System.Security.Principal.SecurityIdentifier($sid)),
+                [System.Security.AccessControl.FileSystemRights]::FullControl,
+                $inherit,
+                [System.Security.AccessControl.PropagationFlags]::None,
+                [System.Security.AccessControl.AccessControlType]::Allow)
+            $acl.AddAccessRule($rule)
+        }
+        [void][System.IO.Directory]::CreateDirectory($path, $acl)
+        $check = Get-Acl -LiteralPath $path
+        $others = @($check.Access | Where-Object {
+            $s = $_.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
+            $s -ne 'S-1-5-18' -and $s -ne 'S-1-5-32-544'
+        })
+        if (-not $check.AreAccessRulesProtected -or $others.Count -ne 0) {
+            Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+            throw ('Could not restrict ' + $path + ' to Administrators. Nothing was changed.')
+        }
+        return $path
+    }
+
+    # Copies the verified exe and checks that what landed is the same file.
+    function Copy-VerifiedExe([string]$From, [string]$To, [string]$Hash) {
+        $copied = $false
+        for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
+            try {
+                Copy-Item -LiteralPath $From -Destination $To -Force
+                $copied = $true
+            } catch {
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        if (-not $copied) {
+            return $false
+        }
+        $landed = (Get-FileHash -Algorithm SHA256 -LiteralPath $To).Hash
+        if ($landed -ine $Hash) {
+            Remove-Item -LiteralPath $To -Force -ErrorAction SilentlyContinue
+            throw ('The copied ' + $To + ' (SHA-256 ' + $landed + ') is not the verified exe (' + $Hash + '). It was deleted; run the line again.')
+        }
+        return $true
     }
 
     function Stop-Agent {
@@ -207,7 +265,7 @@
         # ---- inputs ----
         $sha = Get-OptionalVar 'sha'
         if (-not $sha -or ([string]$sha).Trim() -notmatch '^[0-9a-fA-F]{64}$') {
-            throw 'Set $sha to the SHA-256 of EdiabasAgent.zip (64 hex characters) on the same line, before irm. Nothing was changed.'
+            throw 'Set $sha to the SHA-256 of EdiabasAgent.zip (64 hex characters): paste the whole line serve.py prints. Nothing was changed.'
         }
         $sha = ([string]$sha).Trim()
 
@@ -227,9 +285,8 @@
 
         Write-Step ('Installing ediabas-bridge agent for ' + $userName + ' from ' + $base)
 
-        # ---- 1. download and verify ----
-        $tmp = Join-Path $env:TEMP ('ediabas-bridge-' + [guid]::NewGuid().ToString('N'))
-        New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+        # ---- 1. download and verify, in a folder only Administrators can write ----
+        $tmp = New-AdminOnlyDirectory
         $zip = Join-Path $tmp 'EdiabasAgent.zip'
         Write-Step ('Downloading ' + $base + '/EdiabasAgent.zip')
         Invoke-WebRequest -Uri ($base + '/EdiabasAgent.zip') -OutFile $zip -UseBasicParsing
@@ -248,6 +305,7 @@
             throw 'The zip does not contain EdiabasAgent.exe and version.txt. Nothing was changed.'
         }
         $version = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+        $exeHash = Get-Sha256Hex $newExe
 
         # ---- 2. stop a running agent ----
         Write-Step 'Stopping the scheduled task and any running agent'
@@ -270,16 +328,7 @@
 
         # ---- 4. the exe ----
         Write-Step ('Installing EdiabasAgent.exe ' + $version)
-        $copied = $false
-        for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
-            try {
-                Copy-Item -LiteralPath $newExe -Destination $ExePath -Force
-                $copied = $true
-            } catch {
-                Start-Sleep -Milliseconds 500
-            }
-        }
-        if (-not $copied) {
+        if (-not (Copy-VerifiedExe $newExe $ExePath $exeHash)) {
             throw ('Could not replace ' + $ExePath + ' (file in use?).')
         }
 

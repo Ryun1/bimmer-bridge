@@ -1,16 +1,24 @@
 # ediabas-bridge errors
 
-Every error the Mac MCP server can return today, from `vm_health` or `vm_list_windows`. A
-failed call is a tool error whose text is the message shown below. The code is what appears in
-the Mac audit log (`~/Library/Logs/ediabas-bridge/audit.log`).
+Every error code the bridge's tools can return (the list in the project's `docs/tools.md`). A
+failed call is a tool error whose text is one message saying what happened and what to do. The
+code is what appears in the Mac audit log (`~/Library/Logs/ediabas-bridge/audit.log`).
+Messages quoted below are from the server as built; codes without a quoted message are
+described by meaning, and the server's own message is the one to relay.
 
 General rule for all of them: tell Ryan what to do, do not retry in a loop, and call `vm_health`
-once more after he says it is fixed. Never fill in results that were not returned.
+once more after he says it is fixed. Never fill in results that were not returned. A refusal is
+the answer: never look for another tool, job or route (and never computer use on the VM
+window) that would get round it.
 
 ## Contents
 - Reaching the VM: `vm_not_running`, `local_network_blocked`, `agent_not_answering`, `wrong_service`, `config_error`
 - Authentication: `no_token`, `unauthorized`, `forbidden`
-- Responses: `bad_response`, agent-reported errors, `internal_error`
+- Versions: `agent_outdated`, `bad_response`, agent-reported errors, `internal_error`
+- Job policy: `policy_unavailable`, `job_not_allowed`, `job_needs_review`
+- EDIABAS: the slow first call, a describe that runs out of time, `cable_in_use`, `cable_not_found`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
+- Screenshots: `window_not_found`, `window_minimized`, `desktop_unavailable`
+- Logs: `path_not_allowed`, `file_not_found`
 - Deploy steps (installer, update, token)
 
 ---
@@ -96,6 +104,12 @@ server already re-reads the Keychain once before reporting this.
 the Install line in the VM again (see Deploy steps). It replaces the Keychain entry. No
 restart is needed; call `vm_health` again afterwards.
 
+**With `EDIABAS_AGENT_URL` set** the message starts "The agent at EDIABAS_AGENT_URL rejected the
+token." instead. The server then uses only `EDIABAS_AGENT_TOKEN` and never reads the Keychain, so
+the Keychain is not the problem: that environment variable holds the wrong token for the agent
+at that address. Tell Ryan to correct `EDIABAS_AGENT_TOKEN` in the MCP server's registration, or
+to unset `EDIABAS_AGENT_URL` to use the VM, and restart the server.
+
 ### `forbidden`
 **Message:** "The agent refused this Mac's address (firewall or gateway check)."
 
@@ -107,7 +121,20 @@ suggest loosening the firewall.
 
 ---
 
-## Responses
+## Versions
+
+### `agent_outdated`
+**Meaning:** the agent in the VM has no endpoint for the tool that was called. The Mac server
+was updated with a tool the installed agent does not have yet.
+**Tell Ryan:** that tool is not installed in the VM yet; the agent needs the Update line (see
+Deploy steps), and only if a newer agent build exists. Then stop: do not try to get the same
+result with another tool.
+
+### Policy version warning in `vm_health`
+Not an error code. `vm_health` shows the agent's policy version and warns when it differs from
+the Mac's. The two sides may then disagree about which jobs are allowed (each still refuses
+what its own copy refuses). Tell Ryan the agent needs the Update line with a build made from
+the current policy.
 
 ### `bad_response`
 **Message:** "The agent's response to GET <path> did not match the expected format. The agent
@@ -119,9 +146,11 @@ and this server may be different versions."
 ### Agent-reported errors
 **Message:** "The agent reported an error: <code> — <message> (HTTP <status>)."
 
-The code is the agent's own. Today it can be:
+The code is the agent's own. Codes with their own section in this file are listed there;
+the generic ones are:
 - `not_found` (404) — the agent does not have the endpoint the server asked for; usually an
-  older agent. Update it (see Deploy steps).
+  older agent. For tools the server knows this is reported as `agent_outdated`. Update the
+  agent (see Deploy steps).
 - `method_not_allowed` (405) — a version mismatch between the server and the agent. Update the
   agent.
 - `internal_error` (500) — the agent failed; details are in its log in the VM at
@@ -137,6 +166,180 @@ The code is the agent's own. Today it can be:
 
 ---
 
+## Job policy
+
+The policy (`policy/policy.json` in the repo) is default-deny: a job runs only if its name is
+on the allowed list or matches an allowed read pattern, and no part of it looks like a write.
+The Mac checks it before anything is sent; the agent checks it again.
+
+### `policy_unavailable`
+**Meaning:** the Mac server could not load the policy file, so every `ediabas_*` tool refuses
+and nothing is sent to the VM. This is the safe failure.
+**Tell Ryan:** the policy file is missing or invalid in the repo on the Mac; the message says
+which. It needs fixing in the repo, not working round.
+
+### `job_not_allowed`
+**Meaning:** the policy refused the ECU or job by name; the message names the rule (for
+example a deny word such as `LOESCH`, or `default_deny` for a job not on the list).
+**Cause:** the job may write, or simply is not on the allowed list.
+**Tell Ryan:** which job was refused and by which rule. Do not try a similar job name, a
+different ECU, Tool32, INPA or anything else to get the same effect. If Ryan believes a job is
+a pure read that should be allowed, that is a change to the policy files in the repo, made
+deliberately and with its test cases, not something to do mid-session.
+
+### `job_needs_review`
+**Meaning:** the job's name looks like a read (`STATUS_...`), but its own description in the
+SGBD contains a word that suggests it may do something (start, activate, write, clear, learn
+...) or it has no description. The message quotes the description and the words matched.
+**Tell Ryan:** show him the description as quoted, say in plain English what it seems to say,
+and that the bridge will not run it unless he decides it is a pure read. That decision is his
+alone. The safe default is to skip it; never present approving it as a routine step.
+
+---
+
+## EDIABAS
+
+### The first call after a pause is slow
+Not an error. The agent unloads EDIABAS after a short idle spell (20 s by default) so that it
+does not hold EDIABAS open between requests, and loads it again on the next `ediabas_*` call.
+That first call can take 10–15 s (seen at the desk on 2026-11-21), and a full
+`ediabas_describe` with comments can take about as long on its own (about 15 s for `NVE_65`).
+It is normal and not a reason to retry. `vm_health` shows whether EDIABAS is loaded at the moment (older agents do
+not report it). Allow for it in the rough time you give Ryan before the ignition goes on.
+
+### A full `ediabas_describe` runs out of time
+Not an error code: the call succeeds, but not every job was screened. On 2026-11-21 the full
+job lists of `CAS` (150 jobs) and `LM_60` (134 jobs) took the whole 60 s describe limit
+(`durationMs` 60043 and 60051). The jobs at the end of each list came back with no description
+(the last 52 on `CAS`, the last 9 on `LM_60`). On `CAS`, 18 allowed jobs among them showed
+review `not_checked` ("description not screened"; one more, `STATUS_RDU`, showed needs
+review), so the list does not show them as runnable. On `LM_60` all 9 were refused by name
+anyway.
+**What to do:** describe large files with a `filter` (a job-name substring such as `STATUS_`),
+or one job at a time with `job`; a single job on `CAS` took about 5–6.5 s. Do not repeat the
+full describe hoping it gets further.
+
+### `cable_in_use`
+**Meaning:** a BMW tool (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool) or another program
+using EDIABAS is running in the VM; the message names it. Only one program can use the cable,
+and there is no override.
+**Tell Ryan:** name the tool and ask him to close it when he has finished with it; then wait
+for him to say so. Do not retry in a loop. If it is WinKFP or NCS Expert, say it must not be
+closed or killed mid-flash or mid-coding: an interrupted flash can brick an ECU.
+
+### `cable_not_found`
+**Message:** begins "EDIABAS could not initialise the diagnostic interface (EDIABAS error 28:
+IFH-0018: INITIALIZATION ERROR): the K+DCAN cable is not connected to the VM." and asks Ryan to
+plug the cable into the Mac and pass it through to the Windows VM in UTM, and not to retry
+until he says it is connected.
+
+After the cable has been unplugged from the Mac and plugged back in, a restarted agent can
+report this too (`IFH-0018`) even though the cable is in the Mac: see "After the cable is
+replugged" under `ediabas_error`.
+
+**Meaning:** EDIABAS could not open the interface, so nothing reached the car. Seen at the desk
+on 2026-11-21 with the cable not passed through to the VM: a real SGBD would not load at all,
+so even `ediabas_describe` failed this way. Only `TMODE` and `UTILITY` loaded without the
+cable. The same day, with the cable passed through to the VM but not plugged into the car,
+`ediabas_describe` on `NVE_65` worked: describing most real SGBDs needs the cable in the VM, not
+the car or the ignition (for the exceptions, see error 100 under `ediabas_error`). It can fail a whole call, or appear in each ECU's place in
+`ediabas_read_faults`. It is not the same as an ECU that did not answer (`ediabas_error`):
+there, the cable is connected and the car is silent.
+**Tell Ryan:** the cable is not connected to the VM; plug it into the Mac and pass it through
+to the VM in UTM (if it is already plugged in, tick it for the VM again in UTM's USB menu),
+then say when it is done. Wait for him: until then every retry fails the
+same way. Then call `vm_health` once and carry on. Do all job discovery (`ediabas_list_ecus`,
+`ediabas_describe`) in that state, before asking for the ignition.
+
+### `ecu_not_found`
+**Meaning:** there is no SGBD or group file of that name in the VM's EDIABAS ECU folder.
+**What to do:** search with `ediabas_list_ecus` (a `filter` substring) and pick from what it
+lists. Do not try variations of the name blind.
+
+### `job_not_found`
+**Meaning:** the SGBD has no job of that name.
+**What to do:** list its jobs with `ediabas_describe`. Never guess job names.
+
+### `ediabas_error`
+**Meaning:** EDIABAS ran the request and reported its own error; the message carries
+EDIABAS's code and text. Typical reasons are an ECU that does not answer (ignition off, module
+not fitted, wrong SGBD for this car, or the cable not plugged into the car). A cable not
+connected to the VM is reported separately, as `cable_not_found`. Which other EDIABAS codes mean
+which on this install has not been confirmed yet, apart from the two seen at the desk below.
+**Tell Ryan:** the code and text as returned, and for which ECU. Do not interpret the code
+beyond what the text says. In `ediabas_read_faults` this appears in that ECU's place and the
+other ECUs still print.
+
+The server's hint with every `ediabas_error` says it "often means the ECU did not answer". For
+the two codes below, seen at the desk with the cable not in the car, that is not what
+happened; go by what is written here.
+
+**Error 100 `SYS-0010: INITIALIZATION ERROR` from `ediabas_describe`.** Seen on 2026-11-21
+for `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60`, with the cable in the VM and not in the
+car, while other real SGBDs described normally. These files appear to need the control unit to
+answer even to list their jobs, so they can only be described at the car (see `ecu-map.md`).
+It does not show that the file fits this car or that it does not: which engine file fits is
+not known. Tell Ryan they have to be described at the car, and plan that into the session at
+the car; do not retry at the desk.
+
+**After the cable is replugged: error 16 `IFH-0006: COMMAND NOT ACCEPTED`, then
+`cable_not_found`.** Seen at the desk on 2026-11-21/22: after the cable was unplugged from the
+Mac and plugged back in, every real SGBD failed with `ediabas_error` 16 `IFH-0006: COMMAND
+NOT ACCEPTED` (even `ediabas_describe`), while `TMODE` still answered. After the agent was
+restarted, the same state gave `cable_not_found` (`IFH-0018`). Both cleared when Ryan ticked
+the cable for the VM again in UTM's USB menu: after a replug, UTM does not hand the cable back
+to the VM by itself. So with error 16 (or `cable_not_found`) after the cable has been
+unplugged, do not tell Ryan the ECU did not answer: ask him to open UTM's USB menu for the
+Windows VM and tick the cable again, say when it is done, then call `vm_health` once.
+
+### `ediabas_unavailable`
+**Meaning:** the agent could not start EDIABAS: the DLL is missing or failed to initialise.
+`vm_health` shows whether the DLL was found.
+**Tell Ryan:** EDIABAS would not start in the VM; give him the reason from the message. The
+bridge never changes EDIABAS's configuration, so the fix is his.
+
+### `job_timeout`
+**Meaning:** the job was still running when its time ran out, and the agent stopped it.
+**Tell Ryan:** which job timed out. Do not rerun it straight away; each attempt costs
+ignition-on time. Check `ediabas_vehicle_status` or ask Ryan whether the ignition is on.
+
+### `not_run`
+**Meaning:** (per ECU in `ediabas_read_faults`) the batch ran out of time before this item
+started.
+**Tell Ryan:** which ECUs were not read. Read them in a later, smaller call only if they are
+still needed, keeping the session's ignition time in mind.
+
+### `bad_request`
+**Meaning:** an argument was missing or malformed. Usually a mistake in the call; fix the
+arguments (check them with `ediabas_describe`) rather than retrying the same call.
+
+---
+
+## Screenshots
+
+### `window_not_found`
+No visible window matches the title or handle. Call `vm_list_windows` and use a title from it.
+
+### `window_minimized`
+The window is minimised and the agent never restores windows. Ask Ryan to restore it.
+
+### `desktop_unavailable`
+The screen is locked, on the secure desktop, or the agent is not in an interactive session.
+Ask Ryan to log in or unlock Windows.
+
+---
+
+## Logs
+
+### `path_not_allowed`
+The path is outside the folders the agent may read, or tries to escape them. Use
+`vm_logs_list` and pick a path from it. Do not try other spellings of the path.
+
+### `file_not_found`
+No such file. List again with `vm_logs_list`; trace files are rewritten by the tools.
+
+---
+
 ## Deploy steps
 
 Use these only when the fix above calls for them. Ryan runs everything inside the VM; give him
@@ -145,9 +348,9 @@ one line at a time and say what to expect.
 1. On the Mac, with the VM running, start the deploy server from the repo:
    `python3 dev/serve.py --accept-token`
    (`--accept-token` lets the installer hand the agent's token straight to the Mac's Keychain.)
-   It prints the lines to paste into the VM, including **Install** and **Update** lines of the
-   form `$base='...'; $sha='...'; irm $base/install.ps1 | iex`. Copy them exactly from its
-   output; the hash in the line is what the script checks the download against, so do not
+   It prints the lines to paste into the VM, including long one-line **Install** and **Update**
+   lines that start `$base='...'; $sha='...';`. Copy the whole line exactly from its output;
+   the hashes in the line are what the script and the download are checked against, so do not
    type or reuse an old one. If it says `release/EdiabasAgent.zip` is not built, the agent has
    to be built first (`vm-agent/build.sh`).
 2. In the VM, open **Windows PowerShell** as administrator (not PowerShell 7) and paste the

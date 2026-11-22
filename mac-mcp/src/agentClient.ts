@@ -4,6 +4,8 @@ import {
   BridgeError,
   agentError,
   agentNotAnswering,
+  ediabasRequestLost,
+  agentOutdated,
   badResponse,
   forbidden,
   localNetworkBlocked,
@@ -11,6 +13,7 @@ import {
   vmNotRunning,
   wrongService,
 } from "./errors.js";
+import type { ExchangeRecorder } from "./recorder.js";
 import { VmLocator, bridgeSubnets, hostPort, isOnLink, type CallContext, type DiscoverySources } from "./vmAddress.js";
 
 export const AGENT_ID = "ediabas-bridge-agent";
@@ -37,8 +40,18 @@ export const HealthSchema = z.object({
   port: z.number().int().nullable(),
   gateway: z.string().nullable(),
   conflictingProcesses: z.array(z.object({ name: z.string(), pid: z.number().int() })),
-  ediabas: z.object({ dllPath: z.string().nullable(), dllFound: z.boolean() }),
+  // `loaded`: whether the agent has the DLL loaded right now (idle release); older agents omit it.
+  // `stuck`: a job did not stop after apiBreak and the agent must be restarted; older agents omit it.
+  ediabas: z.object({
+    dllPath: z.string().nullable(),
+    dllFound: z.boolean(),
+    loaded: z.boolean().nullable().optional(),
+    stuck: z.boolean().nullable().optional(),
+  }),
   lastCableUseAt: z.string().nullable(),
+  // Phase 2 additions; an older agent omits them.
+  policyVersion: z.number().int().nullable().optional(),
+  capabilities: z.array(z.string()).nullable().optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 
@@ -53,7 +66,110 @@ export const WindowInfoSchema = z.object({
 export const WindowsSchema = z.object({ windows: z.array(WindowInfoSchema) });
 export type WindowList = z.infer<typeof WindowsSchema>;
 
-const ErrorBodySchema = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
+// `details` may be absent (older agent) or null.
+const ErrorInfoSchema = z.object({ code: z.string(), message: z.string(), details: z.unknown().optional() });
+const ErrorBodySchema = z.object({ error: ErrorInfoSchema });
+export type AgentErrorInfo = z.infer<typeof ErrorInfoSchema>;
+
+/** A result set: field name to value (string, number, hex string or null). */
+const ResultSet = z.record(z.string(), z.unknown());
+
+export const JobResultSchema = z.object({
+  ecu: z.string(),
+  job: z.string(),
+  variant: z.string().nullable().optional(),
+  jobStatus: z.string().nullable().optional(),
+  systemResults: ResultSet.nullable().optional(),
+  sets: z.array(ResultSet),
+  durationMs: z.number().nullable().optional(),
+});
+export type JobResult = z.infer<typeof JobResultSchema>;
+
+export const BatchItemSchema = z.object({
+  ok: z.boolean(),
+  result: JobResultSchema.nullable().optional(),
+  error: ErrorInfoSchema.nullable().optional(),
+});
+export type BatchItem = z.infer<typeof BatchItemSchema>;
+
+export const JobsResponseSchema = z.object({ items: z.array(BatchItemSchema), durationMs: z.number().nullable().optional() });
+export type JobsResponse = z.infer<typeof JobsResponseSchema>;
+
+export const VehicleSchema = z.object({
+  ignition: BatchItemSchema,
+  ubatt: BatchItemSchema,
+  voltages: z.array(BatchItemSchema.extend({ ecu: z.string().nullable().optional(), job: z.string().nullable().optional() })),
+  cableKl30: BatchItemSchema,
+  cableKl15: BatchItemSchema,
+  durationMs: z.number().nullable().optional(),
+});
+export type Vehicle = z.infer<typeof VehicleSchema>;
+
+export const EcusSchema = z.object({
+  ecuPath: z.string().nullable(),
+  count: z.number().int(),
+  truncated: z.boolean(),
+  files: z.array(z.object({ name: z.string(), type: z.string() })),
+});
+export type EcuList = z.infer<typeof EcusSchema>;
+
+const VerdictSchema = z.object({ allowed: z.boolean(), rule: z.string(), review: z.string() });
+export type AgentVerdict = z.infer<typeof VerdictSchema>;
+
+export const DescribeListSchema = z.object({
+  ecu: z.string(),
+  variant: z.string().nullable().optional(),
+  jobCount: z.number().int().nullable().optional(),
+  jobs: z.array(z.object({ name: z.string(), comment: z.string().nullable().optional(), verdict: VerdictSchema })),
+  durationMs: z.number().nullable().optional(),
+});
+export type DescribeList = z.infer<typeof DescribeListSchema>;
+
+const ParamSchema = z.object({ name: z.string(), type: z.string().nullable().optional(), comment: z.string().nullable().optional() });
+
+export const DescribeJobSchema = z.object({
+  ecu: z.string(),
+  variant: z.string().nullable().optional(),
+  job: z.string(),
+  comment: z.string().nullable().optional(),
+  verdict: VerdictSchema,
+  arguments: z.array(ParamSchema),
+  results: z.array(ParamSchema),
+  durationMs: z.number().nullable().optional(),
+});
+export type DescribeJob = z.infer<typeof DescribeJobSchema>;
+
+export const LogListSchema = z.object({
+  roots: z.array(z.object({ index: z.number().int(), path: z.string(), exists: z.boolean() })),
+  files: z.array(
+    z.object({ path: z.string(), root: z.number().int().nullable().optional(), sizeBytes: z.number(), modifiedAt: z.string().nullable() }),
+  ),
+  truncated: z.boolean(),
+});
+export type LogList = z.infer<typeof LogListSchema>;
+
+export const LogReadSchema = z.object({
+  path: z.string(),
+  sizeBytes: z.number(),
+  modifiedAt: z.string().nullable(),
+  offset: z.number(),
+  length: z.number(),
+  encoding: z.string().nullable(),
+  truncated: z.boolean(),
+  grep: z.object({ pattern: z.string(), matchedLines: z.number().int() }).nullable().optional(),
+  text: z.string(),
+});
+export type LogRead = z.infer<typeof LogReadSchema>;
+
+export interface Capture {
+  mimeType: "image/jpeg" | "image/png";
+  data: Uint8Array;
+  title: string | null;
+  handle: string | null;
+  method: string | null;
+  width: number | null;
+  height: number | null;
+}
 const AgentIdSchema = z.object({ agent: z.string() });
 
 function isAgentErrorBody(body: string): boolean {
@@ -78,10 +194,14 @@ export interface AgentClientOptions {
   fetch?: typeof fetch | undefined;
   /** Per-request timeout. Default 15 s. */
   requestTimeoutMs?: number | undefined;
+  /** Per-request timeout for /ediabas/* calls. Default 75 s. */
+  ediabasTimeoutMs?: number | undefined;
   /** Timeout for discovery probes. Default 3 s. */
   probeTimeoutMs?: number | undefined;
   /** Diagnostics (stderr). Never receives the token. */
   log?: ((message: string) => void) | undefined;
+  /** Recording mode (EDIABAS_RECORD_DIR). */
+  recorder?: ExchangeRecorder | undefined;
 }
 
 type FailureKind = "unreachable" | "refused" | "timeout";
@@ -92,6 +212,8 @@ class ConnectionFailure extends Error {
     readonly kind: FailureKind,
     /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
     readonly detail: string,
+    /** The connection was never made, so the request cannot have reached the agent. */
+    readonly neverSent = false,
   ) {
     super(`connection failure: ${kind}`);
   }
@@ -107,8 +229,63 @@ function classify(e: unknown): ConnectionFailure {
   const code = String(err?.cause?.code ?? err?.code ?? "");
   const detail = code || err?.cause?.name || name || "unknown";
   if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
-  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail);
-  return new ConnectionFailure("refused", detail);
+  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
+  // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
+  // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
+  return new ConnectionFailure("refused", detail, code === "ECONNREFUSED");
+}
+
+type QueryValue = string | number | boolean | undefined;
+
+/** One agent request. */
+interface RequestSpec {
+  method: "GET" | "POST";
+  path: string;
+  query?: Record<string, QueryValue>;
+  body?: unknown;
+  /** /ediabas/*: the long timeout, and never re-sent after a timeout (the job may have run). */
+  ediabas?: boolean;
+  /**
+   * Runs an EDIABAS job in the VM (job, jobs, vehicle, describe): re-sent only when the
+   * connection was never made, never after a failure that may have followed delivery.
+   */
+  runsJob?: boolean;
+}
+
+interface RawResponse {
+  status: number;
+  bytes: Uint8Array;
+  headers: Record<string, string>;
+  token: string;
+}
+
+const HEALTH: RequestSpec = { method: "GET", path: "/health" };
+
+/** 403 codes that are agent decisions, not the gateway check. */
+const AGENT_403_CODES = new Set(["job_not_allowed", "job_needs_review", "path_not_allowed"]);
+
+function definedQuery(q: Record<string, QueryValue> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(q ?? {})) if (v !== undefined) out[k] = String(v);
+  return out;
+}
+
+function describeRequest(spec: RequestSpec): string {
+  return `${spec.method} ${spec.path}`;
+}
+
+function intHeader(v: string | undefined): number | null {
+  if (v === undefined || !/^\d+$/.test(v.trim())) return null;
+  return Number(v.trim());
+}
+
+function decodeTitle(v: string | undefined): string | null {
+  if (v === undefined) return null;
+  try {
+    return decodeURIComponent(v);
+  } catch {
+    return v;
+  }
 }
 
 /** HTTP client for the VM agent. Every method throws BridgeError with an actionable message. */
@@ -116,42 +293,126 @@ export class AgentClient {
   private readonly locator: VmLocator;
   private readonly fetchFn: typeof fetch;
   private readonly requestTimeoutMs: number;
+  private readonly ediabasTimeoutMs: number;
   private readonly probeTimeoutMs: number;
   private readonly log: (message: string) => void;
 
   constructor(private readonly opts: AgentClientOptions) {
     this.fetchFn = opts.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 15_000;
+    this.ediabasTimeoutMs = opts.ediabasTimeoutMs ?? 75_000;
     this.probeTimeoutMs = opts.probeTimeoutMs ?? 3_000;
     this.log = opts.log ?? (() => {});
     this.locator = new VmLocator(opts.config, opts.sources, (baseUrl, ctx) => this.probe(baseUrl, ctx), this.log);
   }
 
   health(): Promise<Health> {
-    return this.call("/health", HealthSchema);
+    return this.json(HEALTH, HealthSchema);
   }
 
   listWindows(): Promise<WindowList> {
-    return this.call("/windows", WindowsSchema);
+    return this.json({ method: "GET", path: "/windows" }, WindowsSchema);
   }
 
-  private async call<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  capture(o: { window?: string | undefined; maxEdge?: number | undefined } = {}): Promise<Capture> {
+    const spec: RequestSpec = { method: "GET", path: "/screen/capture", query: { window: o.window, maxEdge: o.maxEdge } };
+    return this.call(spec, (res) => {
+      const type = (res.headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase();
+      if ((type !== "image/jpeg" && type !== "image/png") || res.bytes.length === 0) {
+        this.log(`request GET /screen/capture failed: not an image (${type || "no content-type"})`);
+        throw badResponse("GET /screen/capture");
+      }
+      return {
+        mimeType: type,
+        data: res.bytes,
+        title: decodeTitle(res.headers["x-window-title"]),
+        handle: res.headers["x-window-handle"] ?? null,
+        method: res.headers["x-capture-method"] ?? null,
+        width: intHeader(res.headers["x-image-width"]),
+        height: intHeader(res.headers["x-image-height"]),
+      };
+    });
+  }
+
+  listLogs(q: { root?: number | undefined; glob?: string | undefined; since?: string | undefined; limit?: number | undefined } = {}): Promise<LogList> {
+    return this.json({ method: "GET", path: "/logs", query: q }, LogListSchema);
+  }
+
+  readLog(q: {
+    path: string;
+    tailBytes?: number | undefined;
+    offset?: number | undefined;
+    length?: number | undefined;
+    grep?: string | undefined;
+  }): Promise<LogRead> {
+    return this.json({ method: "GET", path: "/logs/read", query: q }, LogReadSchema);
+  }
+
+  listEcus(filter?: string): Promise<EcuList> {
+    return this.json({ method: "GET", path: "/ediabas/ecus", query: { filter }, ediabas: true }, EcusSchema);
+  }
+
+  describeJobs(q: { ecu: string; filter?: string | undefined }): Promise<DescribeList> {
+    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeListSchema);
+  }
+
+  describeJob(q: { ecu: string; job: string }): Promise<DescribeJob> {
+    return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeJobSchema);
+  }
+
+  vehicle(): Promise<Vehicle> {
+    return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
+  }
+
+  runJob(body: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }): Promise<JobResult> {
+    return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true, runsJob: true }, JobResultSchema);
+  }
+
+  /** 1..20 items; the caller chunks. */
+  runJobs(items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[]): Promise<JobsResponse> {
+    return this.json({ method: "POST", path: "/ediabas/jobs", body: { items }, ediabas: true, runsJob: true }, JobsResponseSchema);
+  }
+
+  private json<T>(spec: RequestSpec, schema: z.ZodType<T>): Promise<T> {
+    return this.call(spec, (res) => {
+      const what = describeRequest(spec);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(Buffer.from(res.bytes).toString("utf8"));
+      } catch {
+        this.log(`request ${what} failed: response is not JSON`);
+        throw badResponse(what);
+      }
+      const result = schema.safeParse(parsed);
+      if (!result.success) {
+        this.log(`request ${what} failed: response does not match the contract`);
+        throw badResponse(what);
+      }
+      return result.data;
+    });
+  }
+
+  private async call<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
     const ctx: CallContext = { tokenRefreshed: false };
     const first = await this.locator.resolve(ctx);
     try {
-      return await this.request(first.baseUrl, path, schema, ctx);
+      return await this.request(first.baseUrl, spec, ctx, parse);
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
-      if (!first.fromCache) throw this.connectionError(e, first.baseUrl);
+      // A job request that may have reached the agent may have run: never send it twice.
+      if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
+      // An EDIABAS call that timed out may still be running in the VM: never send it twice.
+      if (!first.fromCache || (spec.ediabas && e.kind === "timeout")) throw this.connectionError(e, first.baseUrl);
     }
     // The cached address stopped answering: resolve once more, then give up.
     const second = await this.locator.resolve(ctx);
     try {
-      return await this.request(second.baseUrl, path, schema, ctx);
+      return await this.request(second.baseUrl, spec, ctx, parse);
     } catch (e) {
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
+      if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       throw this.connectionError(e, second.baseUrl);
     }
   }
@@ -180,22 +441,23 @@ export class AgentClient {
 
   /** Discovery check: 200 from /health with exactly the agent's id. */
   private async probe(baseUrl: string, ctx: CallContext): Promise<void> {
-    let res: { status: number; body: string; token: string };
+    let res: RawResponse;
     try {
-      res = await this.send(baseUrl, "/health", ctx, this.probeTimeoutMs, "probe");
+      res = await this.send(baseUrl, HEALTH, ctx, this.probeTimeoutMs, "probe");
     } catch (e) {
       if (e instanceof ConnectionFailure) throw this.connectionError(e, baseUrl);
       throw e;
     }
+    const body = Buffer.from(res.bytes).toString("utf8");
     if (res.status !== 200) {
       this.log(`probe ${hostPort(baseUrl)} failed: HTTP ${res.status}`);
       // A non-2xx without the agent's error shape came from some other service.
-      if (res.status !== 401 && res.status !== 403 && !isAgentErrorBody(res.body)) throw wrongService(baseUrl);
-      throw this.httpError(res.status, res.body, res.token);
+      if (res.status !== 401 && res.status !== 403 && !isAgentErrorBody(body)) throw wrongService(baseUrl);
+      throw this.httpError(res.status, body, res.token, HEALTH);
     }
     let parsed: unknown;
     try {
-      parsed = JSON.parse(res.body);
+      parsed = JSON.parse(body);
     } catch {
       this.log(`probe ${hostPort(baseUrl)} failed: not the agent (200 without JSON)`);
       throw wrongService(baseUrl);
@@ -207,45 +469,28 @@ export class AgentClient {
     }
   }
 
-  private async request<T>(baseUrl: string, path: string, schema: z.ZodType<T>, ctx: CallContext): Promise<T> {
-    const res = await this.send(baseUrl, path, ctx, this.requestTimeoutMs, "request");
+  private async request<T>(baseUrl: string, spec: RequestSpec, ctx: CallContext, parse: (res: RawResponse) => T): Promise<T> {
+    const timeout = spec.ediabas ? this.ediabasTimeoutMs : this.requestTimeoutMs;
+    const res = await this.send(baseUrl, spec, ctx, timeout, "request");
     if (res.status !== 200) {
-      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: HTTP ${res.status}`);
-      throw this.httpError(res.status, res.body, res.token);
+      this.log(`request ${hostPort(baseUrl)} ${describeRequest(spec)} failed: HTTP ${res.status}`);
+      throw this.httpError(res.status, Buffer.from(res.bytes).toString("utf8"), res.token, spec);
     }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(res.body);
-    } catch {
-      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: response is not JSON`);
-      throw badResponse(`GET ${path}`);
-    }
-    const result = schema.safeParse(parsed);
-    if (!result.success) {
-      this.log(`request ${hostPort(baseUrl)} GET ${path} failed: response does not match the contract`);
-      throw badResponse(`GET ${path}`);
-    }
-    return result.data;
+    return parse(res);
   }
 
   /**
-   * One authenticated GET. After a 401 the token is re-read (it may have just been installed)
-   * and the request repeated, at most once per tool call.
+   * One authenticated request. After a 401 the token is re-read (it may have just been
+   * installed) and the request repeated, at most once per tool call.
    */
-  private async send(
-    baseUrl: string,
-    path: string,
-    ctx: CallContext,
-    timeoutMs: number,
-    label: "probe" | "request",
-  ): Promise<{ status: number; body: string; token: string }> {
+  private async send(baseUrl: string, spec: RequestSpec, ctx: CallContext, timeoutMs: number, label: "probe" | "request"): Promise<RawResponse> {
     let token = await this.opts.tokens.get();
     const attempt = async (t: string) => {
       try {
-        return await this.fetchOnce(baseUrl + path, t, timeoutMs);
+        return await this.fetchOnce(baseUrl, spec, t, timeoutMs);
       } catch (e) {
         if (e instanceof ConnectionFailure) {
-          const what = label === "request" ? `request ${hostPort(baseUrl)} GET ${path}` : `probe ${hostPort(baseUrl)}`;
+          const what = label === "request" ? `request ${hostPort(baseUrl)} ${describeRequest(spec)}` : `probe ${hostPort(baseUrl)}`;
           this.log(`${what} failed: ${e.kind} (${e.detail})`);
         }
         throw e;
@@ -263,33 +508,69 @@ export class AgentClient {
     return { ...res, token };
   }
 
-  private async fetchOnce(url: string, token: string, timeoutMs: number): Promise<{ status: number; body: string }> {
+  private async fetchOnce(
+    baseUrl: string,
+    spec: RequestSpec,
+    token: string,
+    timeoutMs: number,
+  ): Promise<{ status: number; bytes: Uint8Array; headers: Record<string, string> }> {
+    const query = definedQuery(spec.query);
+    const qs = new URLSearchParams(query).toString();
+    const url = baseUrl + spec.path + (qs ? `?${qs}` : "");
+    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "application/json" };
+    let body: string | undefined;
+    if (spec.body !== undefined) {
+      headers["content-type"] = "application/json; charset=utf-8";
+      body = JSON.stringify(spec.body);
+    }
+    let out: { status: number; bytes: Uint8Array; headers: Record<string, string> };
     try {
       const res = await this.fetchFn(url, {
-        method: "GET",
-        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+        method: spec.method,
+        headers,
+        body,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });
-      const body = await res.text();
-      return { status: res.status, body };
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const kept: Record<string, string> = {};
+      res.headers.forEach((value, name) => {
+        const n = name.toLowerCase();
+        if (n === "content-type" || n.startsWith("x-")) kept[n] = value;
+      });
+      out = { status: res.status, bytes, headers: kept };
     } catch (e) {
       throw classify(e);
     }
+    if (this.opts.recorder) {
+      // The token is not part of the exchange: no request headers are recorded.
+      await this.opts.recorder.record({
+        time: new Date(),
+        method: spec.method,
+        path: spec.path,
+        query,
+        requestBody: spec.body ?? null,
+        status: out.status,
+        responseHeaders: out.headers,
+        body: out.bytes,
+      });
+    }
+    return out;
   }
 
-  private httpError(status: number, body: string, token: string): BridgeError {
-    if (status === 401) return unauthorized();
-    if (status === 403) return forbidden();
-    let code: string | undefined;
-    let message: string | undefined;
+  private httpError(status: number, body: string, token: string, spec: RequestSpec): BridgeError {
+    if (status === 401) return unauthorized(this.opts.config.agentUrl !== undefined);
+    let info: AgentErrorInfo | undefined;
     try {
       const parsed = ErrorBodySchema.safeParse(JSON.parse(body));
-      if (parsed.success) ({ code, message } = parsed.data.error);
+      if (parsed.success) info = parsed.data.error;
     } catch {
       /* not JSON: report the status only */
     }
+    if (status === 403 && !(info && AGENT_403_CODES.has(info.code))) return forbidden();
+    // The agent knows nothing at this path: it is an older build than this server.
+    if (status === 404 && info?.code === "not_found") return agentOutdated(spec.path);
     const redact = (s: string | undefined) => (s && token ? s.split(token).join("[redacted]") : s);
-    return agentError(status, redact(code), redact(message));
+    return agentError(status, redact(info?.code), redact(info?.message), info?.details);
   }
 }

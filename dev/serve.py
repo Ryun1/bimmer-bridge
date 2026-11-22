@@ -8,14 +8,21 @@ Implements the routes in docs/deploy.md and nothing else:
   PUT /upload/<name>                                              saved into discovery/
   PUT /token                                                      only with --accept-token
 
-Standard library only. Run from anywhere:  python3 dev/serve.py [--bind IP] [--port N]
+Only the VM may talk to it: every request from any other address is refused (403). The VM's
+address is the latest DHCP lease for its MAC (EDIABAS_VM_MAC, default the same as the MCP
+server's), or the one given with --client.
+
+Standard library only. Run from anywhere:
+  python3 dev/serve.py [--bind IP] [--client VM-IP] [--port N] [--accept-token]
 """
 
 import argparse
 import hashlib
+import hmac
 import http.server
 import ipaddress
 import json
+import os
 import re
 import subprocess
 import sys
@@ -26,7 +33,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 DEFAULT_PORT = 8000
-UPLOAD_LIMIT = 20 * 1024 * 1024  # 20 MB
+UPLOAD_LIMIT = 20 * 1024 * 1024  # 20 MB per upload
+UPLOAD_COUNT_LIMIT = 10  # uploads per run (discover.ps1 sends two)
+UPLOAD_TOTAL_LIMIT = 40 * 1024 * 1024  # bytes per run, all uploads together
 TOKEN_BODY_LIMIT = 1024
 CHUNK = 64 * 1024
 
@@ -41,6 +50,11 @@ ZIP_NAME = "EdiabasAgent.zip"
 KEYCHAIN_SERVICE = "ediabas-bridge"
 KEYCHAIN_ACCOUNT = "agent"
 SECURITY_TOOL = "/usr/bin/security"
+
+LEASES_PATH = "/var/db/dhcpd_leases"
+# The VM's MAC address. Same default and variable as the MCP server (mac-mcp/src/config.ts).
+VM_MAC_DEFAULT = "F2:E5:81:1E:82:07"
+VM_MAC_ENV = "EDIABAS_VM_MAC"
 
 
 # --------------------------------------------------------------------------- bind address
@@ -100,26 +114,103 @@ def detect_bridge_address():
     return find_bridge_address(out)
 
 
-def client_allowed(bind, client):
-    """Clients must be on the bind address's /24; a loopback bind accepts loopback only."""
+def _ipv4_of(text):
+    """The IPv4 address in `text` (an IPv4-mapped IPv6 address counts), or None."""
     try:
-        b = ipaddress.IPv4Address(bind)
-        c = ipaddress.ip_address(client)
+        a = ipaddress.ip_address(str(text).strip())
     except ValueError:
-        return False
-    if isinstance(c, ipaddress.IPv6Address):
-        if c.ipv4_mapped is None:
-            return False
-        c = c.ipv4_mapped
+        return None
+    if isinstance(a, ipaddress.IPv6Address):
+        return a.ipv4_mapped
+    return a
+
+
+def validate_client(bind, client):
+    """Return the VM's address as accepted for `bind`, or raise ValueError.
+
+    One plain IPv4 address on the bind address's /24 (a loopback bind: another loopback
+    address, for tests), never the bind address itself, the network, broadcast or multicast
+    addresses.
+    """
+    if client is None or not str(client).strip():
+        raise ValueError("no VM address: pass --client <VM IPv4 address>")
+    try:
+        c = ipaddress.IPv4Address(str(client).strip())
+    except ValueError:
+        raise ValueError("--client must be the VM's IPv4 address, got %r" % client)
+    b = ipaddress.IPv4Address(bind)
     if b.is_loopback:
-        return c.is_loopback
-    return c in ipaddress.IPv4Network("%s/24" % b, strict=False)
+        if not c.is_loopback:
+            raise ValueError("with a loopback bind the client must be a loopback address")
+        return str(c)
+    net = ipaddress.IPv4Network("%s/24" % b, strict=False)
+    if c not in net or c in (b, net.network_address, net.broadcast_address):
+        raise ValueError("%s is not a VM address on %s's network (%s)" % (c, b, net))
+    return str(c)
+
+
+def client_allowed(allowed, client):
+    """Only the one VM address is served."""
+    a = _ipv4_of(allowed) if allowed is not None else None
+    c = _ipv4_of(client)
+    return a is not None and c is not None and a == c
+
+
+# --------------------------------------------------------------------------- the VM's address
+
+def _mac_bytes(text):
+    """Six byte values from a MAC address with ':' or '-', one or two hex digits per byte."""
+    parts = re.split(r"[:-]", str(text).strip())
+    if len(parts) != 6 or not all(re.fullmatch(r"[0-9A-Fa-f]{1,2}", p) for p in parts):
+        return None
+    return tuple(int(p, 16) for p in parts)
+
+
+def vm_lease_address(leases_text, mac):
+    """The IPv4 address of the latest-expiring lease for `mac` in macOS's dhcpd_leases, or None.
+
+    Only the latest lease counts (the strict choice: not every address ever leased to the MAC,
+    and never whoever happens to connect first).
+    """
+    want = _mac_bytes(mac)
+    if want is None:
+        return None
+    best = None
+    for block in re.findall(r"\{([^{}]*)\}", leases_text or ""):
+        fields = {}
+        for line in block.splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                fields[k.strip()] = v.strip()
+        ip, hw, lease = fields.get("ip_address"), fields.get("hw_address"), fields.get("lease")
+        if not ip or not hw or not lease:
+            continue
+        if _mac_bytes(hw.split(",", 1)[-1]) != want:
+            continue
+        try:
+            addr = str(ipaddress.IPv4Address(ip))
+            expiry = int(lease, 16) if lease.lower().startswith("0x") else int(lease)
+        except ValueError:
+            continue
+        if best is None or expiry > best[0]:
+            best = (expiry, addr)
+    return best[1] if best else None
+
+
+def read_leases():
+    try:
+        with open(LEASES_PATH, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return ""
 
 
 # --------------------------------------------------------------------------- keychain
 
 def store_token_in_keychain(token):
-    """Store the token with `security`, never placing it on a command line."""
+    """Store the token with `security`, never placing it on a command line, then read the
+    value back and compare it: `security -i` can exit 0 although its `add` failed, and an
+    older item would then still be there."""
     command = "add-generic-password -U -s %s -a %s -w %s\n" % (
         KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, token)
     result = subprocess.run([SECURITY_TOOL, "-i"], input=command, capture_output=True,
@@ -127,10 +218,13 @@ def store_token_in_keychain(token):
     if result.returncode != 0:
         raise RuntimeError("security -i exited with %d" % result.returncode)
     check = subprocess.run([SECURITY_TOOL, "find-generic-password",
-                            "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT],
-                           capture_output=True, timeout=30)
+                            "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
+                           capture_output=True, text=True, timeout=30)
     if check.returncode != 0:
         raise RuntimeError("keychain item not found after storing")
+    stored = (check.stdout or "").rstrip("\r\n")
+    if not hmac.compare_digest(stored.encode("utf-8"), token.encode("utf-8")):
+        raise RuntimeError("the keychain item does not hold the new token after storing")
 
 
 # --------------------------------------------------------------------------- config / server
@@ -138,8 +232,10 @@ def store_token_in_keychain(token):
 class Config:
     def __init__(self, bind, port=DEFAULT_PORT, setup_dir=None, release_dir=None,
                  discovery_dir=None, accept_token=False, store_token=None, out=None,
-                 upload_limit=UPLOAD_LIMIT):
+                 upload_limit=UPLOAD_LIMIT, client=None, upload_count_limit=UPLOAD_COUNT_LIMIT,
+                 upload_total_limit=UPLOAD_TOTAL_LIMIT):
         self.bind = bind
+        self.client = client  # the VM: the only address served
         self.port = port
         self.setup_dir = Path(setup_dir) if setup_dir else REPO_ROOT / "vm-setup"
         self.release_dir = Path(release_dir) if release_dir else REPO_ROOT / "release"
@@ -148,6 +244,8 @@ class Config:
         self.store_token = store_token or store_token_in_keychain
         self.out = out
         self.upload_limit = upload_limit
+        self.upload_count_limit = upload_count_limit
+        self.upload_total_limit = upload_total_limit
 
 
 class Server(http.server.ThreadingHTTPServer):
@@ -156,9 +254,13 @@ class Server(http.server.ThreadingHTTPServer):
 
     def __init__(self, config):
         config.bind = validate_bind(config.bind)
+        config.client = validate_client(config.bind, config.client)
         self.config = config
         self.token_lock = threading.Lock()
-        self.token_stored = False
+        self.token_taken = False  # one token per run, stored or not
+        self.upload_lock = threading.Lock()
+        self.uploads_started = 0
+        self.upload_bytes_reserved = 0
         self.log_lock = threading.Lock()
         super().__init__((config.bind, config.port), Handler)
 
@@ -220,9 +322,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send(status, (message + "\n").encode("utf-8"), note=note)
 
     def _check_client(self):
-        if client_allowed(self.server.config.bind, self.client_address[0]):
+        if client_allowed(self.server.config.client, self.client_address[0]):
             return True
-        self._error(403, "forbidden: client not on the local network")
+        self._error(403, "forbidden: only the VM's address is served")
         return False
 
     def _content_length(self, limit, note=None):
@@ -313,6 +415,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = self._content_length(cfg.upload_limit)
         if length is None:
             return
+        # The run's caps are taken before anything is written, and a failed upload keeps its share.
+        with self.server.upload_lock:
+            if self.server.uploads_started >= cfg.upload_count_limit:
+                self._error(413, "upload limit for this run reached (%d files); restart serve.py"
+                            % cfg.upload_count_limit)
+                return
+            if self.server.upload_bytes_reserved + length > cfg.upload_total_limit:
+                self._error(413, "upload limit for this run reached (%d bytes in all); restart "
+                            "serve.py" % cfg.upload_total_limit)
+                return
+            self.server.uploads_started += 1
+            self.server.upload_bytes_reserved += length
         stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         filename = "%s-%s" % (stamp, name)
         try:
@@ -361,8 +475,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         note=rejected)
             return
         with self.server.token_lock:
-            if self.server.token_stored:
-                self._error(403, "a token was already stored in this run", note=rejected)
+            if self.server.token_taken:
+                self._error(403, "a token was already received in this run; restart serve.py "
+                            "--accept-token to send another", note=rejected)
                 return
             length = self._content_length(TOKEN_BODY_LIMIT, note=rejected)
             if length is None:
@@ -381,13 +496,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not TOKEN_RE.fullmatch(token):
                 self._error(400, "bad token format", note=rejected)
                 return
+            # Exactly one well-formed token per run, whether or not storing it works.
+            self.server.token_taken = True
             try:
                 cfg.store_token(token)
             except Exception:
-                self._error(500, "could not store the token in the Keychain",
+                self._error(500, "could not store the token in the Keychain; restart serve.py "
+                            "--accept-token and run the install line again",
                             note="token rejected (keychain store failed)")
                 return
-            self.server.token_stored = True
         self._send(204, note="token stored")
 
 
@@ -401,26 +518,62 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-def startup_lines(bind, port, release_dir, accept_token=False):
-    base = "http://%s:%d" % (bind, port)
-    lines = [
-        "ediabas-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port),
-        "",
-        "Discovery - paste into PowerShell in the VM:",
-        "  $base='%s'; irm $base/discover.ps1 | iex" % base,
+def pinned_line(base, script, script_sha, zip_sha=None, prefix=""):
+    """The one line to paste into Windows PowerShell 5.1 for `script`.
+
+    It downloads the script to a file, reads its bytes once, and runs those same bytes only
+    when their SHA-256 is the one printed here. The trust is in the pasted line, not in what
+    answers on the network. The bytes are run with iex, not as a .ps1 file, so the execution
+    policy does not block them and nothing can swap the file between check and run.
+    """
+    parts = []
+    if prefix:
+        parts.append(prefix)
+    parts.append("$base='%s'" % base)
+    if zip_sha:
+        parts.append("$sha='%s'" % zip_sha)
+    parts += [
+        '$ebFile="$env:TEMP\\ediabas-bridge-%s"' % script,
+        'iwr "$base/%s" -UseBasicParsing -OutFile $ebFile' % script,
+        "$ebBytes=[IO.File]::ReadAllBytes($ebFile)",
+        "if (([BitConverter]::ToString([Security.Cryptography.SHA256]::Create()"
+        ".ComputeHash($ebBytes)) -replace '-','') -eq '%s') "
+        "{ iex ([Text.Encoding]::UTF8.GetString($ebBytes)) } "
+        "else { Write-Host '%s is not the file serve.py checked; it was NOT run. Restart "
+        "serve.py and paste the line it prints.' -ForegroundColor Red }" % (script_sha, script),
     ]
+    return "; ".join(parts)
+
+
+def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, client=None):
+    base = "http://%s:%d" % (bind, port)
+    setup_dir = Path(setup_dir) if setup_dir else REPO_ROOT / "vm-setup"
+    script_sha = {}
+    for name in SCRIPT_NAMES:
+        path = setup_dir / name
+        if path.is_file():
+            script_sha[name] = sha256_file(path)
+
+    def line(script, zip_sha=None, prefix=""):
+        if script not in script_sha:
+            return ["  (%s not found in vm-setup; no line)" % script]
+        return ["  " + pinned_line(base, script, script_sha[script], zip_sha, prefix)]
+
+    lines = ["ediabas-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port)]
+    if client:
+        lines.append("Serving the VM at %s only; every other address is refused." % client)
+    lines += ["", "Each line below checks the script's SHA-256 before running it.",
+              "", "Discovery - paste into PowerShell in the VM:"]
+    lines += line("discover.ps1")
     zip_path = Path(release_dir) / ZIP_NAME
     if zip_path.is_file():
         sha = sha256_file(zip_path)
-        lines += [
-            "",
-            "Install:",
-            "  $base='%s'; $sha='%s'; irm $base/install.ps1 | iex" % (base, sha),
-            "Update:",
-            "  $base='%s'; $sha='%s'; irm $base/update.ps1 | iex" % (base, sha),
-        ]
+        lines += ["", "Install:"] + line("install.ps1", sha)
+        lines += ["Update:"] + line("update.ps1", sha)
     else:
         lines += ["", "(release/%s not built; install/update lines not shown)" % ZIP_NAME]
+    lines += ["Uninstall (add $KeepData=$true; at the start to keep config, token and logs):"]
+    lines += line("uninstall.ps1")
     if accept_token:
         lines += ["", "Accepting one agent token on PUT /token for this run."]
     lines.append("")
@@ -430,6 +583,9 @@ def startup_lines(bind, port, release_dir, accept_token=False):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="ediabas-bridge deploy/discovery server")
     parser.add_argument("--bind", help="IPv4 address to bind (default: UTM bridge1xx address)")
+    parser.add_argument("--client", help="the VM's IPv4 address, the only one served (default: "
+                        "the latest DHCP lease for the VM's MAC, %s or %s)"
+                        % (VM_MAC_ENV, VM_MAC_DEFAULT))
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port (default 8000)")
     parser.add_argument("--accept-token", action="store_true",
                         help="accept one agent token on PUT /token and store it in the Keychain")
@@ -453,7 +609,23 @@ def main(argv=None):
                   file=sys.stderr)
             return 1
 
-    config = Config(bind=bind, port=args.port, accept_token=args.accept_token)
+    if args.client is not None:
+        client = args.client
+    else:
+        mac = (os.environ.get(VM_MAC_ENV) or "").strip() or VM_MAC_DEFAULT
+        client = vm_lease_address(read_leases(), mac)
+        if client is None:
+            print("error: no DHCP lease for the VM's MAC %s in %s. Start the VM, or pass "
+                  "--client <VM IPv4 address> (ipconfig in the VM shows it)."
+                  % (mac, LEASES_PATH), file=sys.stderr)
+            return 1
+    try:
+        client = validate_client(bind, client)
+    except ValueError as e:
+        print("error: %s" % e, file=sys.stderr)
+        return 2
+
+    config = Config(bind=bind, client=client, port=args.port, accept_token=args.accept_token)
     try:
         server = make_server(config)
     except OSError as e:
@@ -461,7 +633,8 @@ def main(argv=None):
         return 1
 
     host, port = server.server_address[:2]
-    for line in startup_lines(host, port, config.release_dir, config.accept_token):
+    for line in startup_lines(host, port, config.release_dir, config.accept_token,
+                              config.setup_dir, config.client):
         print(line)
     sys.stdout.flush()
     try:

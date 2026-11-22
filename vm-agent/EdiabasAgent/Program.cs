@@ -170,8 +170,17 @@ internal static class Program
                 log.Info("config and token are valid");
             }
 
-            var ctx = new AgentContext(config, new TokenAuth(state.Token), log, new AuditLog(config.LogDirectory), elevated, sessionId);
+            using var ctx = new AgentContext(config, new TokenAuth(state.Token), log, new AuditLog(config.LogDirectory), elevated, sessionId);
             state = state with { Token = null };
+
+            if (ctx.Policy.Loaded)
+            {
+                log.Info($"job policy version {ctx.Policy.Version} loaded");
+            }
+            else
+            {
+                log.Error($"job policy did not load ({ctx.Policy.LoadError}); every EDIABAS job will be refused");
+            }
 
             new AgentHost(ctx).RunAsync(stop.Token).GetAwaiter().GetResult();
             log.Info("agent stopped");

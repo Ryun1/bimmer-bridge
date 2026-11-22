@@ -1,12 +1,12 @@
 # ediabas-bridge - Phase 0 discovery (read-only)
 #
-# Run in the VM from Windows PowerShell 5.1:
-#   $base='http://<mac-bridge-ip>:8000'; irm $base/discover.ps1 | iex
+# Run in the VM from Windows PowerShell 5.1: paste the Discovery line that dev/serve.py prints
+# (it checks this file's SHA-256 before running it with iex).
 #
 # This script only READS. It changes no setting, installs nothing, starts no BMW tool,
 # makes no EDIABAS call and does not touch the diagnostic cable. It writes one report,
 # ediabas-bridge-discovery.txt, to the Desktop and uploads it (plus api.h if found) to
-# dev/serve.py on the Mac. It never calls 'exit', because under 'irm | iex' that would
+# dev/serve.py on the Mac. It never calls 'exit', because under iex that would
 # close the PowerShell window.
 
 $EbdVersion = '1'

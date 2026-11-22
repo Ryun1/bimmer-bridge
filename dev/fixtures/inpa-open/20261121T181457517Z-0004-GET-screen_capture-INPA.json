@@ -1,0 +1,25 @@
+{
+  "recordedAt": "2026-11-21T18:14:57.517Z",
+  "request": {
+    "method": "GET",
+    "path": "/screen/capture",
+    "query": {
+      "window": "INPA",
+      "maxEdge": "1600"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "image/jpeg",
+      "x-capture-method": "printwindow",
+      "x-content-type-options": "nosniff",
+      "x-image-height": "833",
+      "x-image-width": "1016",
+      "x-window-handle": "0x0007009A",
+      "x-window-title": "INPA%20-%20Loader%3A%20%20BimmerGeeks.Net%20Version%2010%2F10%2F2017"
+    },
+    "imageFile": "20261121T181457517Z-0004-GET-screen_capture-INPA.jpg"
+  }
+}

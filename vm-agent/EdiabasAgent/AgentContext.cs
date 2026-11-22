@@ -1,14 +1,19 @@
 using System.Reflection;
 using EdiabasAgent.Audit;
 using EdiabasAgent.Core;
+using EdiabasAgent.Ediabas;
 using EdiabasAgent.Logging;
+using EdiabasAgent.Logs;
 using EdiabasAgent.Proc;
 
 namespace EdiabasAgent;
 
 /// <summary>Process-wide state shared by the host, the pipeline and the handlers.</summary>
-internal sealed class AgentContext
+internal sealed class AgentContext : IDisposable
 {
+    /// <summary>The endpoint groups this build has (docs/api.md /health <c>capabilities</c>).</summary>
+    public static readonly IReadOnlyList<string> Capabilities = ["ediabas", "capture", "logs"];
+
     public AgentContext(AgentConfig config, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
     {
         Config = config;
@@ -17,7 +22,24 @@ internal sealed class AgentContext
         Audit = audit;
         Elevated = elevated;
         SessionId = sessionId;
-        Conflicts = new ConflictCheck(config.ConflictProcesses);
+        Conflicts = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll);
+        Policy = JobPolicy.Embedded;
+        Logs = new LogService(config.LogRoots, new LogAccess());
+        Runner = new EdiabasRunner(
+            () => new EdiabasService(
+                new Api32(config.EdiabasDll),
+                Conflicts,
+                new EcuFolder(config.EcuPath),
+                Policy,
+                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, config.ReviewedJobs),
+                new SystemRunnerClock(),
+                CableUse,
+                new EdiabasLogAdapter(log),
+                DllState,
+                config.JobTimeoutSeconds,
+                config.MaxJobTimeoutSeconds,
+                config.EdiabasIdleReleaseSeconds),
+            log);
     }
 
     public static string Version { get; } =
@@ -34,4 +56,26 @@ internal sealed class AgentContext
     public ConflictCheck Conflicts { get; }
     public bool Elevated { get; }
     public int SessionId { get; }
+
+    /// <summary>The job policy built into the agent; refuses everything if it did not load.</summary>
+    public JobPolicy Policy { get; }
+
+    public CableUse CableUse { get; } = new();
+
+    /// <summary>Whether the runner has api32.dll loaded right now, for /health.</summary>
+    public DllLoadState DllState { get; } = new();
+
+    /// <summary>Read-only access to the files under the config's <c>logRoots</c>.</summary>
+    public LogService Logs { get; }
+
+    public EdiabasRunner Runner { get; }
+
+    public void Dispose() => Runner.Dispose();
+
+    private sealed class EdiabasLogAdapter(AgentLog log) : IEdiabasLog
+    {
+        public void Info(string message) => log.Info(message);
+
+        public void Warn(string message) => log.Warn(message);
+    }
 }

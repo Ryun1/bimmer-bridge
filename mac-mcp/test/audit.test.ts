@@ -36,6 +36,19 @@ describe("audit log", () => {
     expect(line).toContain("vm_health");
   });
 
+  it("adds ecu, job and rule fields when given, cleaned", () => {
+    const line = formatAuditLine({
+      time: new Date(0),
+      tool: "ediabas_job",
+      outcome: "job_not_allowed",
+      durationMs: 2,
+      ecu: "NVE_65",
+      job: "FS_LOESCHEN\t\nX",
+      rule: "deny.substring:LOESCH",
+    });
+    expect(line).toBe("1970-01-01T00:00:00.000Z\tediabas_job\tjob_not_allowed\t2\tecu=NVE_65\tjob=FS_LOESCHENX\trule=deny.substring:LOESCH\n");
+  });
+
   it("creates the directory and appends", async () => {
     const path = join(dir, "nested", "deeper", "audit.log");
     const log = new AuditLog(path, { warn: vi.fn() });

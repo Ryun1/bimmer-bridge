@@ -7,4 +7,10 @@
     <AssemblyName>EdiabasAgent.Core</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The job policy is linked, never copied: policy/policy.json is the single source for
+         both the agent and the Mac server. -->
+    <EmbeddedResource Include="..\..\policy\policy.json" Link="policy.json" LogicalName="EdiabasAgent.Core.policy.json" />
+  </ItemGroup>
+
 </Project>

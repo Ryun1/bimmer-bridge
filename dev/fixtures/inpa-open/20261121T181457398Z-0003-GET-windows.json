@@ -1,0 +1,59 @@
+{
+  "recordedAt": "2026-11-21T18:14:57.398Z",
+  "request": {
+    "method": "GET",
+    "path": "/windows",
+    "query": {},
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "windows": [
+        {
+          "handle": "0x0007009A",
+          "title": "INPA - Loader:  BimmerGeeks.Net Version 10/10/2017",
+          "processName": "INPALOAD",
+          "pid": 1236,
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1024,
+            "height": 837
+          },
+          "minimized": false
+        },
+        {
+          "handle": "0x000103A4",
+          "title": "Administrator: Windows PowerShell",
+          "processName": "WindowsTerminal",
+          "pid": 11548,
+          "bounds": {
+            "x": 148,
+            "y": 156,
+            "width": 1044,
+            "height": 635
+          },
+          "minimized": false
+        },
+        {
+          "handle": "0x0001010A",
+          "title": "Program Manager",
+          "processName": "explorer",
+          "pid": 4116,
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 1024,
+            "height": 885
+          },
+          "minimized": false
+        }
+      ]
+    }
+  }
+}

@@ -4,8 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>0.1.0</Version>
-    <!-- Keep the informational version exactly "0.1.0" (no "+<git sha>" suffix). -->
+    <Version>0.2.2</Version>
+    <!-- Keep the informational version exactly the Version above (no "+<git sha>" suffix). -->
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Deterministic>true</Deterministic>
     <!-- PDBs embedded so a single-file publish leaves nothing beside the exe. -->
