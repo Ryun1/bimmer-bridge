@@ -77,6 +77,44 @@ pub const TIOCM_DTR: c_int = 0x002;
 pub const TIOCM_RTS: c_int = 0x004;
 pub const TIOCM_DSR: c_int = 0x100;
 
+// termios2 flag bits (<asm/termbits.h>). Linux line settings go through termios2 only, so
+// glibc's and musl's differing struct termios are never used.
+pub const IGNBRK: tcflag_t = 0o1;
+pub const BRKINT: tcflag_t = 0o2;
+pub const PARMRK: tcflag_t = 0o10;
+pub const ISTRIP: tcflag_t = 0o40;
+pub const INLCR: tcflag_t = 0o100;
+pub const IGNCR: tcflag_t = 0o200;
+pub const ICRNL: tcflag_t = 0o400;
+pub const IXON: tcflag_t = 0o2000;
+pub const IXANY: tcflag_t = 0o4000;
+pub const IXOFF: tcflag_t = 0o10000;
+pub const OPOST: tcflag_t = 0o1;
+pub const ISIG: tcflag_t = 0o1;
+pub const ICANON: tcflag_t = 0o2;
+pub const ECHO: tcflag_t = 0o10;
+pub const ECHONL: tcflag_t = 0o100;
+pub const IEXTEN: tcflag_t = 0o100000;
+pub const CSIZE: tcflag_t = 0o60;
+pub const CS5: tcflag_t = 0o0;
+pub const CS6: tcflag_t = 0o20;
+pub const CS7: tcflag_t = 0o40;
+pub const CS8: tcflag_t = 0o60;
+pub const CSTOPB: tcflag_t = 0o100;
+pub const CREAD: tcflag_t = 0o200;
+pub const PARENB: tcflag_t = 0o400;
+pub const PARODD: tcflag_t = 0o1000;
+pub const CLOCAL: tcflag_t = 0o4000;
+pub const CRTSCTS: tcflag_t = 0o20000000000;
+pub const B9600: tcflag_t = 0o15;
+pub const B19200: tcflag_t = 0o16;
+pub const B38400: tcflag_t = 0o17;
+pub const B57600: tcflag_t = 0o10001;
+pub const B115200: tcflag_t = 0o10002;
+pub const VTIME = 5;
+pub const VMIN = 6;
+pub const TCIOFLUSH: c_int = 2;
+
 test "linux constants match the kernel headers" {
     if (builtin.os.tag != .linux) return error.SkipZigTest;
     const c = @cImport({
@@ -132,4 +170,25 @@ test "linux constants match the kernel headers" {
     try std.testing.expectEqual(@as(c_int, c.TIOCM_DTR), TIOCM_DTR);
     try std.testing.expectEqual(@as(c_int, c.TIOCM_RTS), TIOCM_RTS);
     try std.testing.expectEqual(@as(c_int, c.TIOCM_DSR), TIOCM_DSR);
+}
+
+test "linux termios2 flag bits match the kernel headers" {
+    if (builtin.os.tag != .linux) return error.SkipZigTest;
+    const c = @cImport({
+        @cInclude("asm/termbits.h");
+        @cInclude("asm/termios.h");
+    });
+    comptime {
+        for (.{
+            .{ c.IGNBRK, IGNBRK }, .{ c.BRKINT, BRKINT }, .{ c.PARMRK, PARMRK }, .{ c.ISTRIP, ISTRIP },
+            .{ c.INLCR, INLCR },   .{ c.IGNCR, IGNCR },   .{ c.ICRNL, ICRNL },   .{ c.IXON, IXON },
+            .{ c.IXANY, IXANY },   .{ c.IXOFF, IXOFF },   .{ c.OPOST, OPOST },   .{ c.ISIG, ISIG },
+            .{ c.ICANON, ICANON }, .{ c.ECHO, ECHO },     .{ c.ECHONL, ECHONL }, .{ c.IEXTEN, IEXTEN },
+            .{ c.CSIZE, CSIZE },   .{ c.CS5, CS5 },       .{ c.CS6, CS6 },       .{ c.CS7, CS7 },
+            .{ c.CS8, CS8 },       .{ c.CSTOPB, CSTOPB }, .{ c.CREAD, CREAD },   .{ c.PARENB, PARENB },
+            .{ c.PARODD, PARODD }, .{ c.CLOCAL, CLOCAL }, .{ c.CRTSCTS, CRTSCTS }, .{ c.B9600, B9600 },
+            .{ c.B19200, B19200 }, .{ c.B38400, B38400 }, .{ c.B57600, B57600 }, .{ c.B115200, B115200 },
+            .{ c.VTIME, VTIME },   .{ c.VMIN, VMIN },     .{ c.TCIOFLUSH, TCIOFLUSH },
+        }) |pair| std.debug.assert(pair[0] == pair[1]);
+    }
 }
