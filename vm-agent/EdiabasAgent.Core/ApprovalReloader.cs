@@ -52,7 +52,7 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
 
         _lastProblem = null;
 
-        // Once per distinct file text: an entry of the wrong shape approves nothing.
+        // Once per distinct file text: an unpinned or malformed entry approves nothing.
         if (text != _entryWarnedText)
         {
             _entryWarnedText = text;
@@ -69,7 +69,7 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
         }
 
         state.Current = next;
-        log.Info($"reviewedJobs re-read: {next.PinnedCount} pinned, {next.UnpinnedCount} unpinned");
+        log.Info($"reviewedJobs re-read: {next.PinnedCount} pinned, {next.IgnoredCount} ignored");
     }
 
     private void Problem(string message)

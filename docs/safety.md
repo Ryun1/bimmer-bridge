@@ -67,8 +67,8 @@ quoting it, when:
   `setz`, `program`, `einstell`, `reset`, `write`, `clear`, ...), case-insensitively.
 
 When such a job is called with arguments, the agent also reads the description of its
-arguments (`_ARGUMENTS`) and screens every argument name and comment the same way. Arguments
-with no description at all are refused too.
+arguments (`_ARGUMENTS`) and screens every argument name and comment the same way, approved in
+`reviewedJobs` or not. Arguments with no description at all are refused too.
 
 Before the terms are matched, the labels in `descriptionScreen.ignore` (`beschreibung`,
 `umsetzer`) are removed, because they contain a term without meaning one: `Jobbeschreibung:`
@@ -85,12 +85,13 @@ A `job_needs_review` refusal is the owner's decision, made for one job at a time
 description. The safe default is not to run it, and approving must never become routine. The
 approval list lives only in the VM, in the agent's config, not in this repo.
 
-An entry in `reviewedJobs` takes one of two forms:
+An entry in `reviewedJobs` has one form: `"ECU:JOB@<12 hex>"`, pinned to the description. It
+approves the job only while its description is the one the owner read. If the SGBD's
+description changes, the job is refused again with `job_needs_review`.
 
-- `"ECU:JOB@<12 hex>"`, pinned: approves the job only while its description is the one the
-  owner read. If the SGBD's description changes, the job is refused again with `job_needs_review`.
-  This is the recommended form.
-- `"ECU:JOB"`, unpinned: approves the job by name, whatever its description says now or later.
+Since 0.5.0 an unpinned `"ECU:JOB"` entry approves nothing. It is a warning in `agent.log` that
+names the pinned form, and `vm_health` counts it as ignored; the job is screened as if it were
+not listed. `ediabas_describe` on the job prints the pinned entry to replace it with.
 
 Steps:
 
@@ -107,10 +108,11 @@ Steps:
 
 An entry of the wrong shape is a warning in `agent.log` and approves nothing; the agent keeps
 running. If the saved file is not a valid config, the agent keeps the previous list and logs a
-warning; the next good save is picked up. `vm_health` shows how many approvals of each form are
-in force.
+warning; the next good save is picked up. `vm_health` shows how many entries are pinned and how
+many are ignored (unpinned or malformed).
 
-An approval skips only the description screen (and the argument screen), never the name rules:
-a job refused by name stays refused, and an approval only applies to a job the policy allows by
-the `STATUS_` pattern. The jobs approved so far are listed in the README's
+An approval skips only the description screen. It never skips the name rules: a job refused by
+name stays refused, and an approval only applies to a job the policy allows by the `STATUS_`
+pattern. Nor does it skip the argument screen: an approved job called with arguments is
+refused with `job_needs_review` unless its argument descriptions pass. The jobs approved so far are listed in the README's
 [Troubleshooting](../README.md#troubleshooting) table.

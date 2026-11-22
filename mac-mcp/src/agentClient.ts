@@ -53,8 +53,16 @@ export const HealthSchema = z.object({
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
-  // reviewedJobs entries pinned to a description and approving by name only; older agents omit it.
-  approvals: z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }).nullable().optional(),
+  // Distinct reviewedJobs entries: pinned ones, and ignored ones (unpinned or malformed; they
+  // approve nothing). A 0.4.0 agent sends `unpinned` instead, which it still honours; older
+  // agents omit the field.
+  approvals: z
+    .union([
+      z.object({ pinned: z.number().int().nonnegative(), ignored: z.number().int().nonnegative() }),
+      z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }),
+    ])
+    .nullable()
+    .optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 

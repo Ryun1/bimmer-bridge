@@ -145,7 +145,7 @@ public class ApiModelsTests
         Assert.Equal(["dllPath", "dllFound", "loaded", "stuck"], ed.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
-        Assert.Equal("""{"pinned":2,"unpinned":1}""", root.GetProperty("approvals").GetRawText());
+        Assert.Equal("""{"pinned":2,"ignored":1}""", root.GetProperty("approvals").GetRawText());
     }
 
     [Fact]

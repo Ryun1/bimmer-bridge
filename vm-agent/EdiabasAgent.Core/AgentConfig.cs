@@ -260,18 +260,22 @@ public sealed class AgentConfig
         return errors;
     }
 
-    /// <summary>A <c>reviewedJobs</c> entry of the wrong shape approves nothing (it never becomes a
-    /// name-only approval) and is a warning, not an error: a typo there must not stop the agent
-    /// from starting after an update.</summary>
+    /// <summary>A <c>reviewedJobs</c> entry that is unpinned or of the wrong shape approves
+    /// nothing and is a warning, not an error: a typo there, or a config from before 0.5.0, must
+    /// not stop the agent from starting after an update.</summary>
     private List<string> ReviewedJobWarnings()
     {
         var warnings = new List<string>();
         for (var i = 0; i < ReviewedJobs.Count; i++)
         {
             var entry = ReviewedJobs[i];
-            if (!ApprovalList.TryParseEntry(entry, out _, out _))
+            if (!ApprovalList.TryParseEntry(entry, out _, out var hash))
             {
-                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits");
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" approves nothing; write \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits, the \"ECU:JOB@<hash>\" line ediabas_describe prints");
+            }
+            else if (hash is null)
+            {
+                warnings.Add($"reviewedJobs[{i}]: \"{Printable(entry)}\" is unpinned and approves nothing since 0.5.0; run ediabas_describe on the job and use the \"ECU:JOB@<hash>\" line it prints");
             }
         }
 

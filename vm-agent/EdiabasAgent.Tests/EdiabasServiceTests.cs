@@ -311,23 +311,27 @@ public class EdiabasServiceTests
     [Fact]
     public void ReviewedJobs_SkipOnlyTheScreen()
     {
+        // SHA-256("Startet B") = 7b69322a754f...: a description the screen would refuse.
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_SYSTEMCHECK_GRUNDADAPT", FakeJob.Comments("Startet B"));
         _api.On("NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT", FakeJob.Ok());
-        var svc = Service(reviewed: ["NVE_65:STATUS_SYSTEMCHECK_GRUNDADAPT", "NVE_65:FS_LOESCHEN", "NVE_65:C_C_LESEN"]);
+        var svc = Service(reviewed: ["NVE_65:STATUS_SYSTEMCHECK_GRUNDADAPT@7b69322a754f", "NVE_65:FS_LOESCHEN@7b69322a754f", "NVE_65:C_C_LESEN@7b69322a754f"]);
 
         Assert.True(svc.RunJob(new JobRequest("nve_65", "status_systemcheck_grundadapt"), null, _audit, default).Ok);
-        Assert.Equal(["Job NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT [] []"], _api.JobCalls);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_SYSTEMCHECK_GRUNDADAPT] []", "Job NVE_65 STATUS_SYSTEMCHECK_GRUNDADAPT [] []"], _api.JobCalls);
 
         // Listing a denied job does not get it past the name rules.
         Assert.Equal("deny.substring:LOESCH", ((JobRefusalDetails)svc.RunJob(new JobRequest("NVE_65", "FS_LOESCHEN"), null, new RequestAudit(), default).Failure!.Error.Details!).Rule);
         Assert.Equal("default_deny", ((JobRefusalDetails)svc.RunJob(new JobRequest("NVE_65", "C_C_LESEN"), null, new RequestAudit(), default).Failure!.Error.Details!).Rule);
-        Assert.Single(_api.JobCalls);
+        Assert.Equal(2, _api.JobCalls.Count());
     }
 
     [Fact]
     public void ReviewedJobs_AreExactUpperCase()
     {
+        // Pinned to the right hash, but the names are not exact.
         _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("starte etwas"));
-        var r = Service(reviewed: ["nve_65:status_x", "NVE_65:STATUS_X "]).RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
+        var hash = CommentScreen.DescriptionHash("starte etwas");
+        var r = Service(reviewed: [$"nve_65:status_x@{hash}", $"NVE_65:STATUS_X @{hash}", $"NVE_65:STATUS_x@{hash}"]).RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
         Assert.Equal("job_needs_review", r.Failure!.Error.Code);
     }
 
@@ -677,14 +681,15 @@ public class EdiabasServiceTests
     }
 
     [Fact]
-    public void DescribeList_NoComments_FilterAndReviewed()
+    public void DescribeList_NoComments_FilterAndNotChecked()
     {
+        // Without descriptions no approval can be checked, pinned or not.
         ScriptNve65Jobs();
-        var r = Service(reviewed: ["NVE_65:STATUS_B"]).DescribeList("NVE_65", "status", false, _audit, default).Value!;
+        var r = Service(reviewed: ["NVE_65:STATUS_B", "NVE_65:STATUS_A@7b69322a754f"]).DescribeList("NVE_65", "status", false, _audit, default).Value!;
 
         Assert.Equal(["STATUS_A", "STATUS_B"], r.Jobs.Select(j => j.Name));
         Assert.Equal(Review.NotChecked, r.Jobs[0].Verdict.Review);
-        Assert.Equal(Review.Reviewed, r.Jobs[1].Verdict.Review);
+        Assert.Equal(Review.NotChecked, r.Jobs[1].Verdict.Review);
         Assert.All(r.Jobs, j => Assert.Null(j.Comment));
         Assert.Equal(["Job NVE_65 _JOBS [] []"], _api.JobCalls);
     }

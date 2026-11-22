@@ -37,10 +37,19 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
   }
   const mac = macPolicyVersion === null ? "could not be loaded, so every EDIABAS tool refuses" : `version ${macPolicyVersion}`;
   lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}; Mac ${mac}.`);
-  if (h.approvals) {
-    lines.push(`Approved jobs: ${h.approvals.pinned} pinned, ${h.approvals.unpinned} unpinned.`);
-    if (h.approvals.unpinned > 0) {
-      lines.push("Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.");
+  const a = h.approvals;
+  if (a && "ignored" in a) {
+    lines.push(`Approved jobs: ${a.pinned} pinned, ${a.ignored} ignored.`);
+    if (a.ignored > 0) {
+      lines.push(`${a.ignored} approval entries are ignored (unpinned or malformed); ediabas_describe prints the pinned entry for each.`);
+    }
+  } else if (a) {
+    // An agent before 0.5.0, which still approves unpinned entries by name.
+    lines.push(`Approved jobs: ${a.pinned} pinned, ${a.unpinned} unpinned.`);
+    if (a.unpinned > 0) {
+      lines.push(
+        `${a.unpinned} unpinned approvals skip the description screen on this older agent and approve nothing from 0.5.0; ediabas_describe prints the pinned entry for each.`,
+      );
     }
   }
   if (agentV !== null && macPolicyVersion !== null && agentV !== macPolicyVersion) {

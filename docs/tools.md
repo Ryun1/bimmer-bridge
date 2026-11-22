@@ -5,7 +5,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 
 | Tool | Arguments | Agent call | Returns |
 |---|---|---|---|
-| `vm_health` | — | `GET /health` | status text: first `Mac server {version}, started {local time}`, then the agent line (warns "WARNING: The Mac server and the agent are different versions; restart Claude or update the agent." when the two versions differ), session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck until the agent restarts), last cable use, policy version, and `Approved jobs: N pinned, M unpinned.` when the agent reports approvals |
+| `vm_health` | — | `GET /health` | status text: first `Mac server {version}, started {local time}`, then the agent line (warns "WARNING: The Mac server and the agent are different versions; restart Claude or update the agent." when the two versions differ), session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck until the agent restarts), last cable use, policy version, and `Approved jobs: N pinned, M ignored.` when the agent reports approvals |
 | `vm_list_windows` | — | `GET /windows` | table |
 | `vm_screenshot` | `window?` (handle, title substring, or `desktop`; default `desktop`), `maxEdge?` (200–4000, default 1600) | `GET /screen/capture` | an image, then one line: title, size, capture method |
 | `vm_logs_list` | `root?` (index), `glob?`, `since?` (ISO 8601), `limit?` (1–200) | `GET /logs` | the roots, then path / size / modified, newest first |
@@ -53,9 +53,11 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   name)". With `job`, for a screened job (review is not `not_required`) it prints
   `Description hash: <hash>` under the description, and when the job needs review also:
   `To approve this job as it is described now, the user adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
-- `vm_health`, when the agent reports approvals: `Approved jobs: N pinned, M unpinned.`, and
-  when M > 0 also `Unpinned approvals do not notice a changed description; ediabas_describe
-  shows the hash to pin them with.`
+- `vm_health`, when the agent reports approvals: `Approved jobs: N pinned, M ignored.`, and
+  when M > 0 also `M approval entries are ignored (unpinned or malformed); ediabas_describe
+  prints the pinned entry for each.` A 0.4.0 agent's counts print as `Approved jobs: N pinned,
+  M unpinned.`, and when M > 0 also `M unpinned approvals skip the description screen on this
+  older agent and approve nothing from 0.5.0; ediabas_describe prints the pinned entry for each.`
 - **Car session.** The results of `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and
   `ediabas_vehicle_status` (errors too) end with "Car session: X min Y s since the first read
   from the car (aim to finish within 10 min)." The session starts at the first successful read

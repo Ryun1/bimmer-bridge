@@ -193,7 +193,9 @@ recorded under policy version 1 and are stale where they say "needs review": the
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
 `MPM_60` `STATUS_AD_WERTE_LESEN`) are listed in `reviewedJobs` in the VM's
 `C:\ProgramData\EdiabasBridge\config.json`, and `ediabas_describe` of each then returned
-review `reviewed`: the bridge on that VM now runs them. The approval lives only in that VM config, not in
+review `reviewed`: the bridge on that VM now runs them. Those entries were written by name
+(unpinned); from 0.5.0 an unpinned entry approves nothing, so the jobs are refused again until
+the owner replaces each with the pinned `ECU:JOB@<hash>` line `ediabas_describe` prints. The approval lives only in that VM config, not in
 the repo; after a fresh install the list is empty and they are refused again until the owner adds
 them back. The verdicts in the tables below are as first recorded (policy version 1), before
 the approval.

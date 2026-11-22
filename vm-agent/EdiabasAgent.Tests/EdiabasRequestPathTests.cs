@@ -262,16 +262,15 @@ public class EdiabasRequestPathTests
     }
 
     [Fact]
-    public void ArgumentScreen_NotForCallsWithoutArgs_ReviewedOrUnscreenedJobs()
+    public void ArgumentScreen_NotForCallsWithoutArgs_OrUnscreenedJobs()
     {
+        // A pinned approval does not skip it: ApprovalTests.RunJob_PinnedApproval_WithArgs_ArgumentScreenStillRuns.
         ScriptStatusX(ArgRows());
-        _api.On("NVE_65 STATUS_Y", FakeJob.Ok());
         _api.On("NVE_65 FS_LESEN_DETAIL", FakeJob.Ok());
-        var svc = Service(reviewed: ["NVE_65:STATUS_Y"]);
+        var svc = Service();
 
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X"), null, new RequestAudit(), default).Ok);
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X", ""), null, new RequestAudit(), default).Ok);
-        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_Y", "1"), null, new RequestAudit(), default).Ok);
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "FS_LESEN_DETAIL", "0x4711"), null, new RequestAudit(), default).Ok);
 
         Assert.DoesNotContain(_api.JobCalls, c => c.Contains("_ARGUMENTS", StringComparison.Ordinal));

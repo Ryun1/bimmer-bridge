@@ -541,41 +541,41 @@ public sealed class EdiabasService
     }
 
     /// <summary>
-    /// The screen for a job allowed only by the name pattern. Null when the job may run. An
-    /// unpinned approval skips it without reading anything. Otherwise the description is read;
-    /// a pinned approval then runs the job only when the description still hashes to the pin,
-    /// and an unapproved job goes through the description and argument screens. A failure that
-    /// is about the request (time, cancel, a BMW tool) keeps its own code.
+    /// The screen for a job allowed only by the name pattern. Null when the job may run. The
+    /// description is always read. A pinned approval then stands in for the description screen
+    /// only while the description still hashes to the pin; an unapproved job goes through the
+    /// description screen. Either way a call with arguments then goes through the argument
+    /// screen. A failure that is about the request (time, cancel, a BMW tool) keeps its own code.
     /// </summary>
     private ApiFailure? ScreenJob(Session session, string ecu, string job, string? args, int timeout, CancellationToken ct)
     {
         var approval = _screen.Approval(ecu, job);
-        if (approval.Kind == ApprovalKind.Unpinned)
-        {
-            return null;
-        }
-
         var d = ReadDescription(session, ecu, job, timeout, ct);
         if (approval.Kind == ApprovalKind.Pinned)
         {
-            return CheckPin(approval, d, ecu, job);
+            if (CheckPin(approval, d, ecu, job) is { } pinFailure)
+            {
+                return pinFailure;
+            }
         }
-
-        if (!d.Ok)
+        else
         {
-            return d.Failure!;
-        }
+            if (!d.Ok)
+            {
+                return d.Failure!;
+            }
 
-        var description = NullIfBlank(d.Value!.Text);
-        var screened = _screen.Screen(description);
-        if (!screened.Passed)
-        {
-            return ApiFailure.Of(
-                ApiErrors.JobNeedsReview,
-                description is null
-                    ? $"{job} has no description, so it cannot be shown to be a read. The user can approve it in the agent config."
-                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config.",
-                new JobReviewDetails(ecu, job, description, screened.Matched));
+            var description = NullIfBlank(d.Value!.Text);
+            var screened = _screen.Screen(description);
+            if (!screened.Passed)
+            {
+                return ApiFailure.Of(
+                    ApiErrors.JobNeedsReview,
+                    description is null
+                        ? $"{job} has no description, so it cannot be shown to be a read. The user can approve it in the agent config."
+                        : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config.",
+                    new JobReviewDetails(ecu, job, description, screened.Matched));
+            }
         }
 
         return string.IsNullOrEmpty(args) ? null : ScreenArguments(session, ecu, job, timeout, ct);
@@ -583,7 +583,8 @@ public sealed class EdiabasService
 
     /// <summary>
     /// A pinned approval holds only for the description the user read: one that changed, is empty or
-    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips both screens.
+    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips the
+    /// description screen only.
     /// </summary>
     private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
     {
@@ -926,11 +927,6 @@ public sealed class EdiabasService
 
         // The same decision a run would make (ScreenJob).
         var approval = _screen.Approval(v.Ecu!, v.Job!);
-        if (approval.Kind == ApprovalKind.Unpinned)
-        {
-            return new JobVerdict(true, v.Rule, Review.Reviewed);
-        }
-
         if (approval.Kind == ApprovalKind.Pinned)
         {
             var pinned = fetch switch

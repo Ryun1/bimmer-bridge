@@ -86,22 +86,32 @@ describe("formatHealth", () => {
   });
 
   describe("approvals", () => {
-    const UNPINNED = "Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.";
     const after = (approvals: unknown) => {
       const lines = formatHealth(health({ policyVersion: 3, capabilities: [], ...(approvals === undefined ? {} : { approvals }) }), 3).split("\n");
       return lines.slice(lines.findIndex((l) => l.startsWith("Job policy:")) + 1);
     };
 
-    it("0 pinned, 0 unpinned", () => {
+    it("0 pinned, 0 ignored", () => {
+      expect(after({ pinned: 0, ignored: 0 })).toEqual(["Approved jobs: 0 pinned, 0 ignored."]);
+    });
+
+    it("2 pinned, 0 ignored", () => {
+      expect(after({ pinned: 2, ignored: 0 })).toEqual(["Approved jobs: 2 pinned, 0 ignored."]);
+    });
+
+    it("1 pinned, 5 ignored: says they approve nothing and where the pinned entry comes from", () => {
+      expect(after({ pinned: 1, ignored: 5 })).toEqual([
+        "Approved jobs: 1 pinned, 5 ignored.",
+        "5 approval entries are ignored (unpinned or malformed); ediabas_describe prints the pinned entry for each.",
+      ]);
+    });
+
+    it("a 0.4.0 agent's {pinned, unpinned}: still read, and says unpinned stops working in 0.5.0", () => {
       expect(after({ pinned: 0, unpinned: 0 })).toEqual(["Approved jobs: 0 pinned, 0 unpinned."]);
-    });
-
-    it("2 pinned, 0 unpinned", () => {
-      expect(after({ pinned: 2, unpinned: 0 })).toEqual(["Approved jobs: 2 pinned, 0 unpinned."]);
-    });
-
-    it("1 pinned, 3 unpinned: says what unpinned misses", () => {
-      expect(after({ pinned: 1, unpinned: 3 })).toEqual(["Approved jobs: 1 pinned, 3 unpinned.", UNPINNED]);
+      expect(after({ pinned: 1, unpinned: 3 })).toEqual([
+        "Approved jobs: 1 pinned, 3 unpinned.",
+        "3 unpinned approvals skip the description screen on this older agent and approve nothing from 0.5.0; ediabas_describe prints the pinned entry for each.",
+      ]);
     });
 
     it("an older agent without the field: nothing", () => {

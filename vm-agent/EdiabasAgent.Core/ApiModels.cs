@@ -19,8 +19,8 @@ public sealed record ConflictingProcess(string Name, int Pid);
 /// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.</summary>
 public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck);
 
-/// <summary>How many <c>reviewedJobs</c> entries are pinned to a description and how many approve by name only.</summary>
-public sealed record ApprovalCounts(int Pinned, int Unpinned);
+/// <summary>How many distinct <c>reviewedJobs</c> entries are pinned to a description, and how many are ignored (unpinned or malformed: they approve nothing).</summary>
+public sealed record ApprovalCounts(int Pinned, int Ignored);
 
 public sealed record HealthResponse(
     string Agent,

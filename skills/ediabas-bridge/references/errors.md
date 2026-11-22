@@ -41,8 +41,9 @@ never look for another tool, job or route (and never computer use on the VM wind
   they decide to approve it, `ediabas_describe` on that job prints the exact entry to add to
   `reviewedJobs` in the VM's `config.json`, pinned to the description as it is now; the agent
   picks it up at the next EDIABAS call, no restart. An approval written without the `@hash`
-  part also works but does not notice a changed description; `vm_health` says how many there
-  are. An approved job is not put through the argument check.
+  part approves nothing (since 0.5.0); `vm_health` counts such entries as ignored, and
+  `ediabas_describe` prints the pinned entry to replace each with. An approved job called with
+  arguments still goes through the argument check.
 
 ## EDIABAS
 

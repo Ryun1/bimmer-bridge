@@ -58,7 +58,7 @@ Never touches the cable and never loads the EDIABAS DLL.
   "conflictingProcesses": [ { "name": "INPALOAD", "pid": 4312 } ],
   "ediabas": { "dllPath": "C:\\EDIABAS\\BIN\\api32.dll", "dllFound": true },
   "lastCableUseAt": null,
-  "approvals": { "pinned": 1, "unpinned": 0 }
+  "approvals": { "pinned": 1, "ignored": 0 }
 }
 ```
 
@@ -143,8 +143,10 @@ caught by the conflict check before EDIABAS is called.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 - `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
   does not stop"). Stays true until the agent restarts.
-- `approvals`: `{ "pinned": n, "unpinned": m }`, the number of distinct `reviewedJobs` entries
-  of each form in force now (see "Approvals"). Entries of the wrong shape are not counted.
+- `approvals`: `{ "pinned": n, "ignored": m }`, the number of distinct `reviewedJobs` entries
+  in force now (see "Approvals"): pinned ones, and ignored ones (unpinned or of the wrong shape),
+  which approve nothing. A 0.4.0 agent sent `{ "pinned": n, "unpinned": m }`; the Mac server
+  still reads that.
 
 ## Job policy
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server
@@ -203,12 +205,13 @@ The ignore entries are labels seen in real descriptions that only look like a te
 `beschreibung` (from `Jobbeschreibung:`, which starts every CAS description and contains
 `schreib`) and `umsetzer` (`AD-Umsetzers`, an A/D converter, contains `setz`). Nothing broader
 is ignored: `EEPROM beschreiben` still fails on `schreib`, `Zaehler zuruecksetzen` on `setz`, and
-`Beschreibungschreiben` on `schreib`. A job approved in the agent config's `reviewedJobs` skips
-the screen, never the name rules (see "Approvals").
+`Beschreibungschreiben` on `schreib`. A job pinned in the agent config's `reviewedJobs` skips
+this screen while its description is unchanged, never the name rules or the argument screen
+(see "Approvals").
 
-**Argument screen (agent only).** A job allowed only by the pattern, not approved in
-`reviewedJobs`, and called with non-empty `args` gets one more call after its description
-passed: `_ARGUMENTS` for that job. Every `ARG` name and `ARGCOMMENT` goes through the same
+**Argument screen (agent only).** A job allowed only by the pattern and called with non-empty
+`args` gets one more call after its description passed (or its pin matched): `_ARGUMENTS` for
+that job. An approval does not skip it. Every `ARG` name and `ARGCOMMENT` goes through the same
 screen. It fails with `job_needs_review` and one of these messages:
 - "The argument description of {JOB} mentions: {terms}. The user can approve it in the agent config."
 - "{JOB} takes arguments but they are not described, so the call cannot be shown to be a read.
@@ -219,22 +222,25 @@ the job.
 
 ## Approvals (`reviewedJobs`)
 `reviewedJobs` in the agent config holds the owner's approvals of single jobs that the description
-screen refuses. Two entry forms:
-- `"ECU:JOB"` approves the job by name, whatever its description says.
-- `"ECU:JOB@hhhhhhhhhhhh"` (12 lower-case hex digits) approves it only while its description
-  is unchanged. This pinned form is the recommended one.
+screen refuses. One entry form: `"ECU:JOB@hhhhhhhhhhhh"` (12 lower-case hex digits) approves
+the job only while its description is unchanged.
 
-ECU and JOB are matched exactly, upper case, with the ECU name as it is asked for. With both
-forms for one job the pinned one wins; with several pins any matching one approves. An entry of
-any other shape is a warning in `agent.log` and approves nothing; it does not stop the agent.
+ECU and JOB are matched exactly, upper case, with the ECU name as it is asked for. With several
+pins for one job any matching one approves. An unpinned `"ECU:JOB"` entry (0.4.0 and before)
+approves nothing since 0.5.0: it is a warning in `agent.log` naming the pinned form
+(`reviewedJobs[i]: "ECU:JOB" is unpinned and approves nothing since 0.5.0; run ediabas_describe
+on the job and use the "ECU:JOB@<hash>" line it prints`). An entry of any other shape is also a
+warning and approves nothing. Neither stops the agent; both count as `ignored` in `/health`.
 An approval only ever applies to a job the policy allows by the `STATUS_` pattern.
 
 The hash is the first 12 hex digits (lower case) of the SHA-256 of the UTF-8 bytes of the
 description, trimmed: every value of the `_JOBCOMMENTS` sets, one per line, joined by `\n`.
 `describe` with `job` returns it as `descriptionHash`.
 
-For a pinned job the agent reads `_JOBCOMMENTS`, then runs the job; there is no `_ARGUMENTS`
-call. An unpinned approval reads nothing. A pin that no longer holds is `job_needs_review`:
+For a pinned job the agent reads `_JOBCOMMENTS`; a matching pin takes the place of the
+description screen only. A call with arguments then goes through the argument screen as for any
+screened job (`_ARGUMENTS`, then the job); a call without arguments runs the job. A pin that no
+longer holds is `job_needs_review`:
 - "The description of {JOB} has changed since it was approved (now {hash}). The user can approve
   it again in the agent config."
 - "{JOB} has no description now, so its approval cannot be checked. The user can approve it again
@@ -317,8 +323,8 @@ Without `job` — the job list. `comments` defaults to `true`; `filter` narrows 
       "verdict": { "allowed": false, "rule": "deny.substring:STEUER", "review": "not_required" } } ],
   "durationMs": 412 }
 ```
-`review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (an
-unpinned `reviewedJobs` entry, or a pinned one that matches the description), or `not_checked`
+`review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (a pinned
+`reviewedJobs` entry that matches the description), or `not_checked`
 (`comments=false`, or the comment was not fetched because the
 request's time budget ran out, an earlier job did not stop after `apiBreak`, or a BMW tool
 started during the request). A pin that does not match gives `needs_review`; a pin with
