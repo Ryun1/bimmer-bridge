@@ -194,7 +194,7 @@ public sealed class EdiabasService
         }
 
         using var session = new Session(this, queuedMs);
-        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), session.StartMs, recheckConflicts: false, ct);
+        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), recheckConflicts: false, ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
         audit.Rule = run.Rule;
@@ -232,7 +232,7 @@ public sealed class EdiabasService
 
         var start = _clock.ElapsedMs;
         using var session = new Session(this, queuedMs);
-        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), session.StartMs, audit, ct);
+        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -266,7 +266,7 @@ public sealed class EdiabasService
 
         var start = _clock.ElapsedMs;
         using var session = new Session(this, queuedMs);
-        var batch = RunBatch(session, items, _defaultTimeoutSeconds, session.StartMs, audit, ct);
+        var batch = RunBatch(session, items, _defaultTimeoutSeconds, audit, ct);
         if (batch.WholeRequest is { } whole)
         {
             return whole;
@@ -322,7 +322,7 @@ public sealed class EdiabasService
             var verdict = _policy.Evaluate(upperEcu, name);
             string? comment = null;
             var fetch = DescriptionFetch.Skipped;
-            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && !OverBudget(session.StartMs))
+            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && session.BudgetLeftMs > 0)
             {
                 var d = ReadDescription(session, upperEcu!, name, timeout, ct);
                 if (d.Ok)
@@ -445,13 +445,13 @@ public sealed class EdiabasService
         public string Text => string.Join("\n", Lines);
     }
 
-    private BatchRun RunBatch(Session session, IReadOnlyList<JobRequest> items, int timeout, long start, RequestAudit audit, CancellationToken ct)
+    private BatchRun RunBatch(Session session, IReadOnlyList<JobRequest> items, int timeout, RequestAudit audit, CancellationToken ct)
     {
         var results = new List<BatchItem>(items.Count);
         for (var i = 0; i < items.Count; i++)
         {
             var itemStart = _clock.ElapsedMs;
-            var run = RunItem(session, items[i], timeout, start, recheckConflicts: i > 0, ct);
+            var run = RunItem(session, items[i], timeout, recheckConflicts: i > 0, ct);
             if (run.WholeRequest is { } whole)
             {
                 audit.Items.Add(new ItemAudit(i, run.Ecu, run.Job, run.Rule, whole.Error.Code, _clock.ElapsedMs - itemStart));
@@ -465,7 +465,7 @@ public sealed class EdiabasService
         return new BatchRun(results, null);
     }
 
-    private ItemRun RunItem(Session session, JobRequest request, int timeout, long requestStart, bool recheckConflicts, CancellationToken ct)
+    private ItemRun RunItem(Session session, JobRequest request, int timeout, bool recheckConflicts, CancellationToken ct)
     {
         var itemStart = _clock.ElapsedMs;
         string? ecu = request.Ecu;
@@ -483,7 +483,7 @@ public sealed class EdiabasService
             return Fail(NotRun("An earlier job did not stop after apiBreak; no further jobs are started."));
         }
 
-        if (OverBudget(requestStart))
+        if (session.BudgetLeftMs <= 0)
         {
             return Fail(NotRun($"The request reached its {_maxTimeoutSeconds} s limit before this job started."));
         }
@@ -762,7 +762,7 @@ public sealed class EdiabasService
 
         // The request budget binds every job, not only the decision to start an item: no job may
         // run past it, so the whole request ends within maxJobTimeoutSeconds plus the break grace.
-        var budgetLeftMs = session.StartMs + (long)_maxTimeoutSeconds * 1000 - _clock.ElapsedMs;
+        var budgetLeftMs = session.BudgetLeftMs;
         if (budgetLeftMs <= 0)
         {
             return NotRun($"The request reached its {_maxTimeoutSeconds} s limit before {job} started.");
@@ -933,8 +933,6 @@ public sealed class EdiabasService
             ? NotRun($"The request waited behind another EDIABAS request for the whole {_maxTimeoutSeconds} s limit; nothing was started.")
             : null;
 
-    private bool OverBudget(long requestStart) => _clock.ElapsedMs - requestStart >= (long)_maxTimeoutSeconds * 1000;
-
     private static ApiFailure Refused(string? ecu, string? job, string rule) =>
         ApiFailure.Of(ApiErrors.JobNotAllowed, $"The job policy refuses this job (rule {rule}).", new JobRefusalDetails(ecu ?? "", job ?? "", rule));
 
@@ -973,6 +971,10 @@ public sealed class EdiabasService
 
         /// <summary>When the request arrived (before any time in the queue), for its overall budget.</summary>
         public long StartMs { get; }
+
+        /// <summary>What is left of the request's <c>maxJobTimeoutSeconds</c> budget; zero or
+        /// less means no further job may start.</summary>
+        public long BudgetLeftMs => StartMs + (long)owner._maxTimeoutSeconds * 1000 - owner._clock.ElapsedMs;
 
         public bool Initialised { get; private set; }
 
