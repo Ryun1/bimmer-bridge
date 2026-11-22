@@ -68,7 +68,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {

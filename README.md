@@ -115,11 +115,11 @@ Check any change against that list.
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.5.0 (agent, MCP server and `VERSION`), job policy version 4, eleven MCP tools.
-**0.5.0 is released (tag `v0.5.0`, 2026-11-22) and installed in the VM as an Update from 0.4.0:
-the [upgrade steps](docs/install.md#upgrading-to-050) and desk checks pass, except re-recording
-the skill references' job verdicts under policy version 4. Nothing in 0.3.0, 0.4.0 or 0.5.0 has
-been run at the car.**
+Version 0.5.1 (agent, MCP server and `VERSION`), job policy version 4, eleven MCP tools.
+**0.5.1 is a small release on top of 0.5.0 (released 2026-11-22, installed in the VM as an Update
+from 0.4.0; the [upgrade steps](docs/install.md#upgrading-to-050) and desk checks pass, and the
+skill references' job verdicts were recorded again under policy version 4). Nothing in 0.3.0
+to 0.5.1 has been run at the car.**
 
 0.5.0 in the VM, 2026-11-22 (cable in the VM, not in the car):
 - Approvals pinned before the update; `vm_health` then showed 5 pinned, 0 ignored, and policy
@@ -163,6 +163,16 @@ Open:
 - **Eval acceptance**: 07 and 08 still need a run without the skills that does worse.
 - **Skill reference entries that need car recordings**: the vehicle-status field names, the
   engine SGBD, and the SGBDs that can only be described with the control unit answering.
+
+### What changed in 0.5.1
+
+- After the Mac sleeps, UTM hands the cable back to the Mac. `ediabas_error` 48
+  (`IFH-0038`) now says the cable may not be attached to the VM, as error 16 does after a replug,
+  instead of only blaming the ECU. Mac server only.
+- `global.json` pins the .NET SDK to 10.0.x, and `release.sh` / `vm-agent/build.sh` prefer the
+  `dotnet@10` keg and check the version, so a newer `dotnet` on `PATH` is refused, not used.
+- The agent's code is unchanged since 0.5.0; its version moves with the others, so the Update
+  line brings it to 0.5.1. Skill references: job verdicts under policy version 4.
 
 ### What changed in 0.5.0
 
