@@ -26,7 +26,7 @@ export function agentErr(status: number, code: string, message: string, details?
 }
 
 export function phase2Health(o: Record<string, unknown> = {}): Record<string, unknown> {
-  return healthBody({ policyVersion: 3, capabilities: ["ediabas", "capture", "logs"], conflictingProcesses: [], ...o });
+  return healthBody({ policyVersion: 4, capabilities: ["ediabas", "capture", "logs"], conflictingProcesses: [], ...o });
 }
 
 export function jobResult(ecu: string, job: string, sets: Record<string, unknown>[], o: Record<string, unknown> = {}): Record<string, unknown> {

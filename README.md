@@ -26,8 +26,8 @@ untested.
 
 What is specific to a car or chassis:
 - **Whole-car jobs.** The job policy allows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` (which
-  modules answer, and all their faults, in one job) only on the `E60` group SGBD, which covers
-  the E60/E61. For another chassis whose group SGBD has these jobs, add it to
+  modules answer, and all their faults, in one job) only on the `E60` group SGBD (the E60/E61) and
+  on the `E65`, `E70`, `E89X`, `F01` and `R56` SGBDs. For another chassis whose group SGBD has these jobs, add it to
   `policy/policy.json` with its test cases ([policy/README.md](policy/README.md)), then rebuild
   and run the Update line (the agent embeds the policy); until then, read modules one SGBD at a
   time.
@@ -166,6 +166,8 @@ Open:
 
 From the review round recorded in [docs/plan-review-fixes.md](docs/plan-review-fixes.md):
 
+- Policy version 4: `E65`, `E70`, `E89X`, `F01`, `R56` restricted like `E60`; switching and
+  triggering words added to the description screen.
 - Policy version 3: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` (whole-car ident and
   faults), `C_FA_LESEN` (vehicle order), more description-screen terms, stricter parse rules.
 - New tool `ediabas_jobs`: up to 20 read jobs in one call.

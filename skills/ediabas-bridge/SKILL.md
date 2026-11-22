@@ -74,8 +74,8 @@ turns it on.
    on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
-   The job policy allows these whole-car jobs only on `E60`; on another chassis
-   `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
+   The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
+   chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
    the policy (`policy/README.md` in the repo). Until then, find the car's modules with
    `ediabas_list_ecus` and read them one SGBD at a time.
 4. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask the

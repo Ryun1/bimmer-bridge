@@ -140,7 +140,7 @@ describe("vm_health", () => {
     const r = await call("vm_health");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
-    expect(r.text).toContain("Job policy: agent version 3; Mac version 3.");
+    expect(r.text).toContain("Job policy: agent version 4; Mac version 4.");
     expect(r.text).not.toMatch(/WARNING: the agent's job policy/);
   });
 
@@ -157,7 +157,7 @@ describe("vm_health", () => {
     override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 2, capabilities: ["ediabas"] }) }));
     const { call } = await connect();
     const r = await call("vm_health");
-    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 2\) differs from this Mac's \(version 3\)/);
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 2\) differs from this Mac's \(version 4\)/);
     expect(r.text).toMatch(/Update line/);
   });
 
@@ -165,7 +165,7 @@ describe("vm_health", () => {
     override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 1, capabilities: ["ediabas"] }) }));
     const { call } = await connect();
     const r = await call("vm_health");
-    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 1\) differs from this Mac's \(version 3\)/);
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 1\) differs from this Mac's \(version 4\)/);
     expect(r.text).toMatch(/Update line/);
   });
 

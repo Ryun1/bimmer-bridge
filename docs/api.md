@@ -182,8 +182,12 @@ Evaluation, in this order. The first rule that decides wins; `rule` is the strin
    `screen: true`.
 7. Otherwise `default_deny`.
 
-The file is at `version` 3. Version 2 added `descriptionScreen.ignore`, which a version 1 file
-does not have (so this build refuses it). Version 3:
+The file is at `version` 4. Version 2 added `descriptionScreen.ignore`, which a version 1 file
+does not have (so this build refuses it). Version 4 makes `E65`, `E70`, `E89X`, `F01` and `R56`
+(the chassis SGBDs present in the VM's Ecu folder) restricted ECUs with the same list as `E60`,
+and adds the screen terms `schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`,
+`trigger`, `oeffnen` and `öffnen`; a job whose description now matches becomes `job_needs_review`
+(none of the recorded describe fixtures changes verdict). Version 3:
 - makes `E60` a restricted ECU like `TMODE` and `UTILITY`: only `INFO`, `IDENT_FUNKTIONAL`,
   `FS_LESEN_FUNKTIONAL` (whole-car ident and fault reads, KWP $1A and $18) and the `_` info jobs;
 - allows `C_FA_LESEN` (vehicle order, KWP $22) by name on every ECU that is not restricted;

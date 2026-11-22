@@ -1101,6 +1101,116 @@
    "allowed": false,
    "rule": "deny.substring:AUFTRAG",
    "screen": false
+  },
+  {
+   "ecu": "E65",
+   "job": "FS_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "chassis SGBD restricted like E60 (policy version 4)"
+  },
+  {
+   "ecu": "E65",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E65",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E70",
+   "job": "FS_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "chassis SGBD restricted like E60 (policy version 4)"
+  },
+  {
+   "ecu": "E70",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E70",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E89X",
+   "job": "FS_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "chassis SGBD restricted like E60 (policy version 4)"
+  },
+  {
+   "ecu": "E89X",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "E89X",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "F01",
+   "job": "FS_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "chassis SGBD restricted like E60 (policy version 4)"
+  },
+  {
+   "ecu": "F01",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "F01",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "R56",
+   "job": "FS_LESEN",
+   "allowed": false,
+   "rule": "ecu_restricted",
+   "screen": false,
+   "note": "chassis SGBD restricted like E60 (policy version 4)"
+  },
+  {
+   "ecu": "R56",
+   "job": "FS_LESEN_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
+  },
+  {
+   "ecu": "R56",
+   "job": "IDENT_FUNKTIONAL",
+   "allowed": true,
+   "rule": "allow.ecu",
+   "screen": false
   }
  ]
 }

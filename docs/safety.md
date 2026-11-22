@@ -42,9 +42,9 @@ In order, the first step that decides wins:
    `CODIER`, `FLASH`, ...) or has a write-like word between underscores (`START`, `STOP`,
    `LERN`, `PROG`, ...) is refused, whatever else applies.
 4. **Restricted ECUs.** `TMODE` and `UTILITY` contain dangerous jobs beside their reads, so
-   only the jobs listed for them by name may run. `E60` is restricted the same way: only
-   `INFO`, `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL` (whole-car ident and fault reads) and the
-   `_` info jobs.
+   only the jobs listed for them by name may run. The chassis SGBDs `E60`, `E65`, `E70`,
+   `E89X`, `F01` and `R56` are restricted the same way: only `INFO`, `IDENT_FUNKTIONAL`,
+   `FS_LESEN_FUNKTIONAL` (whole-car ident and fault reads) and the `_` info jobs.
 5. **Allowed by name.** A fixed list of reads (`IDENT`, `FS_LESEN`, `IS_LESEN`, the `_JOBS`
    family, ...) may run on any other ECU.
 6. **Allowed by pattern.** Any other `STATUS_...` job may run only if its description passes
@@ -64,7 +64,10 @@ quoting it, when:
 
 - the description is empty, or only a label such as `Jobbeschreibung:`; or
 - it contains a write-like term from `descriptionScreen.terms` (`start`, `schreib`, `loesch`,
-  `setz`, `program`, `einstell`, `reset`, `write`, `clear`, ...), case-insensitively.
+  `setz`, `program`, `einstell`, `reset`, `write`, `clear`, and the switching and triggering
+  words `schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`, `trigger`,
+  `oeffnen`, `öffnen`, ...), case-insensitively. "Schaltet Relais ein" needs review; "Status
+  Schalter lesen" does not (`schalter` contains none of them).
 
 When such a job is called with arguments, the agent also reads the description of its
 arguments (`_ARGUMENTS`) and screens every argument name and comment the same way, approved in

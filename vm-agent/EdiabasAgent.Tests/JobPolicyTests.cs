@@ -105,7 +105,7 @@ public class JobPolicyTests
     public void Embedded_Loads()
     {
         Assert.True(JobPolicy.Embedded.Loaded, JobPolicy.Embedded.LoadError);
-        Assert.Equal(3, JobPolicy.Embedded.Version);
+        Assert.Equal(4, JobPolicy.Embedded.Version);
         Assert.Contains("lösch", JobPolicy.Embedded.ScreenTerms);
         Assert.Equal(["beschreibung", "umsetzer"], JobPolicy.Embedded.ScreenIgnore);
     }
@@ -173,8 +173,8 @@ public class JobPolicyTests
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "umsetzer")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = "umsetzer"),
-        Text().Replace("\"version\": 3,", "\"version\": 3, \"version\": 4,", StringComparison.Ordinal),
-        Text().Replace("\"version\": 3,", "// comment\n\"version\": 3,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 4,", "\"version\": 4, \"version\": 5,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 4,", "// comment\n\"version\": 4,", StringComparison.Ordinal),
     ];
 
     [Theory]
