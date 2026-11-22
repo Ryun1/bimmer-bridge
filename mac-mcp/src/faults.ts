@@ -14,6 +14,8 @@ export const BATCH_MAX = 20;
 export interface BatchDeps {
   client: Pick<AgentClient, "runJobs">;
   policy: PolicyGuard;
+  /** Called with the ECU of each item that ran. */
+  onOk?: ((ecu: string) => void) | undefined;
 }
 
 /** An item's outcome, or a whole-request error that stands in for it. */
@@ -42,6 +44,9 @@ export function checkAll(policy: PolicyGuard, items: JobRequest[]): void {
 async function runChunk(deps: BatchDeps, chunk: JobRequest[], timeoutSeconds?: number): Promise<JobsResponse> {
   const r = await deps.client.runJobs(chunk, timeoutSeconds);
   if (r.items.length !== chunk.length) throw badResponse("POST /ediabas/jobs");
+  r.items.forEach((it, i) => {
+    if (it.ok && it.result) deps.onOk?.(chunk[i]!.ecu);
+  });
   return r;
 }
 

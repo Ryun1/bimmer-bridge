@@ -11,7 +11,8 @@ import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, forma
 import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle } from "./formatEdiabas.js";
 import { PolicyGuard } from "./policy.js";
 import { FolderRecorder } from "./recorder.js";
-import { fitText } from "./textBudget.js";
+import { CarSession } from "./carSession.js";
+import { TEXT_BUDGET, fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
 import type { DiscoverySources } from "./vmAddress.js";
 
@@ -79,6 +80,8 @@ export interface ServerParts {
   /** Remove secrets from text before it leaves a tool handler. */
   redact: (text: string) => string;
   log: (message: string) => void;
+  /** The clock (ms since the epoch); default Date.now. */
+  now?: (() => number) | undefined;
 }
 
 type ToolOutput = string | { text: string; image: { data: string; mimeType: string } };
@@ -101,6 +104,9 @@ const NARROW_HINT: Record<string, string> = {
 };
 const DEFAULT_HINT = "Ask for less.";
 
+/** Tools whose results end with the car-session line. */
+const CAR_TOOLS = new Set(["ediabas_job", "ediabas_jobs", "ediabas_read_faults", "ediabas_vehicle_status"]);
+
 function invalidArguments(message: string): BridgeError {
   return new BridgeError("invalid_arguments", message);
 }
@@ -115,15 +121,24 @@ const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{
 export function buildServer(parts: ServerParts): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
   const { client, policy } = parts;
+  const car = new CarSession(parts.now);
+  const onOk = (ecu: string) => car.record(ecu);
 
   async function run(tool: string, body: () => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
     const started = performance.now();
     let outcome = "ok";
     let rule: string | undefined;
     let result: CallToolResult;
-    const fit = (text: string) => fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT);
+    let footer: string | null = null;
+    // The car-session line is added after the cut, so it is always the last line.
+    const fit = (text: string) => {
+      const budget = TEXT_BUDGET - (footer ? footer.length + 2 : 0);
+      const t = fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT, budget);
+      return footer ? `${t}\n\n${footer}` : t;
+    };
     try {
       const out = await body();
+      if (CAR_TOOLS.has(tool)) footer = car.line();
       if (typeof out === "string") {
         result = { content: [{ type: "text", text: fit(out) }] };
       } else {
@@ -139,6 +154,7 @@ export function buildServer(parts: ServerParts): McpServer {
       outcome = err.code;
       rule = err.rule;
       if (err.code === "internal_error") parts.log(parts.redact(`${tool}: ${err.message}`));
+      if (CAR_TOOLS.has(tool)) footer = car.line();
       result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message)) }] };
     }
     try {
@@ -316,7 +332,10 @@ export function buildServer(parts: ServerParts): McpServer {
         "ediabas_vehicle_status",
         async () => {
           policy.require();
-          return formatVehicle(await client.vehicle());
+          const v = await client.vehicle();
+          // Only the voltage sources are modules in the car; the rest read the cable.
+          for (const s of v.voltages) if (s.ok && s.result && s.ecu) onOk(s.ecu);
+          return formatVehicle(v);
         },
         { ecu: "(vehicle)", job: "STATUS_ZUENDUNG,STATUS_UBATT,voltages,LESE_SPANNUNG_KL30,LESE_SPANNUNG_KL15" },
       ),
@@ -347,6 +366,7 @@ export function buildServer(parts: ServerParts): McpServer {
           const req = { ecu: a.ecu, job: a.job, args: a.args, results: a.results };
           policy.check(req);
           const r = await client.runJob(req);
+          onOk(a.ecu);
           return a.raw ? formatJobRaw(r) : formatJobResult(r);
         },
         { ecu: a.ecu, job: a.job },
@@ -384,7 +404,7 @@ export function buildServer(parts: ServerParts): McpServer {
         "ediabas_jobs",
         async () => {
           const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
-          return (await runJobBatch({ client, policy }, items, { raw: a.raw })).text;
+          return (await runJobBatch({ client, policy, onOk }, items, { raw: a.raw })).text;
         },
         { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
       ),
@@ -407,7 +427,7 @@ export function buildServer(parts: ServerParts): McpServer {
     async (a) => {
       const includeInfo = a.includeInfoMemory === true;
       const jobs = includeInfo ? "FS_LESEN,IS_LESEN" : "FS_LESEN";
-      return run("ediabas_read_faults", () => readFaults({ client, policy }, a.ecus, includeInfo), { ecu: a.ecus.join(","), job: jobs });
+      return run("ediabas_read_faults", () => readFaults({ client, policy, onOk }, a.ecus, includeInfo), { ecu: a.ecus.join(","), job: jobs });
     },
   );
 
@@ -422,6 +442,8 @@ export interface AppDeps extends DiscoverySources {
   probeTimeoutMs?: number;
   /** The job policy; default policy/policy.json at the repo root. */
   policy?: PolicyGuard;
+  /** The clock (ms since the epoch); default Date.now. */
+  now?: () => number;
 }
 
 /** Wires config + system access into a ready server. */
@@ -452,5 +474,5 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     recorder,
   });
   const audit = new AuditLog(config.auditLogPath, { warn: log });
-  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log });
+  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now });
 }
