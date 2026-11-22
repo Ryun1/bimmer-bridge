@@ -166,18 +166,18 @@ with the skills and once without.
    typecheck and tests, the deploy server's tests (`python3 -m unittest dev/test_serve.py`) and
    the dev tools' typecheck and tests;
 5. builds `release/EdiabasAgent.zip` and `release/EdiabasAgent.zip.sha256`
-   (`vm-agent/build.sh`), one zip per skill in `skills/dist/` (`skills/install.sh --no-link`,
+   (`vm-agent/build.sh`), one `.skill` file per skill in `skills/dist/` (`skills/install.sh --no-link`,
    which does not touch `~/.claude/skills`) and `mac-mcp/dist` (`npm --prefix mac-mcp run build`);
 6. checks that the zip's `version.txt` is the release version, that it holds `commit.txt` and
    that the `.sha256` file matches the zip, then prints the commit, the SHA-256 and the Update
-   line, and lists each `skills/dist/*.zip` with its SHA-256. The summary prints the zip's
+   line, and lists each `skills/dist/*.skill` with its SHA-256. The summary prints the zip's
    version and commit.
 
 It stops at the first failure and never pushes, tags or deploys anything.
 
 To publish: tag `vX.Y.Z` on the commit `release.sh` built and push the tag, then create a
 GitHub release from it with the files `release.sh` printed attached (`release/EdiabasAgent.zip`,
-`release/EdiabasAgent.zip.sha256` and each `skills/dist/*.zip`) and notes from the README's
+`release/EdiabasAgent.zip.sha256` and each `skills/dist/*.skill`) and notes from the README's
 [Status](../README.md#status) section. The `.sha256` checks that the download is intact, not who made it.
 
 To run one part by hand:
