@@ -16,7 +16,7 @@ window) that would get round it.
 - Authentication: `no_token`, `unauthorized`, `forbidden`
 - Versions: `agent_outdated`, `bad_response`, agent-reported errors, `internal_error`
 - Job policy: `policy_unavailable`, `job_not_allowed`, `job_needs_review`
-- EDIABAS: the slow first call, `cable_in_use`, `cable_not_found`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
+- EDIABAS: the slow first call, a describe that runs out of time, `cable_in_use`, `cable_not_found`, `ecu_not_found`, `job_not_found`, `ediabas_error`, `ediabas_unavailable`, `job_timeout`, `not_run`, `bad_request`
 - Screenshots: `window_not_found`, `window_minimized`, `desktop_unavailable`
 - Logs: `path_not_allowed`, `file_not_found`
 - Deploy steps (installer, update, token)
@@ -207,6 +207,18 @@ That first call can take 10–15 s (seen at the desk on 2026-11-21), and a full
 It is normal and not a reason to retry. `vm_health` shows whether EDIABAS is loaded at the moment (older agents do
 not report it). Allow for it in the rough time you give Ryan before the ignition goes on.
 
+### A full `ediabas_describe` runs out of time
+Not an error code: the call succeeds, but not every job was screened. On 2026-11-21 the full
+job lists of `CAS` (150 jobs) and `LM_60` (134 jobs) took the whole 60 s describe limit
+(`durationMs` 60043 and 60051). The jobs at the end of each list came back with no description
+(the last 52 on `CAS`, the last 9 on `LM_60`). On `CAS`, 18 allowed jobs among them showed
+review `not_checked` ("description not screened"; one more, `STATUS_RDU`, showed needs
+review), so the list does not show them as runnable. On `LM_60` all 9 were refused by name
+anyway.
+**What to do:** describe large files with a `filter` (a job-name substring such as `STATUS_`),
+or one job at a time with `job`; a single job on `CAS` took about 5–6.5 s. Do not repeat the
+full describe hoping it gets further.
+
 ### `cable_in_use`
 **Meaning:** a BMW tool (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool) or another program
 using EDIABAS is running in the VM; the message names it. Only one program can use the cable,
@@ -221,16 +233,21 @@ IFH-0018: INITIALIZATION ERROR): the K+DCAN cable is not connected to the VM." a
 plug the cable into the Mac and pass it through to the Windows VM in UTM, and not to retry
 until he says it is connected.
 
+After the cable has been unplugged from the Mac and plugged back in, a restarted agent can
+report this too (`IFH-0018`) even though the cable is in the Mac: see "After the cable is
+replugged" under `ediabas_error`.
+
 **Meaning:** EDIABAS could not open the interface, so nothing reached the car. Seen at the desk
 on 2026-11-21 with the cable not passed through to the VM: a real SGBD would not load at all,
 so even `ediabas_describe` failed this way. Only `TMODE` and `UTILITY` loaded without the
 cable. The same day, with the cable passed through to the VM but not plugged into the car,
-`ediabas_describe` on `NVE_65` worked: describing a real SGBD needs the cable in the VM, not
-the car or the ignition. It can fail a whole call, or appear in each ECU's place in
+`ediabas_describe` on `NVE_65` worked: describing most real SGBDs needs the cable in the VM, not
+the car or the ignition (for the exceptions, see error 100 under `ediabas_error`). It can fail a whole call, or appear in each ECU's place in
 `ediabas_read_faults`. It is not the same as an ECU that did not answer (`ediabas_error`):
 there, the cable is connected and the car is silent.
 **Tell Ryan:** the cable is not connected to the VM; plug it into the Mac and pass it through
-to the VM in UTM, then say when it is done. Wait for him: until then every retry fails the
+to the VM in UTM (if it is already plugged in, tick it for the VM again in UTM's USB menu),
+then say when it is done. Wait for him: until then every retry fails the
 same way. Then call `vm_health` once and carry on. Do all job discovery (`ediabas_list_ecus`,
 `ediabas_describe`) in that state, before asking for the ignition.
 
@@ -248,10 +265,32 @@ lists. Do not try variations of the name blind.
 EDIABAS's code and text. Typical reasons are an ECU that does not answer (ignition off, module
 not fitted, wrong SGBD for this car, or the cable not plugged into the car). A cable not
 connected to the VM is reported separately, as `cable_not_found`. Which other EDIABAS codes mean
-which on this install has not been confirmed yet.
+which on this install has not been confirmed yet, apart from the two seen at the desk below.
 **Tell Ryan:** the code and text as returned, and for which ECU. Do not interpret the code
 beyond what the text says. In `ediabas_read_faults` this appears in that ECU's place and the
 other ECUs still print.
+
+The server's hint with every `ediabas_error` says it "often means the ECU did not answer". For
+the two codes below, seen at the desk with the cable not in the car, that is not what
+happened; go by what is written here.
+
+**Error 100 `SYS-0010: INITIALIZATION ERROR` from `ediabas_describe`.** Seen on 2026-11-21
+for `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60`, with the cable in the VM and not in the
+car, while other real SGBDs described normally. These files appear to need the control unit to
+answer even to list their jobs, so they can only be described at the car (see `ecu-map.md`).
+It does not show that the file fits this car or that it does not: which engine file fits is
+not known. Tell Ryan they have to be described at the car, and plan that into the session at
+the car; do not retry at the desk.
+
+**After the cable is replugged: error 16 `IFH-0006: COMMAND NOT ACCEPTED`, then
+`cable_not_found`.** Seen at the desk on 2026-11-21/22: after the cable was unplugged from the
+Mac and plugged back in, every real SGBD failed with `ediabas_error` 16 `IFH-0006: COMMAND
+NOT ACCEPTED` (even `ediabas_describe`), while `TMODE` still answered. After the agent was
+restarted, the same state gave `cable_not_found` (`IFH-0018`). Both cleared when Ryan ticked
+the cable for the VM again in UTM's USB menu: after a replug, UTM does not hand the cable back
+to the VM by itself. So with error 16 (or `cable_not_found`) after the cable has been
+unplugged, do not tell Ryan the ECU did not answer: ask him to open UTM's USB menu for the
+Windows VM and tick the cable again, say when it is done, then call `vm_health` once.
 
 ### `ediabas_unavailable`
 **Meaning:** the agent could not start EDIABAS: the DLL is missing or failed to initialise.

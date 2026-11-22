@@ -4,20 +4,28 @@ Ryan's E61 has a recurring battery drain. The aim is to gather evidence from the
 short session, not to diagnose from the readings alone: interpretation belongs to the
 `bmw-e61` skill and to Ryan.
 
-**Status: procedure only.** No battery-related job has been run on this car yet. Every SGBD
-and job name below is an **unverified candidate** taken from the project plan, to confirm
-with `ediabas_list_ecus` and `ediabas_describe` before use. None is known to exist on this
-car, to be allowed by the policy, or to return any particular field.
+**Status: no battery-related job has been run on this car yet.** The jobs below were found
+at the desk on 2026-11-21/22 with `ediabas_describe` (the cable in the VM, **not plugged into
+the car**). They show that the files are in the VM and what the SGBDs declare; none of these
+files is known to be fitted to this car, and no result has been read. Their descriptions,
+result names and verdicts are in `../job-cookbook.md` ("Battery-drain related jobs").
 
-| Candidate (unverified) | Where the plan expects it |
-|---|---|
-| `D_MOTOR` (group) | engine ECU group; the plan guesses it resolves to `N62_TUE` or `ME9N62_2` |
-| `STATUS_IBS_MESSWERTE` | a battery-related read on the engine ECU |
-| `STATUS_BATTERIEINTEGRATOR` | a battery-related read on the engine ECU |
-| `STATUS_SYSTEMCHECK_PM_INFO_1`, `STATUS_SYSTEMCHECK_PM_INFO_2` | battery-related reads on the engine ECU |
+| File | Runnable (review passed) | Needs review: the bridge refuses them; Ryan decides |
+|---|---|---|
+| `CAS` | `STATUS_PA_WUP` | `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP` |
+| `KOMB60` | `STATUS_KLEMMENSPANNUNG`, `STATUS_KLEMMEN`, `STATUS_KL30_H_ZAEHLER` | — |
+| `IHKA60` | `STATUS_ENERGIESPARMODE`, `STATUS_VERBRAUCHERREDUZIERUNG` | — |
+| `sgm_60_2` (variant `SGM_60_2`) | `STATUS_STROMVERSORGUNG_LESEN` | — |
+| `MPM_60` | `STATUS_ECU_LESEN` | `STATUS_AD_WERTE_LESEN` |
 
-What each job actually returns is whatever `ediabas_describe` shows; do not describe it from
-the name.
+The engine files could not be described at the desk: `ediabas_describe` on `N62_TUE2` and
+`ME9N62_2` failed with `ediabas_error` 100 `SYS-0010: INITIALIZATION ERROR` (see
+`../errors.md`), and which engine file fits this car is not known. The project plan's
+engine-ECU candidates (`D_MOTOR`, `STATUS_IBS_MESSWERTE`, `STATUS_BATTERIEINTEGRATOR`,
+`STATUS_SYSTEMCHECK_PM_INFO_1`, `STATUS_SYSTEMCHECK_PM_INFO_2`) remain **unverified**: none
+has been seen in a session. Describing the engine file has to be done at the car; plan for it.
+
+What each job actually returns is whatever the car sends; do not describe it from the name.
 
 The irony to keep in mind: reading the car to investigate a drain drains it. Plan everything
 first.
@@ -35,12 +43,13 @@ first.
    `ediabas_describe` with `job` to see each chosen job's arguments and result fields. Drop
    any job that is refused or marked "needs review"; show Ryan the description of any
    "needs review" job and let him decide, but do not hold the session for it.
-   `ediabas_describe` needs the cable passed through to the VM, but neither the car nor the
-   ignition: on 2026-11-21 it failed with `cable_not_found` without the cable, and worked with
-   the cable in the VM and not plugged into the car. So do all of this discovery now, before
-   asking for the ignition, with a `filter` where you can (a full describe of `NVE_65` with
-   comments took about 15 s). `../job-cookbook.md` lists the jobs `ediabas_describe` has
-   shown as runnable on `NVE_65` and `TMODE` (for example `TMODE`'s `LESE_SPANNUNG_KL30`);
+   `ediabas_describe` needs the cable passed through to the VM, and for most files neither
+   the car nor the ignition: on 2026-11-21 it failed with `cable_not_found` without the
+   cable, and worked with the cable in the VM and not plugged into the car. The exceptions
+   seen are `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60` (above). So do all the other discovery
+   now, before asking for the ignition, with a `filter` (a full describe of `CAS` or `LM_60`
+   ran into the 60 s limit and left the last jobs unscreened). `../job-cookbook.md` lists the
+   jobs above and those on `NVE_65` and `TMODE` (for example `TMODE`'s `LESE_SPANNUNG_KL30`);
    none has been run on the car yet, so check each one's arguments and results with
    `ediabas_describe` and `job`.
 4. Pick a short list: fault memory of the modules involved plus a few status jobs. Tell Ryan

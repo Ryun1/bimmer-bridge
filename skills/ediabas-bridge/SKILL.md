@@ -62,10 +62,14 @@ as much as you can before Ryan turns it on.
    names confirmed on this car; anything not in them is unconfirmed until a tool shows it.
    A job is runnable only if `ediabas_describe` shows it allowed and not "needs review".
    `ediabas_list_ecus` only lists files. `ediabas_describe` reads the SGBD, which EDIABAS will
-   not load unless the cable is connected to the VM (`cable_not_found` otherwise). It does not
-   need the car: on 2026-11-21 it worked with the cable in the Mac and not in the car. So have
-   Ryan plug the cable in and pass it through to the VM, and do all the looking-up before
-   asking for the ignition.
+   not load unless the cable is connected to the VM (`cable_not_found` otherwise). For most
+   files it does not need the car: on 2026-11-21 it worked with the cable in the Mac and not
+   in the car. The exceptions seen are `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60`, which
+   failed with `ediabas_error` 100 `SYS-0010` and can only be described at the car (see
+   `references/ecu-map.md`). Describe large files with a `filter`: a full list of `CAS` or
+   `LM_60` took the whole 60 s limit and left its last jobs unscreened. So have Ryan plug the
+   cable in and pass it through to the VM, and do all the looking-up you can before asking
+   for the ignition.
 3. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask Ryan
    to switch the ignition on and say when it is.
 4. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` call for
@@ -80,7 +84,9 @@ reading every job on every ECU drains the battery and buries the answer.
 The agent unloads EDIABAS after a short idle spell (20 s by default), so the first `ediabas_*`
 call after a pause can take 10–15 s (seen at the desk on 2026-11-21). That is normal:
 wait for it rather than retrying, and allow for it in the rough time. `vm_health` shows
-whether EDIABAS is loaded at the moment.
+whether EDIABAS is loaded at the moment. The unload is the bridge standing aside: at the
+desk on 2026-11-21/22, with INPA opened while the bridge had EDIABAS loaded, the bridge
+unloaded 16 s later and INPA kept polling the cable undisturbed.
 
 ## Refusals and errors
 
@@ -98,11 +104,17 @@ enough. The ones that need judgement:
   and wait. Do not retry in a loop.
 - **`cable_not_found`** — EDIABAS could not initialise the interface: the cable is not
   connected to the VM. Ask Ryan to plug it into the Mac and pass it through to the VM in UTM,
-  and wait until he says it is connected; until then every retry fails the same way.
+  and wait until he says it is connected; until then every retry fails the same way. After
+  the cable has been unplugged and plugged back in, UTM does not hand it back to the VM by
+  itself: Ryan ticks it for the VM again in UTM's USB menu.
 - **`ecu_not_found`, `job_not_found`** — the name was wrong. Go back to `ediabas_list_ecus` /
   `ediabas_describe`; do not try variations of the name.
 - **`ediabas_error`** — EDIABAS's own code and text, for example an ECU that did not answer.
-  Report the code and text as returned; do not guess what they mean on this car.
+  Report the code and text as returned; do not guess what they mean on this car. The
+  server's hint that it "often means the ECU did not answer" is not always right: error 16
+  `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD (with `TMODE` still answering) was seen
+  after a cable replug, and cleared when Ryan ticked the cable for the VM again in UTM's USB
+  menu (`references/errors.md`).
 - **Reaching the VM** (`vm_not_running`, `agent_not_answering`, `local_network_blocked`, ...)
   — tell Ryan the fix from the message. `local_network_blocked` is macOS blocking `node`, not
   the VM being off.
