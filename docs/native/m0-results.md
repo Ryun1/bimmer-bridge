@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–3 done (2026-11-22); **waiting for sections 4–7 of the desk session.**
+Status: sections 1–4 done (2026-11-22); **waiting for sections 5–7 of the desk session.**
 
 ---
 
@@ -189,9 +189,40 @@ the native describe path uses) matches real EDIABAS.
 
 | | Result |
 |---|---|
-| `INITIALISIERUNG` appears in `ifh.trc` for `_JOBS` | yes / no |
-| Trace excerpt (the lines around it) | |
-| INI restored | |
+| `INITIALISIERUNG` appears in `ifh.trc` for `_JOBS` | **yes**: its interface calls do (the IFH trace names calls, not jobs) |
+| Trace excerpt (the lines around it) | below |
+| INI restored | yes, from `EDIABAS.INI.m0backup` (SHA-256 `27CB98B3…F7AC1` matches the backup) |
+
+Done 2026-11-22. Claude changed the INI over SSH with Ryan's OK, and Ryan loaded `NVE_65` in
+Tool32 with the cable unplugged from the car, running no job by hand. In Tool32, `_JOBS` is
+not in the job list: Tool32 calls it itself to build the list, so loading the SGBD is the
+test. It was run twice:
+
+1. `IfhTrace = 3`. Loading `NVE_65` (21:47:35) gave exactly INIT's interface calls, with
+   `NVE_65`'s census parameters (`0x010F`, 115200, 800, 20, 10, 2, 5000) and no telegram:
+   ```
+   OPEN
+   STOPECUTELFREQUENT   I -> D: 0E 03 00
+   SETECUCOMM           INPUT: 0F 01 00 00 00 C2 01 00 20 03 00 00 14 00 00 00 0A 00 00 00
+                               02 00 00 00 88 13 00 00
+   SETTELPARAMETER      INPUT: 00 00 00 00
+   ```
+2. `IfhTrace = 3` and `ApiTrace = 1`, to see which job caused it. The API trace shows Tool32
+   calling only `_JOBS` (once) and `_VERSIONINFO` (four times) on `NVE_65`, plus its `$$$$$$$$`
+   placeholder calls (`SYS-0005`). It never calls `INITIALISIERUNG` itself. The IFH trace of
+   the same load (21:51:31) shows the same `STOPECUTELFREQUENT` / `SETECUCOMM` /
+   `SETTELPARAMETER` block, once.
+
+So real EDIABAS 7.3.0 runs `INITIALISIERUNG` on the first job against a freshly loaded SGBD,
+even when that job is `_JOBS`. It does **not** behave like `NoInitForVJobs = true`. On this
+BMW-FAST SGBD the INIT only sets parameters and sends nothing, so the results are the same;
+on a concept whose INIT sends a telegram (DS2 wake-up, KWP fast init) they would not be.
+
+Side finding: turning `IfhTrace` on also wrote out EDIABAS's history from earlier today,
+before tracing was on (other processes: battery-voltage reads, and an identification request
+to address `0x12` with no reply, `IFH_0003`). None of it is from this test. Both runs' traces
+are kept in the VM as `C:\EDIABAS\TRACE\IFH.trc.m0run1`, `IFH.trc.m0run2` and
+`api.trc.m0run2`.
 
 ## 5. Cable on the Mac (Ryan; not in the car)
 
