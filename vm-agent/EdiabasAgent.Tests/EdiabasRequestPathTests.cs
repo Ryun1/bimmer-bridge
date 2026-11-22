@@ -120,11 +120,12 @@ public class EdiabasRequestPathTests
     [Fact]
     public void QueueTime_DoesNotMakeTheConflictCheckStale()
     {
-        // The request's own conflict check just ran; the first job reuses it however long the wait.
+        // The request's own conflict check just ran, and another after the DLL loads; the first
+        // job reuses them however long the wait.
         _api.On("NVE_65 IDENT", FakeJob.Ok());
 
         Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queuedMs: 5_000).Ok);
-        Assert.Equal(1, _conflicts.Calls);
+        Assert.Equal(2, _conflicts.Calls);
     }
 
     // ---------------------------------------------------------------- A3: a failed apiEnd keeps the result

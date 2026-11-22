@@ -26,12 +26,13 @@ public sealed class RequestAudit
 /// <summary>
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
-/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) apiInit
+/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) load the DLL, conflict check again, apiInit
 /// → per job: policy → Ecu file → description screen where required (and, for a call with
 /// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
 /// reused) → apiJob → poll apiState
-/// every 50 ms until not busy or timeout (apiBreak on timeout) → read every result set →
+/// every 50 ms until not busy or timeout (apiBreak on timeout, or when the conflict check, run
+/// while the job is busy at the same rate, sees a BMW tool) → read every result set →
 /// apiEnd in <c>finally</c>. Nothing touches the API when the conflict check fails or when no
 /// job survives the policy.</para>
 /// <para>Every job the agent sends, including its own <c>_JOBS</c> / <c>_JOBCOMMENTS</c> /
@@ -47,9 +48,9 @@ public sealed class EdiabasService
     public const int BreakGraceMs = 2000;
     public const int MaxBatchItems = 20;
 
-    /// <summary>Within a request the conflict check runs again before every EDIABAS job, but a
-    /// check younger than this is reused: the process scan costs tens of milliseconds, and a
-    /// describe of a large SGBD sends hundreds of short jobs.</summary>
+    /// <summary>Within a request the conflict check runs again before every EDIABAS job and while
+    /// it runs, but a check younger than this is reused: the process scan costs tens of
+    /// milliseconds, and a describe of a large SGBD sends hundreds of short jobs.</summary>
     public const int ConflictRecheckMs = 250;
 
     private readonly IEdiabasApi _api;
@@ -199,7 +200,7 @@ public sealed class EdiabasService
         }
 
         using var session = new Session(this, queuedMs);
-        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), recheckConflicts: false, ct);
+        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
         audit.Rule = run.Rule;
@@ -461,7 +462,7 @@ public sealed class EdiabasService
         for (var i = 0; i < items.Count; i++)
         {
             var itemStart = _clock.ElapsedMs;
-            var run = RunItem(session, items[i], timeout, recheckConflicts: i > 0, ct);
+            var run = RunItem(session, items[i], timeout, ct);
             if (run.WholeRequest is { } whole)
             {
                 audit.Items.Add(new ItemAudit(i, run.Ecu, run.Job, run.Rule, whole.Error.Code, _clock.ElapsedMs - itemStart));
@@ -475,7 +476,7 @@ public sealed class EdiabasService
         return new BatchRun(results, null);
     }
 
-    private ItemRun RunItem(Session session, JobRequest request, int timeout, bool recheckConflicts, CancellationToken ct)
+    private ItemRun RunItem(Session session, JobRequest request, int timeout, CancellationToken ct)
     {
         var itemStart = _clock.ElapsedMs;
         string? ecu = request.Ecu;
@@ -511,11 +512,11 @@ public sealed class EdiabasService
             return Fail(ApiFailure.Of(ApiErrors.EcuNotFound, $"There is no {verdict.Ecu}.prg or {verdict.Ecu}.grp in the Ecu folder.", new EcuDetails(verdict.Ecu!)));
         }
 
-        // A BMW tool started since the request began: start nothing more. Every batch item after
-        // the first scans again; Execute also checks before each job (the screen, then the job).
-        if (session.ToolStarted is not null || (recheckConflicts && ToolStartedSince(session, force: true) is not null))
+        // A BMW tool started since the request began: start nothing more. Execute checks again
+        // before each job (the screen, then the job) and while it runs; EnsureInit after the load.
+        if (session.ToolStarted is { } started)
         {
-            return Fail(ToolStartedNotRun(session.ToolStarted!));
+            return Fail(ToolStartedNotRun(started));
         }
 
         if (session.EnsureInit() is { } initFailure)
@@ -849,6 +850,14 @@ public sealed class EdiabasService
                 return ApiFailure.Of(ApiErrors.JobTimeout, $"{job} was still running {why} and was stopped.", new TimeoutDetails(timeoutSeconds));
             }
 
+            // A BMW tool that starts while the job runs must not share the cable with it.
+            if (ToolStartedSince(session, force: false) is { } tool)
+            {
+                _log.Warn($"{ecu} {job}: a BMW tool started while it ran; calling apiBreak");
+                BreakAndSettle(session, ecu, job);
+                return ToolStartedNotRun(tool);
+            }
+
             _clock.Sleep(PollIntervalMs);
         }
 
@@ -1078,6 +1087,14 @@ public sealed class EdiabasService
                 owner._loaded = true;
                 owner._dll.Loaded = true;
                 owner._log.Info("api32.dll loaded");
+            }
+
+            // Loading the DLL can take seconds: a BMW tool that started meanwhile gets the cable,
+            // and no apiInit happens (so Dispose calls no apiEnd).
+            if (owner.ToolStartedSince(this, force: true) is not null)
+            {
+                _initFailure = ToolStartedFailure(this);
+                return _initFailure;
             }
 
             owner._cableUse.Mark(owner._clock.UtcNow);

@@ -38,10 +38,11 @@ their interactive session and can see the desktop for screenshots. A second copy
    the VM's default gateway, which is the Mac), token, path, method. Every request, refused or
    not, gets an audit line.
 6. An EDIABAS handler (`EdiabasEndpoints.cs`) queues the work on the EDIABAS thread and waits.
-7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; `apiInit`;
-   for each job the policy, the Ecu file, the description and argument screens where needed, the conflict
-   check again, `apiJob`, polling `apiState` every 50 ms until done or timed out (`apiBreak` on
-   timeout), reading the result sets; `apiEnd`.
+7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; loading the
+   DLL, the conflict check again, `apiInit`; for each job the policy, the Ecu file, the
+   description and argument screens where needed, the conflict check again, `apiJob`, polling
+   `apiState` every 50 ms until done or timed out (`apiBreak` on timeout, or when the conflict
+   check, run every 250 ms while the job is busy, sees a BMW tool), reading the result sets; `apiEnd`.
 8. EDIABAS sends the telegrams over the K+DCAN cable (USB, passed through to the VM by UTM)
    to the car's diagnostic socket and the ECU.
 9. The agent returns JSON; the MCP server formats it (fault tables, miles first) and writes its
@@ -57,6 +58,10 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
   `apiInit` to `apiEnd` on that thread. A client that goes away only cancels the request: the
   service stops starting jobs, breaks a running one and still calls `apiEnd`. A request still
   queued when its client has gone is dropped.
+- **A BMW tool that starts during a request.** The same thread runs the conflict check again
+  after loading the DLL (a tool seen then means no `apiInit` at all), before every job, and
+  every 250 ms while a job is busy; a tool seen during a job stops it with `apiBreak`. No
+  further job starts in that request.
 - **Idle release.** `apiEnd` alone leaves EDIABAS's `ebas32.exe` running while the DLL is
   loaded, which would keep the interface open. So between requests the thread waits only until
   `ediabasIdleReleaseSeconds` (default 20) have passed since the last EDIABAS request, then
@@ -79,7 +84,7 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
 | Loading | at start-up from `policy/policy.json` two folders above `dist/`; invalid file: every `ediabas_*` tool refuses with `policy_unavailable` | embedded at build time; invalid: every EDIABAS job refused |
 | Name rules | `ediabas_job`, every item of `ediabas_jobs` and every ECU of `ediabas_read_faults` (the whole call is refused if one is), shape only for `ediabas_describe` | every job, including the agent's own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS` and the `/ediabas/vehicle` jobs |
 | Description screen | no | yes, for jobs allowed only by the `STATUS_` pattern; `reviewedJobs` in the VM's config skips it |
-| Conflict check | no | before the request opens EDIABAS and before every job |
+| Conflict check | no | before the request opens EDIABAS, after loading the DLL, before every job and every 250 ms while one runs |
 
 Both sides run the same test cases (`policy/policy-cases.json`, `policy/policy-parse-cases.json`),
 so they cannot drift apart. `vm_health` warns when the agent's policy version differs from the

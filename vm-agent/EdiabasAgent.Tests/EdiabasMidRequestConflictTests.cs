@@ -66,31 +66,34 @@ public class EdiabasMidRequestConflictTests
             _api.On($"NVE_65 _JOBCOMMENTS {n}", Takes(300, Comment($"{n} lesen")));
         }
 
-        // _JOBS ends at 300 ms, then one fetch per 300 ms: the tool appears during the 3rd fetch.
+        // _JOBS ends at 300 ms, then one fetch per 300 ms: the tool appears during the 3rd fetch,
+        // which is stopped with apiBreak.
         ToolStartsAt(1000);
         var r = Service().DescribeList("NVE_65", null, true, _audit, default);
 
         var list = r.Value!;
         Assert.Equal(10, list.JobCount);
         Assert.Equal(3, CommentFetches);
-        Assert.All(list.Jobs.Take(3), j => Assert.Equal(Review.Passed, j.Verdict.Review));
-        Assert.All(list.Jobs.Take(3), j => Assert.NotNull(j.Comment));
-        Assert.All(list.Jobs.Skip(3), j => Assert.Equal(Review.NotChecked, j.Verdict.Review));
-        Assert.All(list.Jobs.Skip(3), j => Assert.Null(j.Comment));
+        Assert.Equal(1, _api.Count("Break"));
+        Assert.All(list.Jobs.Take(2), j => Assert.Equal(Review.Passed, j.Verdict.Review));
+        Assert.All(list.Jobs.Take(2), j => Assert.NotNull(j.Comment));
+        Assert.All(list.Jobs.Skip(2), j => Assert.Equal(Review.NotChecked, j.Verdict.Review));
+        Assert.All(list.Jobs.Skip(2), j => Assert.Null(j.Comment));
         Assert.Equal(1, _api.Count("End"));
         Assert.Contains(_log.Lines, l => l.StartsWith("WARN", StringComparison.Ordinal) && l.Contains("WINKFPT", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void DescribeList_ToolAlreadyThereBeforeTheFirstFetch_NoCommentFetched()
+    public void DescribeList_ToolStartsDuringTheJobList_IsCableInUse_NoCommentFetched()
     {
         _api.On("NVE_65 _JOBS", JobList(300, "STATUS_A", "STATUS_B"));
-        ToolStartsAt(100); // while _JOBS runs
+        ToolStartsAt(100); // while _JOBS runs: it is stopped, so there is no list to give
 
-        var r = Service().DescribeList("NVE_65", null, true, _audit, default).Value!;
+        var f = Service().DescribeList("NVE_65", null, true, _audit, default).Failure!;
 
+        Assert.Equal("cable_in_use", f.Error.Code);
+        Assert.Equal(1, _api.Count("Break"));
         Assert.Equal(0, CommentFetches);
-        Assert.All(r.Jobs, j => Assert.Equal(Review.NotChecked, j.Verdict.Review));
     }
 
     [Fact]
@@ -120,7 +123,7 @@ public class EdiabasMidRequestConflictTests
         _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Comments("B lesen"));
 
         Assert.True(Service().DescribeList("NVE_65", null, true, _audit, default).Ok);
-        Assert.Equal(1, _conflicts.Calls);
+        Assert.Equal(2, _conflicts.Calls); // the start, and after the DLL loads
     }
 
     // ---------------------------------------------------------------- describe, one job
@@ -128,7 +131,7 @@ public class EdiabasMidRequestConflictTests
     [Theory]
     [InlineData(200, "_JOBCOMMENTS")]
     [InlineData(500, "_ARGUMENTS")]
-    [InlineData(800, "_RESULTS")]
+    [InlineData(700, "_RESULTS")]
     public void DescribeJob_ToolStartsMidway_IsCableInUse(long atMs, string firstNotRun)
     {
         _api.On("NVE_65 _JOBS", JobList(300, "FS_LESEN"));
@@ -144,6 +147,7 @@ public class EdiabasMidRequestConflictTests
         Assert.Contains("started during the request", f.Error.Message, StringComparison.Ordinal);
         Assert.Equal([WinKfp], Assert.IsType<ProcessesDetails>(f.Error.Details).Processes);
         Assert.DoesNotContain(_api.JobCalls, c => c.StartsWith($"Job NVE_65 {firstNotRun}", StringComparison.Ordinal));
+        Assert.Equal(1, _api.Count("Break")); // the job running when the tool appeared
         Assert.Equal(1, _api.Count("End"));
     }
 
@@ -189,6 +193,69 @@ public class EdiabasMidRequestConflictTests
         ToolStartsAt(long.MaxValue);
 
         Assert.True(Service().RunJob(new JobRequest("NVE_65", "STATUS_BORDNETZSPANNUNG"), null, _audit, default).Ok);
-        Assert.Equal(2, _conflicts.Calls); // the start, and once more before the job (300 ms later)
+        Assert.Equal(3, _conflicts.Calls); // the start, after the DLL loads, and once while the screen runs
+    }
+
+    // ---------------------------------------------------------------- while the job runs, before apiInit
+
+    [Fact]
+    public void SingleJob_ToolStartsDuringTheJob_JobIsBroken_NotRun()
+    {
+        _api.On("NVE_65 IDENT", Takes(5000));
+        ToolStartsAt(1000);
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        // A single job cannot give a partial answer: the item's not_run becomes cable_in_use.
+        Assert.Equal("cable_in_use", f.Error.Code);
+        Assert.Contains("WINKFPT", f.Error.Message, StringComparison.Ordinal);
+        Assert.Contains("Break", _api.Calls);
+        Assert.True(_clock.ElapsedMs < 1000 + 2 * EdiabasService.ConflictRecheckMs + EdiabasService.PollIntervalMs, $"took {_clock.ElapsedMs} ms");
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void BatchItem_ToolStartsDuringTheJob_JobIsBroken_NotRun()
+    {
+        _api.On("NVE_65 IDENT", Takes(5000));
+        _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
+        ToolStartsAt(1000);
+
+        var r = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "FS_LESEN")], null, _audit, default).Value!;
+
+        Assert.Equal("not_run", r.Items[0].Error!.Code);
+        Assert.Contains("WINKFPT", r.Items[0].Error!.Message, StringComparison.Ordinal);
+        Assert.Equal("not_run", r.Items[1].Error!.Code);
+        Assert.Contains("Break", _api.Calls);
+        Assert.Equal(["Job NVE_65 IDENT [] []"], _api.JobCalls);
+        Assert.True(_clock.ElapsedMs < 1000 + 2 * EdiabasService.ConflictRecheckMs + EdiabasService.PollIntervalMs, $"took {_clock.ElapsedMs} ms");
+    }
+
+    [Fact]
+    public void SingleJob_ToolStartsDuringDllLoad_NoApiInit()
+    {
+        _api.Clock = _clock;
+        _api.LoadMs = 10_000;
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+        ToolStartsAt(5000);
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("cable_in_use", f.Error.Code);
+        Assert.Equal(409, f.Status);
+        Assert.Contains("WINKFPT", f.Error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Init", _api.Calls);
+        Assert.Empty(_api.JobCalls);
+        Assert.Equal(0, _api.Count("End")); // no apiInit, so no apiEnd
+    }
+
+    [Fact]
+    public void SingleJob_LongJob_NoTool_ConflictScansAreRateLimited()
+    {
+        _api.On("NVE_65 IDENT", Takes(3000));
+
+        Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Ok);
+        Assert.True(_conflicts.Calls <= 3000 / EdiabasService.ConflictRecheckMs + 2, $"{_conflicts.Calls} scans");
+        Assert.True(_conflicts.Calls > 2, $"{_conflicts.Calls} scans: the running job is not checked");
     }
 }

@@ -565,9 +565,11 @@ public class EdiabasServiceTests
     [Fact]
     public void Batch_ToolStartsMidway_RestAreNotRun()
     {
+        // Each job takes one recheck interval, so the check before every later item is due; the
+        // tool appears during the second job, which ends before the next scan sees it.
         _api.On("NVE_65 IDENT", FakeJob.Ok());
-        _conflicts.Answers.Add([]);
-        _conflicts.Answers.Add([new ConflictingProcess("WINKFPT", 9)]);
+        _api.DuringJob = () => _clock.ElapsedMs += EdiabasService.ConflictRecheckMs;
+        _conflicts.Answer = () => _clock.ElapsedMs >= 2 * EdiabasService.ConflictRecheckMs ? [new ConflictingProcess("WINKFPT", 9)] : [];
 
         var r = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "IDENT"), new("NVE_65", "IDENT")], null, _audit, default);
 

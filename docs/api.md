@@ -264,16 +264,18 @@ list does not have the job, the answer is `job_not_found` instead. Only for a `.
 **apiEnd failure.** If `apiEnd` fails after a job ran, the client still gets the result. The
 agent logs it and does not release `api32.dll` again until it is restarted.
 
-**Conflict check during a request.** The check runs again before every EDIABAS job the agent
-sends within a request: each batch item, the description screen's `_JOBCOMMENTS`, the argument
-screen's `_ARGUMENTS`, the job itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and `_RESULTS`. A check
-less than 250 ms old is reused (the process scan is not free, and describe on a large SGBD sends
-hundreds of short jobs); each batch item after the first always scans afresh. Once a BMW tool is
-seen, no further job starts in that request:
+**Conflict check during a request.** The check runs again after loading `api32.dll` (a tool
+seen then means no `apiInit`), before every EDIABAS job the agent sends within a request (each
+batch item, the description screen's `_JOBCOMMENTS`, the argument screen's `_ARGUMENTS`, the job
+itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and
+`_RESULTS`), and every 250 ms while a job runs. A check less than 250 ms old is reused (the
+process scan is not free, and describe on a large SGBD sends hundreds of short jobs). A job
+running when a BMW tool is seen is stopped with `apiBreak` and counts as not run. Once a BMW
+tool is seen, no further job starts in that request:
 - `/ediabas/jobs` and `/ediabas/vehicle`: the item and every later item get `not_run`; items
   already done are kept.
 - describe without `job`: the job list is kept, comments already read are kept, and the rest are
-  `not_checked`. If the tool appears before `_JOBS` runs, the request is `cable_in_use`.
+  `not_checked`. If the tool appears before or while `_JOBS` runs, the request is `cable_in_use`.
 - `/ediabas/job` and describe with `job`: the whole request is `cable_in_use`, with the tools in
   `details.processes`.
 
