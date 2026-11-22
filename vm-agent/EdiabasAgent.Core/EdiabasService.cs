@@ -948,10 +948,10 @@ public sealed class EdiabasService
                 }
                 catch (Exception ex)
                 {
-                    // A handle may still be open: the DLL must not be unloaded under it, ever.
+                    // A handle may still be open: the DLL must not be unloaded under it, ever. Not
+                    // rethrown: the job's result was already read, and the client should get it.
                     owner._handleMayBeOpen = true;
                     owner._log.Warn($"apiEnd threw {ex.GetType().Name}: {ex.Message}; api32.dll stays loaded until the agent restarts");
-                    throw;
                 }
             }
             finally

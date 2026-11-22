@@ -189,7 +189,8 @@ public class EdiabasReleaseAndCableTests
         _api.EndThrows = true;
         var svc = Service();
 
-        Assert.ThrowsAny<InvalidOperationException>(() => Ident(svc));
+        // The job's answer is kept; only the release is given up.
+        Assert.True(Ident(svc).Ok);
         _clock.ElapsedMs += 100 * IdleMs;
 
         Assert.Equal(Timeout.Infinite, svc.MillisecondsUntilRelease());

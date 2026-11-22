@@ -126,4 +126,24 @@ public class EdiabasRequestPathTests
         Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queuedMs: 5_000).Ok);
         Assert.Equal(1, _conflicts.Calls);
     }
+
+    // ---------------------------------------------------------------- A3: a failed apiEnd keeps the result
+
+    [Fact]
+    public void ApiEndThrows_TheResultIsStillReturned_AndTheDllIsNeverReleased()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Ok([Text("JOB_STATUS", "OKAY")]));
+        _api.EndThrows = true;
+        var svc = Service();
+
+        var r = svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
+
+        Assert.True(r.Ok);
+        Assert.Equal("OKAY", r.Value!.JobStatus);
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN apiEnd threw", StringComparison.Ordinal));
+
+        _clock.ElapsedMs += 100_000;
+        Assert.False(svc.ReleaseIfIdle());
+        Assert.Equal(0, _api.Count("Unload"));
+    }
 }
