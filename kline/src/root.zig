@@ -9,12 +9,17 @@ pub const sys = struct {
 pub const port = @import("port.zig");
 pub const identity = @import("identity.zig");
 pub const gate = @import("gate.zig");
+pub const recording = @import("recording.zig");
+pub const session = @import("session.zig");
+pub const Session = session.Session;
 pub const Port = port.Port;
 
 test {
     _ = port;
     _ = identity;
     _ = gate;
+    _ = recording;
+    _ = session;
     _ = sys.darwin;
     _ = sys.linux;
 }

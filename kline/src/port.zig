@@ -31,6 +31,7 @@ pub const LineError = error{ Unsupported, Io };
 pub const IoError = error{Io};
 pub const LatencyError = error{ Unsupported, Io };
 pub const ReceiveError = error{ Timeout, Io };
+pub const CancellableReceiveError = ReceiveError || error{Cancelled};
 
 pub const Port = struct {
     fd: c_int,
@@ -225,12 +226,23 @@ pub const Port = struct {
     /// Fills buf exactly. The first byte must arrive within timeout_ms and no later gap may exceed
     /// timeout_tel_end_ms (EdiabasLib ReceiveData semantics, EdInterfaceObd.cs:3381-3450).
     pub fn receive(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32) ReceiveError!void {
+        return self.receiveCancellable(buf, timeout_ms, timeout_tel_end_ms, null) catch |e| switch (e) {
+            error.Cancelled => unreachable,
+            else => |x| x,
+        };
+    }
+
+    /// receive, returning Cancelled within about 10 ms once cancel is set (checked between
+    /// polls of at most 10 ms).
+    pub fn receiveCancellable(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32, cancel: ?*const std.atomic.Value(bool)) CancellableReceiveError!void {
         var got: usize = 0;
         var deadline = libc.monotonicNs() + @as(u64, timeout_ms) * std.time.ns_per_ms;
         while (got < buf.len) {
             const now = libc.monotonicNs();
             if (now >= deadline) return error.Timeout;
-            const wait_ms: c_int = @intCast(@min((deadline - now + std.time.ns_per_ms - 1) / std.time.ns_per_ms, std.math.maxInt(c_int)));
+            if (cancel) |c| if (c.load(.acquire)) return error.Cancelled;
+            const slice_ms: u64 = if (cancel != null) 10 else std.math.maxInt(c_int);
+            const wait_ms: c_int = @intCast(@min((deadline - now + std.time.ns_per_ms - 1) / std.time.ns_per_ms, slice_ms));
             var fds = [_]std.c.pollfd{.{ .fd = self.fd, .events = std.c.POLL.IN, .revents = 0 }};
             const rc = std.c.poll(&fds, 1, wait_ms);
             if (rc < 0) {
