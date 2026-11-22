@@ -48,7 +48,7 @@ internal sealed class RequestPipeline
             catch (Exception ex)
             {
                 // Details only to agent.log; the client gets the generic message.
-                var where = new string($"{http.Request.Method} {http.Request.Path.Value}".Select(c => char.IsControl(c) ? '_' : c).ToArray());
+                var where = AuditLine.Neutralise($"{http.Request.Method} {http.Request.Path.Value}");
                 _ctx.Log.Error($"unhandled exception for {where}", ex);
                 errorCode = ApiErrors.InternalError;
                 if (!http.Response.HasStarted)
