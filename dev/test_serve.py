@@ -645,6 +645,21 @@ class Startup(unittest.TestCase):
             if "New-AdminOnlyDirectory\n" in body:
                 self.assertLess(call, body.index("New-AdminOnlyDirectory\n"), script)
 
+    def test_install_and_update_share_one_block(self):
+        # The staging folder, the verified copy and stopping the agent are the same code in
+        # both scripts; a fix to one must reach the other.
+        blocks = []
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            self.assertEqual(text.count("    # shared:begin\n"), 1, script)
+            self.assertEqual(text.count("    # shared:end\n"), 1, script)
+            block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
+            for name in ("New-AdminOnlyDirectory", "Remove-StaleStaging", "Copy-VerifiedExe",
+                         "Stop-Agent"):
+                self.assertIn("function %s" % name, block, script)
+            blocks.append(block)
+        self.assertEqual(blocks[0], blocks[1])
+
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
 

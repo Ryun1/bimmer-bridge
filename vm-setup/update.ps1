@@ -55,6 +55,8 @@
         return [string]$routes[0].NextHop
     }
 
+    # shared:begin
+    # This block is the same in install.ps1 and update.ps1 (dev/test_serve.py checks it).
     # A new, empty folder that only SYSTEM and Administrators can write to, created with that
     # ACL in one step (no window in which another process could put a file in it). The zip is
     # downloaded, checked and expanded here, never in the user's %TEMP%, so a non-elevated
@@ -144,6 +146,7 @@
         }
         throw 'EdiabasAgent.exe is still running after 10 seconds; stop it in Task Manager and run this again.'
     }
+    # shared:end
 
     $tmp = $null
     try {
