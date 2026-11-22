@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- EdiabasLib's interpreter core, linked unmodified from the pinned submodule (GPL-3.0).
+       Upstream's .csproj and Directory.Build.* are never imported: this project lives
+       outside the submodule's tree, so MSBuild never finds them. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Up>$(MSBuildThisFileDirectory)../../third_party/ediabaslib/EdiabasLib/EdiabasLib</Up>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(Up)/EdiabasNet.cs" Link="upstream/EdiabasNet.cs" />
+    <Compile Include="$(Up)/EdOperations.cs" Link="upstream/EdOperations.cs" />
+    <Compile Include="$(Up)/EdInterfaceBase.cs" Link="upstream/EdInterfaceBase.cs" />
+    <Compile Include="$(Up)/IniFile.cs" Link="upstream/IniFile.cs" />
+    <Compile Include="$(Up)/MemoryStreamReader.cs" Link="upstream/MemoryStreamReader.cs" />
+    <Compile Include="$(Up)/EdSimFile.cs" Link="upstream/EdSimFile.cs" />
+    <Compile Include="$(Up)/EdBase32.cs" Link="upstream/EdBase32.cs" />
+  </ItemGroup>
+</Project>

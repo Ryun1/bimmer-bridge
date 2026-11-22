@@ -17,6 +17,8 @@ config.local.json
 *.grp
 *.PRG
 *.GRP
+*.lib
+*.LIB
 api32.dll
 api64.dll
 api.h
