@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using EdiabasAgent.Core;
 using EdiabasAgent.Logging;
 
@@ -10,6 +11,8 @@ namespace EdiabasAgent.Ediabas;
 /// this thread, whatever happens to the HTTP client: a client that goes away only cancels the
 /// request's token, which makes the service stop starting jobs, break a running one, and still
 /// call apiEnd. A request still queued when its client has gone is dropped without running.
+/// <para>The time an item waited in the queue is handed to the work, because the client's
+/// deadline started when it sent the request, not when this thread got to it.</para>
 /// <para>Between requests the thread waits only as long as the service says, then lets the
 /// service release api32.dll if it has been idle long enough; so the unload happens on this
 /// thread and never during a request.</para>
@@ -34,9 +37,12 @@ internal sealed class EdiabasRunner : IDisposable
         _thread.Start();
     }
 
-    public Task<T> Run<T>(Func<EdiabasService, CancellationToken, T> work, CancellationToken requestAborted)
+    /// <param name="work">Gets the service, how long the item waited in the queue in
+    /// milliseconds, and the request's token.</param>
+    public Task<T> Run<T>(Func<EdiabasService, long, CancellationToken, T> work, CancellationToken requestAborted)
     {
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var queuedAt = Stopwatch.GetTimestamp();
         void Item(EdiabasService? service)
         {
             if (service is null)
@@ -54,7 +60,8 @@ internal sealed class EdiabasRunner : IDisposable
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, _stopping.Token);
             try
             {
-                tcs.TrySetResult(work(service, linked.Token));
+                var queuedMs = (long)Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
+                tcs.TrySetResult(work(service, queuedMs, linked.Token));
             }
             catch (Exception ex)
             {

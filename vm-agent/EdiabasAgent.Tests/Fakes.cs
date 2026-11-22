@@ -27,6 +27,9 @@ public sealed class FakeJob
 
     public bool Throws { get; init; }
 
+    /// <summary>The job ends ready, but apiResultSets fails: its results cannot be read.</summary>
+    public bool ResultSetsFail { get; init; }
+
     public static FakeJob Ok(params List<FakeResult>[] jobSets) =>
         new() { Sets = [[new FakeResult("VARIANTE", ApiResultFormat.Text, "VAR")], .. jobSets] };
 
@@ -192,7 +195,7 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     public bool ResultSets(out int sets)
     {
         sets = (_current?.Sets.Count ?? 1) - 1;
-        return _current is not null;
+        return _current is not null && !_current.ResultSetsFail;
     }
 
     public bool ResultNumber(int set, out int count)
@@ -306,12 +309,20 @@ public sealed class FakeConflicts : IConflictCheck
     }
 }
 
+/// <summary>An Ecu folder. A name is a <c>.prg</c> file unless it is given as <c>NAME.grp</c>.</summary>
 public sealed class FakeEcus(params string[] present) : IEcuCatalog
 {
-    public bool Exists(string ecu) => present.Contains(ecu, StringComparer.OrdinalIgnoreCase);
+    private readonly List<EcuFile> _files = present
+        .Select(p => p.EndsWith(".grp", StringComparison.OrdinalIgnoreCase) ? new EcuFile(p[..^4], "grp") : new EcuFile(p, "prg"))
+        .ToList();
 
-    public EcusResponse? List(string? filter, int max) =>
-        new("X", present.Length, false, present.Select(p => new EcuFile(p, "prg")).ToList());
+    public bool Exists(string ecu) => _files.Any(f => string.Equals(f.Name, ecu, StringComparison.OrdinalIgnoreCase));
+
+    public EcusResponse? List(string? filter, int max)
+    {
+        var files = _files.Where(f => string.IsNullOrEmpty(filter) || f.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        return new("X", files.Count, false, files);
+    }
 }
 
 public sealed class FakeLog : IEdiabasLog
