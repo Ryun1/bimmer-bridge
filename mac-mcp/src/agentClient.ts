@@ -53,6 +53,8 @@ export const HealthSchema = z.object({
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
+  // reviewedJobs entries pinned to a description and approving by name only; older agents omit it.
+  approvals: z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }).nullable().optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 

@@ -37,6 +37,12 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
   }
   const mac = macPolicyVersion === null ? "could not be loaded, so every EDIABAS tool refuses" : `version ${macPolicyVersion}`;
   lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}; Mac ${mac}.`);
+  if (h.approvals) {
+    lines.push(`Approved jobs: ${h.approvals.pinned} pinned, ${h.approvals.unpinned} unpinned.`);
+    if (h.approvals.unpinned > 0) {
+      lines.push("Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.");
+    }
+  }
   if (agentV !== null && macPolicyVersion !== null && agentV !== macPolicyVersion) {
     lines.push(
       `WARNING: the agent's job policy (version ${agentV}) differs from this Mac's (version ${macPolicyVersion}). Each side refuses what its own copy refuses. ${UPDATE_HINT}`,

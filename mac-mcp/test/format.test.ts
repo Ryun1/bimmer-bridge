@@ -85,6 +85,31 @@ describe("formatHealth", () => {
     expect(formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: false } }))).not.toMatch(/STUCK/);
   });
 
+  describe("approvals", () => {
+    const UNPINNED = "Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.";
+    const after = (approvals: unknown) => {
+      const lines = formatHealth(health({ policyVersion: 3, capabilities: [], ...(approvals === undefined ? {} : { approvals }) }), 3).split("\n");
+      return lines.slice(lines.findIndex((l) => l.startsWith("Job policy:")) + 1);
+    };
+
+    it("0 pinned, 0 unpinned", () => {
+      expect(after({ pinned: 0, unpinned: 0 })).toEqual(["Approved jobs: 0 pinned, 0 unpinned."]);
+    });
+
+    it("2 pinned, 0 unpinned", () => {
+      expect(after({ pinned: 2, unpinned: 0 })).toEqual(["Approved jobs: 2 pinned, 0 unpinned."]);
+    });
+
+    it("1 pinned, 3 unpinned: says what unpinned misses", () => {
+      expect(after({ pinned: 1, unpinned: 3 })).toEqual(["Approved jobs: 1 pinned, 3 unpinned.", UNPINNED]);
+    });
+
+    it("an older agent without the field: nothing", () => {
+      expect(after(undefined)).toEqual([]);
+      expect(formatHealth(health())).not.toContain("Approved jobs");
+    });
+  });
+
   it("strips control characters from agent strings", () => {
     const t = formatHealth(health({ conflictingProcesses: [{ name: "EVIL\u001b[2J\nX", pid: 1 }] }));
     expect(t).not.toContain("\u001b");
