@@ -6,10 +6,11 @@ real session, scrubbed and reviewed.** Nothing is written by hand: no invented E
 responses, no edited values. If a scenario needs an answer nobody has recorded yet, the
 scenario waits for a session that records it.
 
-Two scenarios exist, recorded at the desk on 2026-11-21: `idle` and `inpa-open` (an overlay on
-`idle`, which also serves the screenshot of the INPA loader menu). `needs-review` can be
-recorded at the desk, with the cable in the VM and not in the car; `nve-faults` and `battery`
-wait for Phase 6, at the car ([docs/at-the-car.md](../../docs/at-the-car.md)).
+Three scenarios exist, recorded at the desk: `idle` and `inpa-open` (an overlay on `idle`,
+which also serves the screenshot of the INPA loader menu) on 2026-11-21, and `needs-review`
+(`NVE_65` `STATUS_PAIRING`, refused with `job_needs_review`; cable in the VM, not in the car)
+on 2026-11-22. `nve-faults` and `battery` wait for Phase 6, at the car
+([docs/at-the-car.md](../../docs/at-the-car.md)).
 
 ## Layout
 
@@ -68,7 +69,9 @@ MCP server sends what Claude passed).
 ## Recording a scenario
 
 1. Pick a raw folder **outside the repo** (it holds real vehicle data and is never committed),
-   for example `~/ediabas-recordings/nve-faults`.
+   for example `~/ediabas-recordings/nve-faults`. One folder may serve several scenarios: at
+   the car, record the whole session into one folder (changing it means restarting Claude),
+   then run step 3 once per scenario name and prune each copy in step 4.
 2. Run the recording server `dev/record-server.ts` instead of the production MCP server, with
    `EDIABAS_RECORD_DIR` set to it (the command is in
    [docs/development.md](../../docs/development.md#recording-and-scrubbing)), then use the

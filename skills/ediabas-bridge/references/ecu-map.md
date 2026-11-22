@@ -29,7 +29,7 @@ Entries are added in the same commit as the recorded session (fixtures) they cam
 | Night vision | `NVE_65` (`prg`) | `NVE_65` | Night vision: its job list includes fault memory, info memory, ident and `STATUS_NIVI`, `STATUS_PAIRING` (see `job-cookbook.md`) | 2026-11-21: listed by `ediabas_list_ecus` with filter `nve`; `ediabas_describe` returned 59 jobs (cable in the VM, not in the car); verdicts recorded again under policy version 4 on 2026-11-22. **Not yet read from the car.** |
 | Night vision (group) | `D_NVE` (`grp`) | **not checked** | not checked | 2026-11-21: listed by `ediabas_list_ecus` with filter `nve`, nothing more. Which variant it resolves to on this car has NOT been checked; do not assume it is `NVE_65`. |
 | Diagnostic interface (the cable), not a car module | `TMODE` | `TMODE` | The interface itself: its runnable jobs read the interface type and version and the KL30 / KL15 voltages it sees (see `job-cookbook.md`) | 2026-11-21: `ediabas_describe` returned 25 jobs; the same five runnable under policy version 4 (2026-11-22). Loads with no cable connected at all (seen at the desk the same day). |
-| Utility SGBD, not a car module | `UTILITY` | not recorded | not recorded: its job list has not been captured | 2026-11-21: loaded with no cable connected at all (seen at the desk). |
+| Utility SGBD, not a car module | `UTILITY` | not recorded | Supply voltage (`STATUS_UBATT`) and terminal 15 (`STATUS_ZUENDUNG`), the two reads `ediabas_vehicle_status` sends (see `job-cookbook.md`) | 2026-11-21: loaded with no cable connected at all (seen at the desk). 2026-11-22: `ediabas_describe` returned 10 jobs, 3 runnable (cable in the VM, not in the car). |
 
 `TMODE` and `UTILITY` are the only two names seen to load without the cable.
 
@@ -54,6 +54,9 @@ described at the car:
 - `ME9N62_2`
 - `GS19D`
 - `SZL_60`
+- `D_MOTOR` (the engine group; 2026-11-22, `ediabas_describe` with `job` `IDENT`): a
+  different error, `ediabas_error` 13 `IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED`. A
+  group file picks its variant by asking the module.
 
 Which engine file (if either of `N62_TUE2` and `ME9N62_2`) fits this car is **not known**.
 

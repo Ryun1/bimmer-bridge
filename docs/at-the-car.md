@@ -30,12 +30,18 @@ car-session line and the longer idle time below are all untested there.
       90, the bridge keeps EDIABAS loaded for 90 s after its last call.
 - [ ] To record fixtures, register the recording server (`dev/record-server.ts`, see
       [development.md](development.md#recording-and-scrubbing)) in place of the production one, with `EDIABAS_RECORD_DIR` set to a
-      folder **outside the repo**, for example `~/ediabas-recordings/nve-faults`, one folder
-      per scenario ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
-      Restart Claude so the server picks it up.
+      folder **outside the repo**, for example `~/ediabas-recordings/car-<date>`. Use **one
+      folder for the whole car session**: changing the folder means restarting Claude, which
+      the ignition-on time cannot afford. Afterwards the folder is scrubbed once per scenario
+      ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
+      Restart Claude so the server picks it up, and check with `vm_health` that it answers.
 - [ ] Know which scenarios to record at the car: `nve-faults` (evals 01 and 03) and `battery`
-      (eval 06). `needs-review` (eval 04) does not need the car; record it at the desk. What
-      each needs is in [dev/fixtures/README.md](../dev/fixtures/README.md#scenarios-the-evals-use-skillsevals).
+      (eval 06). `needs-review` (eval 04) was recorded at the desk on 2026-11-22. What each
+      needs is in [dev/fixtures/README.md](../dev/fixtures/README.md#scenarios-the-evals-use-skillsevals);
+      between them, the session must include `ediabas_list_ecus` and `ediabas_describe` for
+      the night-vision SGBD and the engine group, `ediabas_vehicle_status`,
+      `ediabas_read_faults` (with `NVE_65` and at least one fault carrying a mileage, for eval
+      01) and one `ediabas_jobs` batch.
 
 ## At the car, ignition still off
 
@@ -62,7 +68,13 @@ car-session line and the longer idle time below are all untested there.
     a full describe of `CAS` or `LM_60` hit the 60 s limit and left its last jobs unscreened.
   - On the E61's VM, `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60` gave `ediabas_error` 100 `SYS-0010` at the
     desk and appear to need the module to answer. Leave them for the ignition-on part, and
-    only if the session needs them.
+    only if the session needs them. The engine group `D_MOTOR` gave error 13 `IFH-0003`
+    (2026-11-22) for the same reason; its `IDENT` is allowed by name (`allow.global`), so
+    it can be run at the car without describing it first.
+  - Already described at the desk on 2026-11-22, with their result names in the skill's
+    `job-cookbook.md`: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL`, `C_FA_LESEN` on
+    `CAS` and `LM_60`, `UTILITY` `STATUS_UBATT` and `STATUS_ZUENDUNG`, `NVE_65` `FS_LESEN`.
+    Check `vm_health`'s policy version is still 4; if so, these need no describing again.
 - [ ] Agree the plan: which ECUs and jobs, in how many calls, and a rough time. The first
       EDIABAS call after a pause takes 10–15 s longer while the agent loads EDIABAS again
       (desk, 2026-11-21); with the idle time at 90 s that should happen once, not after every
@@ -98,8 +110,12 @@ car-session line and the longer idle time below are all untested there.
 - [ ] Set `ediabasIdleReleaseSeconds` back to 20 (or remove it) and restart Windows in the VM.
 - [ ] Register the production MCP server again (not `dev/record-server.ts`) and restart
       Claude, so later sessions do not record.
-- [ ] Scrub each recording folder into `dev/fixtures/<scenario>/` and review every file and
-      screenshot ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
+- [ ] Scrub the session's folder into each scenario, `dev/fixtures/nve-faults/` and
+      `dev/fixtures/battery/` (one scrub per scenario name), then in each delete the exchanges
+      that scenario does not need, and review every file and screenshot
+      ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)). Check
+      `FAHRZEUGAUFTRAG` (from `C_FA_LESEN`) by hand: the scrubber matches it only if it
+      contains a VIN.
 - [ ] Fill the skill reference entries that waited for the car (vehicle-status field names,
       the modules that answered, the engine SGBD, the SGBDs above) from what the session
       returned, in the same commit as the fixtures.
