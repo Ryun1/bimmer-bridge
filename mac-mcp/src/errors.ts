@@ -30,25 +30,31 @@ export const MESSAGES = {
     "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
 
-/** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
-export type LocalErrorCode =
-  | "vm_not_running"
-  | "agent_not_answering"
-  | "ediabas_request_lost"
-  | "ediabas_busy"
-  | "local_network_blocked"
-  | "unauthorized"
-  | "forbidden"
-  | "no_token"
-  | "wrong_service"
-  | "bad_response"
-  | "config_error"
-  | "invalid_arguments"
-  | "agent_outdated"
-  | "policy_unavailable"
-  | "policy_mismatch"
-  | "job_not_allowed"
-  | "internal_error";
+/**
+ * Codes this server produces itself. Agent errors use the agent's own `error.code`. Each is
+ * listed in docs/tools.md "Errors" (test/errorCodesDoc.test.ts checks).
+ */
+export const LOCAL_ERROR_CODES = [
+  "vm_not_running",
+  "agent_not_answering",
+  "ediabas_request_lost",
+  "ediabas_busy",
+  "local_network_blocked",
+  "unauthorized",
+  "forbidden",
+  "no_token",
+  "wrong_service",
+  "bad_response",
+  "config_error",
+  "invalid_arguments",
+  "agent_outdated",
+  "policy_unavailable",
+  "policy_mismatch",
+  "job_not_allowed",
+  "internal_error",
+] as const;
+
+export type LocalErrorCode = (typeof LOCAL_ERROR_CODES)[number];
 
 export class BridgeError extends Error {
   override readonly name = "BridgeError";
@@ -160,7 +166,7 @@ export function agentError(
 }
 
 export const UPDATE_HINT =
-  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see README.md).";
+  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see docs/install.md).";
 
 /** The agent has no such endpoint: it is an older build. */
 export function agentOutdated(path: string): BridgeError {

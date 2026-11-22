@@ -1,8 +1,9 @@
 # ediabas-bridge errors that need judgement
 
 Every failed call starts with its code in brackets (`[job_not_allowed] ...`) and then says what
-happened and what to do. Relay that message; the full list of codes is in the project's
-`docs/tools.md`. This file covers only the cases where the message is not enough.
+happened and what to do. Relay that message. What each code means is listed once, in the
+project's [docs/tools.md](../../../docs/tools.md#errors); this file covers only what to tell the
+user where the message is not enough.
 
 General rule: tell the user what to do, do not retry in a loop, and call `vm_health` once more
 after they say it is fixed. Never fill in results that were not returned. A refusal is the answer:
@@ -25,10 +26,8 @@ never look for another tool, job or route (and never computer use on the VM wind
 
 ## Refusals
 
-- **`[policy_mismatch]`.** The agent's job policy file is not the same as this Mac's (different
-  SHA-256), so every `ediabas_*` tool refuses and nothing was sent. The agent or the Mac server is
-  out of date: the user runs the Update line and restarts Claude. Then stop; do not look for
-  another way.
+- **`[policy_mismatch]`.** Nothing was sent. Tell the user the agent or the Mac server is out
+  of date: they run the Update line and restart Claude. Then stop; do not look for another way.
 - **`[job_not_allowed]`.** If the user believes a job is a pure read that should be allowed, that is
   a change to the policy files in the repo, made deliberately with its test cases, never
   mid-session.
@@ -69,8 +68,8 @@ never look for another tool, job or route (and never computer use on the VM wind
   UTM's USB menu. Do not tell the user the ECU did not answer.
 - **`[ediabas_error]` "The job finished but its results could not be read".** The job ran.
   Report EDIABAS's code and text; do not run it again without asking the user.
-- **`[ediabas_request_lost]`.** The connection broke after the request may have reached the VM,
-  so the job may have run. Call `vm_health`; repeat the job only if the user asks.
+- **`[ediabas_request_lost]`.** Tell the user the job may have run. Call `vm_health`; repeat
+  the job only if the user asks.
 - **`[ediabas_error]` on a job run, with a hint about the job name.** A job the SGBD lacks
   also gives `ediabas_error`; the agent does not check. If the name may be wrong, check it with
   `ediabas_describe` (`[job_not_found]` comes from describe only); never try variations of the name.

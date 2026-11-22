@@ -3,7 +3,7 @@
 The contract between `vm-agent` (server) and `mac-mcp` (client). Both sides are built against
 this file. Change it here first.
 
-The first part covers `/hello`, `/health` and `/windows` (Phases 1 and 3). The part from
+The first part covers `/health` and `/windows` (Phases 1 and 3) and `/hello` (added in 0.5.0). The part from
 "Phases 2, 4, 5 and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
 screenshot and log endpoints.
 
@@ -174,7 +174,7 @@ caught by the conflict check before EDIABAS is called.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 - `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
   does not stop"). Stays true until the agent restarts.
-- `ediabas.heldOpen`: boolean, true once `apiEnd` threw: EDIABAS stays loaded and the interface in
+- `ediabas.heldOpen`: boolean, true once `apiEnd` threw: EDIABAS stays loaded and the interface
   stays in use until the agent restarts. (`vm_health` says so.)
 - `approvals`: `{ "pinned": n, "ignored": m, "entries": [...], "hash": "..." }`: the distinct
   `reviewedJobs` entries in force now (see "Approvals"). `pinned` counts the pinned ones;
@@ -272,7 +272,7 @@ approves nothing since 0.5.0: it is a warning in `agent.log` naming the pinned f
 (`reviewedJobs[i]: "ECU:JOB" is unpinned and approves nothing since 0.5.0; run ediabas_describe
 on the job and use the "ECU:JOB@<hash>" line it prints`). An entry of any other shape is also a
 warning and approves nothing. So does an entry whose ECU or JOB is not upper case (it can never
-match; the warning says it must be upper case). None of these stops the agent; both count as `ignored` in `/health`.
+match; the warning says it must be upper case). None of these stops the agent; all count as `ignored` in `/health`.
 An approval only ever applies to a job the policy allows by the `STATUS_` pattern.
 
 The hash is the first 12 hex digits (lower case) of the SHA-256 of the UTF-8 bytes of the
@@ -387,8 +387,9 @@ description is empty or could not be read.
 ### `POST /ediabas/job`
 Body `{ "ecu": "NVE_65", "job": "FS_LESEN", "args": "", "results": "", "timeoutSeconds": 30 }`.
 `args`, `results` and `timeoutSeconds` are optional. `timeoutSeconds` defaults to the config's
-`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. The agent refuses to start with a
-`maxJobTimeoutSeconds` above 60: a request can last that long plus the 2 s `apiBreak` grace, and
+`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. With a `maxJobTimeoutSeconds`
+above 60 the agent does not start serving (it keeps running, logs why and re-reads the config
+every 30 s): a request can last that long plus the 2 s `apiBreak` grace, and
 the Mac stops waiting for an EDIABAS call after 75 s.
 
 200:

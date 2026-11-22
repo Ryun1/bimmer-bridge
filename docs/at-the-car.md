@@ -9,7 +9,7 @@ The checklist was written for the 2005 E61 550i the bridge was built on. The gen
 to any car; the items marked E60/E61, and the Phase 6 acceptance below, are that car's. On
 another car, find its modules and jobs with `ediabas_list_ecus` and `ediabas_describe` instead.
 
-The Phase 6 acceptance (the E61's), from [PLAN.md section 9](../PLAN.md#9-build-phases-and-acceptance):
+The Phase 6 acceptance (the E61's), from [PLAN.md section 9](history/PLAN.md#9-build-phases-and-acceptance):
 ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the engine SGBD;
 `ediabas_read_faults` on `NVE_65` shows the A752/A751 pair from the INPA session of
 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the
@@ -22,7 +22,7 @@ car-session line and the longer idle time below are all untested there.
 
 - [ ] `./release.sh` passes and the VM runs the current agent. `vm_health` shows the Mac
       server's version and the agent's: they must agree, with no policy-version warning. If
-      not, [update](../README.md#updating) and restart Claude first.
+      not, [update](install.md#updating) and restart Claude first.
 - [ ] For the session, set `"ediabasIdleReleaseSeconds": 90` in the VM's
       `C:\ProgramData\EdiabasBridge\config.json` (allowed 5 to 600, default 20), so EDIABAS is
       not unloaded and reloaded after every pause between reads. Unlike `reviewedJobs`, this

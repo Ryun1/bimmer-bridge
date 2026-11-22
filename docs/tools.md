@@ -92,7 +92,7 @@ use …`. Codes (also the audit outcome):
 
 | Code | From | Meaning for Claude |
 |---|---|---|
-| `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | the VM or the agent could not be reached, or the token was refused or is missing; the message says what the user does (README, Troubleshooting) |
+| `vm_not_running`, `agent_not_answering`, `local_network_blocked`, `unauthorized`, `forbidden`, `no_token` | Mac | the VM or the agent could not be reached, or the token was refused or is missing; the message says what the user does ([install.md, Troubleshooting](install.md#troubleshooting)) |
 | `ediabas_request_lost` | Mac | the connection broke or timed out after a request that runs an EDIABAS job (`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status`, `ediabas_describe`) may have reached the agent, so the job may have run. It was not sent again. Run `vm_health`; do not repeat the job unless the user asks |
 | `ediabas_busy` | Mac | another EDIABAS call on this Mac was still running after 120 s; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed |
 | `agent_outdated` | Mac | the agent has no such endpoint; the user needs to run the Update line |

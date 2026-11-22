@@ -1,9 +1,9 @@
 # Safety: how read-only is enforced
 
-The bridge is read-only by construction. The rules were first written in
-[PLAN.md section 2](../PLAN.md#2-hard-safety-rules-non-negotiable), which is historical; the
-table below is the current list and says which code enforces each one. They are enforced in code on both sides, not only in tool descriptions or
-skills, which are guidance. Check any change against this list.
+The bridge is read-only by construction. [The table below](#the-rules-and-what-enforces-them)
+is the list of rules and says which code enforces each one. They are enforced in code on both
+sides, not only in tool descriptions or skills, which are guidance. Check any change against
+this list.
 
 **Anything that runs against the car is run by the owner, at the car.** Claude Code may run only jobs that
 cannot reach a module: the `TMODE` and `UTILITY` info jobs, and `ediabas_describe` (the `_JOBS`
@@ -14,7 +14,7 @@ a real SGBD does not load without it).
 
 | # | Rule | Enforced in |
 |---|---|---|
-| 1 | No input into the VM: no click, keystroke, mouse or clipboard | There is no such route: the route table in `vm-agent/EdiabasAgent/Endpoints.cs` is the whole list. Capture never restores, focuses, moves or resizes a window (`vm-agent/EdiabasAgent/Capture/`). The Mac server registers only read-only tools, each marked `readOnlyHint: true` (`mac-mcp/src/server.ts`) |
+| 1 | No input into the VM: no click, keystroke, mouse or clipboard | There is no such route: the route table in `vm-agent/EdiabasAgent/Endpoints.cs` is the whole list. Capture never restores, focuses, moves or resizes a window (`vm-agent/EdiabasAgent/Capture/`); the only message it sends a window is `WM_NULL`, a no-op liveness probe (`vm-agent/EdiabasAgent/Capture/CaptureNative.cs`). The Mac server registers only read-only tools, each marked `readOnlyHint: true` (`mac-mcp/src/server.ts`) |
 | 2 | No writes to the car in v1: no clearing, coding, programming, activations or adaptations | No endpoint for them (`Endpoints.cs`); the job policy (rule 3) refuses them by name |
 | 3 | EDIABAS is default-deny | `policy/policy.json`, applied by `vm-agent/EdiabasAgent.Core/JobPolicy.cs` (plus the description screen in `vm-agent/EdiabasAgent.Core/CommentScreen.cs`) and by `mac-mcp/src/policy.ts` before anything leaves the Mac. The agent embeds the file at build time; the Mac reads it at start-up. Both test suites run every case in `policy/policy-cases.json` and `policy/policy-parse-cases.json`; a policy change without a case change is a bug. Every job the agent sends, its own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and `_RESULTS` calls included, passes the policy first |
 | 4 | One user of the cable at a time; no override | `vm-agent/EdiabasAgent/Proc/ConflictCheck.cs` and `vm-agent/EdiabasAgent.Core/ConflictMatcher.cs`: a process on `conflictProcesses` in the VM's `config.json`, or any other process with `api32.dll` loaded, holds the cable. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` runs the check before a request opens EDIABAS, after loading the DLL (before `apiInit`), before every EDIABAS job in it and every 250 ms while a job runs (a check under 250 ms old is reused); a tool seen during a job stops it with `apiBreak`, and once a BMW tool appears, no further job starts |
@@ -23,10 +23,11 @@ a real SGBD does not load without it).
 | 7 | Read-only file access under configured roots; the agent writes only its own logs | `vm-agent/EdiabasAgent.Core/PathRules.cs`, `vm-agent/EdiabasAgent.Core/LogService.cs` and `vm-agent/EdiabasAgent/Logs/LogAccess.cs`. `/logs/read` checks the path as written against the roots before it opens anything, then checks where the opened file really is ([api.md](api.md#logs)). Folder and token permissions: `vm-setup/install.ps1` |
 | 8 | Never change the EDIABAS configuration: no edits to `EDIABAS.INI` or `obd.ini`, no `apiSetConfig` | `vm-agent/EdiabasAgent/Ediabas/Api32.cs` declares only what read jobs need, and not `apiSetConfig`; nothing in the agent writes those files |
 | 9 | Audit trail on both sides | VM: `vm-agent/EdiabasAgent/Audit/AuditLog.cs` (format in `vm-agent/EdiabasAgent.Core/AuditLine.cs`). Mac: `mac-mcp/src/audit.ts`. See [architecture.md](architecture.md#logs-and-audit) |
-| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](../PLAN.md#12-working-agreements-for-claude-code)), repeated in the skills. The owner runs everything at the car |
+| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](history/PLAN.md#12-working-agreements-for-claude-code), kept in [development.md](development.md#working-rules)), repeated in the skills. The owner runs everything at the car |
 
-Two more limits follow from the timeouts: the agent refuses to start with
-`maxJobTimeoutSeconds` above 60, and the Mac never sends a request that runs an EDIABAS job a
+Two more limits follow from the timeouts: with `maxJobTimeoutSeconds` above 60 the agent does
+not start serving (it keeps running, logs why in `agent.log` and re-reads the config every
+30 s), and the Mac never sends a request that runs an EDIABAS job a
 second time, so a job cannot run twice because a connection broke.
 
 ## The job policy in plain words
@@ -118,5 +119,5 @@ many are ignored (unpinned or malformed).
 An approval skips only the description screen. It never skips the name rules: a job refused by
 name stays refused, and an approval only applies to a job the policy allows by the `STATUS_`
 pattern. Nor does it skip the argument screen: an approved job called with arguments is
-refused with `job_needs_review` unless its argument descriptions pass. The jobs approved so far are listed in the README's
-[Troubleshooting](../README.md#troubleshooting) table.
+refused with `job_needs_review` unless its argument descriptions pass. `vm_health` lists the
+jobs approved so far.

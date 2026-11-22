@@ -24,18 +24,18 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 
 **Job policy.** `src/policy.ts` loads `policy/policy.json` from the repo root (two levels above
 `src/` and `dist/`) once at start-up and evaluates it as `docs/api.md` "Job policy" says.
-`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and `ediabas_describe` (names only) are checked before
+`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status` (every reading, including `voltageSources`) and `ediabas_describe` (names only) are checked before
 any request leaves the Mac, so a refused job never reaches the VM. If the file is missing or
 invalid, every `ediabas_*` tool refuses with `policy_unavailable` (fail closed); restore the
 file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`
 and `policy/policy-parse-cases.json`, as the agent's tests do.
 
 **Older agent.** A tool whose endpoint the agent does not have (404 `not_found`) reports
-`agent_outdated`: install the current agent with the Update line (see "Updating" in the repo README).
+`agent_outdated`: install the current agent with the Update line (see [docs/install.md, Updating](../docs/install.md#updating)).
 
 **Errors and length.** Every error result starts with its code in brackets, e.g.
 `[cable_in_use] …`. No result is longer than 60 000 characters; a longer one is cut at a line
-end with a line saying how to narrow the call. `docs/tools.md` lists the codes.
+end with a line saying how to narrow the call. [docs/tools.md](../docs/tools.md#errors) lists the codes.
 
 **Timeouts.** 15 s per request, 75 s for `/ediabas/*`. EDIABAS calls are sent one at a time,
 in the order they were made, because the agent runs them one at a time; the 75 s starts when a
@@ -161,7 +161,7 @@ failure is logged on stderr and never fails the tool call.
 ## Registering with Claude
 
 Use absolute paths, and a stable Node path (not an nvm version directory) so a Node upgrade
-does not break it. The full steps are in the repo README, "Register the MCP server".
+does not break it. The full steps are in [docs/install.md](../docs/install.md#4-register-the-mcp-server).
 
 - Claude Code: `claude mcp add --scope user ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`
 - Claude desktop app: add to `mcpServers` in

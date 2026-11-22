@@ -147,5 +147,5 @@ the dev recorder never records request headers.
   paths, alternate data streams, device names, links out of the roots, 8.3 short names that
   resolve elsewhere and files with more than one hard link are refused ([api.md](api.md#logs)).
 - **Elevation.** UAC is off in this VM, so the agent runs elevated whatever the task's run
-  level says, and folder permissions do not constrain it ([phase-results.md](phase-results.md)).
+  level says, and folder permissions do not constrain it ([history/phase-results.md](history/phase-results.md)).
   The limits above are in the agent's code, not in Windows permissions.

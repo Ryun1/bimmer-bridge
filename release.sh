@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command for a release (PLAN.md Phase 8): checks that the versions agree, runs every test
+# One command for a release (docs/history/PLAN.md Phase 8): checks that the versions agree, runs every test
 # suite, builds the agent zip, the skill zips and the Mac server, then prints the SHA-256 of each
 # zip (the files to attach to the GitHub release) and the Update line. Stops at the first failure.
 # It does not push, tag or deploy anything.

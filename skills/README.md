@@ -17,11 +17,11 @@ they came from. Those sessions were with the VM and cable of a 2005 E61 550i; on
 find ECUs and jobs with `ediabas_list_ecus` and `ediabas_describe` instead, and to treat the
 E61 data as an example. Keep notes about your own car in your own copy or a git-ignored file,
 not in these references. Evals 02, 05, 07 and 08 passed with the skills against the replay agent
-(2026-11-21). PLAN.md also asks that each fails or does worse without the skills; for 07 and 08
+(2026-11-21). [PLAN.md](../docs/history/PLAN.md) also asks that each fails or does worse without the skills; for 07 and 08
 that was not shown, so their acceptance is not met. 01, 03 and 06 wait for fixtures recorded at
 the car; 04's fixture can be recorded at the desk
 ([dev/fixtures/README.md](../dev/fixtures/README.md)). Installing them for Claude Code and
-the desktop app: [README step 5](../README.md#5-install-the-skills).
-[docs/bmw-e61-skill-addition.md](../docs/bmw-e61-skill-addition.md) is optional: an example
+the desktop app: [install.md step 5](../docs/install.md#5-install-the-skills).
+[bmw-e61-skill-addition.md](bmw-e61-skill-addition.md) is optional: an example
 section to paste into a car-specific skill of your own (it was written for a `bmw-e61` skill),
 so that it hands over to this bridge.

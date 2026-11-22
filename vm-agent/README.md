@@ -19,7 +19,7 @@ vm-agent/build.sh                                 # the release zip
 ```
 
 Both find the .NET 10 SDK in the Homebrew folder if `dotnet` is not on `PATH`. The agent is
-installed and updated in the VM with the scripts in [vm-setup/](../vm-setup/README.md).
+installed and updated in the VM with the scripts in `vm-setup/` ([docs/install.md](../docs/install.md#the-scripts-in-the-vm)).
 
 ## Command line
 
@@ -51,7 +51,7 @@ agent exit: it logs why in `agent.log` and re-reads the file every 30 s.
 | `logDirectory` | `C:\ProgramData\EdiabasBridge\logs` | `agent.log`, `audit.log`, `selftest.txt` |
 | `logRoots` | `C:\EDIABAS\TRACE`, `C:\NCSEXPER\WORK` | the only folders `/logs` may read |
 | `conflictProcesses` | `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool`, `WINKFP`, `ISTAGUI` | process names that hold the cable (any process with `api32.dll` loaded counts too) |
-| `reviewedJobs` | empty | approvals that skip the description screen: `ECU:JOB@<12 hex>` (pinned to the description; recommended) or `ECU:JOB` (by name). An entry of another shape is a warning and approves nothing ([docs/safety.md](../docs/safety.md#approving-one-job)) |
+| `reviewedJobs` | empty | approvals that skip the description screen: `ECU:JOB@<12 hex>`, pinned to the description. An unpinned `ECU:JOB` (0.4.0 and before) or an entry of another shape is a warning and approves nothing ([docs/safety.md](../docs/safety.md#approving-one-job)) |
 | `jobTimeoutSeconds` | 30 | default per job; at most `maxJobTimeoutSeconds` |
 | `maxJobTimeoutSeconds` | 60 | a request's time budget; at most 60, because the Mac stops waiting after 75 s |
 | `ediabasIdleReleaseSeconds` | 20 | unload `api32.dll` after this long without an EDIABAS request (5 to 600; another value is a config error). Read at start-up only |

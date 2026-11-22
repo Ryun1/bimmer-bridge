@@ -84,7 +84,7 @@ public sealed class TokenAuth
         return CryptographicOperations.FixedTimeEquals(presentedHash, _expectedHash);
     }
 
-    /// <summary>The one route that needs no token (docs/api.md, "Identity"): exactly <c>GET /hello</c>.</summary>
+    /// <summary>The one route that needs no token (docs/api.md, "`GET /hello`"): exactly <c>GET /hello</c>.</summary>
     public const string HelloPath = "/hello";
 
     private const string HelloContext = "ediabas-bridge-hello-v1:";
