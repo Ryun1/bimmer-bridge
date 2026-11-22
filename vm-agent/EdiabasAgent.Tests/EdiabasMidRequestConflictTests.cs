@@ -209,9 +209,73 @@ public class EdiabasMidRequestConflictTests
         // A single job cannot give a partial answer: the item's not_run becomes cable_in_use.
         Assert.Equal("cable_in_use", f.Error.Code);
         Assert.Contains("WINKFPT", f.Error.Message, StringComparison.Ordinal);
+        Assert.Contains("the running job was stopped with apiBreak", f.Error.Message, StringComparison.Ordinal);
         Assert.Contains("Break", _api.Calls);
         Assert.True(_clock.ElapsedMs < 1000 + 2 * EdiabasService.ConflictRecheckMs + EdiabasService.PollIntervalMs, $"took {_clock.ElapsedMs} ms");
         Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void SingleJob_ToolStartsDuringDllLoad_SaysNoJobWasStopped()
+    {
+        _api.Clock = _clock;
+        _api.LoadMs = 10_000;
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+        ToolStartsAt(5000);
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.DoesNotContain("apiBreak", f.Error.Message, StringComparison.Ordinal);
+    }
+
+    // ---------------------------------------------------------------- the check itself fails while the job runs
+
+    /// <summary>The process scan throws from <paramref name="atMs"/> on (access denied, a process
+    /// that exited mid-scan).</summary>
+    private void CheckThrowsFrom(long atMs) =>
+        _conflicts.Answer = () => _clock.ElapsedMs >= atMs ? throw new InvalidOperationException("scan failed") : [];
+
+    [Fact]
+    public void SingleJob_CheckThrowsWhileTheJobRuns_JobIsBroken_NotRun_EndOnlyAfterTheBreak()
+    {
+        _api.On("NVE_65 IDENT", Takes(5000));
+        CheckThrowsFrom(1000);
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("not_run", f.Error.Code);
+        Assert.Equal("A BMW tool check failed while IDENT was running; the job was stopped with apiBreak.", f.Error.Message);
+        var breakAt = _api.Calls.IndexOf("Break");
+        Assert.True(breakAt >= 0, "no apiBreak");
+        Assert.Equal(1, _api.Count("End"));
+        Assert.True(_api.Calls.IndexOf("End") > breakAt, "apiEnd before apiBreak");
+        Assert.Contains(_log.Lines, l => l.StartsWith("WARN", StringComparison.Ordinal) && l.Contains("scan failed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BatchItem_CheckThrowsWhileTheJobRuns_ItemIsNotRun()
+    {
+        _api.On("NVE_65 IDENT", Takes(5000));
+        CheckThrowsFrom(1000);
+
+        var r = Service().RunJobs([new("NVE_65", "IDENT")], null, _audit, default).Value!;
+
+        Assert.Equal("not_run", r.Items[0].Error!.Code);
+        Assert.Contains("A BMW tool check failed while IDENT was running", r.Items[0].Error!.Message, StringComparison.Ordinal);
+        Assert.Contains("Break", _api.Calls);
+    }
+
+    [Fact]
+    public void SingleJob_CheckThrows_JobIgnoresTheBreak_NoApiEnd()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { BusyPolls = 60_000 / EdiabasService.PollIntervalMs, Sets = [[]], IgnoresBreak = true });
+        CheckThrowsFrom(1000);
+
+        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
+
+        Assert.Equal("not_run", f.Error.Code);
+        Assert.Contains("Break", _api.Calls);
+        Assert.Equal(0, _api.Count("End")); // poisoned, as after a timeout: no apiEnd on a busy handle
     }
 
     [Fact]
@@ -225,7 +289,9 @@ public class EdiabasMidRequestConflictTests
 
         Assert.Equal("not_run", r.Items[0].Error!.Code);
         Assert.Contains("WINKFPT", r.Items[0].Error!.Message, StringComparison.Ordinal);
+        Assert.Contains("the running job was stopped with apiBreak", r.Items[0].Error!.Message, StringComparison.Ordinal);
         Assert.Equal("not_run", r.Items[1].Error!.Code);
+        Assert.DoesNotContain("apiBreak", r.Items[1].Error!.Message, StringComparison.Ordinal);
         Assert.Contains("Break", _api.Calls);
         Assert.Equal(["Job NVE_65 IDENT [] []"], _api.JobCalls);
         Assert.True(_clock.ElapsedMs < 1000 + 2 * EdiabasService.ConflictRecheckMs + EdiabasService.PollIntervalMs, $"took {_clock.ElapsedMs} ms");

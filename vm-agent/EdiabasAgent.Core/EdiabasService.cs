@@ -768,12 +768,27 @@ public sealed class EdiabasService
                 return ApiFailure.Of(ApiErrors.JobTimeout, $"{job} was still running {why} and was stopped.", new TimeoutDetails(timeoutSeconds));
             }
 
-            // A BMW tool that starts while the job runs must not share the cable with it.
-            if (ToolStartedSince(session, force: false) is { } tool)
+            // A BMW tool that starts while the job runs must not share the cable with it. A check
+            // that fails cannot say no tool started: fail closed, and never leave the job busy for
+            // apiEnd.
+            IReadOnlyList<ConflictingProcess>? tool;
+            try
+            {
+                tool = ToolStartedSince(session, force: false);
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"{ecu} {job}: the BMW tool check failed while it ran ({ex.GetType().Name}: {ex.Message}); calling apiBreak");
+                BreakAndSettle(session, ecu, job);
+                return NotRun($"A BMW tool check failed while {job} was running; the job was stopped with apiBreak.");
+            }
+
+            if (tool is not null)
             {
                 _log.Warn($"{ecu} {job}: a BMW tool started while it ran; calling apiBreak");
+                session.ToolStoppedJob = true;
                 BreakAndSettle(session, ecu, job);
-                return ToolStartedNotRun(tool);
+                return ToolStartedNotRun(tool, stoppedJob: true);
             }
 
             _clock.Sleep(PollIntervalMs);
@@ -901,8 +916,12 @@ public sealed class EdiabasService
         return running;
     }
 
-    private static ApiFailure ToolStartedNotRun(IReadOnlyList<ConflictingProcess> running) =>
-        NotRun($"A BMW tool started during the request ({Names(running)}); no further jobs are started.");
+    /// <param name="stoppedJob">True when the tool appeared while this job ran and the job was
+    /// stopped with apiBreak; false when the job never started.</param>
+    private static ApiFailure ToolStartedNotRun(IReadOnlyList<ConflictingProcess> running, bool stoppedJob = false) =>
+        NotRun(stoppedJob
+            ? $"A BMW tool started during the request ({Names(running)}); the running job was stopped with apiBreak and no further jobs are started."
+            : $"A BMW tool started during the request ({Names(running)}); no further jobs are started.");
 
     /// <summary><c>cable_in_use</c> for a request that cannot give a partial answer, when a BMW
     /// tool started during it; null when none did.</summary>
@@ -910,7 +929,9 @@ public sealed class EdiabasService
         session.ToolStarted is { } running
             ? ApiFailure.Of(
                 ApiErrors.CableInUse,
-                $"A BMW tool started during the request ({Names(running)}); no further EDIABAS job was started. Close it and try again.",
+                session.ToolStoppedJob
+                    ? $"A BMW tool started during the request ({Names(running)}); the running job was stopped with apiBreak and no further EDIABAS job was started. Close it and try again."
+                    : $"A BMW tool started during the request ({Names(running)}); no further EDIABAS job was started. Close it and try again.",
                 new ProcessesDetails(running))
             : null;
 
@@ -974,6 +995,10 @@ public sealed class EdiabasService
 
         /// <summary>BMW tools seen to start during the request; null while none has.</summary>
         public IReadOnlyList<ConflictingProcess>? ToolStarted { get; set; }
+
+        /// <summary>Whether a job was running when <see cref="ToolStarted"/> was seen, and was
+        /// stopped with apiBreak.</summary>
+        public bool ToolStoppedJob { get; set; }
 
         public ApiFailure? EnsureInit()
         {

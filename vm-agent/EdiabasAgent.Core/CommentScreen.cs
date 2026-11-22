@@ -146,7 +146,8 @@ public sealed class ApprovalList
 }
 
 /// <summary>The current <see cref="ApprovalList"/>, replaced whole when config.json is re-read.
-/// Thread-safe: /health reads it while the runner may replace it.</summary>
+/// Thread-safe: <see cref="ApprovalReloader"/> replaces it under its own lock, from the runner or
+/// from /health, while other threads read it.</summary>
 public sealed class ApprovalState(ApprovalList initial)
 {
     private volatile ApprovalList _current = initial;

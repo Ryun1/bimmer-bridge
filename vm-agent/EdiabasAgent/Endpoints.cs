@@ -73,6 +73,9 @@ internal sealed class Endpoints
         var now = DateTimeOffset.UtcNow;
         var dll = _ctx.Config.EdiabasDll;
 
+        // config.json as it is now, so a changed reviewedJobs shows on this answer, not the next.
+        _ctx.ApprovalReloader.Refresh();
+
         // File-existence check only: /health never loads api32.dll and never touches the cable.
         bool dllFound;
         try

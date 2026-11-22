@@ -94,6 +94,58 @@ public class ApprovalReloadTests
     }
 
     [Fact]
+    public void Refresh_AsHealthCallsIt_ShowsTheFileAsItIsNow()
+    {
+        // /health refreshes before it answers: no EDIABAS request in between.
+        _file.Text = Config();
+        var state = State();
+        var reloader = new ApprovalReloader(_file, state, _log);
+        reloader.Refresh();
+        var before = state.Current.Counts;
+
+        _file.Write(Config(PinnedB));
+        reloader.Refresh();
+
+        ApprovalTests.AssertCounts(1, 0, state.Current.Counts);
+        Assert.Equal(ApprovalList.EntriesHash([PinnedB]), state.Current.Counts.Hash);
+        Assert.NotEqual(before.Hash, state.Current.Counts.Hash);
+    }
+
+    [Fact]
+    public void Refresh_FromManyThreadsAtOnce_LeavesAConsistentList()
+    {
+        var state = State();
+        var reloader = new ApprovalReloader(_file, state, _log);
+        string[] a = [PinnedB];
+        string[] b = [PinnedB, "NVE_65:STATUS_C@0123456789ab", "NVE_65:STATUS_D"];
+        var texts = new[] { Config(a), Config(b) };
+        var hashA = ApprovalList.EntriesHash(a);
+        var hashB = ApprovalList.EntriesHash(["NVE_65:STATUS_B@" + StartetBHash, "NVE_65:STATUS_C@0123456789ab"]); // pinned only, sorted
+
+        Parallel.For(0, 400, new ParallelOptions { MaxDegreeOfParallelism = 8 }, i =>
+        {
+            if (i % 5 == 0)
+            {
+                _file.Write(texts[i / 5 % 2]);
+            }
+
+            reloader.Refresh();
+            var counts = state.Current.Counts;
+            Assert.True(
+                (counts.Pinned, counts.Ignored, counts.Hash) == (1, 0, hashA)
+                || (counts.Pinned, counts.Ignored, counts.Hash) == (2, 1, hashB)
+                || counts.Pinned + counts.Ignored == 0,
+                $"inconsistent counts {counts}");
+        });
+
+        _file.Write(Config(b));
+        reloader.Refresh();
+        ApprovalTests.AssertCounts(2, 1, state.Current.Counts);
+        Assert.Equal(hashB, state.Current.Counts.Hash);
+        Assert.DoesNotContain(_log.Lines, l => l.StartsWith("WARN ", StringComparison.Ordinal) && !l.Contains("reviewedJobs[", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Refresh_ReadFailsThenSucceeds_RemovalApplies()
     {
         _file.Text = Config();

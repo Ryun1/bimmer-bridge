@@ -76,8 +76,9 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   would). The Mac server remembers the agent's `approvals.hash`; when it differs from the last
   one seen, the result starts with `[approvals changed] reviewedJobs in the VM changed since this
   server started: now <entries, or none>. Only the owner should change it.` (the result may be an
-  error too), and the Mac audit line gets the field `approvals_changed=1`. The first call after
-  the server starts only sets the baseline. An agent that does not report `hash` is never flagged.
+  error too), and the Mac audit line gets the field `approvals_changed=1`. The agent re-reads
+  `config.json` before answering `/health`, so the first call after an edit is the one flagged.
+  The first call after the server starts only sets the baseline. An agent that does not report `hash` is never flagged.
 - **Car session.** The results of `ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and
   `ediabas_vehicle_status` (errors too) end with "Car session: X min Y s since the first read
   from the car (aim to finish within 10 min)." The session starts at the first successful read

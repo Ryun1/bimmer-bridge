@@ -140,10 +140,6 @@ internal static class WindowCapture
             "The window is minimised. The bridge never restores windows; restore it in the VM and try again.",
             new WindowDetails(window.Handle, window.Title));
 
-    /// <summary>
-    /// Draws into a 32-bit top-down DIB of the agent's own and copies the pixels out (BGRX).
-    /// Null when any GDI step fails. Frees the DCs and the bitmap on every path.
-    /// </summary>
     private const uint AnswerTimeoutMs = 500;
 
     /// <summary>True when the window's message loop answers a WM_NULL within 500 ms.</summary>
@@ -151,6 +147,10 @@ internal static class WindowCapture
         CaptureNative.SendMessageTimeoutW(hwnd, CaptureNative.WM_NULL, UIntPtr.Zero, IntPtr.Zero,
             CaptureNative.SMTO_ABORTIFHUNG | CaptureNative.SMTO_BLOCK, AnswerTimeoutMs, out _) != IntPtr.Zero;
 
+    /// <summary>
+    /// Draws into a 32-bit top-down DIB of the agent's own and copies the pixels out (BGRX).
+    /// Null when any GDI step fails. Frees the DCs and the bitmap on every path.
+    /// </summary>
     private static byte[]? Grab(int width, int height, Func<IntPtr, IntPtr, bool> draw)
     {
         var screen = CaptureNative.GetDC(IntPtr.Zero);

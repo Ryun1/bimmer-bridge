@@ -82,8 +82,15 @@ internal sealed class LogAccess : ILogFileSystem
         }
 
         // The flag above opens a link as the link itself, so a link planted in a log root that
-        // points at a device is never opened. A link is refused, whatever it points at.
-        if (LogNative.GetFileInformationByHandle(h, out var info) && (info.FileAttributes & LogNative.FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        // points at a device is never opened. A link is refused, whatever it points at; so is a
+        // file whose attributes cannot be read, since it cannot be shown not to be a link.
+        if (!LogNative.GetFileInformationByHandle(h, out var info))
+        {
+            h.Dispose();
+            return LogOpenStatus.Unreadable;
+        }
+
+        if ((info.FileAttributes & LogNative.FILE_ATTRIBUTE_REPARSE_POINT) != 0)
         {
             h.Dispose();
             return LogOpenStatus.NotFound;

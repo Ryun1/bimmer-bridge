@@ -68,7 +68,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -177,7 +177,8 @@ caught by the conflict check before EDIABAS is called.
 - `ediabas.heldOpen`: boolean, true once `apiEnd` threw: EDIABAS stays loaded and the interface
   stays in use until the agent restarts. (`vm_health` says so.)
 - `approvals`: `{ "pinned": n, "ignored": m, "entries": [...], "hash": "..." }`: the distinct
-  `reviewedJobs` entries in force now (see "Approvals"). `pinned` counts the pinned ones;
+  `reviewedJobs` entries in force now: `/health` re-reads `config.json` before it answers, as
+  every EDIABAS request does (see "Approvals"). `pinned` counts the pinned ones;
   `ignored` counts those that approve nothing (unpinned, of the wrong shape, or with an ECU or
   JOB that is not upper case). `entries` lists the pinned ones as written, sorted by ordinal
   string comparison; `hash` is the first 12 lower-case hex digits of the SHA-256 of the entries
@@ -289,9 +290,10 @@ longer holds is `job_needs_review`:
   in the agent config."
 - "The description of {JOB} could not be read, so its approval cannot be checked."
 
-**No restart.** At the start of every EDIABAS request the agent re-reads `reviewedJobs`, and
-nothing else, from config.json. A file that is missing, unreadable or not a valid config keeps
-the previous list and logs one warning per distinct problem; a later good read is picked up.
+**No restart.** At the start of every EDIABAS request, and before it answers `/health`, the
+agent re-reads `reviewedJobs`, and nothing else, from config.json. A file that is missing,
+unreadable or not a valid config keeps the previous list and logs one warning per distinct
+problem; a later good read is picked up.
 
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
@@ -315,8 +317,9 @@ batch item, the description screen's `_JOBCOMMENTS`, the argument screen's `_ARG
 itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and
 `_RESULTS`), and every 250 ms while a job runs. A check less than 250 ms old is reused (the
 process scan is not free, and describe on a large SGBD sends hundreds of short jobs). A job
-running when a BMW tool is seen is stopped with `apiBreak` and counts as not run. Once a BMW
-tool is seen, no further job starts in that request:
+running when a BMW tool is seen is stopped with `apiBreak` and counts as not run. A check that
+fails while a job runs (the process scan threw) counts the same way: the job is stopped with
+`apiBreak` and is `not_run`. Once a BMW tool is seen, no further job starts in that request:
 - `/ediabas/jobs`: the item and every later item get `not_run`; items
   already done are kept.
 - describe without `job`: the job list is kept, comments already read are kept, and the rest are
@@ -413,7 +416,8 @@ Body `{ "items": [ { "ecu", "job", "args"?, "results"? } ], "timeoutSeconds"?: 3
 items. `timeoutSeconds` is per item. An item gets `not_run` (with `details: null` and a message
 saying why) when it was not started, or was stopped, because:
 - the request's `maxJobTimeoutSeconds` budget ran out;
-- a BMW tool started during the request (see "Conflict check during a request");
+- a BMW tool started during the request, or the check for one failed while the item's job ran
+  (see "Conflict check during a request");
 - an earlier item's job did not stop after `apiBreak` (see "A job that does not stop");
 - the client gave up on the request (a running job is stopped with `apiBreak`).
 

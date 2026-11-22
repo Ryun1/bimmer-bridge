@@ -14,14 +14,19 @@ public sealed class ConfigFile(string path) : IConfigFile
 
 /// <summary>
 /// Re-reads <c>reviewedJobs</c>, and nothing else, from config.json at the start of every EDIABAS
-/// request, before the policy decides anything, so that an approval the user adds or removes
-/// applies without restarting the agent. The file is read every time: a failed read cannot
-/// hide a later removal, because nothing is remembered about the file except what was warned.
+/// request, before the policy decides anything, and when /health is answered, so that an approval
+/// the user adds or removes applies, and shows, without restarting the agent. The file is read
+/// every time: a failed read cannot hide a later removal, because nothing is remembered about the
+/// file except what was warned.
 /// A file that is missing, unreadable or not a valid config keeps the previous list, with one
-/// warning per distinct problem; a later good read is picked up. Runner thread only.
+/// warning per distinct problem; a later good read is picked up. Thread-safe: the runner thread
+/// and the HTTP threads answering /health may call <see cref="Refresh"/> at the same time; one
+/// lock covers the read, the warnings and the swap of <see cref="ApprovalState.Current"/>.
 /// </summary>
 public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdiabasLog log)
 {
+    private readonly Lock _gate = new();
+
     // The problem last warned about (read failure or invalid file); cleared by a good parse.
     private string? _lastProblem;
 
@@ -29,6 +34,14 @@ public sealed class ApprovalReloader(IConfigFile file, ApprovalState state, IEdi
     private string? _entryWarnedText;
 
     public void Refresh()
+    {
+        lock (_gate)
+        {
+            RefreshLocked();
+        }
+    }
+
+    private void RefreshLocked()
     {
         string text;
         try
