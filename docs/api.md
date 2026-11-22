@@ -69,7 +69,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 - `sessionId` is the Windows session the agent runs in. `0` means it is not in an
   interactive session and screenshots will not work.
 - `ediabas.dllFound` is a file-existence check only.
-- `lastCableUseAt`, `policyVersion`, `policySha256`, `capabilities`, `ediabas.loaded`, `ediabas.stuck` and
+- `lastCableUseAt`, `policyVersion`, `policySha256`, `capabilities`, `ediabas.loaded`, `ediabas.stuck`, `ediabas.heldOpen` and
   `approvals` are described under "`GET /health` additions" below.
 
 ## `GET /windows`
@@ -147,6 +147,8 @@ caught by the conflict check before EDIABAS is called.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 - `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
   does not stop"). Stays true until the agent restarts.
+- `ediabas.heldOpen`: boolean, true once `apiEnd` threw: EDIABAS stays loaded and the interface in
+  stays in use until the agent restarts. (`vm_health` says so.)
 - `approvals`: `{ "pinned": n, "ignored": m, "entries": [...], "hash": "..." }`: the distinct
   `reviewedJobs` entries in force now (see "Approvals"). `pinned` counts the pinned ones;
   `ignored` counts those that approve nothing (unpinned, of the wrong shape, or with an ECU or

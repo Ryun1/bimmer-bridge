@@ -183,6 +183,21 @@ public class EdiabasReleaseAndCableTests
     }
 
     [Fact]
+    public void ApiEndThrows_HealthReportsHeldOpen()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Ok());
+        var svc = Service();
+        Assert.True(Ident(svc).Ok);
+        Assert.False(_dll.HeldOpen);
+
+        _api.EndThrows = true;
+        Assert.True(Ident(svc).Ok);
+
+        Assert.True(_dll.HeldOpen);
+        Assert.False(_dll.Stuck);
+    }
+
+    [Fact]
     public void ApiEndThrew_NeverReleased()
     {
         _api.On("NVE_65 IDENT", FakeJob.Ok());

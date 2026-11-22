@@ -16,8 +16,9 @@ public sealed record OsInfo(string Description, string OsArchitecture, string Pr
 public sealed record ConflictingProcess(string Name, int Pid);
 
 /// <summary><c>Loaded</c>: whether the agent has api32.dll loaded right now (docs/api.md, "Idle release").
-/// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.</summary>
-public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck);
+/// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.
+/// <c>HeldOpen</c>: <c>apiEnd</c> threw, so EDIABAS stays loaded and the interface in use until the agent restarts.</summary>
+public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck, bool HeldOpen);
 
 /// <summary>How many distinct <c>reviewedJobs</c> entries are pinned to a description, and how many are ignored (unpinned or malformed: they approve nothing).</summary>
 public sealed record ApprovalCounts(int Pinned, int Ignored, IReadOnlyList<string> Entries, string Hash);

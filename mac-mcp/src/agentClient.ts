@@ -43,11 +43,13 @@ export const HealthSchema = z.object({
   conflictingProcesses: z.array(z.object({ name: z.string(), pid: z.number().int() })),
   // `loaded`: whether the agent has the DLL loaded right now (idle release); older agents omit it.
   // `stuck`: a job did not stop after apiBreak and the agent must be restarted; older agents omit it.
+  // `heldOpen`: apiEnd threw, so EDIABAS stays loaded until the agent restarts; older agents omit it.
   ediabas: z.object({
     dllPath: z.string().nullable(),
     dllFound: z.boolean(),
     loaded: z.boolean().nullable().optional(),
     stuck: z.boolean().nullable().optional(),
+    heldOpen: z.boolean().nullable().optional(),
   }),
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.

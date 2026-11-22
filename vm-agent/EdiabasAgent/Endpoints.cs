@@ -74,7 +74,7 @@ internal sealed class Endpoints
             Port: _ctx.Config.Port,
             Gateway: _selection.Gateway?.ToString(),
             ConflictingProcesses: _ctx.Conflicts.Running(),
-            Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck),
+            Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck, _ctx.DllState.HeldOpen),
             LastCableUseAt: _ctx.CableUse.LastInitAt is { } t ? ApiFormat.Timestamp(t) : null,
             PolicyVersion: _ctx.Policy.Version,
             PolicySha256: _ctx.Policy.Sha256,

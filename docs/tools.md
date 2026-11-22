@@ -5,7 +5,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 
 | Tool | Arguments | Agent call | Returns |
 |---|---|---|---|
-| `vm_health` | — | `GET /health` | status text: first `Mac server {version}, started {local time}`, then the agent line (warns "WARNING: The Mac server and the agent are different versions; restart Claude or update the agent." when the two versions differ), session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck until the agent restarts), last cable use, policy version, and `Approved jobs: N pinned, M ignored.` when the agent reports approvals |
+| `vm_health` | — | `GET /health` | status text: first `Mac server {version}, started {local time}`, then the agent line (warns "WARNING: The Mac server and the agent are different versions; restart Claude or update the agent." when the two versions differ), session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck, or held open after a failed apiEnd, until the agent restarts), last cable use, policy version, and `Approved jobs: N pinned, M ignored.` when the agent reports approvals |
 | `vm_list_windows` | — | `GET /windows` | table |
 | `vm_screenshot` | `window?` (handle, title substring, or `desktop`; default `desktop`), `maxEdge?` (200–4000, default 1600) | `GET /screen/capture` | an image, then one line: title, size, capture method |
 | `vm_logs_list` | `root?` (index), `glob?`, `since?` (ISO 8601), `limit?` (1–200) | `GET /logs` | the roots, then path / size / modified, newest first |

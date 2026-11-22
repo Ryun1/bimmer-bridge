@@ -130,6 +130,7 @@ public sealed class DllLoadState
 {
     private volatile bool _loaded;
     private volatile bool _stuck;
+    private volatile bool _heldOpen;
 
     public bool Loaded
     {
@@ -143,6 +144,14 @@ public sealed class DllLoadState
     {
         get => _stuck;
         set => _stuck = value;
+    }
+
+    /// <summary><c>apiEnd</c> threw: a handle may still be open, so EDIABAS stays loaded (and the
+    /// interface in use) until the agent restarts.</summary>
+    public bool HeldOpen
+    {
+        get => _heldOpen;
+        set => _heldOpen = value;
     }
 }
 

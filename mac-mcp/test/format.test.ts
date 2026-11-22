@@ -85,6 +85,14 @@ describe("formatHealth", () => {
     expect(formatHealth(health({ ediabas: { ...dll, loaded: true, stuck: false } }))).not.toMatch(/STUCK/);
   });
 
+  it("says when EDIABAS is held open after a failed apiEnd", () => {
+    const dll = { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true };
+    const t = formatHealth(health({ ediabas: { ...dll, loaded: true, heldOpen: true } }));
+    expect(t).toContain("EDIABAS: held open after a failed apiEnd; the interface stays in use until the agent restarts (restart Windows or the scheduled task).");
+    expect(t).not.toMatch(/loaded now/);
+    expect(formatHealth(health({ ediabas: { ...dll, loaded: true, heldOpen: false } }))).not.toMatch(/held open/);
+  });
+
   describe("approvals", () => {
     const after = (approvals: unknown) => {
       const lines = formatHealth(health({ policyVersion: 3, capabilities: [], ...(approvals === undefined ? {} : { approvals }) }), 3).split("\n");

@@ -113,7 +113,7 @@ public class ApiModelsTests
             Port: 8765,
             Gateway: null,
             ConflictingProcesses: [new ConflictingProcess("INPALOAD", 4312)],
-            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true),
+            Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true, true),
             LastCableUseAt: null,
             PolicyVersion: 1,
             PolicySha256: new string('a', 64),
@@ -143,7 +143,8 @@ public class ApiModelsTests
         var ed = root.GetProperty("ediabas");
         Assert.Equal(@"C:\EDIABAS\BIN\api32.dll", ed.GetProperty("dllPath").GetString());
         Assert.True(ed.GetProperty("dllFound").GetBoolean());
-        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck"], ed.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.True(ed.GetProperty("heldOpen").GetBoolean());
+        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck", "heldOpen"], ed.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
         Assert.Equal("""{"pinned":2,"ignored":1,"entries":["A:B@b8ae0dd9d242","C:D@7b69322a754f"],"hash":"0123456789ab"}""", root.GetProperty("approvals").GetRawText());
