@@ -116,9 +116,26 @@ Check any change against that list.
 ## Status
 
 Version 0.5.0 (agent, MCP server and `VERSION`), job policy version 4, eleven MCP tools.
-**0.5.0 is built (`./release.sh` passes) but not yet installed in the VM: the upgrade steps and
-desk checks are pending, see [Upgrading to 0.5.0](docs/install.md#upgrading-to-050). The VM still
-runs 0.4.0 (installed 2026-11-22). Nothing in 0.3.0, 0.4.0 or 0.5.0 has been run at the car.**
+**0.5.0 is released (tag `v0.5.0`, 2026-11-22) and installed in the VM as an Update from 0.4.0:
+the [upgrade steps](docs/install.md#upgrading-to-050) and desk checks pass, except re-recording
+the skill references' job verdicts under policy version 4. Nothing in 0.3.0, 0.4.0 or 0.5.0 has
+been run at the car.**
+
+0.5.0 in the VM, 2026-11-22 (cable in the VM, not in the car):
+- Approvals pinned before the update; `vm_health` then showed 5 pinned, 0 ignored, and policy
+  version 4 with the same SHA-256 on both sides.
+- `update.ps1` under Windows PowerShell 5.1: the first Update added `WINKFP` and `ISTAGUI` and
+  recorded `conflictDefaultsOffered`, with `reviewedJobs` and the other keys unchanged; a second
+  Update changed nothing; a default removed by hand stayed removed after a third.
+  `vm-setup/*.ps1` also parse under `pwsh` 7.7 on the Mac.
+- `--selftest`: PASS (after the self-test's own 8.3 check was fixed, PR #2).
+- Desk checks: `TMODE INFO`; `ediabas_vehicle_status` (TMODE lines; `NVE_65` voltage from the
+  Mac's `config.local.json`); INPA open gives `cable_in_use`; an INPA screenshot is readable;
+  `ediabas_describe E60` shows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` runnable; a
+  `reviewedJobs` edit shows `[approvals changed]` first on a result and after the `[code]` on an
+  error; with the car absent, the info memory line gives the real no-response error. Stopping a
+  running job when a BMW tool opens mid-job (`apiBreak`) is covered by the agent's tests only: a
+  desk-side describe is too short to open INPA during it.
 
 | Phase | State |
 |---|---|
@@ -134,10 +151,8 @@ runs 0.4.0 (installed 2026-11-22). Nothing in 0.3.0, 0.4.0 or 0.5.0 has been run
 
 Open:
 - **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Upgrade the VM to 0.5.0 and finish its desk checks** (the owner's, cable in the VM, not in
-  the car): [Upgrading to 0.5.0](docs/install.md#upgrading-to-050). This includes the open 0.4.0
-  item (`ediabas_describe` on `E60` shows the two whole-car jobs as allowed) and re-recording the
-  skill references' job verdicts under policy version 4.
+- **Re-record the skill references' job verdicts under policy version 4**
+  (`dev/record-server.ts`, [docs/development.md](docs/development.md)).
 - **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
   eval 04's `needs-review` fixture can be recorded at the desk
   ([dev/fixtures/README.md](dev/fixtures/README.md)).
