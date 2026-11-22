@@ -8,6 +8,7 @@ public class KlineInterfaceTests : IDisposable
 {
     static readonly byte[] Ident = [0x82, 0x12, 0xF1, 0x1A, 0x80];
     static readonly byte[] IdentResponse = [0x82, 0xF1, 0x12, 0x5A, 0x80];
+    static readonly byte[] Second = [0x82, 0xF1, 0x12, 0x5A, 0x81];
     static readonly byte[] ClearFaults = [0x83, 0x12, 0xF1, 0x14, 0xFF, 0xFF];
 
     readonly Recordings _rec = new();
@@ -113,6 +114,62 @@ public class KlineInterfaceTests : IDisposable
             Assert.False(Transmit(iface, Ident, out _));
             Assert.True(DateTime.UtcNow - start < TimeSpan.FromSeconds(1));
             Assert.Equal(KlineReason.Cancelled, iface.Transport.LastReason);
+        }
+    }
+
+    [Fact]
+    public void Latch_SurvivesAnotherConnect()
+    {
+        // The next SGBD's INIT runs xconnect again: the refusal must still hold.
+        var (ed, iface) = Create(KlineTransport.Replay(_rec.BmwFastExchange(Ident, IdentResponse)));
+        using (ed)
+        {
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.False(Transmit(iface, ClearFaults, out _));
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.False(Transmit(iface, Ident, out _));
+            Assert.Equal(KlineReason.GateRefused, iface.Transport.LastReason);
+        }
+    }
+
+    [Fact]
+    public void Latch_SurvivesDisconnectAndConnect()
+    {
+        var (ed, iface) = Create(KlineTransport.Replay(_rec.BmwFastExchange(Ident, IdentResponse)));
+        using (ed)
+        {
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.False(Transmit(iface, ClearFaults, out _));
+            Assert.True(iface.InterfaceDisconnect());
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.False(Transmit(iface, Ident, out _));
+            Assert.Equal(KlineReason.GateRefused, iface.Transport.LastReason);
+        }
+    }
+
+    [Fact]
+    public void Connect_WhenOpen_KeepsTheSession()
+    {
+        // Reconnecting must not restart the port (or the replay at its first event).
+        var rec = _rec.Write(
+            "{\"op\":\"send\",\"hex\":\"" + Convert.ToHexString(Recordings.WithChecksum(Ident)) + "\"}\n" +
+            "{\"op\":\"recv\",\"hex\":\"" + Convert.ToHexString(Recordings.WithChecksum(Ident)) + Convert.ToHexString(Recordings.WithChecksum(IdentResponse)) + "\"}\n" +
+            "{\"op\":\"send\",\"hex\":\"" + Convert.ToHexString(Recordings.WithChecksum(Ident)) + "\"}\n" +
+            "{\"op\":\"recv\",\"hex\":\"" + Convert.ToHexString(Recordings.WithChecksum(Ident)) + Convert.ToHexString(Recordings.WithChecksum(Second)) + "\"}\n");
+        var (ed, iface) = Create(KlineTransport.Replay(rec));
+        using (ed)
+        {
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.True(Transmit(iface, Ident, out _));
+            Assert.True(iface.InterfaceConnect());
+            iface.CommParameter = (uint[])EdInterfaceBase.CommParameterBmwFast.Clone();
+            Assert.True(Transmit(iface, Ident, out var response), "second exchange: " + iface.Transport.LastReason);
+            Assert.Equal(Recordings.WithChecksum(Second), response.Take(Second.Length + 1).ToArray());
         }
     }
 }

@@ -32,8 +32,8 @@ namespace EdiabasLib.Native
 
         public bool IsOpen => _handle != IntPtr.Zero;
 
-        /// The first failure since connect (receive timeouts aside, which are routine), and
-        /// GateRefused from the first refusal on, whatever followed.
+        /// The first failure since this transport was made (receive timeouts aside, which are
+        /// routine), and GateRefused from the first refusal on, whatever followed.
         public KlineReason LastReason => _latched ? KlineReason.GateRefused : _first;
 
         /// Makes a blocked send or receive return now. EdiabasNet clears it through
@@ -91,11 +91,16 @@ namespace EdiabasLib.Native
             // would send an F1 F1 FA frame; ignition is read from DSR instead).
         }
 
+        /// Opens the port, or keeps it open: every SGBD's INIT runs xconnect, and upstream's own
+        /// transports stay connected when already open (EdInterfaceObd.cs:1572). A gate refusal
+        /// stays latched for the life of this transport (one request), across reconnects.
         bool Connect(string port, object parameter)
         {
-            Disconnect();
-            _first = KlineReason.Ok;
-            _latched = false;
+            if (_handle != IntPtr.Zero)
+            {
+                return true;
+            }
+
             IntPtr h;
             var rc = _replayPath != null
                 ? KlineNative.kline_open_replay(_replayPath, out h)
@@ -158,6 +163,7 @@ namespace EdiabasLib.Native
                 Check((int)KlineReason.Unsupported);
                 return false;
             }
+            if (_latched) return Check((int)KlineReason.GateRefused);
             if (length < 0 || length > sendData.Length) return Check((int)KlineReason.Io);
             fixed (byte* p = sendData)
             {
