@@ -111,12 +111,17 @@ where the message is not enough. The ones that need judgement here:
 
 - **`[job_not_allowed]`** — refused by name. Say which job and rule; do not look for another
   job, tool or route that does the same thing.
-- **`[job_needs_review]`** — the job's own description (or its arguments' description)
-  suggests it may not be a pure read, has none, or has changed since the user approved it. Show
-  the user the quoted description, say what it seems to mean, and leave the decision to them.
-  The safe default is not to run it; never present approving it as a routine step. If they
-  decide to approve it, `ediabas_describe` on the job prints the exact line to add in the VM; no
-  restart is needed.
+- **`[job_needs_review]`, or a job `ediabas_describe` shows as "needs review"** — the job's
+  own description (or its arguments' description) suggests it may not be a pure read, has
+  none, or has changed since the user approved it. In your answer:
+  - quote the description as returned, and say in plain English what it seems to mean;
+  - say, in so many words, that the decision is the user's and **the safe default is not to
+    run it**;
+  - stop there. Do not give the `reviewedJobs` line, the hash or the steps to approve it, even
+    though `ediabas_describe` prints them, and do not end by offering to run it once approved.
+    Only if the user then says they want to approve it, give them the line `ediabas_describe`
+    printed (no restart is needed);
+  - do not point to INPA, Tool32 or another job or ECU as a way to get the same reading.
 - **`[cable_in_use]`** — a BMW tool is open; see step 1. **`[cable_not_found]`** — ask the
   user to tick the cable for the VM in UTM's USB menu (UTM does not hand back a replugged cable).
 - **`[ecu_not_found]`, `[job_not_found]`** — the name was wrong; go back to the lookup tools.

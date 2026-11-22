@@ -43,9 +43,10 @@ never look for another tool, job or route (and never computer use on the VM wind
     not be read.
 
   Show the user the quoted text, say in plain English what it seems to say, and that the
-  bridge will not run it unless they decide it is a pure read. The safe default is to skip it;
-  never present approving it as a routine step, and never hold a session at the car for it. If
-  they decide to approve it, `ediabas_describe` on that job prints the exact entry to add to
+  bridge will not run it unless they decide it is a pure read. Say that the safe default is
+  not to run it; never present approving it as a routine step, never point to INPA or Tool32
+  for the same reading, and never hold a session at the car for it. Give the approval entry
+  only after the user says they want to approve the job: `ediabas_describe` on that job prints the exact entry to add to
   `reviewedJobs` in the VM's `config.json`, pinned to the description as it is now; the agent
   picks it up at the next EDIABAS call, no restart. An approval written without the `@hash`
   part approves nothing (since 0.5.0); `vm_health` counts such entries as ignored, and

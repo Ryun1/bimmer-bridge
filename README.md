@@ -150,14 +150,13 @@ to 0.5.1 has been run at the car.**
 | 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
 | 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
 | 6 At the car | built (vehicle status, fault tables). **Not run: this is the owner's, at the car** |
-| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 passed with the skills (2026-11-21), but for 07 and 08 the run without the skills was not shown to do worse, so PLAN.md's acceptance is not met for them; skill references filled from the desk recordings of 2026-11-21/22 |
+| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 passed with the skills (2026-11-21); eval 04 passed 3 of 3 with the skills and failed 3 of 3 without them (2026-11-22, `needs-review` fixture); but for 07 and 08 the run without the skills was not shown to do worse, so PLAN.md's acceptance is not met for them; skill references filled from the desk recordings of 2026-11-21/22 |
 | 8 Hardening | built: `VERSION`, `release.sh`, the docs. The plan's acceptance check (reinstalling from this README alone) has not been run; updates from the README's lines have |
 
 Open:
 - **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
-  eval 04's `needs-review` fixture was recorded at the desk on 2026-11-22, so eval 04 can be
-  run ([dev/fixtures/README.md](dev/fixtures/README.md)).
+- **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car
+  ([dev/fixtures/README.md](dev/fixtures/README.md)).
 - **Eval acceptance**: 07 and 08 still need a run without the skills that does worse.
 - **Skill reference entries that need car recordings**: the vehicle-status field names, the
   engine SGBD, and the SGBDs that can only be described with the control unit answering.
