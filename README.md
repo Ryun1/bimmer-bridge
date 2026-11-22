@@ -120,8 +120,10 @@ skill references.
 ## Status
 
 Version 0.4.0 (agent, MCP server and `VERSION`), job policy version 3, eleven MCP tools.
-**0.3.0 and 0.4.0 are built but not yet installed in the VM, and nothing in them has been run at the car.**
-The original owner's VM still runs agent 0.2.2 with policy version 2 until the Update line is run there.
+**0.4.0 is installed in the original owner's VM (2026-11-22, updated from 0.3.0 with the Update
+line): `vm_health` shows the Mac server and the agent both at 0.4.0, policy version 3 on both
+sides, the existing `config.json` and approvals kept, and the Mac server found the VM from UTM's
+config with no MAC set. Nothing in 0.3.0 or 0.4.0 has been run at the car.**
 
 | Phase | State |
 |---|---|
@@ -137,9 +139,9 @@ The original owner's VM still runs agent 0.2.2 with policy version 2 until the U
 
 Open:
 - **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Install 0.4.0** in the VM and check it at the desk: `vm_health` shows both versions as
-  0.4.0; `ediabas_describe` on `E60` shows the two whole-car jobs as allowed; the job verdicts
-  in the skill references are re-recorded under policy version 3.
+- **Finish the 0.4.0 desk check**: `vm_health` passed (both at 0.4.0); still to do with the cable
+  in the VM: `ediabas_describe` on `E60` shows the two whole-car jobs as allowed, and the job
+  verdicts in the skill references are re-recorded under policy version 3.
 - **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
   eval 04's `needs-review` fixture can be recorded at the desk
   ([dev/fixtures/README.md](dev/fixtures/README.md)).
