@@ -115,6 +115,8 @@ function invalidArguments(message: string): BridgeError {
 // name gets the policy's refusal and an audit line.
 const Name = z.string().max(256);
 const Filter = z.string().min(1).max(64);
+/** Per job; the agent clamps it to its own maximum. */
+const JobTimeout = z.number().int().min(1).max(60).optional().describe("Seconds each job may run, 1-60 (default: the agent's setting).");
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 /** Builds the McpServer and registers the tools. No transport is attached. */
@@ -294,12 +296,14 @@ export function buildServer(parts: ServerParts): McpServer {
       description:
         "Without `job`: list an ECU's (SGBD's) jobs with their descriptions and whether each is runnable through the " +
         "bridge (optionally filtered by name substring). With `job`: that job's description, arguments and results. " +
-        "`filter` is ignored when `job` is given. Use it to find job names and arguments; never guess them. Reads the SGBD " +
+        "`filter` is ignored when `job` is given. `namesOnly` lists names without reading descriptions: faster, but " +
+        "nothing is screened, so verdicts go by name only. Use it to find job names and arguments; never guess them. Reads the SGBD " +
         "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD; read-only.",
       inputSchema: {
         ecu: Name.describe("SGBD or group name, e.g. from ediabas_list_ecus."),
         job: Name.optional().describe("One job to describe."),
         filter: Filter.optional().describe("Case-insensitive substring of job names (job list only)."),
+        namesOnly: z.boolean().optional().describe("Job list only: names without descriptions (faster; not screened)."),
       },
       annotations: { title: "Describe an SGBD's jobs", ...READ_ONLY },
     },
@@ -312,8 +316,12 @@ export function buildServer(parts: ServerParts): McpServer {
             const d = await client.describeJob({ ecu: a.ecu, job: a.job });
             return formatDescribeJob(d, policy.evaluate({ ecu: a.ecu, job: a.job }));
           }
-          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter });
-          return formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
+          const namesOnly = a.namesOnly === true;
+          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
+          const text = formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
+          if (!namesOnly) return text;
+          const [head, ...rest] = text.split("\n");
+          return [head, "(names only: not screened, verdicts by name)", ...rest].join("\n");
         },
         { ecu: a.ecu, job: a.job ?? "(job list)" },
       ),
@@ -357,6 +365,7 @@ export function buildServer(parts: ServerParts): McpServer {
         args: z.string().max(1000).optional().describe("Job arguments, semicolon-separated."),
         results: z.string().max(1000).optional().describe("Result names to return, semicolon-separated."),
         raw: z.boolean().optional().describe("Return the agent's JSON instead of formatted text."),
+        timeoutSeconds: JobTimeout,
       },
       annotations: { title: "Run one EDIABAS read job", ...READ_ONLY },
     },
@@ -366,7 +375,7 @@ export function buildServer(parts: ServerParts): McpServer {
         async () => {
           const req = { ecu: a.ecu, job: a.job, args: a.args, results: a.results };
           policy.check(req);
-          const r = await client.runJob(req);
+          const r = await client.runJob({ ...req, timeoutSeconds: a.timeoutSeconds });
           onOk(a.ecu);
           return a.raw ? formatJobRaw(r) : formatJobResult(r);
         },
@@ -397,6 +406,7 @@ export function buildServer(parts: ServerParts): McpServer {
           .max(BATCH_MAX)
           .describe("The jobs to run, 1-20."),
         raw: z.boolean().optional().describe("Return the agent's JSON for each job instead of formatted text."),
+        timeoutSeconds: JobTimeout,
       },
       annotations: { title: "Run several EDIABAS read jobs", ...READ_ONLY },
     },
@@ -405,7 +415,7 @@ export function buildServer(parts: ServerParts): McpServer {
         "ediabas_jobs",
         async () => {
           const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
-          return (await runJobBatch({ client, policy, onOk }, items, { raw: a.raw })).text;
+          return (await runJobBatch({ client, policy, onOk }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
         },
         { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
       ),

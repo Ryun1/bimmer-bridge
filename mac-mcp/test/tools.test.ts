@@ -100,9 +100,10 @@ describe("tool list", () => {
       expect(t.title).toBeTruthy();
     }
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    expect(Object.keys(byName.ediabas_job!.inputSchema.properties ?? {}).sort()).toEqual(["args", "ecu", "job", "raw", "results"]);
+    expect(Object.keys(byName.ediabas_job!.inputSchema.properties ?? {}).sort()).toEqual(["args", "ecu", "job", "raw", "results", "timeoutSeconds"]);
     expect(Object.keys(byName.ediabas_read_faults!.inputSchema.properties ?? {}).sort()).toEqual(["ecus", "includeInfoMemory"]);
-    expect(Object.keys(byName.ediabas_jobs!.inputSchema.properties ?? {}).sort()).toEqual(["jobs", "raw"]);
+    expect(Object.keys(byName.ediabas_jobs!.inputSchema.properties ?? {}).sort()).toEqual(["jobs", "raw", "timeoutSeconds"]);
+    expect(Object.keys(byName.ediabas_describe!.inputSchema.properties ?? {}).sort()).toEqual(["ecu", "filter", "job", "namesOnly"]);
     expect(Object.keys(byName.vm_logs_read!.inputSchema.properties ?? {}).sort()).toEqual(["grep", "length", "offset", "path", "tailBytes"]);
     expect(Object.keys(byName.vm_screenshot!.inputSchema.properties ?? {}).sort()).toEqual(["maxEdge", "window"]);
   });
@@ -608,6 +609,33 @@ describe("ediabas_job", () => {
       expect(r.text).toMatch(/may have run in the VM\. It was not sent again/);
       expect(agent.requests.filter((q) => q.path === path)).toHaveLength(1);
     }
+  });
+});
+
+describe("timeoutSeconds and namesOnly", () => {
+  it("ediabas_job passes timeoutSeconds, 1 to 60", async () => {
+    const { call } = await connect();
+    await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 45 });
+    expect(JSON.parse(toolRequests()[0]!.body)).toEqual({ ecu: "NVE_65", job: "IDENT", timeoutSeconds: 45 });
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 61 })).isError).toBe(true);
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 0 })).isError).toBe(true);
+    expect(toolRequests()).toHaveLength(1);
+  });
+
+  it("ediabas_jobs passes timeoutSeconds for each item, as the agent's request field", async () => {
+    const { call } = await connect();
+    await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 20 });
+    expect(JSON.parse(toolRequests()[0]!.body)).toEqual({ items: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 20 });
+    expect((await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 61 })).isError).toBe(true);
+  });
+
+  it("ediabas_describe with namesOnly asks for no comments and says what that means", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_describe", { ecu: "NVE_65", namesOnly: true });
+    expect(new URL(toolRequests()[0]!.path, "http://x").searchParams.get("comments")).toBe("false");
+    expect(r.text.split("\n")[1]).toBe("(names only: not screened, verdicts by name)");
+    await call("ediabas_describe", { ecu: "NVE_65" });
+    expect(new URL(toolRequests()[1]!.path, "http://x").searchParams.has("comments")).toBe(false);
   });
 });
 

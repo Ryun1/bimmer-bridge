@@ -369,7 +369,8 @@ export class AgentClient {
     return this.json({ method: "GET", path: "/ediabas/ecus", query: { filter }, ediabas: true }, EcusSchema);
   }
 
-  describeJobs(q: { ecu: string; filter?: string | undefined }): Promise<DescribeList> {
+  /** `comments: false`: names only, no `_JOBCOMMENTS` per job (verdicts then say `not_checked`). */
+  describeJobs(q: { ecu: string; filter?: string | undefined; comments?: boolean | undefined }): Promise<DescribeList> {
     return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeListSchema);
   }
 
@@ -381,7 +382,13 @@ export class AgentClient {
     return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
   }
 
-  runJob(body: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }): Promise<JobResult> {
+  runJob(body: {
+    ecu: string;
+    job: string;
+    args?: string | undefined;
+    results?: string | undefined;
+    timeoutSeconds?: number | undefined;
+  }): Promise<JobResult> {
     return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true, runsJob: true }, JobResultSchema);
   }
 
