@@ -568,7 +568,10 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
     zip_path = Path(release_dir) / ZIP_NAME
     if zip_path.is_file():
         sha = sha256_file(zip_path)
-        lines += ["", "Install:"] + line("install.ps1", sha)
+        # install.ps1 sends the token on a first install, or when told to: only when this run
+        # will take it.
+        send_token = "$SendToken=$true" if accept_token else ""
+        lines += ["", "Install:"] + line("install.ps1", sha, send_token)
         lines += ["Update:"] + line("update.ps1", sha)
     else:
         lines += ["", "(release/%s not built; install/update lines not shown)" % ZIP_NAME]

@@ -7,6 +7,8 @@
 # Optional variables set before it on the same line:
 #   $base     server URL (default http://<IPv4 default gateway>:8000)
 #   $Elevated $true to run the agent with highest privileges (default: limited)
+#   $SendToken $true to send the existing token to the Mac (serve.py --accept-token sets it);
+#             a first install always sends it. The token is never printed.
 #
 # Idempotent: re-running upgrades in place. config.json and token.txt are kept if present.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
@@ -278,6 +280,7 @@
         $base = ([string]$base).TrimEnd('/')
         $elevatedVar = Get-OptionalVar 'Elevated'
         $runElevated = ($elevatedVar -eq $true)
+        $sendToken = ((Get-OptionalVar 'SendToken') -eq $true)
 
         $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
         $userName = $identity.Name
@@ -454,17 +457,19 @@
             }
         }
 
-        # ---- 11. token hand-off (every run) ----
-        # serve.py accepts PUT /token only when started with --accept-token; otherwise it answers 403.
-        Write-Step 'Sending the token to the Mac'
-        $put = Invoke-Http 'PUT' ($base + '/token') $null $token 10000
-        if ($put.Status -ge 200 -and $put.Status -lt 300) {
-            Write-Note "token stored in the Mac's Keychain"
-        } elseif ($firstInstall) {
-            Write-Warn ('Could not send the token to the Mac (HTTP ' + $put.Status + '). Run this once on the Mac:')
-            Write-Host ("security add-generic-password -U -s ediabas-bridge -a agent -w '" + $token + "'")
+        # ---- 11. token hand-off (first install, or $SendToken) ----
+        # serve.py accepts PUT /token only when started with --accept-token, and then puts
+        # $SendToken=$true on the Install line. The token is never printed.
+        if ($firstInstall -or $sendToken) {
+            Write-Step 'Sending the token to the Mac'
+            $put = Invoke-Http 'PUT' ($base + '/token') $null $token 10000
+            if ($put.Status -ge 200 -and $put.Status -lt 300) {
+                Write-Note "token stored in the Mac's Keychain"
+            } else {
+                Write-Warn ('Could not send the token to the Mac (HTTP ' + $put.Status + '). On the Mac, start: python3 dev/serve.py --accept-token, then paste the Install line it prints again.')
+            }
         } else {
-            Write-Note ('The token was not sent to the Mac (HTTP ' + $put.Status + '). To re-send it, start serve.py on the Mac with --accept-token and run the install line again.')
+            Write-Note 'The token was not sent to the Mac. To send it, start serve.py on the Mac with --accept-token and paste the Install line it prints.'
         }
         $token = $null
 

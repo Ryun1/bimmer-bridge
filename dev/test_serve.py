@@ -595,6 +595,24 @@ class Startup(unittest.TestCase):
             line.encode("ascii")
         self.assertIn("$KeepData=$true; ", "\n".join(lines))
 
+    def test_install_line_sends_the_token_only_with_accept_token(self):
+        # install.ps1 sends the token on a first install, or when $SendToken is true; serve.py
+        # sets it only when it will take the token, so a re-install does not send it for nothing.
+        (self.release / "EdiabasAgent.zip").write_bytes(b"zip")
+        plain = self.lines()
+        self.assertNotIn("SendToken", "\n".join(plain))
+        accepting = self.lines(accept_token=True)
+        self.assertTrue(self.line_for(accepting, "install.ps1").startswith(
+            "  $SendToken=$true; $base='http://192.168.64.1:8000'; "))
+        for script in ("discover.ps1", "update.ps1", "uninstall.ps1"):
+            self.assertNotIn("SendToken", self.line_for(accepting, script))
+
+    def test_install_script_never_prints_the_token(self):
+        text = (serve.REPO_ROOT / "vm-setup" / "install.ps1").read_text(encoding="ascii")
+        self.assertNotIn("add-generic-password", text)
+        self.assertNotIn("-w '", text)
+        self.assertIn("'SendToken'", text)
+
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
 
