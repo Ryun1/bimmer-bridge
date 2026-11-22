@@ -76,14 +76,16 @@ neither, the server still starts and each tool says how to store the token.
 read**, so the VM agent's token is never sent to an address set by hand (the replay agent in
 `dev/`, or a mistyped URL). Without `EDIABAS_AGENT_TOKEN` every tool then fails with
 `no_token`, saying why, and a 401 says the `EDIABAS_AGENT_TOKEN` value is wrong (not the
-Keychain's). After a 401 the
-token is re-read once, so a newly stored token is picked up without a restart.
+Keychain's). When the `/hello` proof does not match, the token is re-read once and the proof
+checked again; after a 401 it is re-read for the next call, which proves the address with it
+before sending it. Either way a newly stored token is picked up without a restart, and a token
+is only ever sent to an address that proved it holds that same token.
 
 ## Environment (all optional)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/health` agent check still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
+| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/hello` proof still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
 | `EDIABAS_AGENT_PORT` | `8765` | port used with a discovered address |
 | `EDIABAS_VM_MAC` | read from UTM | the VM's MAC address; when unset, read from UTM's config for the VM (see Finding the VM) |
 | `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl`, messages and finding the VM's MAC in UTM's config |

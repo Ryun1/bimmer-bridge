@@ -17,6 +17,7 @@ import {
   wrongService,
 } from "./errors.js";
 import type { ExchangeRecorder } from "./recorder.js";
+import { helloKey } from "./token.js";
 import { VmLocator, bridgeSubnets, hostPort, isOnLink, type CallContext, type DiscoverySources } from "./vmAddress.js";
 
 export const AGENT_ID = "ediabas-bridge-agent";
@@ -214,8 +215,6 @@ function isAgentErrorBody(body: string): boolean {
 export interface TokenSource {
   get(): Promise<string>;
   refresh(): Promise<string>;
-  /** SHA-256 of the current token: the key of the `/hello` proof. */
-  helloKey(): Promise<Buffer>;
 }
 
 export interface AgentClientOptions {
@@ -498,8 +497,9 @@ export class AgentClient {
       // An EDIABAS call that timed out may still be running in the VM: never send it twice.
       if (!first.fromCache || (spec.ediabas && e.kind === "timeout")) throw this.connectionError(e, first.baseUrl);
     }
-    // The cached address stopped answering: resolve once more, then give up.
-    const second = await this.locator.resolve(ctx);
+    // The cached address stopped answering: find and prove it once more, then give up.
+    ctx.proven = undefined;
+    const second = await this.resolveProven(ctx);
     try {
       return await this.request(second.baseUrl, spec, ctx, parse);
     } catch (e) {
@@ -512,24 +512,33 @@ export class AgentClient {
   }
 
   /**
-   * The address for this call, proved with `/hello` before any Bearer request (decision D5).
-   * Discovery proves each candidate itself; a cached address is proved again on every call, as
-   * another service may hold it now. If that fails, the cache is dropped and discovery runs,
+   * The address for this call, proved with `/hello` in this call before any Bearer request
+   * (decision D5). Discovery run by this call proves each candidate itself. Anything else (the
+   * cache, or a discovery another call ran) is proved here, as another service may hold that
+   * address now. If that fails, the cache is dropped and the address found and proved again,
    * so the token never goes to the old address. Nothing was sent with the token here, so a
    * failure at this step never makes a job request "may have run".
    */
   private async resolveProven(ctx: CallContext): Promise<{ baseUrl: string; fromCache: boolean }> {
     const target = await this.locator.resolve(ctx);
-    if (!target.fromCache) return target;
+    if (ctx.proven?.baseUrl === target.baseUrl) return target;
     try {
       await this.probe(target.baseUrl, ctx);
       return target;
     } catch (e) {
       if (!(e instanceof BridgeError) || e.code === "no_token") throw e;
-      this.log(`cached address ${hostPort(target.baseUrl)} did not prove it is the agent (${e.code}); finding the agent again`);
+      this.log(`${target.fromCache ? "cached address" : "address"} ${hostPort(target.baseUrl)} did not prove it is the agent (${e.code}); finding the agent again`);
       this.locator.invalidate();
-      return this.locator.resolve(ctx);
     }
+    const again = await this.locator.resolve(ctx);
+    if (ctx.proven?.baseUrl === again.baseUrl) return again;
+    try {
+      await this.probe(again.baseUrl, ctx);
+    } catch (e) {
+      if (e instanceof BridgeError && e.code !== "no_token") this.locator.invalidate();
+      throw e;
+    }
+    return again;
   }
 
   /**
@@ -570,7 +579,7 @@ export class AgentClient {
   private async probe(baseUrl: string, ctx: CallContext): Promise<void> {
     const where = hostPort(baseUrl);
     // Read first: without a token there is nothing to check the proof against (no_token).
-    let key = await this.opts.tokens.helloKey();
+    let token = await this.opts.tokens.get();
     const nonce = randomBytes(16).toString("hex");
     const spec: RequestSpec = { method: "GET", path: "/hello", query: { nonce }, anonymous: true };
     let res: RawResponse;
@@ -588,7 +597,7 @@ export class AgentClient {
       // An agent older than /hello checks the token before the path, so it answers 401.
       if (res.status === 401) throw agentOutdated(spec.path);
       // Nothing was sent with the token, but the message is still redacted like any other.
-      throw this.httpError(res.status, body, await this.opts.tokens.get(), spec);
+      throw this.httpError(res.status, body, token, spec);
     }
     let parsed: unknown;
     try {
@@ -603,13 +612,17 @@ export class AgentClient {
       throw wrongService(baseUrl);
     }
     const proof = hello.data.proof;
-    if (proofMatches(proof, key, nonce)) return;
+    let matched = proofMatches(proof, helloKey(token), nonce);
     // The token may have just been installed: re-read it once per tool call and check again.
-    if (!ctx.tokenRefreshed) {
+    if (!matched && !ctx.tokenRefreshed) {
       ctx.tokenRefreshed = true;
-      await this.opts.tokens.refresh();
-      key = await this.opts.tokens.helloKey();
-      if (proofMatches(proof, key, nonce)) return;
+      token = await this.opts.tokens.refresh();
+      matched = proofMatches(proof, helloKey(token), nonce);
+    }
+    if (matched) {
+      // This exact token, and only to this address, is what the call may now send.
+      ctx.proven = { baseUrl, token };
+      return;
     }
     this.log(`probe ${where} failed: the proof does not match this Mac's token`);
     throw unprovenAgent(where, this.opts.config.agentUrl !== undefined);
@@ -629,12 +642,17 @@ export class AgentClient {
   }
 
   /**
-   * One request, authenticated unless `spec.anonymous`. After the agent's 401 the token is
-   * re-read (it may have just been installed) and the request repeated, at most once per tool
-   * call; a 401 not in the agent's error shape is not answered with another token.
+   * One request, unauthenticated if `spec.anonymous`, else with the token this call proved at
+   * this address (`ctx.proven`), never another. After the agent's 401 the token is re-read for
+   * the next call (it may have just been installed; that call proves the address with it
+   * first), but nothing is re-sent with it now: the address proved only the old one.
    */
   private async send(baseUrl: string, spec: RequestSpec, ctx: CallContext, timeoutMs: number, label: "probe" | "request"): Promise<RawResponse> {
-    let token = spec.anonymous ? "" : await this.opts.tokens.get();
+    let token = "";
+    if (!spec.anonymous) {
+      if (ctx.proven?.baseUrl !== baseUrl) throw new BridgeError("internal_error", "Internal error: a request was about to go to an address that did not prove it is the agent. Nothing was sent.");
+      token = ctx.proven.token;
+    }
     const attempt = async (t: string) => {
       try {
         return await this.fetchOnce(baseUrl, spec, t, timeoutMs);
@@ -646,14 +664,11 @@ export class AgentClient {
         throw e;
       }
     };
-    let res = await attempt(token);
+    const res = await attempt(token);
     if (res.status === 401 && !spec.anonymous && !ctx.tokenRefreshed && isAgentErrorBody(Buffer.from(res.bytes).toString("utf8"))) {
       ctx.tokenRefreshed = true;
-      const fresh = await this.opts.tokens.refresh();
-      if (fresh !== token) {
-        token = fresh;
-        res = await attempt(token);
-      }
+      // For the next call only. A missing token then shows up there as no_token.
+      await this.opts.tokens.refresh().catch(() => undefined);
     }
     return { ...res, token };
   }

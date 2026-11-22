@@ -42,7 +42,7 @@ function staticTokens(token: string | null = AGENT_TOKEN): TokenSource & { refre
     if (token === null) throw new BridgeError("no_token", MESSAGES.noToken);
     return token;
   };
-  return { get: vi.fn(read), refresh: vi.fn(read), helloKey: async () => sha256(await read()) };
+  return { get: vi.fn(read), refresh: vi.fn(read) };
 }
 
 /** A token source whose value can change (a token installed while the server runs). */
@@ -54,7 +54,6 @@ function changingTokens(initial: string, next: string): TokenSource & { refresh:
       current = next;
       return current;
     }),
-    helloKey: async () => sha256(current),
   };
 }
 
@@ -241,14 +240,54 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     expect(e.message).not.toContain(AGENT_TOKEN);
   });
 
-  it("retries with a freshly installed token after a 401", async () => {
-    // /hello still proves the old token; the VM's token changed right after.
-    const a = await fake((req, res) => (answerHello(req, res, "stale-token") ? undefined : contractHandler("fresh-token")(req, res)));
+  it("after a 401 a newly read token is not sent to an address that proved only the old one", async () => {
+    // The agent proves stale-token at /hello, then its token changes before the Bearer request.
+    let agentToken = "stale-token";
+    const a = await fake((req, res) => {
+      if (answerHello(req, res, agentToken)) {
+        agentToken = "fresh-token";
+        return;
+      }
+      contractHandler(agentToken)(req, res);
+    });
     const tokens = changingTokens("stale-token", "fresh-token");
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
-    const w = await client.listWindows();
-    expect(w.windows).toHaveLength(2);
+    expect((await errorOf(client.listWindows())).code).toBe("unauthorized");
+    // the provider was re-read, but nothing went out with the new token in this call
     expect(tokens.refresh).toHaveBeenCalledTimes(1);
+    expect(a.requests.map((r) => r.authorization)).toEqual([undefined, "Bearer stale-token"]);
+  });
+
+  it("the call after a 401 proves the address with the re-read token, then sends it", async () => {
+    let agentToken = "stale-token";
+    let rotate = true;
+    const a = await fake((req, res) => {
+      if (answerHello(req, res, agentToken)) {
+        if (rotate) agentToken = "fresh-token";
+        rotate = false;
+        return;
+      }
+      contractHandler(agentToken)(req, res);
+    });
+    const tokens = changingTokens("stale-token", "fresh-token");
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
+    expect((await errorOf(client.listWindows())).code).toBe("unauthorized");
+    expect((await client.listWindows()).windows).toHaveLength(2);
+    expect(a.requests.map((r) => `${r.path.split("?")[0]} ${r.authorization ?? "none"}`)).toEqual([
+      "/hello none",
+      "/windows Bearer stale-token",
+      "/hello none",
+      "/windows Bearer fresh-token",
+    ]);
+  });
+
+  it("each call proves the address itself, even when it joins another call's discovery", async () => {
+    const a = await fake();
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    const [w1, w2] = await Promise.all([client.listWindows(), client.listWindows()]);
+    expect(w1.windows).toHaveLength(2);
+    expect(w2.windows).toHaveLength(2);
+    expect(a.requests.filter((r) => r.path.startsWith("/hello?"))).toHaveLength(2);
   });
 
   it("maps 403 to the firewall message", async () => {

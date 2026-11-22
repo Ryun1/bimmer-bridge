@@ -21,6 +21,14 @@ export interface TokenProviderOptions {
 
 const SECURITY = "/usr/bin/security";
 
+/**
+ * The key of the agent's `/hello` proof (docs/api.md): SHA-256 of the token's UTF-8 bytes.
+ * Taken from one exact token, so the token that passed the proof is the one that is sent.
+ */
+export function helloKey(token: string): Buffer {
+  return createHash("sha256").update(token, "utf8").digest();
+}
+
 /** no_token when EDIABAS_AGENT_URL is set without EDIABAS_AGENT_TOKEN. */
 export function noTokenForOverride(): BridgeError {
   return new BridgeError(
@@ -72,14 +80,6 @@ export class TokenProvider {
     this.seen.add(token);
     this.cached = token;
     return token;
-  }
-
-  /**
-   * The key of the agent's `/hello` proof (docs/api.md): SHA-256 of the token's UTF-8 bytes.
-   * Throws `no_token` like `get()`.
-   */
-  async helloKey(): Promise<Buffer> {
-    return createHash("sha256").update(await this.get(), "utf8").digest();
   }
 
   /** Replace every token value this provider has handed out with "[redacted]". */

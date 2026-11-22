@@ -241,11 +241,17 @@ export function hostPort(baseUrl: string): string {
 /** Per-tool-call state shared between discovery and the request (one token re-read per call). */
 export interface CallContext {
   tokenRefreshed: boolean;
+  /**
+   * The address that proved itself in this call, and the exact token whose key its `/hello`
+   * proof matched: the only token this call sends, and only to that address.
+   */
+  proven?: { baseUrl: string; token: string } | undefined;
 }
 
 /**
- * Checks one candidate: resolves when `GET /health` there returns 200 with the right `agent`
- * value; otherwise rejects with a classified BridgeError.
+ * Checks one candidate: resolves when `GET /hello` there (fresh nonce, no token) returns 200
+ * with the right `agent` value and a proof that matches this Mac's token, and records the
+ * address and token in `ctx.proven`; otherwise rejects with a classified BridgeError.
  */
 export type ProbeFn = (baseUrl: string, ctx: CallContext) => Promise<void>;
 
