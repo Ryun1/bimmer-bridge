@@ -22,6 +22,21 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    // The C ABI (include/kline.h) as a shared library, for ediabasd's P/Invoke.
+    const capi_mod = b.createModule(.{
+        .root_source_file = b.path("src/capi.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{.{ .name = "kline", .module = mod }},
+    });
+    const shared = b.addLibrary(.{
+        .name = "kline",
+        .linkage = .dynamic,
+        .root_module = capi_mod,
+    });
+    b.installArtifact(shared);
+
     const exe = b.addExecutable(.{
         .name = "kline",
         .root_module = b.createModule(.{
@@ -45,6 +60,8 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+    const capi_tests = b.addTest(.{ .root_module = capi_mod });
+    test_step.dependOn(&b.addRunArtifact(capi_tests).step);
 
     // Compiles (does not run) the tests for Linux. The constant tests check every hand-declared
     // value at compile time against the kernel headers Zig ships, so this verifies the Linux

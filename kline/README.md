@@ -1,8 +1,8 @@
 # kline
 
-The cable layer of the native engine: a Zig library (`Port`) for the K+DCAN cable (FTDI FT232R,
-USB `0403:6001`) on macOS and Linux, and a `kline` CLI for bringing the cable up at a desk.
-M0 has no C ABI, frame gate or recorder yet; those come in M1.
+The cable layer of the native engine: a Zig library for the K+DCAN cable (FTDI FT232R, USB
+`0403:6001`) on macOS and Linux, its C ABI (`libkline`, used by `ediabasd`), and a `kline` CLI
+for bringing the cable up at a desk.
 
 **Never run `kline` with the cable plugged into a car.** `probe` toggles DTR and holds a
 25 ms break on the K-line, and a break is how a fast-init wake-up starts. `loopback` is for a
@@ -17,7 +17,7 @@ cd kline
 zig build test          # unit tests (pty-based; nothing touches a real device)
 zig build check-linux   # from a Mac: type-check the Linux tests, verifying every
                         # hand-declared Linux constant against the kernel headers
-zig build               # zig-out/bin/kline and zig-out/lib/libkline.a
+zig build               # zig-out/bin/kline, zig-out/lib/libkline.a and libkline.dylib (.so on Linux)
 ```
 
 ## Commands
@@ -81,3 +81,31 @@ never taken from the environment, so a run under `sudo` or from another session 
 lock. It is an `flock`, released by the kernel when its holder exits, so a lock file left by a
 crashed run never blocks the next open. Root bypasses the device's own exclusive-access flag
 (`TIOCEXCL`) on both macOS and Linux; the lock file still applies.
+
+## C ABI (`include/kline.h`)
+
+One handle per open cable, or per replayed recording. Every call returns a reason
+(`KLINE_OK`, `KLINE_NO_DEVICE`, … `KLINE_UNSUPPORTED`); `kline_last_error` gives the last
+failure's reason, and `ediabasd` turns it into a bridge error (`cable_not_found`,
+`cable_in_use`, `cable_unsupported`, `cable_permission`, `frame_refused`).
+
+- **Frame gate** (`src/gate.zig`). Every send is checked against the concept the SGBD declared
+  with `kline_set_concept`. It fails closed: no concept, or one other than BMW-FAST (0x010F),
+  KWP2000\* (0x010D), KWP2000 BMW (0x010C), DS2 (0x0006) or D-CAN (0x0110), refuses every
+  send. Under the header concepts it refuses service IDs 0x10 (except the default session),
+  0x11, 0x14, 0x27–0x29, 0x2E, 0x2F, 0x30–0x37, 0x3B, 0x3D and 0x85, and every `F1→F1` adapter
+  command except the FA/FD/FE reads. The first refusal **latches**: every later send fails until
+  `kline_close`.
+- **Inter-byte time.** With `kline_set_interbyte(ms)` the bytes of one send are paced as
+  EdiabasLib paces them (one byte time plus the inter-byte time per byte), so the gate always
+  sees whole telegrams.
+- **Cancel.** `kline_cancel(k, 1)` makes a blocked send or receive return `KLINE_CANCELLED`
+  within about 10 ms; `kline_cancel(k, 0)` clears it.
+- **Recorder.** With a record directory, every line setting, modem-line and break edge,
+  concept, byte sent or received, purge and refusal goes to a JSON-lines file
+  (`src/recording.zig` lists the events). Recordings can hold a VIN and other identifiers;
+  keep them local unless scrubbed.
+- **Replay.** `kline_open_replay` opens a recording in place of the cable: each send must match
+  the next recorded send, and receive returns the bytes recorded after it. A different send, or
+  one past the end, is `KLINE_REPLAY_MISMATCH`, and so is every send after it. Nothing ever
+  falls back to a device.
