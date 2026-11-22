@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); section 7 tests pass on Linux in a container, its hardware half still open; section 8 skipped; section 9 decided (2026-11-22).
+Status: **M0 closed (2026-11-22).** Sections 1–5 and 9 done; section 6 deferred to the start of M2 (no bench supply); section 7's tests pass on Linux in a container, and Linux hardware support is deferred (Ryan, 2026-11-22); section 8 skipped.
 
 ---
 
@@ -315,6 +315,8 @@ On a Linux machine (a UTM Linux VM with the cable passed through is fine), with 
 | `kline list` | runs, finds no cable (none reachable from the container) |
 | `kline probe` (paste below) | not run on hardware |
 | Loopback latency 1 / 16 (min/median/max) | not run (no bench supply) |
+
+**Linux support is deferred (Ryan, 2026-11-22);** the hardware half below waits until it is picked up again.
 
 **Partly done (2026-11-22), in a Docker container, not with the cable.** Debian bookworm,
 linux/arm64, kernel 6.6.12-linuxkit, the official Zig 0.16.0 (SHA-256 checked), the code
