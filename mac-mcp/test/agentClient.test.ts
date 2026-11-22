@@ -730,6 +730,86 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
     ]);
   });
 
+  describe("connect timeout (the TCP handshake never completed) against ETIMEDOUT", () => {
+    /** `path` fails once with `code`, then answers. */
+    function failOnce(path: string, code: string, body: unknown) {
+      let fail = false;
+      const c = makeClient({
+        fetch: vi.fn(async (url) => {
+          const u = String(url);
+          if (fail && u.endsWith(path)) {
+            fail = false;
+            throw connError(code);
+          }
+          if (u.endsWith(path)) return okResponse(body);
+          return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        }),
+        leases: LEASES,
+      });
+      return { ...c, arm: () => (fail = true) };
+    }
+
+    it("POST /ediabas/job after UND_ERR_CONNECT_TIMEOUT: the address is resolved again and the job sent once more", async () => {
+      const { client: c, fetchFn, arm } = failOnce("/ediabas/job", "UND_ERR_CONNECT_TIMEOUT", JOB);
+      await c.listWindows();
+      arm();
+      const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
+      expect(r.job).toBe("IDENT");
+      expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/ediabas/job", // never connected
+        "http://192.168.64.3:8765/health",
+        "http://192.168.64.3:8765/ediabas/job",
+      ]);
+    });
+
+    it("POST /ediabas/job after ETIMEDOUT: not re-sent, may have run", async () => {
+      const { client: c, fetchFn, arm } = failOnce("/ediabas/job", "ETIMEDOUT", JOB);
+      await c.listWindows();
+      arm();
+      const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
+      expect(e.code).toBe("ediabas_request_lost");
+      expect(calledUrls(fetchFn).slice(2)).toEqual(["http://192.168.64.3:8765/ediabas/job"]);
+    });
+
+    it("a connect timeout right after discovery is not reported as possibly run", async () => {
+      const { client: c, arm } = failOnce("/ediabas/job", "UND_ERR_CONNECT_TIMEOUT", JOB);
+      arm();
+      const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
+      expect(e.code).not.toBe("ediabas_request_lost");
+      expect(e.message).not.toMatch(/may have run/);
+    });
+
+    it.each(["UND_ERR_CONNECT_TIMEOUT", "ETIMEDOUT"])("GET /windows after %s: resolved again and re-sent", async (code) => {
+      const { client: c, fetchFn, arm } = failOnce("/windows", code, windowsBody());
+      await c.listWindows();
+      arm();
+      expect((await c.listWindows()).windows).toHaveLength(2);
+      expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/windows",
+        "http://192.168.64.3:8765/health",
+        "http://192.168.64.3:8765/windows",
+      ]);
+    });
+
+    it("the VM came back on a new address: the next job call finds it", async () => {
+      let vmIp = "192.168.64.3";
+      const fetchMock = vi.fn<typeof fetch>(async (url) => {
+        if (!String(url).includes(`${vmIp}:`)) throw connError("UND_ERR_CONNECT_TIMEOUT");
+        if (String(url).endsWith("/ediabas/job")) return okResponse(JOB);
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      });
+      const c = makeClient({ fetch: fetchMock, leases: LEASES });
+      await c.client.listWindows();
+      vmIp = "192.168.64.4";
+      c.readFile.mockImplementation(async () => leaseFile({ ip: vmIp, lease: 0x6b01baf5 }));
+      expect((await c.client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
+      expect(calledUrls(c.fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toEqual([
+        "http://192.168.64.3:8765/ediabas/job",
+        "http://192.168.64.4:8765/ediabas/job",
+      ]);
+    });
+  });
+
   it("plain GETs that do not touch the cable are still re-sent after a reset", async () => {
     for (const [path, run] of [
       ["/windows", (c: AgentClient) => c.listWindows()],

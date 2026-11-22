@@ -234,7 +234,10 @@ function classify(e: unknown): ConnectionFailure {
   if (err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout", "TimeoutError");
   const code = String(err?.cause?.code ?? err?.code ?? "");
   const detail = code || err?.cause?.name || name || "unknown";
-  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
+  // A connect timeout means the TCP handshake never completed: nothing was sent, and the VM may
+  // be on another address now. ETIMEDOUT can also come after the request was written.
+  if (code === "UND_ERR_CONNECT_TIMEOUT") return new ConnectionFailure("unreachable", detail, true);
+  if (code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
   if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
   // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
   // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
