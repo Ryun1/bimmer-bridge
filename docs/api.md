@@ -68,7 +68,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -288,7 +288,10 @@ longer holds is `job_needs_review`:
   it again in the agent config."
 - "{JOB} has no description now, so its approval cannot be checked. The user can approve it again
   in the agent config."
-- "The description of {JOB} could not be read, so its approval cannot be checked."
+
+A description that cannot be read keeps its own failure, as for an unpinned job: an EDIABAS error
+there (often a module that does not answer, e.g. IFH-0009) is `ediabas_error`, and the job is not
+run.
 
 **No restart.** At the start of every EDIABAS request, and before it answers `/health`, the
 agent re-reads `reviewedJobs`, and nothing else, from config.json. A file that is missing,
@@ -335,7 +338,7 @@ EDIABAS request has arrived for `ediabasIdleReleaseSeconds` (agent config, defau
 loaded right now.
 
 **A job that does not stop.** A job still busy at its timeout (or when the client gives up) is
-stopped with `apiBreak`. If `apiState` still says busy 2 s later, the agent starts no further
+stopped with `apiBreak`. If `apiState` still says busy 10 s later, the agent starts no further
 job in that request and from then on leaves EDIABAS alone until it is restarted: no `apiEnd` on
 that handle (it could block for good), no idle release of `api32.dll` (it could unload code
 under the running job), and every later request that would use EDIABAS gets 503
@@ -392,7 +395,7 @@ Body `{ "ecu": "NVE_65", "job": "FS_LESEN", "args": "", "results": "", "timeoutS
 `args`, `results` and `timeoutSeconds` are optional. `timeoutSeconds` defaults to the config's
 `jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. With a `maxJobTimeoutSeconds`
 above 60 the agent does not start serving (it keeps running, logs why and re-reads the config
-every 30 s): a request can last that long plus the 2 s `apiBreak` grace, and
+every 30 s): a request can last that long plus the 10 s `apiBreak` grace, and
 the Mac stops waiting for an EDIABAS call after 75 s.
 
 200:

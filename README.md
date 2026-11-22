@@ -64,27 +64,24 @@ already talk to the car. Full steps: [docs/install.md](docs/install.md#setup-fro
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.6.1, job policy version 4, eleven MCP tools. Built and tested at the desk; **nothing
+Version 0.6.2, job policy version 4, eleven MCP tools. Built and tested at the desk; **nothing
 from 0.3.0 on has been run at the car.**
 
-### What changed in 0.6.1
+### What changed in 0.6.2
 
-Hardening for the first session at the car, from a desk rehearsal of the at-the-car sequence
-(2026-11-22, cable in the VM, not in the car). Only the Mac server changed; the agent is
-rebuilt for the version number.
+From a review of the EDIABAS path ahead of the first session at the car (Phase 6).
 
-- **`ediabas_error` advice by EDIABAS code** (code table from EdiabasLib, checked against every
-  code seen at the desk): the cable codes (`IFH-0002`, `IFH-0003`), low or wrong battery voltage,
-  a module that did not answer (`IFH-0009`), a disturbed answer, ignition off and `SYS-0010` each
-  say what to check. Cable, voltage and ignition codes no longer send Claude to
-  `ediabas_vehicle_status`, and no `IFH-` code suggests a wrong job name.
-- **`ediabas_vehicle_status` says its battery and KL30 readings come from the cable**: with no
-  car connected they read `STAT_UBATT=1` and KL30 12000. Only a voltage source (a module) shows
-  the car is awake. Fixture `dev/fixtures/no-car`.
-- **The recording server runs on Node 26**, which removed `--experimental-transform-types`:
-  `mac-mcp/src` and `dev/` now use only syntax Node can strip (`erasableSyntaxOnly`).
-- `docs/at-the-car.md` has the tested commands to register the recording server (the name goes
-  before `-e`) and a check that the folder fills.
+- **A job gets 10 s to stop after `apiBreak`** (was 2 s) before the agent treats EDIABAS as
+  stuck until a restart. A job on the car's line may act on a break only between steps; 60 s
+  plus 10 s still ends inside the Mac's 75 s.
+- **A pinned approval whose description cannot be read is the EDIABAS error** (for example
+  `IFH-0009`, a module that does not answer), as for an unpinned job, not `job_needs_review`.
+  The job is still not run.
+- `docs/at-the-car.md`: record the evals' own calls by typing their prompts at the car (the
+  replay agent needs an exact match); describe the engine group with the ignition on; run each
+  functional job on its own with `timeoutSeconds: 60` once EDIABAS is loaded; name only modules
+  that answered in `ediabas_read_faults`. The skill says the same for functional jobs.
+- Eval 01 no longer needs a fault with a mileage: `NVE_65` `FS_LESEN` declares none.
 
 Open: the at-the-car checks ([docs/at-the-car.md](docs/at-the-car.md)), evals 01, 03 and 06
 (they need fixtures recorded at the car), and a run without the skills that does worse for evals

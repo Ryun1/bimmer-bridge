@@ -85,7 +85,7 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
   `ediabasIdleReleaseSeconds` (default 20) have passed since the last EDIABAS request, then
   unloads the DLL. The next request loads it again (about 10 s in this VM). The unload happens
   on the same thread, never during a request.
-- **A job that does not stop.** If a job is still busy 2 s after `apiBreak`, the agent starts
+- **A job that does not stop.** If a job is still busy 10 s after `apiBreak` (a job on the car's line may act on it only between steps), the agent starts
   no further job and leaves EDIABAS alone until it restarts: no `apiEnd` on that handle, no
   unload, and every later EDIABAS request is refused with `ediabas_unavailable`. `/health`
   reports `ediabas.stuck: true`. Restarting Windows restarts the agent.

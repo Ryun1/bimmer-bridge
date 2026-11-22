@@ -336,6 +336,18 @@ public class EdiabasReleaseAndCableTests
     }
 
     [Fact]
+    public void JobThatTakesSecondsToStopAfterBreak_IsNotStuck()
+    {
+        // A job on the car's line may act on apiBreak only between steps: 5 s to stop is not stuck.
+        _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true, BusyPollsAfterBreak = 5000 / EdiabasService.PollIntervalMs });
+        var svc = Service();
+        Assert.Equal("job_timeout", IdentWithTimeout(svc).Failure!.Error.Code);
+
+        Assert.Equal(1, _api.Count("End"));
+        Assert.False(_dll.Stuck);
+    }
+
+    [Fact]
     public void JobThatStopsAfterBreak_IsNotStuck()
     {
         _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true });

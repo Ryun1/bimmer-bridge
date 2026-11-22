@@ -74,6 +74,10 @@ turns it on.
    on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
+   Run each functional job as its own `ediabas_job` with `timeoutSeconds: 60`, after an
+   earlier call has loaded EDIABAS (`ediabas_vehicle_status`): a request gets at most 60 s,
+   and how long these take on a car is not yet measured. Then name only the modules that
+   answered in `ediabas_read_faults`: one that does not answer can use its whole timeout.
    The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
    chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
    the policy (`policy/README.md` in the repo). Until then, find the car's modules with

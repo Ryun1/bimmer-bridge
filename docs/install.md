@@ -73,7 +73,7 @@ has no `.git` and `release.sh` stops without one, then use the release's prebuil
 build only the Mac server:
 
 ```sh
-git clone --branch v0.6.1 https://github.com/Ryun1/bimmer-bridge && cd bimmer-bridge
+git clone --branch v0.6.2 https://github.com/Ryun1/bimmer-bridge && cd bimmer-bridge
 mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
 shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
 (cd mac-mcp && npm ci && npm run build)

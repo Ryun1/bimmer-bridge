@@ -17,6 +17,10 @@ public sealed class FakeJob
 
     public bool IgnoresBreak { get; init; }
 
+    /// <summary>After apiBreak, apiState still answers busy this many times before break: a job
+    /// that takes a while to stop, as a real one on the car's line can.</summary>
+    public int BusyPollsAfterBreak { get; init; }
+
     public int FinalState { get; init; } = ApiState.Ready;
 
     public int ErrorCode { get; init; }
@@ -68,6 +72,7 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     private FakeJob? _current;
     private int _pollsLeft;
     private bool _broken;
+    private int _breakPollsLeft;
     private int _lastErrorCode;
     private string _lastErrorText = "";
 
@@ -157,6 +162,12 @@ public sealed class FakeEdiabasApi : IEdiabasApi
         // apiBreak stops any job, unless it is scripted to ignore it.
         if (_broken && !_current.IgnoresBreak)
         {
+            if (_breakPollsLeft > 0)
+            {
+                _breakPollsLeft--;
+                return ApiState.Busy;
+            }
+
             return ApiState.Break;
         }
 
@@ -178,6 +189,7 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     {
         Calls.Add("Break");
         _broken = true;
+        _breakPollsLeft = _current?.BusyPollsAfterBreak ?? 0;
     }
 
     public void End()
