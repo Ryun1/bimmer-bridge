@@ -50,7 +50,7 @@ public sealed class AgentConfig
     public string EcuPath { get; set; } = @"C:\EDIABAS\ECU";
     public string LogDirectory { get; set; } = DefaultLogDirectory;
     public List<string> LogRoots { get; set; } = [@"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK"];
-    public List<string> ConflictProcesses { get; set; } = ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"];
+    public List<string> ConflictProcesses { get; set; } = ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI"];
     public List<VoltageSource> VoltageSources { get; set; } = [];
     public List<string> ReviewedJobs { get; set; } = [];
     public int JobTimeoutSeconds { get; set; } = 30;

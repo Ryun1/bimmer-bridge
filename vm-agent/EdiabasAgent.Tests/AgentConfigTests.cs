@@ -32,12 +32,21 @@ public class AgentConfigTests
         Assert.Equal(@"C:\EDIABAS\ECU", c.EcuPath);
         Assert.Equal(@"C:\ProgramData\EdiabasBridge\logs", c.LogDirectory);
         Assert.Equal(new[] { @"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK" }, c.LogRoots);
-        Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool" }, c.ConflictProcesses);
+        Assert.Equal(new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI" }, c.ConflictProcesses);
         Assert.Empty(c.VoltageSources);
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(30, c.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);
         Assert.Equal(20, c.EdiabasIdleReleaseSeconds);
+    }
+
+    [Fact]
+    public void Defaults_ConflictProcesses_IncludeWinkfpAndIsta()
+    {
+        var c = LoadOk("{}");
+        Assert.Equal(
+            new[] { "INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool", "WINKFP", "ISTAGUI" },
+            c.ConflictProcesses);
     }
 
     [Fact]

@@ -394,7 +394,7 @@
                 ediabasDll           = (Join-Path $ediabasRoot 'BIN\api32.dll')
                 ecuPath              = (Join-Path $ediabasRoot 'ECU')
                 logRoots             = [object[]]$logRoots
-                conflictProcesses    = [object[]]@('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool')
+                conflictProcesses    = [object[]]@('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool', 'WINKFP', 'ISTAGUI')
                 voltageSources       = [object[]]@()
                 reviewedJobs         = [object[]]@()
                 jobTimeoutSeconds    = 30
