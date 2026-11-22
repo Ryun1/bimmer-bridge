@@ -95,9 +95,10 @@ internal static class WindowCapture
             : null;
 
         // PrintWindow waits for the window to draw itself; a hung window would hold the request
-        // forever, so it goes straight to the screen copy.
+        // forever, so it goes straight to the screen copy. A window that is not flagged hung yet
+        // but does not answer a WM_NULL within 500 ms is treated the same way.
         byte[]? pixels = null;
-        if (!CaptureNative.IsHungAppWindow(hwnd))
+        if (!CaptureNative.IsHungAppWindow(hwnd) && WindowAnswers(hwnd))
         {
             pixels = Grab(rect.Width, rect.Height, (mem, _) => CaptureNative.PrintWindow(hwnd, mem, CaptureNative.PW_RENDERFULLCONTENT));
             if (pixels is not null && CaptureRules.IsAllBlack(pixels))
@@ -143,6 +144,13 @@ internal static class WindowCapture
     /// Draws into a 32-bit top-down DIB of the agent's own and copies the pixels out (BGRX).
     /// Null when any GDI step fails. Frees the DCs and the bitmap on every path.
     /// </summary>
+    private const uint AnswerTimeoutMs = 500;
+
+    /// <summary>True when the window's message loop answers a WM_NULL within 500 ms.</summary>
+    private static bool WindowAnswers(IntPtr hwnd) =>
+        CaptureNative.SendMessageTimeoutW(hwnd, CaptureNative.WM_NULL, UIntPtr.Zero, IntPtr.Zero,
+            CaptureNative.SMTO_ABORTIFHUNG | CaptureNative.SMTO_BLOCK, AnswerTimeoutMs, out _) != IntPtr.Zero;
+
     private static byte[]? Grab(int width, int height, Func<IntPtr, IntPtr, bool> draw)
     {
         var screen = CaptureNative.GetDC(IntPtr.Zero);
