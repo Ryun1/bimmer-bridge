@@ -11,11 +11,12 @@ which jobs exist and which the bridge will run. Where a job was also described o
 SGBD declares them; none of these jobs has been run, so no value or meaning of a result is
 recorded. Those come from Phase 6. Do not fill them in from the name or the description.
 
-**Policy versions.** Every verdict and count in this file was recorded under policy version 1
-(at the desk, 2026-11-21/22), except the one recount under version 2 noted below. Agent 0.3.0 brings
-policy version 3: more screen terms, and the `E60` whole-car jobs. The verdicts have to be
-recorded again under version 3 at the desk; until then go by what `ediabas_describe` returns,
-not by these tables.
+**Policy versions.** The job lists were first recorded under policy version 1 (2026-11-21/22).
+Every verdict and count in this file was recorded again under **policy version 4** (agent and
+Mac server 0.5.0) at the desk on 2026-11-22, cable in the VM and not in the car, with the five
+pinned approvals listed below in place. The descriptions quoted did not change. If the policy
+version in `vm_health` is newer than 4, go by what `ediabas_describe` returns, not by these
+tables.
 
 This file holds only what a real session returned: jobs listed by `ediabas_describe`, and jobs
 that a real session ran successfully on this car, with the arguments used and the result fields
@@ -48,10 +49,11 @@ first line is quoted and the KWP2000 service line, if any, follows after " — "
 
 ### `NVE_65` — night vision
 
-`ediabas_describe` on 2026-11-21 (policy version 1): `variant` `NVE_65`, 59 jobs, about 15 s
-with comments (`durationMs` 14745). Cable in the VM, not in the car.
+`ediabas_describe` on 2026-11-21: `variant` `NVE_65`, 59 jobs, about 15 s with comments
+(`durationMs` 14745). Cable in the VM, not in the car. Under policy version 4 (2026-11-22,
+`durationMs` 16545): 22 allowed, 21 runnable; the one change is `STATUS_PAIRING`, below.
 
-**Runnable (allowed by the policy):**
+**Allowed by the policy** (all runnable under version 4 except `STATUS_PAIRING`, which now needs review):
 
 | Job | Rule (review) | Description as returned | *(gloss)* |
 |---|---|---|---|
@@ -74,7 +76,7 @@ with comments (`durationMs` 14745). Cable in the VM, not in the car.
 | `STATUS_KLEMMEN` | `allow.pattern` (review passed) | `read clamp status` | (already English) |
 | `STATUS_BORDNETZSPANNUNG` | `allow.pattern` (review passed) | `Bordnetzspannung in Volt` | on-board supply voltage in volts |
 | `STATUS_ENERGIESPARMODUS` | `allow.pattern` (review passed) | `read out status of energy saving mode` | (already English) |
-| `STATUS_PAIRING` | `allow.pattern` (review passed) | `Gibt den Pairing-Status aus zwischen ECU und CAM` (more lines below) | gives the pairing status between the ECU and the camera |
+| `STATUS_PAIRING` | `allow.pattern` (**needs review** under version 4: `schaltet`, in `freigeschaltet`, matches the screen; refused with `job_needs_review` unless the owner approves it) | `Gibt den Pairing-Status aus zwischen ECU und CAM` (more lines below) | gives the pairing status between the ECU and the camera |
 | `STATUS_NIVI` | `allow.pattern` (review passed) | `Liest den Status von NIVI` | reads the night-vision status |
 | `STATUS_FSC_LESEN` | `allow.pattern` (review passed) | `gibt den detaillierten Status des Freischaltcodes aus` | gives the detailed status of the enabling code (FSC) |
 
@@ -129,7 +131,8 @@ session-control jobs; `ediabas_describe` shows each with its rule.
 
 ### `TMODE` — the diagnostic interface, not a car module
 
-`ediabas_describe` on 2026-11-21 (policy version 1): `variant` `TMODE`, 25 jobs (`durationMs` 1521). `TMODE`
+`ediabas_describe` on 2026-11-21: `variant` `TMODE`, 25 jobs (`durationMs` 1521); the same five
+runnable under policy version 4 (2026-11-22, `durationMs` 891). `TMODE`
 loads with no cable connected at all. It is a restricted ECU in the policy: only the jobs on
 its own list run (`allow.ecu`); everything else is `ecu_restricted` or denied by name.
 
@@ -158,65 +161,97 @@ described one at a time with `ediabas_describe` and `job` on 2026-11-22. None ha
 Only the jobs described one at a time are listed. For any other job on these files use
 `ediabas_describe` with a `filter` (a job-name substring such as `STATUS_` or `KL30`).
 
-Full job lists, 2026-11-21, **policy version 1**:
+Full job lists, **policy version 4**, 2026-11-22 (agent 0.5.0, with the five pinned approvals
+below). "Runnable" counts jobs that passed the screen and approved ones; "not checked" means the
+60 s describe limit ran out before their descriptions were read, so their verdict is unknown
+until they are described one at a time. The version 1 counts of 2026-11-21 are in this file's
+git history.
 
-| File | Jobs | Allowed | Runnable | Full describe (`durationMs`) |
-|---|---|---|---|---|
-| `E60` | 26 | 1 (`INFO`; version 3 adds `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL`) | 1 | 2872 |
-| `CAS` | 150 | 62 | 16 (28 needs review, 18 not checked) | 60043 (the limit) |
-| `MPM_60` | 57 | 21 | 18 (3 needs review) | 13284 |
-| `KOMB60` | 128 | 37 | 36 (1 needs review) | 52730 |
-| `KBM_60` | 79 | 24 | 22 (2 needs review) | 24111 |
-| `LM_60` | 134 | 37 | 37 | 60051 (the limit) |
-| `sgm_60_2` (variant `SGM_60_2`) | 80 | 24 | 24 | 29423 |
-| `IHKA60` | 119 | 33 | 30 (3 needs review) | 50419 |
-| `CCC_60` | 87 | 30 | 29 (1 needs review) | 28285 |
-| `MASK60` | 91 | 25 | 24 (1 needs review) | 30179 |
-| `DSC_60` | 95 | 21 | 21 | 37102 |
-| `EKPM60_2` | 62 | 22 | 21 (1 needs review) | 14730 |
+| File | Jobs | Allowed | Runnable | Needs review | Not checked | Full describe (`durationMs`) |
+|---|---|---|---|---|---|---|
+| `E60` | 26 | 3 (`INFO`, `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL`) | 3 | 0 | 0 | 3074 |
+| `CAS` | 150 | 63 | 39 (2 of them approved) | 4 | 20 | 60226 (the limit) |
+| `MPM_60` | 57 | 21 | 19 (1 approved) | 2 | 0 | 14980 |
+| `KOMB60` | 128 | 37 | 37 | 0 | 0 | 58268 |
+| `KBM_60` | 79 | 24 | 22 | 2 | 0 | 25499 |
+| `LM_60` | 134 | 38 | 36 | 2 | 0 | 60036 |
+| `sgm_60_2` (variant `SGM_60_2`) | 80 | 24 | 24 | 0 | 0 | 35216 |
+| `IHKA60` | 119 | 33 | 29 | 4 | 0 | 55740 |
+| `CCC_60` | 87 | 30 | 29 | 1 | 0 | 31766 |
+| `MASK60` | 91 | 25 | 24 | 1 | 0 | 33885 |
+| `DSC_60` | 95 | 21 | 21 | 0 | 0 | 39944 |
+| `EKPM60_2` | 62 | 22 | 22 | 0 | 0 | 18032 |
+
+`CAS` with filter `STATUS` (54 jobs, `durationMs` 60082, the limit): 47 allowed, 30 runnable
+(2 approved), 6 needs review, 11 not checked, 7 refused by name. Its full list reached the limit
+with 20 jobs not checked, among them `STATUS_WAKEUP_HISTORY`, `STATUS_WUP` and `STATUS_PA_WUP`;
+described one at a time (below) all three are runnable.
+
+**Needs review under policy version 4**, with the screen term each description matched (found by
+checking the recorded description against `policy/policy.json` the way the agent does: the
+ignored words `beschreibung` and `umsetzer` replaced by a space, then each term looked for
+anywhere, ignoring case; an empty or label-only description needs review too). The `CAS` rows
+combine the full list (4) and the `STATUS` filter (6): `STATUS_RDL`, `STATUS_RDU` and
+`STATUS_THS_HANDSENDER1` were not checked in the full list.
+
+| File | Job | Matched |
+|---|---|---|
+| `NVE_65` | `STATUS_PAIRING` | `schaltet` (in `freigeschaltet`) |
+| `CAS` | `STATUS_CC_DATEN_ARG`, `STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU` | `start` |
+| `CAS` | `STATUS_ELV_HISTORY_AUS_BUFFER` | `write` |
+| `CAS` | `STATUS_MECHANISCHER_SCHLUESSELCODE`, `STATUS_THS_HANDSENDER1` | no description |
+| `MPM_60` | `STATUS_CAN_INPUT_LESEN`, `STATUS_ECUHWVERSION_LESEN` | no description |
+| `KBM_60` | `STATUS_CFL_150N`, `STATUS_DENORM_REASON` | `start` (`StartRoutineByLID`) |
+| `LM_60` | `STATUS_XENON_AL_EINSCHALTVERSUCHE` | `einschalt` |
+| `LM_60` | `STATUS_LAMPEN_KURZSCHLUSS_COUNTER_MAX` | no description |
+| `IHKA60` | `STATUS_BEDIENTEIL` | `einstell` |
+| `IHKA60` | `STATUS_IO` | `ansteuer` |
+| `IHKA60` | `STATUS_CAR_KEY_EINSTELLUNGEN` | `program` |
+| `IHKA60` | `STATUS_VERDAMPF_MIN_ANHEBUNG` | `schreib` |
+| `CCC_60` | `STATUS_FREISCHALTUNG` | `start` |
+| `MASK60` | `STATUS_FLOTTENMODUS` | `aktivier` |
+
+These are what the screen flags, not a judgement that the jobs write anything: the owner decides,
+and the safe default is to skip them.
 
 Below, "Description as returned" quotes the first line and the service line (`KWP2000: ...`),
 if any, after " — "; tabs in the SGBD's text are shown as one space. "In the job list" is what
 the full list showed for the same job. Every job here takes no arguments (`arguments` was
 empty for all of them). Result names are listed as declared, in the SGBD's order.
 
-**Screen changed on 2026-11-22 (agent 0.2.2, policy version 2).** The description screen now
-ignores the words "Beschreibung" and "Umsetzer" before matching its terms, so the label
-"Jobbeschreibung:" no longer fails a job by itself. The counts and verdicts in this file were
-recorded under policy version 1 and are stale where they say "needs review": the same day,
-`ediabas_describe` of `CAS` with filter `STATUS` under version 2 returned 54 jobs: 30 passed,
-4 reviewed, 6 needs review (`STATUS_CC_DATEN_ARG`, `STATUS_ELV_HISTORY_AUS_BUFFER`,
-`STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU`, `STATUS_TRANSPONDER_PAGE`), 7 not checked
-(60 s limit), 7 refused by name; and `MPM_60` showed 19 runnable of 57.
+**How the screen got here.** Version 2 (agent 0.2.2) made the screen ignore the words
+"Beschreibung" and "Umsetzer" before matching, so the label "Jobbeschreibung:" no longer flags a
+job by itself; version 3 added more terms, and version 4 added switching and triggering terms
+(`schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`, `trigger`, `oeffnen`,
+`öffnen`). That is why some jobs flagged under version 1 pass now, and why `NVE_65`
+`STATUS_PAIRING` and `LM_60` `STATUS_XENON_AL_EINSCHALTVERSUCHE` are flagged under version 4.
 
-**Approved by the owner on 2026-11-22.** All five needs-review jobs below (`CAS`
+**Approved by the owner on 2026-11-22, pinned the same day for 0.5.0.** Five jobs below (`CAS`
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
-`MPM_60` `STATUS_AD_WERTE_LESEN`) are listed in `reviewedJobs` in the VM's
-`C:\ProgramData\EdiabasBridge\config.json`, and `ediabas_describe` of each then returned
-review `reviewed`: the bridge on that VM now runs them. Those entries were written by name
-(unpinned); from 0.5.0 an unpinned entry approves nothing, so the jobs are refused again until
-the owner replaces each with the pinned `ECU:JOB@<hash>` line `ediabas_describe` prints. The approval lives only in that VM config, not in
-the repo; after a fresh install the list is empty and they are refused again until the owner adds
-them back. The verdicts in the tables below are as first recorded (policy version 1), before
-the approval.
+`MPM_60` `STATUS_AD_WERTE_LESEN`), flagged when they were first described, are listed in
+`reviewedJobs` in the VM's `C:\ProgramData\EdiabasBridge\config.json` as pinned
+`ECU:JOB@<hash>` lines, and `ediabas_describe` of each returns review `reviewed` under policy
+version 4: the bridge on that VM runs them. A pin holds only while the job's description stays
+the same. The approval lives only in that VM config, not in the repo; after a fresh install the
+list is empty and they are refused again until the owner adds them back. Under policy version 4
+the screen still flags three of them; `STATUS_WUP` and `STATUS_AD_WERTE_LESEN` match no term
+now and would run without the approval.
 
-**Needs review: the bridge will refuse to run these** (`job_needs_review`). The user decides;
-the safe default is to skip them. The likely trigger is a screen term from
-`policy/policy.json` `descriptionScreen.terms` found in the recorded description
-(case-insensitive, anywhere in a word). The refusal message itself, which names the matched
-terms, has not been recorded.
+**Flagged by the screen, approved by the owner.** Without the pinned approval the bridge would
+refuse these (`job_needs_review`). The trigger is a screen term from `policy/policy.json`
+`descriptionScreen.terms` found in the description (case-insensitive, anywhere in a word).
 
 ### `CAS`
 
-Single-job describes took 4.8–6.5 s each (`durationMs` 4781–6545).
+Single-job describes under policy version 4 took 5.0–7.4 s each (`durationMs` 4961–7379).
 
-| Job | Rule (review) | Description as returned | In the job list | Likely trigger |
+| Job | Rule (review) | Description as returned | In the full job list (version 4) | Screen terms matched (version 4) |
 |---|---|---|---|---|
-| `STATUS_PA_WUP` | `allow.pattern` (review passed) | `Lesen des PA Wakeup Pattern` | no description, `not_checked` | — (runnable) |
-| `STATUS_WAKEUP_HISTORY` | `allow.pattern` (**needs review**) | `Jobbeschreibung: This Job reads the history trace of the LPM application` — `KWP2000: $31 Start Routine By Local Identifier` | no description, `not_checked` | `schreib` (in `Jobbeschreibung`) and `start` (in `Start Routine`) |
-| `STATUS_KLEMMENVERHINDERER` | `allow.pattern` (**needs review**) | `Jobbeschreibung: Der Job dient zum Auslesen der internen Verhinderungsgründe` — `KWP2000: $21 ReadDataByLocalIdentifier` | same description, needs review | `schreib` (in `Jobbeschreibung`) |
-| `STATUS_KL15_ABSCHALTUNG` | `allow.pattern` (**needs review**) | `Jobbeschreibung: Status verschiedener Abschaltverhinderer` — `KWP2000: $31 StartRoutineByLocalIdentifier` | same description, needs review | `schreib` (in `Jobbeschreibung`) and `start` (in `StartRoutineByLocalIdentifier`) |
-| `STATUS_WUP` | `allow.pattern` (**needs review**) | `Jobbeschreibung: Dieser Job liest den aktuellen Status "Wake-Up-Pattern"` — `KWP 2000:$21 ReadDataByLocalIdentifier` | no description, `not_checked` | `schreib` (in `Jobbeschreibung`) |
+| `STATUS_PA_WUP` | `allow.pattern` (review passed) | `Lesen des PA Wakeup Pattern` | no description, `not_checked` | none (runnable) |
+| `STATUS_WAKEUP_HISTORY` | `allow.pattern` (**reviewed**: approved) | `Jobbeschreibung: This Job reads the history trace of the LPM application` — `KWP2000: $31 Start Routine By Local Identifier` | no description, `not_checked` | `start` (in `Start Routine`) |
+| `STATUS_KLEMMENVERHINDERER` | `allow.pattern` (**reviewed**: approved) | `Jobbeschreibung: Der Job dient zum Auslesen der internen Verhinderungsgründe` — `KWP2000: $21 ReadDataByLocalIdentifier` | same description, reviewed | `einschalt`, `ausschalt` (in `Einschalten`, `Ausschalten`; version 4 terms) |
+| `STATUS_KL15_ABSCHALTUNG` | `allow.pattern` (**reviewed**: approved) | `Jobbeschreibung: Status verschiedener Abschaltverhinderer` — `KWP2000: $31 StartRoutineByLocalIdentifier` | same description, reviewed | `start` (in `StartRoutineByLocalIdentifier`) |
+| `STATUS_WUP` | `allow.pattern` (**reviewed**: approved) | `Jobbeschreibung: Dieser Job liest den aktuellen Status "Wake-Up-Pattern"` — `KWP 2000:$21 ReadDataByLocalIdentifier` | no description, `not_checked` | none under version 4 (version 1 flagged `schreib` in `Jobbeschreibung`, which the screen has ignored since version 2): it would pass without the approval |
 
 The full descriptions, as returned (tabs shown as one space):
 
@@ -289,7 +324,7 @@ Result names declared:
 
 ### `KOMB60`
 
-Single-job describes took about 2 s each (`durationMs` 1921–2084).
+Single-job describes took about 2 s each (`durationMs` 1921–2084; 2253–2343 under policy version 4, verdicts unchanged).
 
 | Job | Rule (review) | Description as returned | In the job list |
 |---|---|---|---|
@@ -307,7 +342,7 @@ Result names declared:
 
 ### `IHKA60`
 
-Single-job describes took 1.6 s and 2.1 s (`durationMs` 1584, 2149).
+Single-job describes took 1.6 s and 2.1 s (`durationMs` 1584, 2149); under policy version 4 both still review passed.
 
 | Job | Rule (review) | Description as returned | In the job list |
 |---|---|---|---|
@@ -329,7 +364,7 @@ Result names declared:
 ### `sgm_60_2` (variant `SGM_60_2`)
 
 Passed as `sgm_60_2`; the tool reported variant `SGM_60_2`. Single-job describe took 2.7 s
-(`durationMs` 2705).
+(`durationMs` 2705); under policy version 4 still review passed.
 
 | Job | Rule (review) | Description as returned | In the job list |
 |---|---|---|---|
@@ -346,12 +381,12 @@ Result names declared: `JOB_STATUS`, `STAT_SPG_KLEMME_30_SGM_WERT`,
 
 ### `MPM_60`
 
-Single-job describes took about 1.3 s each (`durationMs` 1292, 1380).
+Single-job describes took about 1.3 s each (`durationMs` 1292, 1380), and 1.6 s under policy version 4.
 
-| Job | Rule (review) | Description as returned | In the job list | Likely trigger |
+| Job | Rule (review) | Description as returned | In the full job list (version 4) | Screen terms matched (version 4) |
 |---|---|---|---|---|
-| `STATUS_ECU_LESEN` | `allow.pattern` (review passed) | `es wird der aktuelle Status der ECU ausgelesen` (no service line) | same, review passed | — (runnable) |
-| `STATUS_AD_WERTE_LESEN` | `allow.pattern` (**needs review**) | `es werden die Messwerte des AD-Umsetzers ausgelesen` (no service line) | same, needs review | `setz` (in `AD-Umsetzers`) |
+| `STATUS_ECU_LESEN` | `allow.pattern` (review passed) | `es wird der aktuelle Status der ECU ausgelesen` (no service line) | same, review passed | none (runnable) |
+| `STATUS_AD_WERTE_LESEN` | `allow.pattern` (**reviewed**: approved) | `es werden die Messwerte des AD-Umsetzers ausgelesen` (no service line) | same, reviewed | none under version 4 (version 1 flagged `setz` in `AD-Umsetzers`; the screen has ignored `Umsetzer` since version 2): it would pass without the approval |
 
 Result names declared:
 - `STATUS_ECU_LESEN`: `JOB_STATUS`, `STAT_RELAIS_SOLL_WERT`, `STAT_RELAIS_SOLL_TEXT`,
