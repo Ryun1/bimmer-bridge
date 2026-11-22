@@ -3,6 +3,7 @@
 pub const sys = struct {
     pub const darwin = @import("sys/darwin.zig");
     pub const linux = @import("sys/linux.zig");
+    pub const libc = @import("sys/libc.zig");
 };
 
 pub const port = @import("port.zig");

@@ -22,10 +22,29 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(lib);
 
+    const exe = b.addExecutable(.{
+        .name = "kline",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cli.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{.{ .name = "kline", .module = mod }},
+        }),
+    });
+    b.installArtifact(exe);
+
+    const run_cmd = b.addRunArtifact(exe);
+    if (b.args) |args| run_cmd.addArgs(args);
+    b.step("run", "Run kline").dependOn(&run_cmd.step);
+
     const tests = b.addTest(.{ .root_module = mod });
     const run_tests = b.addRunArtifact(tests);
+    const exe_tests = b.addTest(.{ .root_module = exe.root_module });
+    const run_exe_tests = b.addRunArtifact(exe_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_tests.step);
+    test_step.dependOn(&run_exe_tests.step);
 
     // Compiles (does not run) the tests for Linux. The constant tests check every hand-declared
     // value at compile time against the kernel headers Zig ships, so this verifies the Linux
