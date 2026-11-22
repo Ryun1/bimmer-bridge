@@ -415,6 +415,37 @@ describe("ediabas_describe", () => {
   });
 });
 
+describe("the job-name hint on ediabas_error", () => {
+  const hint = "If the job name may be wrong, check it with ediabas_describe.";
+  const details = { errorCode: 19, errorText: "SYS-0008: JOB NOT FOUND" };
+
+  it("is added to a failed ediabas_job run", async () => {
+    override("POST /ediabas/job", () => agentErr(502, "ediabas_error", "x", details));
+    const { call } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "STATUS_X" });
+    expect(r.text).toContain(`error 19: SYS-0008: JOB NOT FOUND. `);
+    expect(r.text.endsWith(hint)).toBe(true);
+  });
+
+  it("is added to an ediabas_jobs item", async () => {
+    override("POST /ediabas/jobs", () => ({
+      status: 200,
+      body: { items: [{ ok: false, result: null, error: { code: "ediabas_error", message: "x", details } }] },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "STATUS_X" }] });
+    expect(r.text).toContain(hint);
+  });
+
+  it("is not added to an ediabas_describe error", async () => {
+    override("GET /ediabas/describe", () => agentErr(502, "ediabas_error", "x", details));
+    const { call } = await connect();
+    const r = await call("ediabas_describe", { ecu: "NVE_65" });
+    expect(r.text).toMatch(/^\[ediabas_error\]/);
+    expect(r.text).not.toContain(hint);
+  });
+});
+
 describe("ediabas_describe text", () => {
   it("says it needs the cable, can be slow, and ignores filter with job", async () => {
     const { client } = await connect();

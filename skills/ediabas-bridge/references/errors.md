@@ -70,9 +70,9 @@ never look for another tool, job or route (and never computer use on the VM wind
   Report EDIABAS's code and text; do not run it again without asking the user.
 - **`[ediabas_request_lost]`.** The connection broke after the request may have reached the VM,
   so the job may have run. Call `vm_health`; repeat the job only if the user asks.
-- **`[job_not_found]` from a job run** (not only from describe): after the job failed, the
-  agent listed the SGBD's jobs and it was not there (checked for SGBD files only, not group
-  names). Check with `ediabas_describe`; never try variations of the name.
+- **`[ediabas_error]` on a job run, with a hint about the job name.** A job the SGBD lacks
+  also gives `ediabas_error`; the agent does not check. If the name may be wrong, check it with
+  `ediabas_describe` (`[job_not_found]` comes from describe only); never try variations of the name.
 - **`[not_run]`.** The message says why: the request's time limit, a wait behind another
   EDIABAS request for the whole limit, a BMW tool opened during the request, an earlier job
   that did not stop, or an abandoned request. Read what was not run in a later, smaller call

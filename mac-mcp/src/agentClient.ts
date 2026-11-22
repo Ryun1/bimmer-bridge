@@ -652,6 +652,6 @@ export class AgentClient {
     // The agent knows nothing at this path: it is an older build than this server.
     if (status === 404 && info?.code === "not_found") return agentOutdated(spec.path);
     const redact = (s: string | undefined) => (s && token ? s.split(token).join("[redacted]") : s);
-    return agentError(status, redact(info?.code), redact(info?.message), info?.details);
+    return agentError(status, redact(info?.code), redact(info?.message), info?.details, spec.path !== "/ediabas/describe");
   }
 }

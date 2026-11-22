@@ -113,7 +113,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 403 | `job_needs_review` | a job allowed by the `STATUS_` pattern has a description that fails the screen, or has no description; or it is called with `args` and the description of its arguments fails the screen or is missing; or it has a pinned approval and its description has changed, is empty or could not be read (see "Approvals") | `{ ecu, job, description, matched: ["start"] }` (`matched` is `[]` when the description is empty or only labels, and for a pinned approval that no longer holds; see "Description screen"). For the argument screen `description` holds the argument text |
 | 403 | `path_not_allowed` | log path outside the configured roots, or an escape attempt | `{ reason }` |
 | 404 | `ecu_not_found` | no `.prg` or `.grp` of that name in the Ecu folder | `{ ecu }` |
-| 404 | `job_not_found` | `describe` was asked for a job the SGBD does not have; or, from `/ediabas/job`, a `/ediabas/jobs` item or a `/ediabas/vehicle` item, the job failed with `ediabas_error` and the SGBD's own `_JOBS` list does not have it (see "Job not in the SGBD"). Message: "{ECU} has no job {JOB}." | `{ ecu, job }` |
+| 404 | `job_not_found` | `describe` was asked for a job the SGBD does not have. A run of a job the SGBD lacks gives `ediabas_error`. Message: "{ECU} has no job {JOB}." | `{ ecu, job }` |
 | 404 | `window_not_found` | no visible window matches | `null` |
 | 404 | `file_not_found` | log file does not exist | `null` |
 | 409 | `cable_in_use` | a BMW tool or another `api32.dll` user is running. No override | `{ processes: [ { name, pid } ] }` |
@@ -276,10 +276,8 @@ so time spent waiting behind another EDIABAS request counts against it. `duratio
 covers only the run. A request that waited the whole budget gets `not_run` and EDIABAS is not
 loaded for it.
 
-**Job not in the SGBD.** When a job from `/ediabas/job`, a `/ediabas/jobs` item or a
-`/ediabas/vehicle` item fails with `ediabas_error`, the agent runs `_JOBS` on that SGBD. If the
-list does not have the job, the answer is `job_not_found` instead. Only for a `.prg` file: for a
-`.grp` name, a job starting with `_`, or a failed `_JOBS`, the original error stays.
+**Job not in the SGBD.** A job the SGBD does not have fails with `ediabas_error` like any other
+failed job; the agent does not run `_JOBS` to check. Only `describe` answers `job_not_found`.
 
 **apiEnd failure.** If `apiEnd` fails after a job ran, the client still gets the result. The
 agent logs it and does not release `api32.dll` again until it is restarted.

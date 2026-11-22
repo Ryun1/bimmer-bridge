@@ -132,9 +132,10 @@ export function agentError(
   code: string | undefined,
   message: string | undefined,
   details?: unknown,
+  run = false,
 ): BridgeError {
   const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || `http_${status}`;
-  const known = describeAgentError(safeCode, message, details);
+  const known = describeAgentError(safeCode, message, details, run);
   if (known) {
     const e = new BridgeError(safeCode, known);
     const rule = detailString(details, "rule");
@@ -198,7 +199,7 @@ function processList(details: unknown): string | null {
  * The user-facing message for a known agent error code, or null for codes without one. None
  * suggests a way around a refusal.
  */
-export function describeAgentError(code: string, message: string | undefined, details: unknown): string | null {
+export function describeAgentError(code: string, message: string | undefined, details: unknown, run = false): string | null {
   const agentSaid = message ? ` The agent said: "${cleanText(message, 200)}".` : "";
   switch (code) {
     case "job_not_allowed": {
@@ -256,7 +257,8 @@ export function describeAgentError(code: string, message: string | undefined, de
           ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (the user ticks it in UTM's USB menu). " +
             "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
           : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
-      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.`;
+      const hint = run ? " If the job name may be wrong, check it with ediabas_describe." : "";
+      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.${hint}`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.

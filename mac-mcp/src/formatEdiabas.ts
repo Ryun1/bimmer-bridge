@@ -88,7 +88,7 @@ function plural(n: number, one: string, many = `${one}s`): string {
 export function itemErrorText(err: AgentErrorInfo | null | undefined): string {
   if (!err) return "failed (the agent gave no error)";
   const code = cleanText(err.code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") || "error";
-  return errorText(code, describeAgentError(code, err.message, err.details) ?? cleanText(err.message || "(no message)"));
+  return errorText(code, describeAgentError(code, err.message, err.details, true) ?? cleanText(err.message || "(no message)"));
 }
 
 // ---------------------------------------------------------------------------
