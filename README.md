@@ -138,8 +138,8 @@ been run at the car.**
   desk-side describe is too short to open INPA during it.
 - Restart checks: after a VM reboot the agent came back by itself at log-on, and the running
   Mac server reconnected without a restart. After the Mac slept, the agent and the bridge stayed
-  up, but the cable was handed back to the Mac and EDIABAS calls failed (error 48) until it was
-  ticked for the VM again in UTM; the error hint now says so.
+  up, but the cable was handed back to the Mac: a `TMODE` job then failed with error 48 until the
+  cable was ticked for the VM again in UTM. The error hint for 48 now says so.
 
 | Phase | State |
 |---|---|
