@@ -75,7 +75,7 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
 | Step | Mac (`mac-mcp/src/policy.ts`) | Agent (`vm-agent/EdiabasAgent.Core/JobPolicy.cs`, `CommentScreen.cs`) |
 |---|---|---|
 | Loading | at start-up from `policy/policy.json` two folders above `dist/`; invalid file: every `ediabas_*` tool refuses with `policy_unavailable` | embedded at build time; invalid: every EDIABAS job refused |
-| Name rules | `ediabas_job`, every ECU of `ediabas_read_faults` (the whole call is refused if one is), shape only for `ediabas_describe` | every job, including the agent's own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS` and the `/ediabas/vehicle` jobs |
+| Name rules | `ediabas_job`, every item of `ediabas_jobs` and every ECU of `ediabas_read_faults` (the whole call is refused if one is), shape only for `ediabas_describe` | every job, including the agent's own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS` and the `/ediabas/vehicle` jobs |
 | Description screen | no | yes, for jobs allowed only by the `STATUS_` pattern; `reviewedJobs` in the VM's config skips it |
 | Conflict check | no | before the request opens EDIABAS and before every job |
 

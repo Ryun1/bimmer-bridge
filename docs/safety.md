@@ -1,12 +1,14 @@
 # Safety: how read-only is enforced
 
-The bridge is read-only by construction. The rules are the ten in
-[PLAN.md section 2](../PLAN.md#2-hard-safety-rules-non-negotiable); this page says which code
-enforces each one. They are enforced in code on both sides, not only in tool descriptions or
+The bridge is read-only by construction. The rules were first written in
+[PLAN.md section 2](../PLAN.md#2-hard-safety-rules-non-negotiable), which is historical; the
+table below is the current list and says which code enforces each one. They are enforced in code on both sides, not only in tool descriptions or
 skills, which are guidance. Check any change against this list.
 
-**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only offline
-jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is unplugged.
+**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only jobs that
+cannot reach a module: the `TMODE` and `UTILITY` info jobs, and `ediabas_describe` (the `_JOBS`
+family), after Ryan confirms the cable is not plugged into the car (it may still be in the VM;
+a real SGBD does not load without it).
 
 ## The rules and what enforces them
 

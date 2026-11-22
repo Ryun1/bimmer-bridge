@@ -98,8 +98,9 @@ with the skills and once without.
 
 From [PLAN.md section 12](../PLAN.md#12-working-agreements-for-claude-code), still in force:
 
-- Nothing that talks to the car runs unattended. Claude Code may run offline jobs (`TMODE`,
-  the `_JOBS` family) only after Ryan confirms the cable is unplugged.
+- Nothing that talks to the car runs unattended. Claude Code may run only jobs that cannot
+  reach a module (`TMODE`/`UTILITY` info jobs, `ediabas_describe` and the `_JOBS` family) and only
+  after Ryan confirms the cable is not plugged into the car.
 - Contracts first: change [api.md](api.md) or [tools.md](tools.md), then the code on both
   sides.
 - Skill reference files hold only what a real session returned, committed with the fixtures

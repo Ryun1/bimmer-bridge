@@ -60,7 +60,7 @@ variables set earlier on the same pasted line.
 | `$Purge` | uninstall | `$true` to remove `config.json`, `token.txt` and `logs\` as well. Optional, default off: uninstall keeps them for a later reinstall |
 | `$KeepData` | uninstall | ignored: keeping the data is now the default. The script says so if it is set |
 
-All three scripts must run in an elevated **Windows PowerShell** (5.1) window, not PowerShell 7.
+Install, update and uninstall must run in an elevated **Windows PowerShell** (5.1) window, not PowerShell 7.
 
 Install and Update download, check and expand the zip in a new folder
 `C:\ProgramData\EdiabasBridge-staging-<guid>` that is created with an ACL granting only
