@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One command for a release (PLAN.md Phase 8): checks that the versions agree, runs every test
-# suite, builds the agent zip and the Mac server, then prints the zip's SHA-256 and the Update
-# line. Stops at the first failure. It does not push, tag or deploy anything.
+# suite, builds the agent zip, the skill zips and the Mac server, then prints the SHA-256 of each zip
+# (the files to attach to the GitHub release) and the Update line. Stops at the first failure. It does not push, tag or deploy anything.
 #
 #   ./release.sh                 everything
 #   ./release.sh --no-build      versions and tests only; no zip, no mac-mcp/dist
@@ -28,7 +28,7 @@ for arg in "$@"; do
     --skip-dotnet) SKIP_DOTNET=1 ;;
     --dry-run) DRY_RUN=1 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
-    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "release.sh: unknown argument $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -142,6 +142,9 @@ if [ "$NO_BUILD" -eq 0 ]; then
     step "Building the agent zip"
     if [ "$ALLOW_DIRTY" -eq 1 ]; then run vm-agent/build.sh --allow-dirty; else run vm-agent/build.sh; fi
   fi
+  # --no-link: build skills/dist/*.zip only; never touch ~/.claude/skills.
+  step "Building the skill zips (skills/dist)"
+  run skills/install.sh --no-link
   step "Building the MCP server (mac-mcp/dist)"
   run npm --prefix mac-mcp run build
 fi
@@ -153,6 +156,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
   [ "$VERSIONS_OK" -eq 1 ] && [ "$DIRTY_STOP" -eq 0 ] || exit 1
   exit 0
 fi
+
+SKILL_ZIPS=()
+for z in skills/dist/*.zip; do [ -f "$z" ] && SKILL_ZIPS+=("$z"); done
 
 BUILT=$(( NO_BUILD == 0 && SKIP_DOTNET == 0 ))
 if [ -f "$ZIP" ]; then
@@ -180,6 +186,20 @@ if [ -f "$ZIP" ]; then
   echo "  $UPDATE_LINE"
 else
   echo "Agent zip:  not built (no $ZIP)"
+fi
+
+echo
+if [ ${#SKILL_ZIPS[@]} -eq 0 ]; then
+  echo "Skill zips: none (no skills/dist/*.zip)"
+else
+  if [ "$NO_BUILD" -eq 0 ]; then
+    echo "Skill zips (attach to the GitHub release):"
+  else
+    echo "Skill zips from an earlier build, NOT rebuilt this run:"
+  fi
+  for z in "${SKILL_ZIPS[@]}"; do
+    printf '  %s  %s\n' "$(shasum -a 256 "$z" | awk '{print $1}')" "$z"
+  done
 fi
 
 if [ "$BUILT" -eq 1 ] && [ -z "$DIRTY" ]; then

@@ -582,16 +582,18 @@ a real SGBD does not load without it).
    typecheck and tests, the deploy server's tests (`python3 -m unittest dev/test_serve.py`) and
    the dev tools' typecheck and tests;
 5. builds `release/EdiabasAgent.zip` and `release/EdiabasAgent.zip.sha256`
-   (`vm-agent/build.sh`) and `mac-mcp/dist` (`npm --prefix mac-mcp run build`);
+   (`vm-agent/build.sh`), one zip per skill in `skills/dist/` (`skills/install.sh --no-link`,
+   which does not touch `~/.claude/skills`) and `mac-mcp/dist` (`npm --prefix mac-mcp run build`);
 6. checks that the zip's `version.txt` is the release version, that it holds `commit.txt` and
    that the `.sha256` file matches the zip, then prints the commit, the SHA-256 and the Update
-   line.
+   line, and lists each `skills/dist/*.zip` with its SHA-256.
 
 It stops at the first failure and never pushes, tags or deploys anything.
 
 To publish: tag `vX.Y.Z` on the commit `release.sh` built and push the tag, then create a
-GitHub release from it with `release/EdiabasAgent.zip`, `release/EdiabasAgent.zip.sha256` and
-`skills/dist/*.zip` attached and notes from the README's status section.
+GitHub release from it with the files `release.sh` printed attached (`release/EdiabasAgent.zip`,
+`release/EdiabasAgent.zip.sha256` and each `skills/dist/*.zip`) and notes from the README's
+status section. The `.sha256` checks that the download is intact, not who made it.
 
 To run one part by hand:
 
