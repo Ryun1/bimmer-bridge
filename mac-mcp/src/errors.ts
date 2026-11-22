@@ -293,13 +293,20 @@ export function describeAgentError(code: string, message: string | undefined, de
         return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask the user before trying again.`;
       }
       const what = n !== null || text ? said : cleanText(message ?? "no details", 200);
-      // Error 16 (IFH-0006) on every real SGBD, seen on 2026-11-22 after the cable was replugged
-      // into the Mac: it was no longer attached to the VM until ticked again in UTM.
-      const why =
+      // Codes seen when the cable was no longer attached to the VM until ticked again in UTM:
+      // error 16 (IFH-0006) on every real SGBD after the cable was replugged into the Mac, and
+      // error 48 (IFH-0038) after the Mac slept, which hands USB devices back to the Mac (both
+      // 2026-11-22). Either can have other causes, so the ECU stays the other explanation.
+      const detached =
         n === 16
-          ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (the user ticks it in UTM's USB menu). " +
-            "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
-          : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+          ? "after it is unplugged and plugged back in, UTM does not hand it back by itself"
+          : n === 48
+            ? "after the Mac sleeps, UTM hands it back to the Mac"
+            : null;
+      const why = detached
+        ? `The cable may not be attached to the VM: ${detached} (the user ticks it in UTM's USB menu). ` +
+          "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
+        : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
       const hint = run ? " If the job name may be wrong, check it with ediabas_describe." : "";
       return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.${hint}`;
     }

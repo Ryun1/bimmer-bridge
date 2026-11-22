@@ -47,6 +47,9 @@ car-session line and the longer idle time below are all untested there.
       USB menu**. UTM does not hand a plugged-in or replugged cable to the VM by itself; until
       it is ticked, EDIABAS answers `cable_not_found` (error 28, `IFH-0018`) or error 16
       `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD.
+- [ ] Keep the Mac awake for the whole session: on power, lid open. When it sleeps, UTM hands
+      the cable back to the Mac; the bridge stays up but every EDIABAS call fails (error 48,
+      `IFH-0038`) until the cable is ticked for the VM again.
 - [ ] Close every BMW tool in the VM (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool). While
       one is open, every EDIABAS call is refused with `cable_in_use`. Never close WinKFP or
       NCS Expert in the middle of a flash or coding run.

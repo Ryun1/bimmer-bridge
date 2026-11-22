@@ -136,6 +136,10 @@ been run at the car.**
   error; with the car absent, the info memory line gives the real no-response error. Stopping a
   running job when a BMW tool opens mid-job (`apiBreak`) is covered by the agent's tests only: a
   desk-side describe is too short to open INPA during it.
+- Restart checks: after a VM reboot the agent came back by itself at log-on, and the running
+  Mac server reconnected without a restart. After the Mac slept, the agent and the bridge stayed
+  up, but the cable was handed back to the Mac and EDIABAS calls failed (error 48) until it was
+  ticked for the VM again in UTM; the error hint now says so.
 
 | Phase | State |
 |---|---|
@@ -159,8 +163,6 @@ Open:
 - **Eval acceptance**: 07 and 08 still need a run without the skills that does worse.
 - **Skill reference entries that need car recordings**: the vehicle-status field names, the
   engine SGBD, and the SGBDs that can only be described with the control unit answering.
-- **Restart checks on 0.2.x**: that the agent comes back after the VM reboots, and that the
-  bridge works again after the Mac sleeps. The reboot check passed on the Phase 1 agent only.
 
 ### What changed in 0.5.0
 

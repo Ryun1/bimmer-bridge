@@ -698,6 +698,12 @@ describe("ediabas_job", () => {
     [
       "ediabas_error",
       502,
+      { errorCode: 48, errorText: "IFH-0038: INTERFACE COMMAND NOT IMPLEMENTED" },
+      /^\[ediabas_error\] EDIABAS reported error 48: IFH-0038: INTERFACE COMMAND NOT IMPLEMENTED\. The cable may not be attached to the VM: after the Mac sleeps, UTM hands it back to the Mac \(the user ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
+    ],
+    [
+      "ediabas_error",
+      502,
       { errorCode: 134, errorText: "SYS-0002: SOMETHING", resultsUnread: true },
       /^\[ediabas_error\] The job finished but its results could not be read \(EDIABAS error 134: SYS-0002: SOMETHING\)\. Ask the user before trying again\.$/,
     ],
