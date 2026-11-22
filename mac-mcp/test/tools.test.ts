@@ -6,6 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppServer } from "../src/server.js";
 import { loadConfig } from "../src/config.js";
+import { wrongService } from "../src/errors.js";
 import { PolicyGuard } from "../src/policy.js";
 import type { ExecFileFn } from "../src/vmAddress.js";
 import { AGENT_TOKEN, LOOPBACK_BRIDGE, healthBody, startFakeAgent, type FakeAgent } from "./fixtures.js";
@@ -123,6 +124,13 @@ describe("error results", () => {
     expect(busy.text).toMatch(/^\[cable_in_use\] The diagnostic cable is in use/);
     const bad = await call("vm_logs_read", { path: "C:\\x.log", offset: 5 });
     expect(bad.text).toMatch(/^\[invalid_arguments\] /);
+  });
+
+  it("a wrong service names the host and port, never URL credentials", () => {
+    const e = wrongService("http://u:p@1.2.3.4:8765");
+    expect(e.code).toBe("wrong_service");
+    expect(e.message).toContain("1.2.3.4:8765");
+    expect(e.message).not.toContain("u:p");
   });
 
   it("gives a job request that may have run its own code", async () => {

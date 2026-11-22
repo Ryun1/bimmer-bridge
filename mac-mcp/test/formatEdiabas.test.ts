@@ -10,6 +10,7 @@ import {
   formatJobResult,
   formatKm,
   formatVehicle,
+  isKmName,
   itemErrorText,
   vehicleBatch,
 } from "../src/formatEdiabas.js";
@@ -17,6 +18,15 @@ import { faultSets, jobResult, phase2Health } from "./stubAgent.js";
 
 const result = (sets: Record<string, unknown>[], o: Record<string, unknown> = {}) =>
   JobResultSchema.parse(jobResult("NVE_65", "FS_LESEN", sets, o));
+
+describe("isKmName", () => {
+  it("a KM token is a distance, but not when PRO, H or STD follows it (km/h, km per hour, km standard)", () => {
+    expect(isKmName("STAT_KM_STAND")).toBe(true);
+    expect(isKmName("STAT_GESCHWINDIGKEIT_KM_PRO_H")).toBe(false);
+    expect(isKmName("SPEED_KM_H")).toBe(false);
+    expect(isKmName("X_KM_STD")).toBe(false);
+  });
+});
 
 describe("formatKm", () => {
   it("puts miles first, km in brackets, with thousands separators", () => {

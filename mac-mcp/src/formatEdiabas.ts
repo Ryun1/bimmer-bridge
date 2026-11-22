@@ -47,8 +47,9 @@ function cleanName(s: string, max = 64): string {
 }
 
 /** Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer". */
-function isKmName(name: string): boolean {
-  if (/(^|_)KM_H(_|$)/i.test(name)) return false;
+export function isKmName(name: string): boolean {
+  // km/h (KM_H, KM_PRO_H) and km per standard (KM_STD) are speeds or rates, not distances.
+  if (/(^|_)KM_(H|PRO|STD)(_|$)/i.test(name)) return false;
   return /(^|_)KM(_|$)/i.test(name) || /KILOMETER/i.test(name);
 }
 

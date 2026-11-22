@@ -3,6 +3,8 @@
  * user (through Claude) as the text of a failed tool call, so each says what to do.
  */
 
+import { hostPort } from "./vmAddress.js";
+
 export const TOKEN_FIX =
   "Hand the VM's token to this Mac again: in the repo run python3 dev/serve.py --accept-token and paste the Install line it prints " +
   "into an Administrator Windows PowerShell in the VM (the installer never shows the token). Or set EDIABAS_AGENT_TOKEN in the server's environment.";
@@ -105,10 +107,10 @@ export function noToken(): BridgeError {
   return new BridgeError("no_token", MESSAGES.noToken);
 }
 
-export function wrongService(where: string): BridgeError {
+export function wrongService(baseUrl: string): BridgeError {
   return new BridgeError(
     "wrong_service",
-    `Something answered at ${where}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
+    `Something answered at ${hostPort(baseUrl)}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
   );
 }
 
