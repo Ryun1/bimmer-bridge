@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 1–5 done (2026-11-22); **waiting for sections 6–7 of the desk session.**
+Status: sections 1–5 done (2026-11-22); section 6 deferred to M2 (no bench supply); **waiting for section 7.**
 
 ---
 
@@ -280,10 +280,14 @@ there's no bench supply, write "no bench supply" here; this moves to the start o
 ./zig-out/bin/kline loopback /dev/cu.usbserial-… --bench --latency 16 --count 200
 ```
 
+**No bench supply (2026-11-22).** Not run; per the plan this moves to the start of M2. Until
+then it is unknown whether latency 1 ms takes effect on macOS (open risk 3); section 5 shows
+only that the driver accepts the setting.
+
 | Latency | Echoes | Timeouts | Wrong | Min ms | Median ms | Max ms |
 |---|---|---|---|---|---|---|
-| 1 ms | | | | | | |
-| 16 ms | | | | | | |
+| 1 ms | not run | | | | | |
+| 16 ms | not run | | | | | |
 
 Each run sets the latency explicitly (1 or 16 ms), because a setting lasts until the cable is
 replugged. If latency 1 shows no improvement over 16, `IOSSDATALAT` did not take effect on
