@@ -72,7 +72,7 @@ describe("MCP server", () => {
     const instr = client.getInstructions() ?? "";
     expect(instr).toBe(INSTRUCTIONS);
     expect(instr.split(/\s+/).length).toBeLessThanOrEqual(180);
-    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_vehicle_status"]) {
+    for (const tool of ["vm_list_windows", "vm_screenshot", "vm_logs_list", "vm_logs_read", "ediabas_list_ecus", "ediabas_describe", "ediabas_read_faults", "ediabas_job", "ediabas_jobs", "ediabas_vehicle_status"]) {
       expect(instr).toContain(tool);
     }
     expect(instr).toMatch(/Call vm_health first/);
@@ -92,7 +92,7 @@ describe("MCP server", () => {
   it("lists the tools with read-only annotations, titles and descriptions", async () => {
     const { client } = await connect();
     const { tools } = await client.listTools();
-    expect(tools).toHaveLength(10);
+    expect(tools).toHaveLength(11);
     for (const t of tools) {
       expect(t.title).toBeTruthy();
       expect(t.description && t.description.length).toBeGreaterThan(40);
@@ -180,7 +180,7 @@ describe("MCP server", () => {
 
   it("reports a missing token with the fix, and the server still serves tools/list", async () => {
     const { client } = await connect({ ...discovery({ EDIABAS_AGENT_TOKEN: "" }), keychain: null });
-    expect((await client.listTools()).tools).toHaveLength(10);
+    expect((await client.listTools()).tools).toHaveLength(11);
     const r = await client.callTool({ name: "vm_health", arguments: {} });
     expect(r.isError).toBe(true);
     expect(textOf(r)).toContain("security add-generic-password -s ediabas-bridge -a agent -w");

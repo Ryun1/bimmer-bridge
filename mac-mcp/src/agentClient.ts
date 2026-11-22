@@ -385,9 +385,12 @@ export class AgentClient {
     return this.json({ method: "POST", path: "/ediabas/job", body, ediabas: true, runsJob: true }, JobResultSchema);
   }
 
-  /** 1..20 items; the caller chunks. */
-  runJobs(items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[]): Promise<JobsResponse> {
-    return this.json({ method: "POST", path: "/ediabas/jobs", body: { items }, ediabas: true, runsJob: true }, JobsResponseSchema);
+  /** 1..20 items; the caller chunks. `timeoutSeconds` applies to each item. */
+  runJobs(
+    items: { ecu: string; job: string; args?: string | undefined; results?: string | undefined }[],
+    timeoutSeconds?: number,
+  ): Promise<JobsResponse> {
+    return this.json({ method: "POST", path: "/ediabas/jobs", body: timeoutSeconds === undefined ? { items } : { items, timeoutSeconds }, ediabas: true, runsJob: true }, JobsResponseSchema);
   }
 
   private json<T>(spec: RequestSpec, schema: z.ZodType<T>): Promise<T> {

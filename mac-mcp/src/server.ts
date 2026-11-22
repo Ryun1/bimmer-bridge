@@ -2,22 +2,14 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { AgentClient, type BatchItem } from "./agentClient.js";
+import { AgentClient } from "./agentClient.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import type { Config } from "./config.js";
-import { BridgeError, badResponse, cleanText, errorText, toBridgeError } from "./errors.js";
+import { BridgeError, errorText, toBridgeError } from "./errors.js";
+import { BATCH_MAX, readFaults, runJobBatch } from "./faults.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
-import {
-  formatDescribeJob,
-  formatDescribeList,
-  formatEcus,
-  formatFaultReport,
-  formatJobRaw,
-  formatJobResult,
-  formatVehicle,
-  type FaultReport,
-} from "./formatEdiabas.js";
-import { PolicyGuard, jobNotAllowed } from "./policy.js";
+import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle } from "./formatEdiabas.js";
+import { PolicyGuard } from "./policy.js";
 import { FolderRecorder } from "./recorder.js";
 import { fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
@@ -40,7 +32,7 @@ export const INSTRUCTIONS = [
   "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
-  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job, ediabas_vehicle_status reads ignition and voltages.",
+  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition and voltages.",
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
   "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
   "[agent_outdated]: that tool is not installed in the VM yet; say so.",
@@ -60,8 +52,6 @@ export function stderrLog(message: string): void {
   process.stderr.write(`[ediabas-bridge] ${message}\n`);
 }
 
-/** The most items one /ediabas/jobs request may carry (docs/api.md). */
-export const BATCH_MAX = 20;
 export const MAX_FAULT_ECUS = 20;
 /** vm_logs_read: the largest range, and the tail read when no range is given. */
 const LOG_READ_MAX = 65_536;
@@ -364,6 +354,43 @@ export function buildServer(parts: ServerParts): McpServer {
   );
 
   server.registerTool(
+    "ediabas_jobs",
+    {
+      title: "Run several EDIABAS read jobs",
+      description:
+        "Run 1-20 read-only EDIABAS jobs in one request, each `{ecu, job, args?, results?}` as for ediabas_job, and " +
+        "show one block per job in the order given, a failed job as its [code] line, under a header saying how many ran. " +
+        "Every job is checked against the job policy first: if one is refused, nothing is sent. Find names and arguments " +
+        "with ediabas_describe first. Read-only.",
+      inputSchema: {
+        jobs: z
+          .array(
+            z.object({
+              ecu: Name.describe("SGBD or group name."),
+              job: Name.describe("Job name, from ediabas_describe."),
+              args: z.string().max(1000).optional().describe("Job arguments, semicolon-separated."),
+              results: z.string().max(1000).optional().describe("Result names to return, semicolon-separated."),
+            }),
+          )
+          .min(1)
+          .max(BATCH_MAX)
+          .describe("The jobs to run, 1-20."),
+        raw: z.boolean().optional().describe("Return the agent's JSON for each job instead of formatted text."),
+      },
+      annotations: { title: "Run several EDIABAS read jobs", ...READ_ONLY },
+    },
+    async (a) =>
+      run(
+        "ediabas_jobs",
+        async () => {
+          const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
+          return (await runJobBatch({ client, policy }, items, { raw: a.raw })).text;
+        },
+        { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
+      ),
+  );
+
+  server.registerTool(
     "ediabas_read_faults",
     {
       title: "Read fault memory",
@@ -379,69 +406,10 @@ export function buildServer(parts: ServerParts): McpServer {
     },
     async (a) => {
       const includeInfo = a.includeInfoMemory === true;
-      const jobs = includeInfo ? ["FS_LESEN", "IS_LESEN"] : ["FS_LESEN"];
-      return run("ediabas_read_faults", () => readFaults(a.ecus, jobs, includeInfo), { ecu: a.ecus.join(","), job: jobs.join(",") });
+      const jobs = includeInfo ? "FS_LESEN,IS_LESEN" : "FS_LESEN";
+      return run("ediabas_read_faults", () => readFaults({ client, policy }, a.ecus, includeInfo), { ecu: a.ecus.join(","), job: jobs });
     },
   );
-
-  async function readFaults(ecusIn: string[], jobs: string[], includeInfo: boolean): Promise<string> {
-    // The same ECU twice (any case) is read once.
-    const seen = new Set<string>();
-    const ecus = ecusIn.filter((e) => {
-      const k = e.toUpperCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-
-    // Every item is checked before anything is sent; any refusal stops the whole call.
-    const refused: { ecu: string; job: string; rule: string }[] = [];
-    const items: { ecu: string; job: string }[] = [];
-    for (const ecu of ecus) {
-      for (const job of jobs) {
-        const v = policy.evaluate({ ecu, job });
-        if (!v.allowed) refused.push({ ecu, job, rule: v.rule });
-        items.push({ ecu, job });
-      }
-    }
-    if (refused.length === 1) throw jobNotAllowed(refused[0]!.ecu, refused[0]!.job, refused[0]!.rule);
-    if (refused.length > 1) {
-      const list = refused.map((r) => `${cleanText(r.ecu, 80) || "(empty)"} ${r.job} (rule ${r.rule})`).join("; ");
-      const e = new BridgeError(
-        "job_not_allowed",
-        `Refused by the job policy: ${list}. Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell Ryan it was refused.`,
-      );
-      e.rule = refused[0]!.rule;
-      throw e;
-    }
-
-    const results: (BatchItem | { error: string })[] = [];
-    let failure: BridgeError | null = null;
-    for (let start = 0; start < items.length; start += BATCH_MAX) {
-      const chunk = items.slice(start, start + BATCH_MAX);
-      if (failure) {
-        // A whole-request failure (cable in use, EDIABAS down, VM gone) stands in for the rest.
-        for (let i = 0; i < chunk.length; i++) results.push({ error: errorText(failure.code, failure.message) });
-        continue;
-      }
-      try {
-        const r = await client.runJobs(chunk);
-        if (r.items.length !== chunk.length) throw badResponse("POST /ediabas/jobs");
-        results.push(...r.items);
-      } catch (e) {
-        const err = toBridgeError(e);
-        if (start === 0) throw err;
-        failure = err;
-        for (let i = 0; i < chunk.length; i++) results.push({ error: errorText(err.code, err.message) });
-      }
-    }
-
-    const reports: FaultReport[] = ecus.map((ecu, i) => {
-      const at = i * jobs.length;
-      return { ecu, faults: results[at]!, info: includeInfo ? results[at + 1] : undefined };
-    });
-    return formatFaultReport(reports, includeInfo);
-  }
 
   return server;
 }

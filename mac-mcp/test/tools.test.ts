@@ -82,6 +82,7 @@ describe("tool list", () => {
       [
         "ediabas_describe",
         "ediabas_job",
+        "ediabas_jobs",
         "ediabas_list_ecus",
         "ediabas_read_faults",
         "ediabas_vehicle_status",
@@ -99,6 +100,7 @@ describe("tool list", () => {
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
     expect(Object.keys(byName.ediabas_job!.inputSchema.properties ?? {}).sort()).toEqual(["args", "ecu", "job", "raw", "results"]);
     expect(Object.keys(byName.ediabas_read_faults!.inputSchema.properties ?? {}).sort()).toEqual(["ecus", "includeInfoMemory"]);
+    expect(Object.keys(byName.ediabas_jobs!.inputSchema.properties ?? {}).sort()).toEqual(["jobs", "raw"]);
     expect(Object.keys(byName.vm_logs_read!.inputSchema.properties ?? {}).sort()).toEqual(["grep", "length", "offset", "path", "tailBytes"]);
     expect(Object.keys(byName.vm_screenshot!.inputSchema.properties ?? {}).sort()).toEqual(["maxEdge", "window"]);
   });
@@ -594,6 +596,94 @@ describe("ediabas_job", () => {
       expect(r.text).toMatch(/may have run in the VM\. It was not sent again/);
       expect(agent.requests.filter((q) => q.path === path)).toHaveLength(1);
     }
+  });
+});
+
+describe("ediabas_jobs", () => {
+  const items = (r: { body: string }) => JSON.parse(r.body).items;
+
+  it("runs several jobs in one request and prints one block per item in order", async () => {
+    const { call, auditLines } = await connect();
+    const r = await call("ediabas_jobs", {
+      jobs: [
+        { ecu: "NVE_65", job: "IDENT" },
+        { ecu: "D_MOTOR", job: "FS_LESEN", results: "F_ORT_NR" },
+        { ecu: "NVE_65", job: "STATUS_X", args: "1;2" },
+      ],
+    });
+    expect(r.isError).toBeFalsy();
+    const reqs = toolRequests();
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.path).toBe("/ediabas/jobs");
+    expect(items(reqs[0]!)).toEqual([
+      { ecu: "NVE_65", job: "IDENT" },
+      { ecu: "D_MOTOR", job: "FS_LESEN", results: "F_ORT_NR" },
+      { ecu: "NVE_65", job: "STATUS_X", args: "1;2" },
+    ]);
+    expect(r.text).toMatch(/^3 of 3 ran\.\n\nNVE_65 IDENT: job status OKAY/);
+    expect(r.text.indexOf("D_MOTOR FS_LESEN:")).toBeGreaterThan(r.text.indexOf("NVE_65 IDENT:"));
+    expect(r.text.indexOf("NVE_65 STATUS_X:")).toBeGreaterThan(r.text.indexOf("D_MOTOR FS_LESEN:"));
+    expect((await auditLines())[0]).toMatch(/\tediabas_jobs\tok\t\d+\tecu=NVE_65,D_MOTOR,NVE_65\tjob=IDENT,FS_LESEN,STATUS_X$/);
+  });
+
+  it("shows a failed item as its [code] line and counts what ran", async () => {
+    override("POST /ediabas/jobs", (q) => ({
+      status: 200,
+      body: {
+        items: (q.body as { items: { ecu: string; job: string }[] }).items.map((it) =>
+          it.ecu === "BAD"
+            ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: "BAD", job: it.job } } }
+            : { ok: true, result: jobResult(it.ecu, it.job, [{ A: 1 }]), error: null },
+        ),
+        durationMs: 5,
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }, { ecu: "BAD", job: "IDENT" }] });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toMatch(/^1 of 2 ran\./);
+    expect(r.text).toContain("\n\nBAD IDENT: [job_not_found] BAD has no job IDENT.");
+  });
+
+  it("returns the agent's JSON per item with raw: true", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], raw: true });
+    const [, ...rest] = r.text.split("\n\n");
+    expect(JSON.parse(rest.join("\n\n"))).toMatchObject({ ecu: "NVE_65", job: "IDENT" });
+  });
+
+  it("refuses the whole call on the Mac if any item is refused, with zero requests", async () => {
+    const fetchSpy = vi.fn<typeof fetch>((...a) => fetch(...a));
+    const { call, auditLines } = await connect({ fetch: fetchSpy });
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }, { ecu: "NVE_65", job: "FS_LOESCHEN" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[job_not_allowed\] Refused by the job policy: NVE_65 FS_LOESCHEN/);
+    expect(r.text).toMatch(/Nothing was sent to the VM/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect((await auditLines())[0]).toMatch(/\tjob_not_allowed\t\d+\tecu=NVE_65,NVE_65\tjob=IDENT,FS_LOESCHEN\trule=deny\.substring:LOESCH$/);
+  });
+
+  it("refuses arguments that fail the policy's shape check, with zero requests", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT", args: "gr\u00fcn" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("rule shape.args");
+    expect(agent.requests).toHaveLength(0);
+  });
+
+  it("rejects 21 items, and none, by the schema", async () => {
+    const { call } = await connect();
+    expect((await call("ediabas_jobs", { jobs: Array.from({ length: 21 }, () => ({ ecu: "NVE_65", job: "IDENT" })) })).isError).toBe(true);
+    expect((await call("ediabas_jobs", { jobs: [] })).isError).toBe(true);
+    expect(agent.requests).toHaveLength(0);
+  });
+
+  it("returns isError when the request fails as a whole", async () => {
+    override("POST /ediabas/jobs", () => agentErr(409, "cable_in_use", "x", null));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[cable_in_use\]/);
   });
 });
 
