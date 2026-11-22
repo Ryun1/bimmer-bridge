@@ -428,6 +428,35 @@ describe("ediabas_describe", () => {
   });
 });
 
+describe("what an ediabas_error message sends the user to check, by code", () => {
+  const status = "Check ediabas_vehicle_status";
+  const hint = "If the job name may be wrong, check it with ediabas_describe.";
+  // The cable and voltage codes are about the cable or the supply: ediabas_vehicle_status's
+  // battery and KL30 readings come from the cable's lines (rehearsal, 2026-11-22), so they
+  // cannot settle it. No IFH code comes from a wrong job name (that is SYS-0008).
+  it.each([
+    [12, "IFH-0002: NO RESPONSE FROM INTERFACE", false, false],
+    [13, "IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED", false, false],
+    [16, "IFH-0006: COMMAND NOT ACCEPTED", false, false],
+    [48, "IFH-0038: INTERFACE COMMAND NOT IMPLEMENTED", false, false],
+    [17, "IFH-0007: WRONG UBATT", false, false],
+    [47, "IFH-0037: LOW UBATT", false, false],
+    [42, "IFH-0032: IGNITION IS OFF", false, false],
+    [19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT", true, false],
+    [20, "IFH-0010: DATATRANSMISSION TO CONTROLUNIT DISTURBED", true, false],
+    [100, "SYS-0010: INITIALIZATION ERROR", true, true],
+    [98, "SYS-0008: JOB NOT FOUND", true, true],
+    [134, "SYS-0002: ECU OBJECT FILE NOT FOUND", true, true],
+  ] as const)("error %i (%s)", async (errorCode, errorText, wantStatus, wantHint) => {
+    override("POST /ediabas/job", () => agentErr(502, "ediabas_error", "x", { errorCode, errorText }));
+    const { call } = await connect();
+    const r = await call("ediabas_job", { ecu: "CAS", job: "C_FA_LESEN" });
+    expect(r.text.includes(status)).toBe(wantStatus);
+    expect(r.text.includes(hint)).toBe(wantHint);
+    expect(r.text).toMatch(/ask the user before trying again|Do not retry|stop reading/i);
+  });
+});
+
 describe("the job-name hint on ediabas_error", () => {
   const hint = "If the job name may be wrong, check it with ediabas_describe.";
   const details = { errorCode: 19, errorText: "SYS-0008: JOB NOT FOUND" };
@@ -478,7 +507,7 @@ describe("ediabas_vehicle_status", () => {
     expect(r.text).toContain("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
     expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
-    expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
     const sent = toolRequests();
     expect(sent.map((q) => `${q.method} ${q.path}`)).toEqual(["POST /ediabas/jobs"]);
     expect(JSON.parse(sent[0]!.body).items).toEqual([
@@ -688,7 +717,65 @@ describe("ediabas_job", () => {
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. The user decides/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "", matched: [] }, /has no description/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Jobbeschreibung", matched: [] }, /^(?![\s\S]*suggests)[\s\S]*description has nothing in it but a label \("Jobbeschreibung"\), so the agent cannot tell that it only reads/],
-    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^\[ediabas_error\] (?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 19, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" },
+      /^\[ediabas_error\] (?![\s\S]*UTM)EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT\. The cable works but this ECU did not answer: the ignition is off, the module is not fitted or is asleep, or this SGBD does not match the module fitted\./,
+    ],
+    // The code in the text wins when the number is missing.
+    ["ediabas_error", 502, { errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" }, /The cable works but this ECU did not answer/],
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 12, errorText: "IFH-0002: NO RESPONSE FROM INTERFACE" },
+      /^\[ediabas_error\] (?![\s\S]*ECU did not answer)EDIABAS reported error 12: IFH-0002: NO RESPONSE FROM INTERFACE\. The cable itself did not answer, so nothing reached the car: .*OBD port.*UTM's USB menu/,
+    ],
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 13, errorText: "IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED" },
+      /^\[ediabas_error\] (?![\s\S]*(ECU did not answer|D_MOTOR|identification))EDIABAS reported error 13: IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED\. The exchange with the cable failed, which points at the cable before the ECU: at the desk every job on a real SGBD or group file gave this with the cable in the VM but not plugged into the car\. .*OBD port.*If both are fine and the ignition is on, this module may not have answered; say so rather than retrying\./,
+    ],
+    ...([
+      [17, "IFH-0007: WRONG UBATT"],
+      [25, "IFH-0015: UBATT ON/OFF ERROR"],
+      [47, "IFH-0037: LOW UBATT"],
+    ] as const).map(
+      ([n, t]) =>
+        [
+          "ediabas_error",
+          502,
+          { errorCode: n, errorText: t },
+          new RegExp(`^\\[ediabas_error\\] (?![\\s\\S]*ECU did not answer)EDIABAS reported error ${n}: [^.]*\\. The cable reports the battery voltage at the OBD port as wrong or low\\..*charger`),
+        ] as const,
+    ),
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 20, errorText: "IFH-0010: DATATRANSMISSION TO CONTROLUNIT DISTURBED" },
+      /EDIABAS reported error 20: IFH-0010: DATATRANSMISSION TO CONTROLUNIT DISTURBED\. The ECU's answer was disturbed: .*low battery voltage/,
+    ],
+    ...([
+      [26, "IFH-0016: IGNITION ON/OFF ERROR"],
+      [42, "IFH-0032: IGNITION IS OFF"],
+    ] as const).map(
+      ([n, t]) =>
+        [
+          "ediabas_error",
+          502,
+          { errorCode: n, errorText: t },
+          new RegExp(`EDIABAS reported error ${n}: [^.]*\\. The cable sees the ignition \\(KL15\\) as off\\. Ask the user whether the ignition is on`),
+        ] as const,
+    ),
+    [
+      "ediabas_error",
+      502,
+      { errorCode: 100, errorText: "SYS-0010: INITIALIZATION ERROR" },
+      /EDIABAS reported error 100: SYS-0010: INITIALIZATION ERROR\. The SGBD could not start\. Some files need the module to answer even to load or describe \(seen at the desk with the ignition off\)/,
+    ],
+    // A code with no advice of its own keeps the general wording.
+    ["ediabas_error", 502, { errorCode: 134, errorText: "SYS-0002: ECU OBJECT FILE NOT FOUND" }, /EDIABAS reported error 134: SYS-0002: ECU OBJECT FILE NOT FOUND\. This often means the ECU did not answer/],
     [
       "ediabas_error",
       502,
@@ -707,7 +794,7 @@ describe("ediabas_job", () => {
       { errorCode: 134, errorText: "SYS-0002: SOMETHING", resultsUnread: true },
       /^\[ediabas_error\] The job finished but its results could not be read \(EDIABAS error 134: SYS-0002: SOMETHING\)\. Ask the user before trying again\.$/,
     ],
-    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009", resultsUnread: false }, /^\[ediabas_error\] EDIABAS reported error 159: IFH-0009\. This often means the ECU did not answer/],
+    ["ediabas_error", 502, { errorCode: 19, errorText: "IFH-0009", resultsUnread: false }, /^\[ediabas_error\] EDIABAS reported error 19: IFH-0009\. The cable works but this ECU did not answer/],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
     ["job_not_found", 404, { ecu: "NVE_65", job: "STATUS_X" }, /^\[job_not_found\] NVE_65 has no job STATUS_X\./],
     ["job_not_found", 404, null, /^\[job_not_found\] The SGBD has no such job\./],

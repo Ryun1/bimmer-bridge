@@ -239,6 +239,84 @@ function processList(details: unknown): string | null {
 }
 
 /**
+ * EDIABAS's own name for an error ("IFH-0009"): from the text when it carries one, else from
+ * the number. Numbering from EdiabasLib's ErrorCodes (IFH from 10, BIP 60, SYS 90, API 120,
+ * NET 150), which matches every code seen at the desk (16 IFH-0006, 28 IFH-0018, 48 IFH-0038,
+ * 13 IFH-0003, 100 SYS-0010).
+ */
+export function ediabasErrorId(n: number | null, text: string | null | undefined): string | null {
+  const m = text ? /\b(IFH|BIP|SYS|API|NET)-(\d{4})\b/.exec(text) : null;
+  if (m) return `${m[1]}-${m[2]}`;
+  if (n === null) return null;
+  const ranges: [string, number][] = [["NET", 150], ["API", 120], ["SYS", 90], ["BIP", 60], ["IFH", 10]];
+  for (const [name, base] of ranges) {
+    if (n >= base && n < base + 30) return `${name}-${String(n - base).padStart(4, "0")}`;
+  }
+  return null;
+}
+
+/** Codes about the cable, the supply or the ignition rather than one ECU's answer. */
+const CABLE_SIDE_CODES = new Set(["IFH-0002", "IFH-0003", "IFH-0006", "IFH-0038", "IFH-0007", "IFH-0015", "IFH-0037", "IFH-0016", "IFH-0032"]);
+
+const ECU_OR_CAR = "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+
+/**
+ * Why an EDIABAS error happened and what to check, by EDIABAS's name for it. Codes marked
+ * "desk" were seen on this setup; the others take EDIABAS's own meaning of the code, so the
+ * advice stays with what the code says.
+ */
+function ediabasErrorAdvice(id: string | null): string {
+  switch (id) {
+    // Desk, 2026-11-21/22: every real SGBD after the cable was replugged into the Mac.
+    case "IFH-0006":
+      return (
+        "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself " +
+        "(the user ticks it in UTM's USB menu). " + ECU_OR_CAR
+      );
+    // Desk, 2026-11-22: after the Mac slept, which hands USB devices back to the Mac.
+    case "IFH-0038":
+      return "The cable may not be attached to the VM: after the Mac sleeps, UTM hands it back to the Mac (the user ticks it in UTM's USB menu). " + ECU_OR_CAR;
+    case "IFH-0002":
+      return (
+        "The cable itself did not answer, so nothing reached the car: check that it is firmly in the car's OBD port (it is powered from there) " +
+        "and still ticked for the VM in UTM's USB menu. "
+      );
+    // Rehearsal, 2026-11-22: every job on E60, CAS, NVE_65 and D_MOTOR, cable in the VM, not in the car.
+    case "IFH-0003":
+      return (
+        "The exchange with the cable failed, which points at the cable before the ECU: at the desk every job on a real SGBD or group file " +
+        "gave this with the cable in the VM but not plugged into the car. Check that it is firmly in the car's OBD port and still ticked " +
+        "for the VM in UTM's USB menu. If both are fine and the ignition is on, this module may not have answered; say so rather than retrying. "
+      );
+    case "IFH-0007":
+    case "IFH-0015":
+    case "IFH-0037":
+      return (
+        "The cable reports the battery voltage at the OBD port as wrong or low. Ask the user to check that a charger or support unit is on " +
+        "and connected; reads on a low battery are unreliable, so stop reading the car until it is. "
+      );
+    case "IFH-0009":
+      return (
+        "The cable works but this ECU did not answer: the ignition is off, the module is not fitted or is asleep, or this SGBD does not match " +
+        "the module fitted. Do not try other SGBDs at random; find the right one with ediabas_list_ecus. "
+      );
+    case "IFH-0010":
+      return "The ECU's answer was disturbed: low battery voltage, a loose cable at the OBD port, or another tester on the bus. ";
+    case "IFH-0016":
+    case "IFH-0032":
+      return "The cable sees the ignition (KL15) as off. Ask the user whether the ignition is on; every minute with it on counts toward the car session. ";
+    // Desk, 2026-11-21: N62_TUE2, ME9N62_2, GS19D and SZL_60 with the ignition off.
+    case "SYS-0010":
+      return (
+        "The SGBD could not start. Some files need the module to answer even to load or describe (seen at the desk with the ignition off); " +
+        "with the ignition on, the module may not be fitted or may not match this file. "
+      );
+    default:
+      return "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+  }
+}
+
+/**
  * The user-facing message for a known agent error code, or null for codes without one. None
  * suggests a way around a refusal.
  */
@@ -293,22 +371,14 @@ export function describeAgentError(code: string, message: string | undefined, de
         return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask the user before trying again.`;
       }
       const what = n !== null || text ? said : cleanText(message ?? "no details", 200);
-      // Codes seen when the cable was no longer attached to the VM until ticked again in UTM:
-      // error 16 (IFH-0006) on every real SGBD after the cable was replugged into the Mac, and
-      // error 48 (IFH-0038) after the Mac slept, which hands USB devices back to the Mac (both
-      // 2026-11-22). Either can have other causes, so the ECU stays the other explanation.
-      const detached =
-        n === 16
-          ? "after it is unplugged and plugged back in, UTM does not hand it back by itself"
-          : n === 48
-            ? "after the Mac sleeps, UTM hands it back to the Mac"
-            : null;
-      const why = detached
-        ? `The cable may not be attached to the VM: ${detached} (the user ticks it in UTM's USB menu). ` +
-          "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
-        : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
-      const hint = run ? " If the job name may be wrong, check it with ediabas_describe." : "";
-      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.${hint}`;
+      const id = ediabasErrorId(n, text);
+      // The cable, voltage and ignition codes are not settled by ediabas_vehicle_status: its battery
+      // and KL30 readings come from the cable's own lines (rehearsal, 2026-11-22).
+      const checkStatus = !(id !== null && CABLE_SIDE_CODES.has(id));
+      // No IFH code comes from a wrong job name (EDIABAS gives SYS-0008 for that).
+      const hint = run && !id?.startsWith("IFH-") ? " If the job name may be wrong, check it with ediabas_describe." : "";
+      const next = checkStatus ? "Check ediabas_vehicle_status, and ask the user before trying again." : "Ask the user before trying again.";
+      return `EDIABAS reported ${what}. ${ediabasErrorAdvice(id)}${next}${hint}`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.

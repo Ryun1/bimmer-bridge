@@ -197,7 +197,7 @@ const VEHICLE_READINGS: Record<string, unknown> = {
   "TMODE LESE_SPANNUNG_KL15": {
     ok: false,
     result: null,
-    error: { code: "ediabas_error", message: "failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } },
+    error: { code: "ediabas_error", message: "failed", details: { errorCode: 19, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } },
   },
 };
 

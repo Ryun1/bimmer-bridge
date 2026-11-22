@@ -372,7 +372,8 @@ export function buildServer(parts: ServerParts): McpServer {
       title: "Vehicle status",
       description:
         "Read ignition (UTILITY STATUS_ZUENDUNG), battery (UTILITY STATUS_UBATT), the interface's KL30/KL15 voltages (TMODE) and any voltage sources configured on the Mac, in one EDIABAS request. " +
-        "Each reading's result fields are shown as returned. Use it to check the car is awake before reading faults. Read-only.",
+        "Each reading's result fields are shown as returned. The battery and KL30 readings come from the cable's own lines and read the same with no car connected; " +
+          "only a configured voltage source (a module) shows the car is awake. Read-only.",
       annotations: { title: "Vehicle status", ...READ_ONLY },
     },
     async () => {

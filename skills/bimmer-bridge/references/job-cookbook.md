@@ -155,7 +155,8 @@ remaining jobs (`ecu_restricted`).
 ### `UTILITY` — a utility SGBD, not a car module
 
 `ediabas_describe` on 2026-11-22 (policy version 4, cable in the VM, not in the car): 10 jobs,
-3 runnable. `ediabas_vehicle_status` sends the two `STATUS_` jobs. Neither has been run.
+3 runnable. `ediabas_vehicle_status` sends the two `STATUS_` jobs. Run so far only without the
+car (below).
 
 | Job | Verdict | Description as returned | Results declared | *(gloss)* |
 |---|---|---|---|---|
@@ -167,6 +168,16 @@ Refused: `INITIALISIERUNG`, `ABS_RELAIS`, `INTERFACE`, `TIME_AND_DATE`, `OGW_CAN
 (`ecu_restricted`), `IF_RESET` (`deny.substring:RESET`), `PARALLELE_CODIERUNG_EIN`
 (`deny.substring:CODIER`). What `STAT_UBATT` and `STAT_ZUENDUNG` mean as numbers (units,
 values for on and off) is not declared; it comes from Phase 6.
+
+**Run with no car connected** (rehearsal 2026-11-22, cable in the VM, not in the car; fixture
+`dev/fixtures/no-car`): `STATUS_ZUENDUNG` gave `STAT_ZUENDUNG=0`, `STATUS_UBATT` gave
+`STAT_UBATT=1`, both `JOB_STATUS` `OKAY`. `TMODE` `LESE_SPANNUNG_KL30` gave `SPANNUNG`
+`E02E0000` (12000 read little-endian) and `LESE_SPANNUNG_KL15` `00000000`, with no job status.
+So `STAT_UBATT` and the KL30 reading come from the cable, not the car: they say nothing about
+whether the car is awake or the battery's charge. Only a module's reading (a voltage source,
+e.g. `NVE_65` `STATUS_BORDNETZSPANNUNG`) shows the car answered. In the same batch,
+`NVE_65` `STATUS_BORDNETZSPANNUNG` gave `ediabas_error` 13 `IFH-0003`, as did every other job on a
+real SGBD or group file (`E60`, `CAS`, `D_MOTOR`, `NVE_65` `FS_LESEN`).
 
 ### Whole-car and vehicle-order jobs (described 2026-11-22, not yet run)
 

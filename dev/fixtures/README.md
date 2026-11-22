@@ -66,6 +66,10 @@ MCP server sends what Claude passed).
 | `battery` | the engine group and a few status jobs: `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_jobs` |
 | `unreachable` | no folder: start no replay agent, point `EDIABAS_AGENT_URL` at a closed port |
 
+`no-car` is used by no eval: the vehicle-status batch from the desk rehearsal of 2026-11-22 (cable
+in the VM, not in the car), the evidence for `job-cookbook.md`'s note that `STAT_UBATT` and the
+cable's KL30 do not come from the car.
+
 ## Recording a scenario
 
 1. Pick a raw folder **outside the repo** (it holds real vehicle data and is never committed),
