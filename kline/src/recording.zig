@@ -3,8 +3,9 @@
 //! runs; `load` reads them back for replay.
 //!
 //! Ops and their fields: open {path, latency?}, line {baud, bits, parity}, dtr {on},
-//! rts {on}, break {on}, concept {params}, interbyte {ms}, send {hex}, recv {hex}, purge,
-//! refused {hex, reason}, close.
+//! rts {on}, break {on}, concept {params}, interbyte {ms}, send {hex}, recv {hex, reason?}, purge,
+//! refused {hex, reason}, close. A recv with a reason is a receive that failed after those bytes
+//! arrived (a short read, or a drain ending in a timeout).
 
 const std = @import("std");
 const libc = @import("sys/libc.zig");

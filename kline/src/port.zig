@@ -226,16 +226,20 @@ pub const Port = struct {
     /// Fills buf exactly. The first byte must arrive within timeout_ms and no later gap may exceed
     /// timeout_tel_end_ms (EdiabasLib ReceiveData semantics, EdInterfaceObd.cs:3381-3450).
     pub fn receive(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32) ReceiveError!void {
-        return self.receiveCancellable(buf, timeout_ms, timeout_tel_end_ms, null) catch |e| switch (e) {
+        return self.receiveCancellable(buf, timeout_ms, timeout_tel_end_ms, null, null) catch |e| switch (e) {
             error.Cancelled => unreachable,
             else => |x| x,
         };
     }
 
     /// receive, returning Cancelled within about 10 ms once cancel is set (checked between
-    /// polls of at most 10 ms).
-    pub fn receiveCancellable(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32, cancel: ?*const std.atomic.Value(bool)) CancellableReceiveError!void {
+    /// polls of at most 10 ms). got_out, if given, says how many bytes arrived, also when it
+    /// fails (a short read or a drain that ends in a timeout).
+    pub fn receiveCancellable(self: *Port, buf: []u8, timeout_ms: u32, timeout_tel_end_ms: u32, cancel: ?*const std.atomic.Value(bool), got_out: ?*usize) CancellableReceiveError!void {
         var got: usize = 0;
+        defer if (got_out) |g| {
+            g.* = got;
+        };
         var deadline = libc.monotonicNs() + @as(u64, timeout_ms) * std.time.ns_per_ms;
         while (got < buf.len) {
             const now = libc.monotonicNs();

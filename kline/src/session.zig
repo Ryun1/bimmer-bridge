@@ -265,17 +265,28 @@ pub const Session = struct {
     }
 
     /// Fills buf exactly: the first byte within timeout_ms, no gap longer than tel_end_ms.
+    /// A receive that fails after some bytes arrived (a short read, or EdiabasLib's drain that
+    /// always ends in a timeout) still records those bytes, with the reason.
     pub fn receive(self: *Session, buf: []u8, timeout_ms: u32, tel_end_ms: u32) Reason {
         if (self.cancelled.load(.acquire)) return self.done(.cancelled);
+        var got: usize = buf.len;
+        var res: Reason = .ok;
         switch (self.device) {
-            .replay => |*r| {
-                const res = r.receive(buf);
-                if (res != .ok) return self.done(res);
+            .replay => |*r| res = r.receive(buf),
+            .port => |*p| p.receiveCancellable(buf, timeout_ms, tel_end_ms, &self.cancelled, &got) catch |e| {
+                res = reasonOf(e);
             },
-            .port => |*p| p.receiveCancellable(buf, timeout_ms, tel_end_ms, &self.cancelled) catch |e| return self.done(reasonOf(e)),
         }
-        if (self.rec) |*w| w.bytesEvent(.recv, buf, "");
-        return .ok;
+        if (res != .ok and self.device == .replay) got = 0;
+        if (self.rec) |*w| {
+            if (res == .ok) {
+                w.bytesEvent(.recv, buf, "");
+            } else if (got > 0) {
+                var extra: [48]u8 = undefined;
+                w.bytesEvent(.recv, buf[0..got], std.fmt.bufPrint(&extra, ",\"reason\":\"{s}\"", .{@tagName(res)}) catch "");
+            }
+        }
+        return self.done(res);
     }
 
     pub fn purge(self: *Session) Reason {
@@ -456,6 +467,61 @@ test "recorder writes every event" {
     try testing.expectEqualStrings("open,line,concept,send,recv,close", ops.items);
     try testing.expectEqualSlices(u8, &ident, r.events[3].bytes);
     try testing.expectEqualSlices(u8, &.{ 0x82, 0xF1, 0x12, 0x5A, 0x80, 0x5F }, r.events[4].bytes);
+}
+
+test "recorder keeps the bytes of a receive that times out" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var lock = try TmpDir.create();
+    defer lock.cleanup();
+    var rec = try TmpDir.create();
+    defer rec.cleanup();
+    {
+        const s = try openPty(&pty, &lock, rec.path);
+        defer s.close();
+        const partial = [_]u8{ 0x82, 0xF1 };
+        _ = std.c.write(pty.master, &partial, partial.len);
+        var buf: [4]u8 = undefined;
+        try testing.expectEqual(Reason.timeout, s.receive(&buf, 200, 30));
+    }
+    const path = (try onlyFile(rec.path)).?;
+    defer testing.allocator.free(path);
+    var r = try recording.load(testing.allocator, path);
+    defer r.deinit();
+    var found = false;
+    for (r.events) |e| {
+        if (e.op == .recv) {
+            try testing.expectEqualSlices(u8, &.{ 0x82, 0xF1 }, e.bytes);
+            found = true;
+        }
+    }
+    try testing.expect(found);
+    // The reason is in the line, for M2's count of short reads.
+    var buf: [4096]u8 = undefined;
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY });
+    defer _ = std.c.close(fd);
+    const n = std.c.read(fd, &buf, buf.len);
+    try testing.expect(std.mem.indexOf(u8, buf[0..@intCast(n)], "\"reason\":\"timeout\"") != null);
+}
+
+test "recorder writes nothing for a receive that got no bytes" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var lock = try TmpDir.create();
+    defer lock.cleanup();
+    var rec = try TmpDir.create();
+    defer rec.cleanup();
+    {
+        const s = try openPty(&pty, &lock, rec.path);
+        defer s.close();
+        var buf: [4]u8 = undefined;
+        try testing.expectEqual(Reason.timeout, s.receive(&buf, 20, 20));
+    }
+    const path = (try onlyFile(rec.path)).?;
+    defer testing.allocator.free(path);
+    var r = try recording.load(testing.allocator, path);
+    defer r.deinit();
+    for (r.events) |e| try testing.expect(e.op != .recv);
 }
 
 fn onlyFile(dir: [:0]const u8) !?[:0]u8 {
