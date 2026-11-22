@@ -12,7 +12,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 | `vm_logs_read` | `path`, then `tailBytes?` (default 16384) or `offset?` + `length?`, `grep?`; at most 65536 bytes per call | `GET /logs/read` | header line (path, range, encoding, truncated) then the text |
 | `ediabas_list_ecus` | `filter?` | `GET /ediabas/ecus` | names with type (`prg` / `grp`); at most 500 names, then "N more; use filter to narrow the list." |
 | `ediabas_describe` | `ecu`, `job?`, `filter?` (ignored with `job`), `namesOnly?` (job list only; sent as `comments=false`) | `GET /ediabas/describe` | job list with description and whether each is runnable; or one job's description, arguments and results |
-| `ediabas_vehicle_status` | — | `POST /ediabas/jobs` (one batch, built on the Mac) | ignition, battery presence, voltages when configured, cable-side readings |
+| `ediabas_vehicle_status` | — | `POST /ediabas/jobs` (one batch, built on the Mac) | ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any `voltageSources` configured on the Mac |
 | `ediabas_job` | `ecu`, `job`, `args?`, `results?`, `raw?`, `timeoutSeconds?` (1–60) | `POST /ediabas/job` | formatted result sets; the agent's JSON when `raw: true` |
 | `ediabas_jobs` | `jobs` (1–20 of `{ecu, job, args?, results?}`), `raw?`, `timeoutSeconds?` (1–60, for each job) | `POST /ediabas/jobs` | header "N of M ran.", then one block per job in request order; a failed job as `ECU JOB: [code] …` |
 | `ediabas_read_faults` | `ecus` (1–20 names), `includeInfoMemory?` | `POST /ediabas/jobs` | one fault table per ECU |

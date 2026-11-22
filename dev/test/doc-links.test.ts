@@ -1,6 +1,7 @@
 // Every relative link in the repo's markdown resolves: the file (or folder) exists and, for a
 // `#anchor`, the target file has a heading with that GitHub-style slug (or an explicit
-// `<a id="...">`). Links to the web are not checked. docs/superpowers/ holds point-in-time
+// `<a id="...">`). Only inline `](target)` links are checked (not reference-style links or
+// HTML `href`s). Links to the web are not checked. docs/superpowers/ holds point-in-time
 // plans and is left as written.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
