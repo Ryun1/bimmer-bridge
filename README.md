@@ -89,7 +89,7 @@ to `main`.
 | 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
 | 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
 | 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 pass with the skills; skill references filled from the desk recordings of 2026-11-21/22 |
-| 8 Hardening | done: this README, `VERSION`, `release.sh` |
+| 8 Hardening | built: `VERSION`, `release.sh`, the docs. The plan's acceptance check (reinstalling from this README alone) has not been run; updates from the README's lines have |
 
 Open:
 - **Phase 6 at the car**, Ryan's: [docs/at-the-car.md](docs/at-the-car.md).
