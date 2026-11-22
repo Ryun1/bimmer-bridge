@@ -48,11 +48,10 @@ never look for another tool, job or route (and never computer use on the VM wind
   for the same reading, and never hold a session at the car for it. Give the approval entry
   only after the user says they want to approve the job: `ediabas_describe` on that job
   prints the exact entry to add to `reviewedJobs` in the VM's `config.json`, pinned to the
-  description as it is now; the agent
-  picks it up at the next EDIABAS call, no restart. An approval written without the `@hash`
-  part approves nothing (since 0.5.0); `vm_health` counts such entries as ignored, and
-  `ediabas_describe` prints the pinned entry to replace each with. An approved job called with
-  arguments still goes through the argument check.
+  description as it is now; the agent picks it up at the next EDIABAS call, no restart. An
+  approval written without the `@hash` part approves nothing (since 0.5.0); `vm_health`
+  counts such entries as ignored, and `ediabas_describe` prints the pinned entry to replace
+  each with. An approved job called with arguments still goes through the argument check.
 
 ## EDIABAS
 
