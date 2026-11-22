@@ -421,6 +421,7 @@ public sealed class EdiabasService
             variant,
             verdict.Job,
             comment,
+            comment is null ? null : CommentScreen.DescriptionHash(comment),
             ToJobVerdict(verdict, fetch, comment),
             arguments.Value!,
             results.Value!,

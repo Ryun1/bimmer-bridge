@@ -292,4 +292,41 @@ public class ApprovalTests
             Assert.Equal(ran, described == Review.Reviewed);
         }
     }
+
+    // ---- describe shows what to paste ----
+
+    [Fact]
+    public void DescribeJob_CarriesTheDescriptionHash()
+    {
+        ScriptDescribe("STATUS_B", "Startet B");
+        var r = Service().DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!;
+        Assert.Equal(StartetBHash, r.DescriptionHash);
+        Assert.Equal(CommentScreen.DescriptionHash(r.Comment!), r.DescriptionHash);
+    }
+
+    [Fact]
+    public void DescribeJob_NoDescription_NoHash()
+    {
+        ScriptDescribe("STATUS_B", " ");
+        Assert.Null(Service().DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!.DescriptionHash);
+    }
+
+    [Fact]
+    public void DescribeJob_UnreadableDescription_NoHash()
+    {
+        _api.On("NVE_65 _JOBS", FakeJob.Jobs("STATUS_B"));
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Error(100, "SYS-0010"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_B", new FakeJob { Sets = [[]] });
+        _api.On("NVE_65 _RESULTS STATUS_B", new FakeJob { Sets = [[]] });
+        Assert.Null(Service().DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!.DescriptionHash);
+    }
+
+    [Fact]
+    public void DescribeJob_MultiLineDescription_HashIsOfTheJoinedText()
+    {
+        ScriptDescribe("STATUS_B", "Zeile 1");
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Comments("Status lesen", "Zeile 2"));
+        var r = Service().DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!;
+        Assert.Equal(CommentScreen.DescriptionHash("Status lesen\nZeile 2"), r.DescriptionHash);
+    }
 }

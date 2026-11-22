@@ -92,6 +92,9 @@ public sealed class ApprovalList
     /// <summary>Distinct unpinned entries.</summary>
     public int UnpinnedCount { get; }
 
+    /// <summary>For /health.</summary>
+    public ApprovalCounts Counts => new(PinnedCount, UnpinnedCount);
+
     /// <summary>True for <c>ECU:JOB</c> and <c>ECU:JOB@</c> plus 12 lower-case hex digits.</summary>
     public static bool TryParseEntry(string? entry, out string key, out string? hash)
     {

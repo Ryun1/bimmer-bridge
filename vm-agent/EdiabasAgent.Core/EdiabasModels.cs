@@ -58,11 +58,14 @@ public sealed record DescribeListResponse(
 
 public sealed record JobParameterInfo(string? Name, string? Type, string? Comment);
 
+/// <summary><c>DescriptionHash</c>: <see cref="CommentScreen.DescriptionHash"/> of <c>Comment</c>, what a
+/// pinned <c>reviewedJobs</c> entry holds; null when the description is empty or could not be read.</summary>
 public sealed record DescribeJobResponse(
     string Ecu,
     string? Variant,
     string Job,
     string? Comment,
+    string? DescriptionHash,
     JobVerdict Verdict,
     IReadOnlyList<JobParameterInfo> Arguments,
     IReadOnlyList<JobParameterInfo> Results,

@@ -25,13 +25,14 @@ internal sealed class AgentContext : IDisposable
         Conflicts = new ConflictCheck(config.ConflictProcesses, config.EdiabasDll);
         Policy = JobPolicy.Embedded;
         Logs = new LogService(config.LogRoots, new LogAccess());
+        Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
         Runner = new EdiabasRunner(
             () => new EdiabasService(
                 new Api32(config.EdiabasDll),
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
-                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, config.ReviewedJobs),
+                new CommentScreen(Policy.ScreenTerms, Policy.ScreenIgnore, Approvals),
                 new SystemRunnerClock(),
                 CableUse,
                 new EdiabasLogAdapter(log),
@@ -61,6 +62,9 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>The config's <c>reviewedJobs</c> as the runner uses them, for /health.</summary>
+    public ApprovalState Approvals { get; }
 
     /// <summary>Whether the runner has api32.dll loaded right now, for /health.</summary>
     public DllLoadState DllState { get; } = new();
