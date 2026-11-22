@@ -198,11 +198,16 @@ export interface FaultReport {
   info?: BatchItem | { error: string } | undefined;
 }
 
-function itemSection(item: BatchItem | { error: string }, label: string, info = false): string[] {
+function itemSection(item: BatchItem | { error: string }, label: string, ecu: string, info = false): string[] {
   if ("ok" in item) {
     if (item.ok && item.result) return formatFaultTable(item.result, label);
-    // Not every module has an info memory; its SGBD then has no IS_LESEN. That is not a failure.
-    if (info && item.error?.code === "job_not_found") return [`  ${label}: no info memory on this module.`];
+    // Not every module has an info memory; its SGBD then has no IS_LESEN, which EDIABAS reports as an
+    // ordinary job error. The agent does not tell the two apart, so say what may be the case.
+    if (info && item.error?.code === "ediabas_error") {
+      return [
+        `  ${label}: not read ([ediabas_error] ${cleanText(item.error.message || "no details", 200)}). Many modules have no info memory (no IS_LESEN job); ediabas_describe ${cleanName(ecu)} shows whether this one has it.`,
+      ];
+    }
     return [`  ${label}: ${item.ok ? "no result returned" : `error: ${itemErrorText(item.error)}`}`];
   }
   return [`  ${label}: error: ${item.error}`];
@@ -215,8 +220,8 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
     const variant = "ok" in r.faults && r.faults.result?.variant ? valueText(r.faults.result.variant, 64) : null;
     out.push("");
     out.push(`${cleanName(r.ecu)}${variant && variant !== r.ecu.toUpperCase() ? ` (variant ${variant})` : ""}`);
-    out.push(...itemSection(r.faults, "Fault memory"));
-    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", true));
+    out.push(...itemSection(r.faults, "Fault memory", r.ecu));
+    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", r.ecu, true));
   }
   return out.join("\n");
 }

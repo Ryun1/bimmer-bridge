@@ -999,18 +999,16 @@ describe("ediabas_read_faults", () => {
     expect(r.text).toMatch(/ECU_11\n  Fault memory: error: [^\n]+\n  Info memory: error: \[cable_in_use\] The diagnostic cable/);
   });
 
-  it("shows a module without info memory as such, not as a failure", async () => {
+  it("says an info memory that did not read may be missing, not that the module failed", async () => {
     override("POST /ediabas/jobs", (q) => {
       const items = (q.body as { items: { ecu: string; job: string }[] }).items;
       return {
         status: 200,
         body: {
           items: items.map((it) =>
-            it.job === "IS_LESEN"
-              ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
-              : it.ecu === "NOFS"
-                ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
-                : { ok: true, result: jobResult(it.ecu, it.job, [{ JOB_STATUS: "OKAY" }]), error: null },
+            it.job === "IS_LESEN" || it.ecu === "NOFS"
+              ? { ok: false, result: null, error: { code: "ediabas_error", message: "EDIABAS job failed: SYS-0008: JOB NOT FOUND", details: { errorCode: 19, errorText: "SYS-0008: JOB NOT FOUND" } } }
+              : { ok: true, result: jobResult(it.ecu, it.job, [{ JOB_STATUS: "OKAY" }]), error: null },
           ),
           durationMs: 5,
         },
@@ -1018,8 +1016,12 @@ describe("ediabas_read_faults", () => {
     });
     const { call } = await connect();
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "NOFS"], includeInfoMemory: true });
-    expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.\n  Info memory: no info memory on this module.");
-    expect(r.text).toMatch(/NOFS\n  Fault memory: error: \[job_not_found\] NOFS has no job FS_LESEN\./);
+    expect(r.text).toContain(
+      "NVE_65\n  Fault memory: no faults stored.\n  Info memory: not read ([ediabas_error] EDIABAS job failed: SYS-0008: JOB NOT FOUND). Many modules have no info memory (no IS_LESEN job); ediabas_describe NVE_65 shows whether this one has it.",
+    );
+    expect(r.text).not.toContain("NVE_65 has no job");
+    // A missing FS_LESEN is a plain ediabas_error with the run hint (no way to tell it from a silent ECU).
+    expect(r.text).toMatch(/NOFS\n  Fault memory: error: \[ediabas_error\] EDIABAS reported error 19: SYS-0008: JOB NOT FOUND\..*If the job name may be wrong, check it with ediabas_describe\./);
   });
 
   it("reads a repeated ECU once", async () => {
