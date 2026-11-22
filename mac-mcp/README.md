@@ -26,7 +26,8 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 `ediabas_job`, `ediabas_read_faults` and `ediabas_describe` (names only) are checked before
 any request leaves the Mac, so a refused job never reaches the VM. If the file is missing or
 invalid, every `ediabas_*` tool refuses with `policy_unavailable` (fail closed); restore the
-file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`.
+file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`
+and `policy/policy-parse-cases.json`, as the agent's tests do.
 
 **Older agent.** A tool whose endpoint the agent does not have (404 `not_found`) reports
 `agent_outdated`: install the current agent with the Update line (see "Updating" in the repo README).
@@ -136,9 +137,9 @@ a recording failure is logged on stderr and never fails the tool call.
 ## Registering with Claude
 
 Use absolute paths, and a stable Node path (not an nvm version directory) so a Node upgrade
-does not break it.
+does not break it. The full steps are in the repo README, "Register the MCP server".
 
-- Claude Code: `claude mcp add ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`
+- Claude Code: `claude mcp add --scope user ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`
 - Claude desktop app: add to `mcpServers` in
   `~/Library/Application Support/Claude/claude_desktop_config.json`:
 

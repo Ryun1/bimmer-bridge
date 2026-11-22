@@ -3,7 +3,9 @@
 The contract between `vm-agent` (server) and `mac-mcp` (client). Both sides are built against
 this file. Change it here first.
 
-Covers what exists after Phases 1 and 3. Later phases add endpoints.
+The first part covers `/health` and `/windows` (Phases 1 and 3). The part from "Phases 2, 4, 5
+and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
+screenshot and log endpoints.
 
 ## Transport
 - Plain HTTP, port **8765**, on the VM's shared-network IPv4 address only.
@@ -39,7 +41,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -66,7 +68,8 @@ Never touches the cable and never loads the EDIABAS DLL.
 - `sessionId` is the Windows session the agent runs in. `0` means it is not in an
   interactive session and screenshots will not work.
 - `ediabas.dllFound` is a file-existence check only.
-- `lastCableUseAt` is `null` until Phase 2.
+- `lastCableUseAt`, `policyVersion`, `capabilities`, `ediabas.loaded` and `ediabas.stuck` are
+  described under "`GET /health` additions" below.
 
 ## `GET /windows`
 Visible top-level windows with a non-empty title, in z-order (front first).
