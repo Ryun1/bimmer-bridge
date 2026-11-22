@@ -6,7 +6,9 @@
  *   node dev/scrub-fixtures.ts <raw-folder> <scenario> [--fixtures dev/fixtures] [--dry-run]
  *
  * Replaced, in every string and object of each recording (request and response):
- *   - anything shaped like a 17-character VIN, also inside hex-encoded binary results;
+ *   - anything shaped like a 17-character VIN; a BMW VIN (WB...) in any case and whatever
+ *     touches it; in hex-encoded binary results, any 17-character VIN-alphabet run with a
+ *     letter and a digit; percent-encoded strings are also checked decoded;
  *   - the value of any field whose name says it holds a chassis number, VIN or serial number
  *     (German and English names);
  *   - in /health: the Windows user name and any host name field;
@@ -43,10 +45,37 @@ export interface Replacement {
 
 /** VIN alphabet (no I, O, Q), 17 characters, not part of a longer letter/digit run. */
 const VIN_RE = /(?<![A-Za-z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Za-z0-9])/g;
+/** A BMW VIN (WB + 15), in any case and whatever touches it: field text can run into it. */
+const BMW_VIN_RE = /WB[A-HJ-NPR-Z0-9]{15}/gi;
+/** In binary results any run of the VIN alphabet is a candidate; bytes around it mean nothing. */
+const VIN_RUN_RE = /[A-HJ-NPR-Z0-9]{17,}/g;
+const PERCENT_ESCAPE = /%[0-9A-Fa-f]{2}/;
 
 function looksLikeVin(s: string): boolean {
   // A VIN has both letters and digits; this keeps 17-digit numbers and all-letter words out.
   return /[A-Z]/.test(s) && /[0-9]/.test(s) && !isPlaceholder(s);
+}
+
+/**
+ * The characters of a VIN-alphabet run that lie in some 17-character window with a letter
+ * and a digit, as placeholders; the rest of the run is kept.
+ */
+function scrubVinRun(run: string): string {
+  const hit = new Array<boolean>(run.length).fill(false);
+  for (let i = 0; i + 17 <= run.length; i++) {
+    if (looksLikeVin(run.slice(i, i + 17))) hit.fill(true, i, i + 17);
+  }
+  return [...run].map((c, i) => (hit[i] ? shapePlaceholder(c) : c)).join("");
+}
+
+/** The agent's X-Window-Title encoding: UTF-8, every byte outside A-Z a-z 0-9 - . _ ~ as %XX. */
+function percentEncode(s: string): string {
+  let out = "";
+  for (const b of Buffer.from(s, "utf8")) {
+    const c = String.fromCharCode(b);
+    out += /[A-Za-z0-9._~-]/.test(c) ? c : "%" + b.toString(16).toUpperCase().padStart(2, "0");
+  }
+  return out;
 }
 
 /** Letters -> X, digits -> 0, everything else kept. */
@@ -135,12 +164,36 @@ class Scrubber {
     return v;
   }
 
-  /** VIN-shaped text and Windows profile folders inside a string. */
+  /**
+   * A string as it is and, when it has percent-escapes (the agent encodes X-Window-Title that
+   * way), decoded: an identifier found only in the decoded text is scrubbed there and the string
+   * re-encoded as the agent does.
+   */
   text(s: string, path: string): string {
+    const out = this.plainText(s, path);
+    if (!PERCENT_ESCAPE.test(out)) return out;
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(out);
+    } catch {
+      return out; // a lone "%" in ordinary text: nothing encoded here
+    }
+    const scrubbed = this.plainText(decoded, path);
+    return scrubbed === decoded ? out : percentEncode(scrubbed);
+  }
+
+  /** VIN-shaped text and Windows profile folders inside a string. */
+  private plainText(s: string, path: string): string {
     let out = s.replace(VIN_RE, (m) => {
       if (!looksLikeVin(m)) return m;
       const p = shapePlaceholder(m);
       this.note(path, "vin-shaped", p);
+      return p;
+    });
+    out = out.replace(BMW_VIN_RE, (m) => {
+      if (!looksLikeVin(m.toUpperCase())) return m;
+      const p = shapePlaceholder(m);
+      this.note(path, "bmw-vin", p);
       return p;
     });
     if (isHex(out) && out.length >= 34) out = this.hexText(out, path);
@@ -156,13 +209,10 @@ class Scrubber {
   private hexText(hex: string, path: string): string {
     const upper = hex === hex.toUpperCase();
     const ascii = Buffer.from(hex, "hex").toString("latin1");
-    let changed = false;
-    const scrubbed = ascii.replace(VIN_RE, (m) => {
-      if (!looksLikeVin(m)) return m;
-      changed = true;
-      return shapePlaceholder(m);
-    });
-    if (!changed) return hex;
+    const scrubbed = ascii
+      .replace(VIN_RUN_RE, scrubVinRun)
+      .replace(BMW_VIN_RE, (m) => (looksLikeVin(m.toUpperCase()) ? shapePlaceholder(m) : m));
+    if (scrubbed === ascii) return hex;
     const out = Buffer.from(scrubbed, "latin1").toString("hex");
     const p = upper ? out.toUpperCase() : out;
     this.note(path, "vin-in-hex", "(hex with the VIN bytes as X/0)");

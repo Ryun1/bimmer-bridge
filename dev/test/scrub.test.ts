@@ -9,6 +9,8 @@ import { isIdentifierField, scrubFolder, scrubRecording, shapePlaceholder } from
 import { FAKE_VIN, agentError, synthHealth, synthJobResult, writeRecording } from "./synthetic.ts";
 
 const DEV = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+/** Shaped like a BMW VIN (WB...) but made up: SYNTH and TEST in the middle. */
+const BMW_VIN = "WBASYNTH0TEST1234";
 
 let root: string;
 beforeEach(() => {
@@ -130,8 +132,54 @@ describe("scrubRecording", () => {
     expect(r.imageFile).toBe("cap.png");
   });
 
+  it("scrubs a percent-encoded window title (as the agent sends it) and re-encodes it", () => {
+    // The agent percent-encodes every byte outside A-Z a-z 0-9 - . _ ~, so "%20" sits right
+    // against the VIN and the user folder is "C%3A%5CUsers%5C...".
+    const title = `SYNTH%20${FAKE_VIN}%20-%20C%3A%5CUsers%5Csynthuser%5Cnotes.txt`;
+    const raw = {
+      recordedAt: "2026-11-21T12:00:00.000Z",
+      request: { method: "GET", path: "/screen/capture", query: { window: "desktop" }, body: null },
+      response: { status: 200, headers: { "content-type": "image/png", "x-window-title": title }, imageFile: "cap.png" },
+    };
+    const r = scrubRecording("c.json", raw);
+    const got = (r.recording.response as any).headers["x-window-title"];
+    expect(got).toBe("SYNTH%20XXXXX00000XXXX000%20-%20C%3A%5CUsers%5Cuser%5Cnotes.txt");
+    expect(r.replacements.map((x) => x.rule).sort()).toEqual(["vin-shaped", "windows-user-folder"]);
+    expect(JSON.stringify(r.replacements)).not.toContain("synthuser");
+    // An encoded string with nothing to scrub is left exactly as it was.
+    const plain = scrubRecording("p.json", recording("/ediabas/job", { t: "INPA%20-%20Loader%3A%20x" }));
+    expect((plain.recording.response as any).body.t).toBe("INPA%20-%20Loader%3A%20x");
+    expect(plain.replacements).toEqual([]);
+  });
+
+  it("in hex results, scrubs a VIN-alphabet run whatever bytes touch it", () => {
+    for (const ascii of [`1${FAKE_VIN}\0`, `FG${FAKE_VIN}`, `\x01${BMW_VIN}9\x02`]) {
+      const hex = Buffer.from(ascii, "latin1").toString("hex");
+      const { recording: out, replacements } = scrubRecording("r.json", recording("/ediabas/job", { sets: [{ RAW: hex }] }));
+      const got = Buffer.from((out.response as any).body.sets[0].RAW, "hex").toString("latin1");
+      expect(got, JSON.stringify(ascii)).not.toContain(FAKE_VIN);
+      expect(got, JSON.stringify(ascii)).not.toContain(BMW_VIN);
+      expect(got.length).toBe(ascii.length);
+      expect(replacements.map((x) => x.rule)).toEqual(["vin-in-hex"]);
+    }
+  });
+
+  it("in text, scrubs a BMW VIN in any case and with any neighbours", () => {
+    const values = [`FG${BMW_VIN}`, BMW_VIN.toLowerCase(), `x${BMW_VIN}1`];
+    const { recording: out, replacements } = scrubRecording("r.json", recording("/ediabas/job", { values }));
+    expect((out.response as any).body.values).toEqual(["FGXXXXXXXX0XXXX0000", "xxxxxxxx0xxxx0000", "xXXXXXXXX0XXXX00001"]);
+    expect(replacements.map((x) => x.rule)).toEqual(["bmw-vin", "bmw-vin", "bmw-vin"]);
+  });
+
   it("is idempotent: scrubbing a scrubbed recording changes nothing", () => {
-    const first = scrubRecording("r.json", recording("/ediabas/job", { sets: [{ VIN: FAKE_VIN, SERIENNUMMER: 987 }] }));
+    const hex = Buffer.from(`1${FAKE_VIN}\0`, "latin1").toString("hex");
+    const first = scrubRecording(
+      "r.json",
+      recording("/ediabas/job", {
+        sets: [{ VIN: FAKE_VIN, SERIENNUMMER: 987, RAW: hex, T: `FG${BMW_VIN.toLowerCase()}`, E: `x%20${FAKE_VIN}%20C%3A%5CUsers%5Csynthuser` }],
+      }),
+    );
+    expect(first.replacements.length).toBeGreaterThan(0);
     const second = scrubRecording("r.json", first.recording);
     expect(second.recording).toEqual(first.recording);
     expect(second.replacements).toEqual([]);
