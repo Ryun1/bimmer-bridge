@@ -45,10 +45,26 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
   return lines;
 }
 
-export function formatHealth(h: Health, macPolicyVersion: number | null = null): string {
+/** `2026-11-22 09:05:07` in this Mac's time zone. */
+function localTime(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+export interface MacServerInfo {
+  version: string;
+  startedAt: Date;
+}
+
+export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo): string {
   const lines: string[] = [];
+  if (mac) lines.push(`Mac server ${mac.version}, started ${localTime(mac.startedAt)}`);
   const since = h.startedAt ? ` (since ${clean(h.startedAt)})` : "";
   lines.push(`Agent: ediabas-bridge-agent ${clean(h.version)}, up ${formatDuration(h.uptimeSeconds)}${since}`);
+  // A Mac server left running from before an update (Claude not restarted), or an agent not updated.
+  if (mac && clean(h.version) !== mac.version) {
+    lines.push("WARNING: The Mac server and the agent are different versions; restart Claude or update the agent.");
+  }
   lines.push(
     `Windows: ${clean(h.os.description)} (OS ${clean(h.os.osArchitecture)}, agent process ${clean(h.os.processArchitecture)})`,
   );

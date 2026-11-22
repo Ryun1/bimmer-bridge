@@ -32,6 +32,19 @@ describe("formatHealth", () => {
     expect(t).toMatch(/last cable use: never/i);
   });
 
+  it("starts with the Mac server's version and start time, then the agent's", () => {
+    const startedAt = new Date(2026, 10, 22, 9, 5, 7); // local time
+    const lines = formatHealth(health({ version: "0.3.0" }), null, { version: "0.3.0", startedAt }).split("\n");
+    expect(lines[0]).toBe("Mac server 0.3.0, started 2026-11-22 09:05:07");
+    expect(lines[1]).toMatch(/^Agent: ediabas-bridge-agent 0\.3\.0, up /);
+    expect(lines.join("\n")).not.toMatch(/different versions/);
+  });
+
+  it("warns when the Mac server and the agent are different versions", () => {
+    const t = formatHealth(health({ version: "0.2.2" }), null, { version: "0.3.0", startedAt: new Date() });
+    expect(t.split("\n")[2]).toBe("WARNING: The Mac server and the agent are different versions; restart Claude or update the agent.");
+  });
+
   it("warns that screenshots will not work in session 0", () => {
     const t = formatHealth(health({ sessionId: 0 }));
     expect(t).toMatch(/not .*interactive/i);

@@ -122,6 +122,7 @@ export function buildServer(parts: ServerParts): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
   const { client, policy } = parts;
   const car = new CarSession(parts.now);
+  const mac = { version: SERVER_VERSION, startedAt: new Date((parts.now ?? Date.now)()) };
   const onOk = (ecu: string) => car.record(ecu);
 
   async function run(tool: string, body: () => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
@@ -174,14 +175,14 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "VM agent health",
       description:
-        "Check the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
+        "Check this Mac server's version and start time and the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
         "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
         "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
         "which features the agent has, and its job policy version against this Mac's. " +
         "Call this first in a session, and again when another tool fails. Read-only.",
       annotations: { title: "VM agent health", ...READ_ONLY },
     },
-    async () => run("vm_health", async () => formatHealth(await client.health(), policy.version)),
+    async () => run("vm_health", async () => formatHealth(await client.health(), policy.version, mac)),
   );
 
   server.registerTool(

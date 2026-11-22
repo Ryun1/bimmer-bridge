@@ -140,7 +140,16 @@ describe("vm_health", () => {
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
     expect(r.text).toContain("Job policy: agent version 2; Mac version 2.");
-    expect(r.text).not.toMatch(/WARNING/);
+    expect(r.text).not.toMatch(/WARNING: the agent's job policy/);
+  });
+
+  it("starts with this server's version from package.json and its start time", async () => {
+    const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    const { call } = await connect({ now: () => new Date(2026, 10, 22, 9, 5, 7).getTime() });
+    const r = await call("vm_health");
+    expect(r.text.split("\n")[0]).toBe(`Mac server ${pkg.version}, started 2026-11-22 09:05:07`);
+    // The stub agent reports 0.1.0.
+    expect(r.text).toContain("The Mac server and the agent are different versions; restart Claude or update the agent.");
   });
 
   it("warns when the agent's policy version differs", async () => {
