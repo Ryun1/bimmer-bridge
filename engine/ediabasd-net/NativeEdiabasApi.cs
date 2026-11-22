@@ -165,15 +165,39 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
     {
         EnsureIdle();
         var offline = job.StartsWith('_');
-        var ed = offline ? Offline() : Live();
-        var cable = offline ? null : _cable;
-
         _results = null;
         _errorCode = 0;
         _errorText = "";
         _abort = false;
+
+        var group = GroupFile(ecu);
+        string? variant = null;
+        string? groupHash = null;
+        if (group != null)
+        {
+            groupHash = Sha256(group);
+            if (offline)
+            {
+                variant = _variants.Lookup(ecu, groupHash);
+                if (variant == null && Mode != RequestMode.Live)
+                {
+                    // Which variant a group means is found only at the car (IDENTIFIKATION).
+                    SetError(NativeErrorCodes.NeedsCar, $"{ecu} is a group file and its variant is not known yet (needs the car)");
+                    _state = ApiState.Error;
+                    return;
+                }
+            }
+        }
+
+        // A live resolution of the group (live job, or offline job in a live request with no
+        // cached variant) needs the live instance; everything else on the offline one.
+        var resolveLive = group != null && (!offline || variant == null);
+        var live = !offline || resolveLive ? Live() : null;
+        var ed = offline ? Offline() : live!;
+        var cable = live != null ? _cable : null;
+
         _state = ApiState.Busy;
-        _worker = new Thread(() => Run(ed, cable, ecu, job, parameters, results))
+        _worker = new Thread(() => Run(ed, live, cable, ecu, variant, groupHash, job, parameters, results))
         {
             IsBackground = true,
             Name = "ediabasd job",
@@ -181,16 +205,53 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
         _worker.Start();
     }
 
-    void Run(EdiabasNet ed, ILiveCable? cable, string ecu, string job, string parameters, string results)
+    /// The .grp file for name when name is a group (a .grp and no .prg of that name), else null.
+    string? GroupFile(string name)
+    {
+        if (string.IsNullOrEmpty(name) || name.IndexOfAny(['/', '\\', '*', '?']) >= 0 || !Directory.Exists(_ecuPath))
+        {
+            return null;
+        }
+
+        var opts = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, RecurseSubdirectories = false };
+        if (Directory.EnumerateFiles(_ecuPath, name + ".prg", opts).Any())
+        {
+            return null;
+        }
+
+        return Directory.EnumerateFiles(_ecuPath, name + ".grp", opts).FirstOrDefault();
+    }
+
+    static string Sha256(string file) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant();
+
+    void Run(EdiabasNet ed, EdiabasNet? live, ILiveCable? cable, string ecu, string? variant, string? groupHash, string job, string parameters, string results)
     {
         var state = ApiState.Ready;
+        var current = ed;
         try
         {
+            var sgbd = variant ?? ecu;
+            if (groupHash != null && variant == null && live != null && !ReferenceEquals(live, ed))
+            {
+                // Offline job on a group in a live request: resolve it at the car first.
+                current = live;
+                EdiabasFactory.Activate(live);
+                live.ResolveSgbdFile(ecu);
+                sgbd = StoreVariant(ecu, groupHash, live);
+                current = ed;
+            }
+
             EdiabasFactory.Activate(ed);
             ed.ArgBinary = Win1252.GetBytes(parameters ?? "");
             ed.ArgBinaryStd = null;
             ed.ResultsRequests = results ?? "";
-            ed.ResolveSgbdFile(ecu);
+            ed.ResolveSgbdFile(sgbd);
+            if (groupHash != null && ReferenceEquals(ed, live))
+            {
+                StoreVariant(ecu, groupHash, ed);
+            }
+
             ed.ExecuteJob(job);
             _results = ed.ResultSets;
         }
@@ -203,8 +264,8 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
             else
             {
                 state = ApiState.Error;
-                var code = ed.ErrorCodeLast != EdiabasNet.ErrorCodes.EDIABAS_ERR_NONE
-                    ? ed.ErrorCodeLast
+                var code = current.ErrorCodeLast != EdiabasNet.ErrorCodes.EDIABAS_ERR_NONE
+                    ? current.ErrorCodeLast
                     : ex is EdiabasNet.EdiabasNetException ene ? ene.ErrorCode : EdiabasNet.ErrorCodes.EDIABAS_SYS_0000;
                 SetError((int)code, EdiabasNet.GetErrorDescription(code) ?? ex.Message);
             }
@@ -228,6 +289,13 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
 
         SetError(m.Code, m.Text);
         return m.State;
+    }
+
+    string StoreVariant(string group, string groupHash, EdiabasNet resolved)
+    {
+        var variant = Path.GetFileNameWithoutExtension(resolved.SgbdFileName);
+        _variants.Store(group, groupHash, variant);
+        return variant;
     }
 
     /// libkline's reason decides the error whenever it names one: a gate refusal fails the
