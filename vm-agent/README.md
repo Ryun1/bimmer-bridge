@@ -34,8 +34,8 @@ installed and updated in the VM with the scripts in [vm-setup/](../vm-setup/READ
 
 Written by `install.ps1` on first install and never overwritten. Read at start-up: restart the
 agent (restart Windows) after changing it. The one exception is `reviewedJobs`: the agent
-re-reads it, and nothing else, at the next EDIABAS request after the file's last-write time
-changes, so a new approval needs no restart. Missing keys take the defaults; comments and
+re-reads it, and nothing else, at every EDIABAS request, so a new approval needs no
+restart. Missing keys take the defaults; comments and
 trailing commas are allowed. An unknown top-level key is ignored with a warning in `agent.log`
 (`config: unknown key "reviewJobs" is ignored (a typo?)`), and so is a `logRoots` entry the
 path rules refuse (logged as not used, with the reason). An invalid config does not make the

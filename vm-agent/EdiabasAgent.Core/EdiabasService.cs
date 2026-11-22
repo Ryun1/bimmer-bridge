@@ -26,7 +26,7 @@ public sealed class RequestAudit
 /// <summary>
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
-/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) load the DLL, conflict check again, apiInit
+/// <para>Per request: re-read <c>reviewedJobs</c> → conflict check → (lazily, at the first job that will really run) load the DLL, conflict check again, apiInit
 /// → per job: policy → Ecu file → description screen where required (and, for a call with
 /// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is

@@ -102,7 +102,8 @@ Steps:
 3. Add the entry to the `reviewedJobs` list, upper case, with the ECU name as it is asked for
    (not the variant a group name resolves to). The match is exact. For example
    `"reviewedJobs": ["NVE_65:STATUS_EXAMPLE@3f1c0a9b2d4e"]`. Save the file.
-4. Nothing to restart. The agent re-reads `reviewedJobs` at every EDIABAS request. `ediabas_describe` then shows the job as `reviewed`.
+4. Nothing to restart. The agent re-reads `reviewedJobs` at every EDIABAS request.
+   `ediabas_describe` then shows the job as `reviewed`.
 
 An entry of the wrong shape is a warning in `agent.log` and approves nothing; the agent keeps
 running. If the saved file is not a valid config, the agent keeps the previous list and logs a
