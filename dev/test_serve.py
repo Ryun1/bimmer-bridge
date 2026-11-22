@@ -812,6 +812,38 @@ class Startup(unittest.TestCase):
         self.assertIn("ConvertTo-Json -Depth 10", text)
         self.assertIn("New-Object System.Text.UTF8Encoding($false)", text)
 
+    def test_update_keeps_and_restores_the_config_backup(self):
+        # Review fix: a merge keeps config.json.bak, checks the new text before the swap, and a
+        # rollback puts config.json back when the merge wrote it.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        self.assertIn("$ConfigBackupPath = Join-Path $Root 'config.json.bak'", text)
+        self.assertIn("[System.IO.File]::Replace($newPath, $ConfigPath, $ConfigBackupPath)", text)
+        self.assertNotIn("Replace($newPath, $ConfigPath, $null)", text)
+        self.assertNotIn("Add-Member", text)
+        merge = text.split("function Merge-ConflictDefaults", 1)[1].split("\n    }\n", 1)[0]
+        self.assertLess(merge.index("'reviewedJobs has '"), merge.index("WriteAllText"))
+        self.assertLess(merge.index("'the key '"), merge.index("WriteAllText"))
+        self.assertLess(merge.index("'conflictProcesses is not an array'"), merge.index("WriteAllText"))
+        self.assertIn("$configMerged = Merge-ConflictDefaults", text)
+        rollback = text[text.index("Rolling back."):text.index("'Rolled back to '")]
+        self.assertIn("if ($configMerged)", rollback)
+        self.assertIn("[System.IO.File]::Copy($ConfigBackupPath, $ConfigPath, $true)", rollback)
+        self.assertIn("'Rolled back to ' + $oldVersion + $configNote", text)
+
+    def test_a_403_counts_as_up_only_with_the_forbidden_body(self):
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            for line in text.splitlines():
+                if "Status -eq 403" in line:
+                    self.assertIn("[string]$result.Body -like '*forbidden*'", line, script)
+
+    def test_update_warns_about_a_task_it_enabled_and_a_missing_rule(self):
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        self.assertIn("$wasDisabled = ([string]$task.State -eq 'Disabled')", text)
+        self.assertEqual(text.count("if ($wasDisabled) {"), 2)
+        self.assertIn("is in place, but the firewall rule", text)
+        self.assertIn("Run the Install line again.", text)
+
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
 

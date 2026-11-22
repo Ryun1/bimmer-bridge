@@ -518,7 +518,7 @@
             } elseif ($result.Status -eq 200) {
                 Write-Note 'Agent is up. /health:'
                 Write-Host $result.Body
-            } elseif ($result.Status -eq 403) {
+            } elseif ($result.Status -eq 403 -and [string]$result.Body -like '*forbidden*') {
                 Write-Note 'Agent is up. (It answered 403 forbidden because this request came from the VM itself,'
                 Write-Note 'not from the Mac; that proves the listener works.)'
             } else {

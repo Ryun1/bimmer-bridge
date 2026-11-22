@@ -77,13 +77,20 @@ copy the new exe into place; add to `config.json`'s `conflictProcesses` any of t
 defaults (`INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool`, `WINKFP`, `ISTAGUI`)
 it lacks, compared without case, after the owner's own entries, and print the names added
 (the other keys, `reviewedJobs` included, are kept; a file that does not parse is left alone
-with a warning; the file is written as UTF-8 without BOM, re-indented by `ConvertTo-Json`, as
-Install writes it); make the firewall rule again from the current default gateway (the same
-function as Install); enable and start the task; ask `/health` from inside the VM for up to
+with a warning; the new text must parse back with `conflictProcesses` an array equal to the
+merged list, every original top-level key present and as many `reviewedJobs` entries, or
+`config.json` is left untouched; it is written as UTF-8 without BOM, re-indented by
+`ConvertTo-Json`, as Install writes it, and the previous file is kept as `config.json.bak`);
+make the firewall rule again from the current default gateway (the same
+function as Install; if that fails, the error says the new exe is in place and the rule is
+missing, and to run the Install line again); enable and start the task; ask `/health` from inside the VM for up to
 60 s. If the new exe cannot be copied, or the agent does not come up (an answer of 200, or
-403 because the request came from the VM itself, counts as up), Update puts
-`EdiabasAgent.exe.bak` back (hash-checked against the backup's own hash), starts it and prints
-`Rolled back to <old version>`. The task is enabled again on every way out. A second Update
+403 with the agent's `forbidden` error because the request came from the VM itself, counts as
+up), Update puts `EdiabasAgent.exe.bak` back (hash-checked against the backup's own hash), and
+`config.json.bak` too if it rewrote `config.json`, starts it and prints
+`Rolled back to <old version>` (naming `config.json` when it was restored). The task is enabled
+again on every way out; if it was disabled before the update, Update warns that it has been
+enabled and started. A second Update
 with the same zip is a no-op update and must succeed.
 
 ## The release artefact
@@ -98,6 +105,7 @@ with the same zip is a no-op update and must succeed.
 |---|---|---|
 | `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe` | the agent | read, execute |
 | `C:\ProgramData\EdiabasBridge\EdiabasAgent.exe.bak` | the exe before the last update (Update's rollback copy) | not used |
+| `C:\ProgramData\EdiabasBridge\config.json.bak` | `config.json` before Update last added conflict processes to it | not used |
 | `C:\ProgramData\EdiabasBridge\config.json` | configuration (the folder grants users read access only; with UAC off, any program the owner runs in the VM can still edit it, so `vm_health` lists the approved jobs and every `ediabas_*` result is flagged `[approvals changed]` when they change) | read |
 | `C:\ProgramData\EdiabasBridge\token.txt` | bearer token | read |
 | `C:\ProgramData\EdiabasBridge\logs\agent.log` | agent's own log | write |

@@ -23,6 +23,7 @@
     $ExePath = Join-Path $Root 'EdiabasAgent.exe'
     $BackupPath = Join-Path $Root 'EdiabasAgent.exe.bak'
     $ConfigPath = Join-Path $Root 'config.json'
+    $ConfigBackupPath = Join-Path $Root 'config.json.bak'
     $TokenPath = Join-Path $Root 'token.txt'
     $TaskName = 'ediabas-bridge agent'
     $RuleName = 'ediabas-bridge agent'
@@ -308,21 +309,28 @@
     # Adds the default conflict processes that config.json's conflictProcesses lacks (compared
     # without case), after the owner's own entries. Everything else in the file (reviewedJobs
     # and the other keys) is kept. A file that cannot be read or parsed is left untouched.
+    # Returns $true only when it rewrote config.json (the previous file is then config.json.bak).
     function Merge-ConflictDefaults {
         if (-not (Test-Path -LiteralPath $ConfigPath)) {
             Write-Warn ($ConfigPath + ' not found; conflict process defaults not merged. Run install.ps1 to write it.')
-            return
+            return $false
         }
         try {
             $cfg = [System.IO.File]::ReadAllText($ConfigPath) | ConvertFrom-Json
         } catch {
             Write-Warn ('Could not read ' + $ConfigPath + ' (' + $_.Exception.Message + '); left untouched, conflict process defaults not merged.')
-            return
+            return $false
         }
         if ($null -eq $cfg -or -not ($cfg -is [System.Management.Automation.PSCustomObject])) {
             Write-Warn ($ConfigPath + ' is not a JSON object; left untouched, conflict process defaults not merged.')
-            return
+            return $false
         }
+        # What the written file must still hold.
+        $origKeys = @($cfg.PSObject.Properties | ForEach-Object { $_.Name })
+        $origReviewed = 0
+        $rj = $cfg.PSObject.Properties['reviewedJobs']
+        if ($null -ne $rj -and $null -ne $rj.Value) { $origReviewed = @($rj.Value).Count }
+
         $prop = $cfg.PSObject.Properties['conflictProcesses']
         $current = @()
         if ($null -ne $prop -and $null -ne $prop.Value) {
@@ -338,37 +346,90 @@
         }
         if ($added.Count -eq 0) {
             Write-Note 'config.json already lists every default conflict process'
-            return
+            return $false
         }
-        $merged = [object[]]($current + $added)
+        # A plain .NET object[] (List.ToArray, set through a method call, not a cmdlet
+        # parameter), so ConvertTo-Json writes a JSON array and not {"value":...,"Count":...}.
+        $list = New-Object 'System.Collections.Generic.List[object]'
+        foreach ($item in $current) { $list.Add($item) }
+        foreach ($item in $added) { $list.Add($item) }
+        $merged = $list.ToArray()
         if ($null -eq $prop) {
-            $cfg | Add-Member -NotePropertyName 'conflictProcesses' -NotePropertyValue $merged
+            $cfg.PSObject.Properties.Add([System.Management.Automation.PSNoteProperty]::new('conflictProcesses', $merged))
         } else {
             $prop.Value = $merged
         }
         $json = $cfg | ConvertTo-Json -Depth 10
+
+        # The new text must parse back to the same file plus the added names.
+        $problem = $null
         try {
-            $null = $json | ConvertFrom-Json
+            $re = $json | ConvertFrom-Json
         } catch {
-            Write-Warn ('The merged config.json would not parse (' + $_.Exception.Message + '); left untouched.')
-            return
+            $re = $null
+            $problem = 'it does not parse (' + $_.Exception.Message + ')'
         }
-        # Written beside it, then swapped in (File.Replace keeps config.json's ACL): a failed
-        # write never leaves a half-written config.json.
+        if ($null -eq $problem -and -not ($re -is [System.Management.Automation.PSCustomObject])) {
+            $problem = 'it is not a JSON object'
+        }
+        if ($null -eq $problem) {
+            $reList = $re.PSObject.Properties['conflictProcesses']
+            if ($null -eq $reList -or -not ($reList.Value -is [System.Array])) {
+                $problem = 'conflictProcesses is not an array'
+            } else {
+                $reItems = @($reList.Value)
+                if ($reItems.Count -ne $merged.Count) {
+                    $problem = 'conflictProcesses has ' + $reItems.Count + ' entries, not ' + $merged.Count
+                } else {
+                    for ($i = 0; $i -lt $merged.Count; $i++) {
+                        if ([string]$reItems[$i] -ine [string]$merged[$i]) {
+                            $problem = 'conflictProcesses entry ' + $i + ' changed'
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        if ($null -eq $problem) {
+            foreach ($key in $origKeys) {
+                if ($null -eq $re.PSObject.Properties[$key]) {
+                    $problem = 'the key ' + $key + ' is missing'
+                    break
+                }
+            }
+        }
+        if ($null -eq $problem) {
+            $newReviewed = 0
+            $reRj = $re.PSObject.Properties['reviewedJobs']
+            if ($null -ne $reRj -and $null -ne $reRj.Value) { $newReviewed = @($reRj.Value).Count }
+            if ($newReviewed -ne $origReviewed) {
+                $problem = 'reviewedJobs has ' + $newReviewed + ' entries, not ' + $origReviewed
+            }
+        }
+        if ($null -ne $problem) {
+            Write-Warn ('The merged config.json failed its check (' + $problem + '); config.json left untouched, conflict process defaults not merged.')
+            return $false
+        }
+
+        # Written beside it, then swapped in; File.Replace keeps config.json's ACL and moves the
+        # previous file to config.json.bak. A failed write never leaves a half-written config.json.
         $newPath = $ConfigPath + '.new'
         try {
             [System.IO.File]::WriteAllText($newPath, $json, (New-Object System.Text.UTF8Encoding($false)))
-            [System.IO.File]::Replace($newPath, $ConfigPath, $null)
+            [System.IO.File]::Replace($newPath, $ConfigPath, $ConfigBackupPath)
         } catch {
             Remove-Item -LiteralPath $newPath -Force -ErrorAction SilentlyContinue
             Write-Warn ('Could not write ' + $ConfigPath + ' (' + $_.Exception.Message + '); left as it was, conflict process defaults not merged.')
-            return
+            return $false
         }
-        Write-Note ('Added to conflictProcesses in config.json: ' + ($added -join ', '))
+        Write-Note ('Added to conflictProcesses in config.json: ' + ($added -join ', ') + ' (previous file kept as ' + $ConfigBackupPath + ')')
+        return $true
     }
 
     $tmp = $null
     $taskDisabled = $false
+    $wasDisabled = $false
+    $configMerged = $false
     try {
         Assert-Elevated
         Assert-WindowsPowerShell
@@ -383,9 +444,11 @@
         if (-not (Test-Path -LiteralPath $ExePath)) {
             throw ('The agent is not installed (' + $ExePath + ' is missing). Run install.ps1 instead. Nothing was changed.')
         }
-        if ($null -eq (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue)) {
+        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        if ($null -eq $task) {
             throw ('Scheduled task "' + $TaskName + '" not found. Run install.ps1 instead; it recreates it. Nothing was changed.')
         }
+        $wasDisabled = ([string]$task.State -eq 'Disabled')
 
         $route = Get-DefaultRoute
         $base = Get-OptionalVar 'base'
@@ -442,18 +505,25 @@
 
         # ---- 5. conflict process defaults ----
         Write-Step 'Checking conflictProcesses in config.json'
-        Merge-ConflictDefaults
+        $configMerged = Merge-ConflictDefaults
 
         # ---- 6. firewall ----
         $existing = Read-ExistingConfig
         $port = $existing.Port
-        Set-FirewallRule $port
+        try {
+            Set-FirewallRule $port
+        } catch {
+            throw ('The new exe (' + $version + ') is in place, but the firewall rule "' + $RuleName + '" could not be made (' + $_.Exception.Message + '), so it is missing or still pinned to the old gateway: the Mac cannot reach the agent. Run the Install line again.')
+        }
 
         # ---- 7. start ----
         Write-Step 'Enabling and starting the scheduled task'
         Enable-ScheduledTask -TaskName $TaskName | Out-Null
         $taskDisabled = $false
         Start-ScheduledTask -TaskName $TaskName
+        if ($wasDisabled) {
+            Write-Warn ('The scheduled task was disabled before this update; it has been enabled and started.')
+        }
 
         # ---- 8. is the new agent up? If not, back to the old one ----
         $bindAddress = Resolve-BindAddress $existing.BindAddress $route.InterfaceIndex
@@ -473,7 +543,7 @@
             if ($null -ne $result -and $result.Status -eq 200) {
                 Write-Note 'Agent is up. /health:'
                 Write-Host $result.Body
-            } elseif ($null -ne $result -and $result.Status -eq 403) {
+            } elseif ($null -ne $result -and $result.Status -eq 403 -and [string]$result.Body -like '*forbidden*') {
                 Write-Note 'Agent is up. (It answered 403 forbidden because this request came from the VM itself,'
                 Write-Note 'not from the Mac; that proves the listener works.)'
             } else {
@@ -487,10 +557,19 @@
                 if (-not (Restore-Backup $oldHash)) {
                     throw ('Agent ' + $version + ' did not start, and the backup could not be put back. ' + (Get-RestoreByHand))
                 }
+                $configNote = ''
+                if ($configMerged) {
+                    try {
+                        [System.IO.File]::Copy($ConfigBackupPath, $ConfigPath, $true)
+                        $configNote = ' and config.json from ' + $ConfigBackupPath
+                    } catch {
+                        Write-Warn ('Could not put ' + $ConfigBackupPath + ' back as config.json (' + $_.Exception.Message + '); the merged config.json stays (only conflictProcesses was added to it).')
+                    }
+                }
                 Enable-ScheduledTask -TaskName $TaskName | Out-Null
                 $taskDisabled = $false
                 Start-ScheduledTask -TaskName $TaskName
-                Write-Host ('Rolled back to ' + $oldVersion) -ForegroundColor Yellow
+                Write-Host ('Rolled back to ' + $oldVersion + $configNote) -ForegroundColor Yellow
                 throw ('Agent ' + $version + ' did not start; ' + $oldVersion + ' was put back and started. Check ' + (Join-Path $LogDir 'agent.log'))
             }
         }
@@ -506,6 +585,9 @@
                 Enable-ScheduledTask -TaskName $TaskName | Out-Null
                 Start-ScheduledTask -TaskName $TaskName
                 Write-Note ('Scheduled task "' + $TaskName + '" enabled and started again.')
+                if ($wasDisabled) {
+                    Write-Warn ('The scheduled task was disabled before this update; it has been enabled and started.')
+                }
             } catch {
                 Write-Warn ('Could not enable and start the scheduled task: ' + $_.Exception.Message + '. Run: Enable-ScheduledTask -TaskName "' + $TaskName + '"; Start-ScheduledTask -TaskName "' + $TaskName + '"')
             }

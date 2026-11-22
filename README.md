@@ -435,11 +435,13 @@ After a code change, or to install a newer build:
    added; everything else in the file, approvals included, is kept, and a file it cannot read
    is left alone with a warning), makes the firewall rule again for the current gateway,
    enables and starts the task, and waits up to 60 s for the agent to answer `/health`
-   (`Agent is up.`, usually with the 403 note as at install). It ends with
+   (`Agent is up.`, always with the 403 note, as at install). It ends with
    `Updated to ediabas-bridge agent <version>`. If the copy fails, or the new agent does not
    come up, it puts the backup back, starts it and says so (`Rolled back to <old version>`,
    then a red `ERROR:`); the task is enabled again on every way out. The token, ACLs and task
-   settings are not touched. Running the same Update line a second time is a no-op update and
+   settings are not touched. If Update adds names to conflictProcesses it rewrites config.json
+   as UTF-8 with PowerShell's layout; the content, including reviewedJobs, is unchanged, and the
+   previous file is kept as config.json.bak. Running the same Update line a second time is a no-op update and
    must also succeed. If it says the agent is not installed, or the scheduled task is missing,
    use the Install line instead.
 4. Stop `serve.py` with Ctrl-C.
