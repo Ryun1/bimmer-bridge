@@ -1,0 +1,54 @@
+# vm-agent: the agent in the VM
+
+`EdiabasAgent.exe`, the HTTP agent that runs in the Windows VM and calls EDIABAS. C# on .NET 10,
+published as a self-contained win-x86 single file (32-bit, like `api32.dll`). Its HTTP contract
+is [docs/api.md](../docs/api.md); how it fits with the rest is
+[docs/architecture.md](../docs/architecture.md).
+
+| Path | What |
+|---|---|
+| `EdiabasAgent.Core/` | everything that can be tested on the Mac: config, job policy (embeds `policy/policy.json`), description screen, EDIABAS service against an `IEdiabasApi`, path rules, result shaping, audit line format |
+| `EdiabasAgent/` | the Windows host: Kestrel, request pipeline, P/Invoke into `api32.dll`, the EDIABAS thread, window capture, log access, `--selftest` |
+| `EdiabasAgent.Tests/` | xUnit tests of `EdiabasAgent.Core` |
+| `Directory.Build.props` | the version (`<Version>`), which must match `VERSION` |
+| `build.sh` | writes `release/EdiabasAgent.zip` and its `.sha256` |
+
+```sh
+(cd vm-agent && dotnet test EdiabasAgent.Tests)   # tests, on the Mac
+vm-agent/build.sh                                 # the release zip
+```
+
+Both find the .NET 10 SDK in the Homebrew folder if `dotnet` is not on `PATH`. The agent is
+installed and updated in the VM with the scripts in [vm-setup/](../vm-setup/README.md).
+
+## Command line
+
+| | |
+|---|---|
+| no arguments | run the agent (the scheduled task does this) |
+| `--selftest` | run the checks, print PASS/FAIL, write `logs\selftest.txt`; exit 0 or 1 |
+| `--version` | print the version |
+| `--config <path>` | use another config file |
+
+## Config: `C:\ProgramData\EdiabasBridge\config.json`
+
+Written by `install.ps1` on first install and never overwritten. Read once at start-up: restart
+the agent (restart Windows) after changing it. Missing keys take the defaults; unknown keys are
+ignored; comments and trailing commas are allowed. An invalid config does not make the agent
+exit: it logs why in `agent.log` and re-reads the file every 30 s.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `bindAddress` | `auto` | `auto` (the shared-network address) or one literal IPv4 address; never a wildcard |
+| `port` | 8765 | |
+| `tokenFile` | `C:\ProgramData\EdiabasBridge\token.txt` | |
+| `ediabasDll` | `C:\EDIABAS\BIN\api32.dll` | |
+| `ecuPath` | `C:\EDIABAS\ECU` | the SGBD folder |
+| `logDirectory` | `C:\ProgramData\EdiabasBridge\logs` | `agent.log`, `audit.log`, `selftest.txt` |
+| `logRoots` | `C:\EDIABAS\TRACE`, `C:\NCSEXPER\WORK` | the only folders `/logs` may read |
+| `conflictProcesses` | `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool` | process names that hold the cable (any process with `api32.dll` loaded counts too) |
+| `voltageSources` | `NVE_65` `STATUS_BORDNETZSPANNUNG` | extra jobs `/ediabas/vehicle` runs |
+| `reviewedJobs` | empty | `ECU:JOB` entries that skip the description screen ([docs/safety.md](../docs/safety.md#approving-one-job)) |
+| `jobTimeoutSeconds` | 30 | default per job; at most `maxJobTimeoutSeconds` |
+| `maxJobTimeoutSeconds` | 60 | a request's time budget; at most 60, because the Mac stops waiting after 75 s |
+| `ediabasIdleReleaseSeconds` | 20 | unload `api32.dll` after this long without an EDIABAS request (5 to 600) |
