@@ -8,6 +8,12 @@ which jobs exist and which the bridge will run. Where a job was also described o
 SGBD declares them; none of these jobs has been run, so no value or meaning of a result is
 recorded. Those come from Phase 6. Do not fill them in from the name or the description.
 
+**Policy versions.** Every verdict and count in this file was recorded under policy version 1
+(at the desk, 2026-11-21/22), except the one recount under version 2 noted below. Agent 0.3.0 brings
+policy version 3: more screen terms, and the `E60` whole-car jobs. The verdicts have to be
+recorded again under version 3 at the desk; until then go by what `ediabas_describe` returns,
+not by these tables.
+
 This file holds only what a real session returned: jobs listed by `ediabas_describe`, and jobs
 that a real session ran successfully on this car, with the arguments used and the result fields
 that came back. Nothing from memory, forums or the web goes in: SGBDs differ between variants,
@@ -39,8 +45,8 @@ first line is quoted and the KWP2000 service line, if any, follows after " — "
 
 ### `NVE_65` — night vision
 
-`ediabas_describe` on 2026-11-21: `variant` `NVE_65`, 59 jobs, about 15 s with comments
-(`durationMs` 14745). Cable in the VM, not in the car.
+`ediabas_describe` on 2026-11-21 (policy version 1): `variant` `NVE_65`, 59 jobs, about 15 s
+with comments (`durationMs` 14745). Cable in the VM, not in the car.
 
 **Runnable (allowed by the policy):**
 
@@ -120,7 +126,7 @@ session-control jobs; `ediabas_describe` shows each with its rule.
 
 ### `TMODE` — the diagnostic interface, not a car module
 
-`ediabas_describe` on 2026-11-21: `variant` `TMODE`, 25 jobs (`durationMs` 1521). `TMODE`
+`ediabas_describe` on 2026-11-21 (policy version 1): `variant` `TMODE`, 25 jobs (`durationMs` 1521). `TMODE`
 loads with no cable connected at all. It is a restricted ECU in the policy: only the jobs on
 its own list run (`allow.ecu`); everything else is `ecu_restricted` or denied by name.
 
@@ -147,12 +153,13 @@ files are not known to be fitted to this car (see `ecu-map.md`). The single jobs
 described one at a time with `ediabas_describe` and `job` on 2026-11-22. None has been run.
 
 Only the jobs described one at a time are listed. For any other job on these files use
-`ediabas_describe` with a `filter` (a job-name substring such as `STATUS_` or `KL30`): a full
-list of `CAS` or `LM_60` with comments ran into the 60 s limit at the desk.
+`ediabas_describe` with a `filter` (a job-name substring such as `STATUS_` or `KL30`).
+
+Full job lists, 2026-11-21, **policy version 1**:
 
 | File | Jobs | Allowed | Runnable | Full describe (`durationMs`) |
 |---|---|---|---|---|
-| `E60` | 26 | 1 | 1 | 2872 |
+| `E60` | 26 | 1 (`INFO`; version 3 adds `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL`) | 1 | 2872 |
 | `CAS` | 150 | 62 | 16 (28 needs review, 18 not checked) | 60043 (the limit) |
 | `MPM_60` | 57 | 21 | 18 (3 needs review) | 13284 |
 | `KOMB60` | 128 | 37 | 36 (1 needs review) | 52730 |
@@ -177,8 +184,7 @@ recorded under policy version 1 and are stale where they say "needs review": the
 `ediabas_describe` of `CAS` with filter `STATUS` under version 2 returned 54 jobs: 30 passed,
 4 reviewed, 6 needs review (`STATUS_CC_DATEN_ARG`, `STATUS_ELV_HISTORY_AUS_BUFFER`,
 `STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU`, `STATUS_TRANSPONDER_PAGE`), 7 not checked
-(60 s limit), 7 refused by name; and `MPM_60` showed 19 runnable of 57. Go by what
-`ediabas_describe` returns now, not by the tables.
+(60 s limit), 7 refused by name; and `MPM_60` showed 19 runnable of 57.
 
 **Approved by Ryan on 2026-11-22.** All five needs-review jobs below (`CAS`
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
@@ -186,7 +192,8 @@ recorded under policy version 1 and are stale where they say "needs review": the
 `C:\ProgramData\EdiabasBridge\config.json`, and `ediabas_describe` of each then returned
 review `reviewed`: the bridge now runs them. The approval lives only in that VM config, not in
 the repo; after a fresh install the list is empty and they are refused again until Ryan adds
-them back. The verdicts in the tables below are as first recorded, before the approval.
+them back. The verdicts in the tables below are as first recorded (policy version 1), before
+the approval.
 
 **Needs review: the bridge will refuse to run these** (`job_needs_review`). Ryan decides;
 the safe default is to skip them. The likely trigger is a screen term from

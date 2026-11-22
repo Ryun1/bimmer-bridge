@@ -1,16 +1,22 @@
 # Playbook: battery-drain evidence
 
-Ryan's E61 has a recurring battery drain. The aim is to gather evidence from the car in one
-short session, not to diagnose from the readings alone: interpretation belongs to the
-`bmw-e61` skill and to Ryan.
+Ryan's E61 has a recurring battery drain. The aim is to gather evidence in one short session,
+not to diagnose from the readings alone: interpretation belongs to the `bmw-e61` skill and to
+Ryan. The session routine in `../../SKILL.md` applies; this file adds only what is specific.
 
-**Status: no battery-related job has been run on this car yet.** The jobs below were found
-at the desk on 2026-11-21/22 with `ediabas_describe` (the cable in the VM, **not plugged into
-the car**). They show that the files are in the VM and what the SGBDs declare; none of these
-files is known to be fitted to this car, and no result has been read. Their descriptions,
-result names and verdicts are in `../job-cookbook.md` ("Battery-drain related jobs").
+**What the bridge can and cannot show** (general knowledge, not from this car): no bridge read
+measures the parasitic current. Reading the car keeps its buses awake, so the car is not
+asleep while it is being read. The bridge's evidence is history: wake-up reasons, fault and
+info memory, and battery history where a module keeps it. The current itself is measured with
+a meter or clamp with the car asleep, which is Ryan's to do.
 
-| File | Runnable (review passed) | Failed the description screen; approved by Ryan on 2026-11-22 (`reviewedJobs` in the VM config), so runnable while that config stands |
+**Status: no battery-related job has been run on this car yet.** The jobs below were found at
+the desk on 2026-11-21/22 with `ediabas_describe` (cable in the VM, **not in the car**). They
+show what the files in the VM declare; none of these files is known to be fitted to this car.
+Descriptions and result names are in `../job-cookbook.md`. Verdicts were recorded under policy
+version 1 or 2; under version 3 check each again with `ediabas_describe` before relying on it.
+
+| File | Passed the description screen | Needed review; approved by Ryan by name on 2026-11-22 (`reviewedJobs` in the VM's config, not in the repo) |
 |---|---|---|
 | `CAS` | `STATUS_PA_WUP` | `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP` |
 | `KOMB60` | `STATUS_KLEMMENSPANNUNG`, `STATUS_KLEMMEN`, `STATUS_KL30_H_ZAEHLER` | — |
@@ -18,57 +24,36 @@ result names and verdicts are in `../job-cookbook.md` ("Battery-drain related jo
 | `sgm_60_2` (variant `SGM_60_2`) | `STATUS_STROMVERSORGUNG_LESEN` | — |
 | `MPM_60` | `STATUS_ECU_LESEN` | `STATUS_AD_WERTE_LESEN` |
 
-The engine files could not be described at the desk: `ediabas_describe` on `N62_TUE2` and
-`ME9N62_2` failed with `ediabas_error` 100 `SYS-0010: INITIALIZATION ERROR` (see
-`../errors.md`), and which engine file fits this car is not known. The project plan's
-engine-ECU candidates (`D_MOTOR`, `STATUS_IBS_MESSWERTE`, `STATUS_BATTERIEINTEGRATOR`,
-`STATUS_SYSTEMCHECK_PM_INFO_1`, `STATUS_SYSTEMCHECK_PM_INFO_2`) remain **unverified**: none
-has been seen in a session. Describing the engine file has to be done at the car; plan for it.
+The approved jobs run while that config stands; after a fresh install of the agent they are
+refused again until Ryan adds them back. What each job returns is whatever the car sends; do
+not describe it from the name.
 
-What each job actually returns is whatever the car sends; do not describe it from the name.
-
-The irony to keep in mind: reading the car to investigate a drain drains it. Plan everything
-first.
+Which engine file fits this car is not known: `N62_TUE2` and `ME9N62_2` could not be described
+at the desk (`../errors.md`). The project plan's engine-ECU candidates (`D_MOTOR`,
+`STATUS_IBS_MESSWERTE`, `STATUS_BATTERIEINTEGRATOR`, `STATUS_SYSTEMCHECK_PM_INFO_1`,
+`STATUS_SYSTEMCHECK_PM_INFO_2`) remain **unverified**; none has been seen in a session.
 
 ## Before the ignition goes on
 
-1. `vm_health`. If a BMW tool is running, name it, ask Ryan to close it when he has finished,
-   and stop until he says so.
-2. Ask Ryan what he has seen (flat battery after how many days, warnings, recent work) and
-   whether the battery is on a charger. This decides which reads matter. Ask him to have the
-   cable plugged in and passed through to the VM in UTM: the next step needs it.
-3. Discover the names: `ediabas_list_ecus` (filter for the candidates above), then
-   `ediabas_describe` on the engine group or SGBD with a `filter` (for example `STATUS_`) to
-   see which battery or power-management jobs exist and which are runnable. Use
-   `ediabas_describe` with `job` to see each chosen job's arguments and result fields. Drop
-   any job that is refused or marked "needs review"; show Ryan the description of any
-   "needs review" job and let him decide, but do not hold the session for it.
-   `ediabas_describe` needs the cable passed through to the VM, and for most files neither
-   the car nor the ignition: on 2026-11-21 it failed with `cable_not_found` without the
-   cable, and worked with the cable in the VM and not plugged into the car. The exceptions
-   seen are `N62_TUE2`, `ME9N62_2`, `GS19D` and `SZL_60` (above). So do all the other discovery
-   now, before asking for the ignition, with a `filter` (a full describe of `CAS` or `LM_60`
-   ran into the 60 s limit and left the last jobs unscreened). `../job-cookbook.md` lists the
-   jobs above and those on `NVE_65` and `TMODE` (for example `TMODE`'s `LESE_SPANNUNG_KL30`);
-   none has been run on the car yet, so check each one's arguments and results with
-   `ediabas_describe` and `job`.
-4. Pick a short list: fault memory of the modules involved plus a few status jobs. Tell Ryan
-   the plan, the number of calls and a rough time (the first EDIABAS call after a pause can
-   take 10–15 s while the agent loads EDIABAS again; that is normal); ask him to switch the
-   ignition on and say when. Note the time.
+- Ask Ryan what he has seen: flat after how many days, warnings, recent work, and whether the
+  battery is on a charger. This decides which reads matter.
+- Check the chosen jobs with `ediabas_describe` and `job`. Drop any refused or "needs review"
+  job; show Ryan its description, but do not hold the session for it.
+- Pick a short list: the whole-car read (`E60`), the fault memory of the modules involved, and
+  a few of the status jobs above. Describing the engine file has to wait for the ignition;
+  plan for it only if the session needs it.
 
-## With the ignition on
+## With the ignition on (not yet run at the car)
 
-5. `ediabas_vehicle_status`; report the readings as returned.
-6. One `ediabas_read_faults` call for the modules chosen.
-7. The status jobs with `ediabas_job`, back to back, no pauses.
-8. Stop at 10 minutes of ignition-on time even if the list is not done; say what was left.
+1. The whole-car read first (`E60` `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL`), so the reads
+   that follow use modules that answered.
+2. One `ediabas_read_faults` call for the modules chosen, with `includeInfoMemory` if Ryan
+   wants the info memory.
+3. The status jobs in one `ediabas_jobs` call.
 
 ## After
 
-9. Say "ignition off".
-10. Report the readings and faults as returned (distances miles first), and what could not be
-    read and why. Do not claim a cause the readings do not show.
-11. Hand the results to the `bmw-e61` skill for interpretation and the fault log.
-12. Tell Ryan which names and result fields were confirmed, so they can be recorded in
-    `../ecu-map.md` and `../job-cookbook.md`.
+- Report readings and faults as returned, and what could not be read and why. Do not claim a
+  cause the readings do not show.
+- Tell Ryan which names and result fields were confirmed, for `../ecu-map.md` and
+  `../job-cookbook.md`.
