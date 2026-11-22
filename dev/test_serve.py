@@ -9,6 +9,7 @@ import plistlib
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -130,6 +131,10 @@ class GetRoutes(ServerTestCase):
 
     def test_request_logged(self):
         self.request("GET", "/discover.ps1")
+        # A file is logged after its body is sent, so the client can finish first: wait for it.
+        deadline = time.monotonic() + 2
+        while not self.log.getvalue().strip() and time.monotonic() < deadline:
+            time.sleep(0.01)
         line = self.log.getvalue().strip().splitlines()[-1]
         size = (self.setup_dir / "discover.ps1").stat().st_size
         self.assertRegex(line, r"^\S+Z 127\.0\.0\.1 GET /discover\.ps1 200 %d$" % size)
