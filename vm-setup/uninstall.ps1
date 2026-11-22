@@ -50,12 +50,32 @@
         }
     }
 
+    # Staging folders left behind when a window was closed mid-run (the finally that removes
+    # them did not run). Only names install.ps1 and update.ps1 make; a link is left alone, and
+    # Directory.Delete does not follow links inside the folder.
+    function Remove-StaleStaging {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $env:ProgramData -Directory -Force -ErrorAction SilentlyContinue)) {
+            if ($dir.Name -notmatch '^EdiabasBridge-staging-[0-9a-f]{32}$') { continue }
+            if (($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warn ($dir.FullName + ' is a link, not a staging folder; left alone.')
+                continue
+            }
+            try {
+                [System.IO.Directory]::Delete($dir.FullName, $true)
+                Write-Host ('    Removed the left-over ' + $dir.FullName)
+            } catch {
+                Write-Warn ('Could not remove ' + $dir.FullName + ': ' + $_.Exception.Message)
+            }
+        }
+    }
+
     try {
         # Options first, so they are cleared even when a check below stops the script.
         $purge = ((Get-OneShotVar 'Purge') -eq $true)
         $keepDataSet = ($null -ne (Get-OneShotVar 'KeepData'))
         Assert-Elevated
         Assert-WindowsPowerShell
+        Remove-StaleStaging
         if ($keepDataSet) {
             Write-Host '    $KeepData is ignored: config.json, token.txt and logs\ are kept unless $Purge=$true is set.'
         }

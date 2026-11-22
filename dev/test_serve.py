@@ -627,6 +627,20 @@ class Startup(unittest.TestCase):
                 self.assertIn("Get-OneShotVar '%s'" % name, text, script)
                 self.assertNotIn("Get-OptionalVar '%s'" % name, text, script)
 
+    def test_left_over_staging_folders_are_removed_first(self):
+        # A closed window skips the finally that removes the staging folder.
+        setup = serve.REPO_ROOT / "vm-setup"
+        for script in ("install.ps1", "update.ps1", "uninstall.ps1"):
+            text = (setup / script).read_text(encoding="ascii")
+            self.assertIn("function Remove-StaleStaging", text, script)
+            self.assertIn("'^EdiabasBridge-staging-[0-9a-f]{32}$'", text, script)
+            self.assertIn("[System.IO.Directory]::Delete($dir.FullName, $true)", text, script)
+            body = text[text.index("    try {\n"):]
+            call = body.index("        Remove-StaleStaging\n")
+            self.assertGreater(call, body.index("        Assert-WindowsPowerShell\n"), script)
+            if "New-AdminOnlyDirectory\n" in body:
+                self.assertLess(call, body.index("New-AdminOnlyDirectory\n"), script)
+
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))
 

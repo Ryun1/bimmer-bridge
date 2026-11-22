@@ -127,6 +127,25 @@
         return $path
     }
 
+    # Staging folders left behind when a window was closed mid-run (the finally that removes
+    # them did not run). Only names New-AdminOnlyDirectory makes; a link is left alone, and
+    # Directory.Delete does not follow links inside the folder.
+    function Remove-StaleStaging {
+        foreach ($dir in @(Get-ChildItem -LiteralPath $env:ProgramData -Directory -Force -ErrorAction SilentlyContinue)) {
+            if ($dir.Name -notmatch '^EdiabasBridge-staging-[0-9a-f]{32}$') { continue }
+            if (($dir.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                Write-Warn ($dir.FullName + ' is a link, not a staging folder; left alone.')
+                continue
+            }
+            try {
+                [System.IO.Directory]::Delete($dir.FullName, $true)
+                Write-Host ('    Removed the left-over ' + $dir.FullName)
+            } catch {
+                Write-Warn ('Could not remove ' + $dir.FullName + ': ' + $_.Exception.Message)
+            }
+        }
+    }
+
     # Copies the verified exe and checks that what landed is the same file.
     function Copy-VerifiedExe([string]$From, [string]$To, [string]$Hash) {
         $copied = $false
@@ -275,6 +294,7 @@
 
         Assert-Elevated
         Assert-WindowsPowerShell
+        Remove-StaleStaging
 
         # ---- inputs ----
         $sha = Get-OptionalVar 'sha'
