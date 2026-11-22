@@ -11,19 +11,20 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 
 | Tool | What it does |
 |---|---|
-| `vm_health` | agent status, BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's) |
+| `vm_health` | this server's version and start time, agent status (warns when the agent's version differs from this server's), BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's), approved jobs (pinned and unpinned) |
 | `vm_list_windows` | windows open in the VM |
 | `vm_screenshot` | an image of the desktop or one window (`window`, `maxEdge`), then a one-line caption |
 | `vm_logs_list` / `vm_logs_read` | log files under the agent's allowed folders; read a tail or a range, optionally grep |
 | `ediabas_list_ecus` | SGBD (`prg`) and group (`grp`) names |
-| `ediabas_describe` | an SGBD's jobs with whether each is runnable, or one job's arguments and results |
+| `ediabas_describe` | an SGBD's jobs with whether each is runnable (`namesOnly` skips the descriptions), or one job's description, its hash, arguments and results |
 | `ediabas_vehicle_status` | ignition, battery and cable voltage readings, fields as returned |
-| `ediabas_job` | one allowed job, result sets as text (or the agent's JSON with `raw: true`) |
+| `ediabas_job` | one allowed job, result sets as text (or the agent's JSON with `raw: true`); `timeoutSeconds` 1–60 |
+| `ediabas_jobs` | 1–20 allowed jobs in one request, one block per job in request order |
 | `ediabas_read_faults` | `FS_LESEN` (and `IS_LESEN`) for 1–20 ECUs, one fault table per ECU, distances in miles first |
 
 **Job policy.** `src/policy.ts` loads `policy/policy.json` from the repo root (two levels above
 `src/` and `dist/`) once at start-up and evaluates it as `docs/api.md` "Job policy" says.
-`ediabas_job`, `ediabas_read_faults` and `ediabas_describe` (names only) are checked before
+`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and `ediabas_describe` (names only) are checked before
 any request leaves the Mac, so a refused job never reaches the VM. If the file is missing or
 invalid, every `ediabas_*` tool refuses with `policy_unavailable` (fail closed); restore the
 file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`
@@ -32,8 +33,17 @@ and `policy/policy-parse-cases.json`, as the agent's tests do.
 **Older agent.** A tool whose endpoint the agent does not have (404 `not_found`) reports
 `agent_outdated`: install the current agent with the Update line (see "Updating" in the repo README).
 
-**Timeouts.** 15 s per request, 75 s for `/ediabas/*`. An EDIABAS call that timed out is never
-sent a second time. The agent unloads EDIABAS after a short idle spell, so the first
+**Errors and length.** Every error result starts with its code in brackets, e.g.
+`[cable_in_use] …`. No result is longer than 60 000 characters; a longer one is cut at a line
+end with a line saying how to narrow the call. `docs/tools.md` lists the codes.
+
+**Timeouts.** 15 s per request, 75 s for `/ediabas/*`. EDIABAS calls are sent one at a time,
+in the order they were made, because the agent runs them one at a time; the 75 s starts when a
+call is sent. A call that waits more than 120 s behind another one is not sent
+(`ediabas_busy`). A connect timeout counts as never sent: the VM's address is looked up again
+and the call is sent once more. Any other failure after a call that runs a job (every
+`ediabas_*` tool but `ediabas_list_ecus`) may have reached the agent is `ediabas_request_lost`,
+and the call is never sent a second time; nor is an `ediabas_list_ecus` call that timed out. The agent unloads EDIABAS after a short idle spell, so the first
 `ediabas_*` call after a pause takes about 10 s longer; that is expected.
 
 **No cable.** EDIABAS error 28 (`IFH-0018`) comes back as `cable_not_found`: the cable is not
@@ -45,7 +55,7 @@ connected to the VM. Even `ediabas_describe` of a real SGBD needs it (seen at th
 Node 20+ (developed on Node 24).
 
 ```sh
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build        # -> dist/index.js (executable, #!/usr/bin/env node)
@@ -55,11 +65,9 @@ stdout is the MCP channel. All logging goes to stderr.
 
 ## Token
 
-The agent token is read from the Keychain on first use:
-
-```sh
-security add-generic-password -s ediabas-bridge -a agent -w '<token>' -U
-```
+The agent token is read from the Keychain (service `ediabas-bridge`, account `agent`) on first
+use. It gets there from the VM: start `python3 dev/serve.py --accept-token` and paste the
+Install line it prints (`docs/deploy.md`, "Token hand-off").
 
 If the Keychain has none, `EDIABAS_AGENT_TOKEN` is used (with one warning on stderr). With
 neither, the server still starts and each tool says how to store the token.

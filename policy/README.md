@@ -2,7 +2,7 @@
 
 | File | What |
 |---|---|
-| `policy.json` | the default-deny job policy, version 2. The agent embeds it at build time; the Mac server reads it at start-up |
+| `policy.json` | the default-deny job policy, version 3. The agent embeds it at build time; the Mac server reads it at start-up |
 | `policy-cases.json` | ECU/job pairs with the expected verdict (`allowed`, `rule`, `screen`) |
 | `policy-parse-cases.json` | whole policy texts each parser must accept or refuse |
 
