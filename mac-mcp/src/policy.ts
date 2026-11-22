@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -273,11 +274,16 @@ export class PolicyGuard {
   private constructor(
     private readonly policy: Policy | null,
     private readonly loadError: string | null,
+    /** SHA-256 (lower-case hex) of the exact bytes parsed; null when nothing loaded from a file. */
+    readonly sha256: string | null = null,
   ) {}
 
-  static load(path: string = DEFAULT_POLICY_PATH, read: (p: string) => string = (p) => readFileSync(p, "utf8")): PolicyGuard {
+  static load(path: string = DEFAULT_POLICY_PATH, read: (p: string) => string | Buffer = (p) => readFileSync(p)): PolicyGuard {
     try {
-      return new PolicyGuard(parsePolicy(read(path)), null);
+      // Hash the bytes that are parsed, so the hash is of what this Mac enforces.
+      const bytes = Buffer.from(read(path));
+      const policy = parsePolicy(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      return new PolicyGuard(policy, null, createHash("sha256").update(bytes).digest("hex"));
     } catch (e) {
       const reason = e instanceof z.ZodError ? "it does not have the expected fields" : e instanceof Error ? e.message : String(e);
       return new PolicyGuard(null, `${path}: ${reason}`);

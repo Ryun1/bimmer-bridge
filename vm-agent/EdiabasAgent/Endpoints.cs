@@ -77,6 +77,7 @@ internal sealed class Endpoints
             Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck),
             LastCableUseAt: _ctx.CableUse.LastInitAt is { } t ? ApiFormat.Timestamp(t) : null,
             PolicyVersion: _ctx.Policy.Version,
+            PolicySha256: _ctx.Policy.Sha256,
             Capabilities: AgentContext.Capabilities,
             Approvals: _ctx.Approvals.Current.Counts);
 

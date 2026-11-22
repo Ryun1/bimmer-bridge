@@ -44,6 +44,7 @@ export type LocalErrorCode =
   | "invalid_arguments"
   | "agent_outdated"
   | "policy_unavailable"
+  | "policy_mismatch"
   | "job_not_allowed"
   | "internal_error";
 
@@ -66,6 +67,15 @@ export function vmNotRunning(vmName: string, detail?: string): BridgeError {
 
 export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
+}
+
+/** The agent's job policy file differs byte for byte from this Mac's. Nothing was sent to /ediabas/*. */
+export function policyMismatch(agentSha256: string, macSha256: string): BridgeError {
+  return new BridgeError(
+    "policy_mismatch",
+    `The agent's job policy (sha256 ${cleanText(agentSha256.slice(0, 12), 40)}) differs from this Mac's (${macSha256.slice(0, 12)}). ` +
+      "Update the agent or the Mac server so both carry the same policy/policy.json.",
+  );
 }
 
 /** A request that runs an EDIABAS job failed after it may have reached the agent. */

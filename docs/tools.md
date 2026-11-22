@@ -22,7 +22,8 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   (its `ecu`, and `job` for shape only) are checked against `policy/policy.json` on the Mac
   before any request leaves it. A refusal never reaches the VM. If the policy file is missing or
   invalid (including unknown or duplicate keys, which the agent also refuses), every `ediabas_*`
-  tool refuses with `policy_unavailable`.
+  tool refuses with `policy_unavailable`. Each `ediabas_*` call also reads the agent's `/health`
+  first and refuses with `policy_mismatch` when the agent's policy file hash differs from this Mac's.
 - `ediabas_read_faults` sends `FS_LESEN` per ECU, plus `IS_LESEN` per ECU with
   `includeInfoMemory`, 20 items per request at most (so at most two requests). Every item is
   policy-checked before anything is sent; if any ECU is refused, the whole call is refused and
@@ -85,6 +86,7 @@ use …`. Codes (also the audit outcome):
 | `ediabas_busy` | Mac | another EDIABAS call on this Mac was still running after 120 s; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed |
 | `agent_outdated` | Mac | the agent has no such endpoint; the user needs to run the Update line |
 | `policy_unavailable` | Mac | the policy file could not be loaded; nothing is sent |
+| `policy_mismatch` | Mac | the agent reports a different SHA-256 for its policy file than this Mac loaded; nothing is sent to `/ediabas/*`. The agent or the Mac server is out of date: the user updates the agent (Update line) or restarts Claude. Do not look for another way |
 | `invalid_arguments` | Mac | arguments that cannot go together (`tailBytes` with `offset`/`length`, or only one of `offset` and `length`); nothing is sent |
 | `wrong_service`, `bad_response`, `config_error`, `internal_error` | Mac | something other than the agent answered, the agent and server are different versions, or a fault in the server itself |
 | `not_run` | agent | the agent did not start the job (a batch item, or a single `ediabas_job` / `ediabas_describe`, HTTP 503), or stopped it. The message passes on the agent's reason: the request's time budget ran out (time spent waiting behind another EDIABAS request counts), a BMW tool was opened during the request (ask the user to close it), an earlier job did not stop after `apiBreak`, or the request was abandoned. Do not retry in a loop |

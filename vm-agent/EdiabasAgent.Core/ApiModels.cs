@@ -38,6 +38,7 @@ public sealed record HealthResponse(
     EdiabasInfo Ediabas,
     string? LastCableUseAt,
     int? PolicyVersion,
+    string? PolicySha256,
     IReadOnlyList<string> Capabilities,
     ApprovalCounts Approvals)
 {

@@ -52,6 +52,8 @@ export const HealthSchema = z.object({
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
+  // SHA-256 (hex) of the agent's embedded policy.json; absent from an older agent.
+  policySha256: z.string().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
   // Distinct reviewedJobs entries: pinned ones, and ignored ones (unpinned or malformed; they
   // approve nothing). A 0.4.0 agent sends `unpinned` instead, which it still honours; older

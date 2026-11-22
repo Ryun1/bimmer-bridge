@@ -26,7 +26,7 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 /** The agent's policy version against the Mac's (null when the Mac's file did not load). */
-function policyLines(h: Health, macPolicyVersion: number | null): string[] {
+function policyLines(h: Health, macPolicyVersion: number | null, macSha256: string | null): string[] {
   const lines: string[] = [];
   const agentV = h.policyVersion ?? null;
   const caps = h.capabilities ?? null;
@@ -36,7 +36,9 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
     lines.push(`Agent features: ${caps.length ? caps.map((c) => clean(c)).join(", ") : "none"}`);
   }
   const mac = macPolicyVersion === null ? "could not be loaded, so every EDIABAS tool refuses" : `version ${macPolicyVersion}`;
-  lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}; Mac ${mac}.`);
+  const agentSha = h.policySha256 ? clean(h.policySha256) : null;
+  const sha = (s: string | null) => (s ? ` (sha256 ${s.slice(0, 12)})` : "");
+  lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}${sha(agentSha)}; Mac ${mac}${macPolicyVersion === null ? "" : sha(macSha256)}.`);
   const a = h.approvals;
   if (a && "ignored" in a) {
     lines.push(`Approved jobs: ${a.pinned} pinned, ${a.ignored} ignored.`);
@@ -59,6 +61,11 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
       `WARNING: the agent's job policy (version ${agentV}) differs from this Mac's (version ${macPolicyVersion}). Each side refuses what its own copy refuses. ${UPDATE_HINT}`,
     );
   }
+  if (agentSha !== null && macSha256 !== null && agentSha.toLowerCase() !== macSha256) {
+    lines.push(
+      `WARNING: the agent's policy file (sha256 ${agentSha.slice(0, 12)}) is not the same file as this Mac's (${macSha256.slice(0, 12)}), so every ediabas_* tool refuses with [policy_mismatch]. ${UPDATE_HINT}`,
+    );
+  }
   return lines;
 }
 
@@ -73,7 +80,7 @@ export interface MacServerInfo {
   startedAt: Date;
 }
 
-export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo): string {
+export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo, macPolicySha256: string | null = null): string {
   const lines: string[] = [];
   if (mac) lines.push(`Mac server ${mac.version}, started ${localTime(mac.startedAt)}`);
   const since = h.startedAt ? ` (since ${clean(h.startedAt)})` : "";
@@ -115,7 +122,7 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null, 
     lines.push("EDIABAS: not loaded (released after idle); the next EDIABAS call loads it and takes about 10 s longer. That is normal, not a fault.");
   }
   lines.push(`Last cable use: ${h.lastCableUseAt ? clean(h.lastCableUseAt) : "never (since the agent started)"}`);
-  lines.push(...policyLines(h, macPolicyVersion));
+  lines.push(...policyLines(h, macPolicyVersion, macPolicySha256));
   return lines.join("\n");
 }
 

@@ -102,6 +102,19 @@ public class JobPolicyTests
     }
 
     [Fact]
+    public void Embedded_Sha256_MatchesFileBytes()
+    {
+        var expected = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(PolicyDir(), "policy.json"))));
+        Assert.Equal(expected, JobPolicy.Embedded.Sha256);
+    }
+
+    [Fact]
+    public void ParsedFromText_HasNoSha256()
+    {
+        Assert.Null(JobPolicy.Parse("{}").Sha256);
+    }
+
+    [Fact]
     public void Embedded_Loads()
     {
         Assert.True(JobPolicy.Embedded.Loaded, JobPolicy.Embedded.LoadError);

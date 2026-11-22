@@ -140,7 +140,7 @@ describe("vm_health", () => {
     const r = await call("vm_health");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
-    expect(r.text).toContain("Job policy: agent version 4; Mac version 4.");
+    expect(r.text).toMatch(/Job policy: agent version 4; Mac version 4 \(sha256 [0-9a-f]{12}\)\./);
     expect(r.text).not.toMatch(/WARNING: the agent's job policy/);
   });
 
@@ -459,6 +459,43 @@ describe("approval changes", () => {
     expect(lines[1]).toMatch(/\tediabas_job\tok\t\d+\tecu=NVE_65\tjob=IDENT\tapprovals_changed=1$/);
     const third = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
     expect(third.text).not.toContain("[approvals changed]");
+  });
+
+  it("refuses every ediabas call with [policy_mismatch] when the agent's policy hash differs, and sends nothing to /ediabas/*", async () => {
+    override("GET /health", () => ({ status: 200, body: phase2Health({ policySha256: "0".repeat(64) }) }));
+    const { call, auditLines } = await connect();
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[policy_mismatch\] The agent's job policy \(sha256 000000000000\) differs from this Mac's \([0-9a-f]{12}\)\. Update the agent or the Mac server so both carry the same policy\/policy\.json\./);
+    for (const [tool, args] of [
+      ["ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] }],
+      ["ediabas_read_faults", { ecus: ["NVE_65"] }],
+      ["ediabas_list_ecus", {}],
+      ["ediabas_describe", { ecu: "NVE_65" }],
+      ["ediabas_vehicle_status", {}],
+    ] as const) {
+      expect((await call(tool, args)).text).toMatch(/^\[policy_mismatch\]/);
+    }
+    expect(agent.requests.filter((q) => q.path.startsWith("/ediabas/"))).toEqual([]);
+    expect((await auditLines())[0]).toMatch(/\tediabas_job\tpolicy_mismatch\t/);
+  });
+
+  it("runs the job when the agent reports no policy hash, or the same one", async () => {
+    const { call } = await connect();
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" })).isError).toBeFalsy();
+    const same = PolicyGuard.load().sha256!;
+    override("GET /health", () => ({ status: 200, body: phase2Health({ policySha256: same }) }));
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" })).isError).toBeFalsy();
+  });
+
+  it("vm_health shows both hashes", async () => {
+    const same = PolicyGuard.load().sha256!;
+    override("GET /health", () => ({ status: 200, body: phase2Health({ policySha256: "0".repeat(64) }) }));
+    const { call } = await connect();
+    const r = await call("vm_health");
+    expect(r.text).toContain("sha256 000000000000");
+    expect(r.text).toContain(`sha256 ${same.slice(0, 12)}`);
+    expect(r.text).toContain("WARNING");
   });
 
   it("a health failure before an ediabas call gives the tool's usual unreachable error", async () => {

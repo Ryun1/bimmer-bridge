@@ -69,7 +69,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 - `sessionId` is the Windows session the agent runs in. `0` means it is not in an
   interactive session and screenshots will not work.
 - `ediabas.dllFound` is a file-existence check only.
-- `lastCableUseAt`, `policyVersion`, `capabilities`, `ediabas.loaded`, `ediabas.stuck` and
+- `lastCableUseAt`, `policyVersion`, `policySha256`, `capabilities`, `ediabas.loaded`, `ediabas.stuck` and
   `approvals` are described under "`GET /health` additions" below.
 
 ## `GET /windows`
@@ -138,6 +138,10 @@ caught by the conflict check before EDIABAS is called.
 ## `GET /health` additions
 - `lastCableUseAt`: UTC time the runner last called `apiInit`, else `null`.
 - `policyVersion`: the `version` of the policy file built into the agent (integer).
+- `policySha256`: lower-case hex SHA-256 (64 characters) of the exact bytes of the policy file
+  built into the agent; `null` only if the policy did not load. A 0.4.x agent omits it. Before
+  every `ediabas_*` call the Mac compares it with the SHA-256 of the file it loaded; if both are
+  present and differ, it refuses with `policy_mismatch` and sends no `/ediabas/*` request.
 - `capabilities`: array of strings, the endpoint groups this build has:
   `"ediabas"`, `"capture"`, `"logs"`.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").

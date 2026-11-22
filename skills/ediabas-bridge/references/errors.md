@@ -24,6 +24,10 @@ never look for another tool, job or route (and never computer use on the VM wind
 
 ## Refusals
 
+- **`[policy_mismatch]`.** The agent's job policy file is not the same as this Mac's (different
+  SHA-256), so every `ediabas_*` tool refuses and nothing was sent. The agent or the Mac server is
+  out of date: the user runs the Update line and restarts Claude. Then stop; do not look for
+  another way.
 - **`[job_not_allowed]`.** If the user believes a job is a pure read that should be allowed, that is
   a change to the policy files in the repo, made deliberately with its test cases, never
   mid-session.

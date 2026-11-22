@@ -116,6 +116,7 @@ public class ApiModelsTests
             Ediabas: new EdiabasInfo(@"C:\EDIABAS\BIN\api32.dll", true, false, true),
             LastCableUseAt: null,
             PolicyVersion: 1,
+            PolicySha256: new string('a', 64),
             Capabilities: ["ediabas"],
             Approvals: new ApprovalCounts(2, 1, ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], "0123456789ab"));
 
@@ -125,7 +126,7 @@ public class ApiModelsTests
         [
             "agent", "version", "startedAt", "uptimeSeconds", "os", "user", "elevated", "sessionId",
             "bindAddress", "port", "gateway", "conflictingProcesses", "ediabas", "lastCableUseAt",
-            "policyVersion", "capabilities", "approvals",
+            "policyVersion", "policySha256", "capabilities", "approvals",
         ];
         Assert.Equal(expected, root.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal("ediabas-bridge-agent", root.GetProperty("agent").GetString());

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
 import { BridgeError } from "../src/errors.js";
 
@@ -186,5 +187,16 @@ describe("PolicyGuard", () => {
   it("requires a full match even when the file's pattern is not anchored", () => {
     const p = parsePolicy(JSON.stringify({ ...JSON.parse(policyText), namePattern: "[A-Z_]{1,64}" }));
     expect(evaluate(p, { ecu: "NVE;X", job: "IDENT" }).rule).toBe("shape.ecu");
+  });
+});
+
+describe("PolicyGuard.sha256", () => {
+  it("is the SHA-256 of the exact bytes of the policy file", () => {
+    const g = PolicyGuard.load();
+    expect(g.sha256).toBe(createHash("sha256").update(readFileSync(DEFAULT_POLICY_PATH)).digest("hex"));
+  });
+
+  it("is null when the file did not load", () => {
+    expect(PolicyGuard.load("/nonexistent/policy.json").sha256).toBeNull();
   });
 });

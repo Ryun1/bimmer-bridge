@@ -6,7 +6,7 @@ import { AgentClient, type Health } from "./agentClient.js";
 import { ApprovalWatch } from "./approvalWatch.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import type { Config } from "./config.js";
-import { BridgeError, errorText, toBridgeError } from "./errors.js";
+import { BridgeError, errorText, policyMismatch, toBridgeError } from "./errors.js";
 import { BATCH_MAX, readFaults, runJobBatch } from "./faults.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
 import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle } from "./formatEdiabas.js";
@@ -146,7 +146,11 @@ export function buildServer(parts: ServerParts): McpServer {
    * request would have: the VM is unreachable either way.
    */
   async function preflight(): Promise<{ notice: string | null }> {
-    return { notice: noticeOf(await client.health()) };
+    const h = await client.health();
+    // Compared whole, not by version: two files with the same version can still differ.
+    const macSha = policy.sha256;
+    if (h.policySha256 && macSha && h.policySha256.toLowerCase() !== macSha) throw policyMismatch(h.policySha256.toLowerCase(), macSha);
+    return { notice: noticeOf(h) };
   }
 
   async function run(tool: string, body: (ctx: CallContext) => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
@@ -212,7 +216,7 @@ export function buildServer(parts: ServerParts): McpServer {
       run("vm_health", async (ctx) => {
         const h = await client.health();
         ctx.notice = noticeOf(h);
-        return formatHealth(h, policy.version, mac);
+        return formatHealth(h, policy.version, mac, policy.sha256);
       }),
   );
 
