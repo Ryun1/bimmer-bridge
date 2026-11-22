@@ -123,8 +123,8 @@ export function agentError(
   message: string | undefined,
   details?: unknown,
 ): BridgeError {
-  const safeCode = code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : `http_${status}`;
-  const known = safeCode ? describeAgentError(safeCode, message, details) : null;
+  const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || `http_${status}`;
+  const known = describeAgentError(safeCode, message, details);
   if (known) {
     const e = new BridgeError(safeCode, known);
     const rule = detailString(details, "rule");
@@ -132,7 +132,7 @@ export function agentError(
     return e;
   }
   const safeMessage = message ? cleanText(message) : "(no message)";
-  return new BridgeError(safeCode || `http_${status}`, `The agent reported an error: ${safeCode} — ${safeMessage} (HTTP ${status}).`);
+  return new BridgeError(safeCode, `The agent reported an error: ${safeCode} — ${safeMessage} (HTTP ${status}).`);
 }
 
 export const UPDATE_HINT =
@@ -224,8 +224,12 @@ export function describeAgentError(code: string, message: string | undefined, de
       const ecu = detailString(details, "ecu");
       return `There is no SGBD or group file${ecu ? ` named ${cleanText(ecu, 80)}` : ""} in the VM's EDIABAS Ecu folder. Use ediabas_list_ecus to find the right name; never guess names.`;
     }
-    case "job_not_found":
-      return `The SGBD has no such job (${ecuJob(details)}). Use ediabas_describe on that ECU to see its jobs; never guess names.`;
+    case "job_not_found": {
+      const ecu = detailString(details, "ecu");
+      const job = detailString(details, "job");
+      const what = ecu && job ? `${cleanText(ecu, 80)} has no job ${cleanText(job, 80)}.` : "The SGBD has no such job.";
+      return `${what} Use ediabas_describe on that ECU to see its jobs; never guess names.`;
+    }
     case "ediabas_error": {
       const n = detailNumber(details, "errorCode");
       const text = detailString(details, "errorText");
@@ -267,6 +271,10 @@ export function describeAgentError(code: string, message: string | undefined, de
     }
     case "desktop_unavailable":
       return "The VM's screen cannot be captured: Windows is locked, showing a secure desktop, or nobody is logged in. Ask Ryan to log in to or unlock Windows, then ask again.";
+    case "capture_busy":
+      return "Another screenshot is still being taken in the VM; try again in a moment.";
+    case "capture_failed":
+      return "The window could not be captured (Windows failed to copy its image; this is not the lock screen). Try again once, or capture the desktop instead.";
     case "path_not_allowed": {
       const reason = detailString(details, "reason");
       return `That path is outside the folders the agent may read${reason ? ` (${cleanText(reason, 120)})` : ""}. Use vm_logs_list to see the allowed folders and files; do not try other spellings of the path.`;

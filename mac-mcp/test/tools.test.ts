@@ -207,6 +207,8 @@ describe("vm_screenshot", () => {
     ["window_not_found", 404, null, /vm_list_windows/],
     ["window_minimized", 409, { handle: "0x1", title: "INPA" }, /"INPA" is minimised.*Ask Ryan to restore it/],
     ["desktop_unavailable", 503, null, /locked.*log in to or unlock/],
+    ["capture_busy", 503, null, /^\[capture_busy\] (?![\s\S]*locked)Another screenshot is still being taken in the VM; try again in a moment\./],
+    ["capture_failed", 500, null, /^\[capture_failed\] (?![\s\S]*locked)The window could not be captured/],
   ] as const)("maps %s", async (code, status, details, msg) => {
     override("GET /screen/capture", () => agentErr(status, code, "x", details));
     const { call } = await connect();
@@ -385,7 +387,7 @@ describe("ediabas_describe", () => {
 
   it.each([
     ["ecu_not_found", 404, { ecu: "NOPE" }, /no SGBD or group file named NOPE.*ediabas_list_ecus/i],
-    ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /NVE_65 NOPE.*ediabas_describe/],
+    ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /^\[job_not_found\] NVE_65 has no job NOPE\. .*ediabas_describe/],
     ["cable_in_use", 409, { processes: [{ name: "INPALOAD", pid: 4312 }, { name: "NcsDummy", pid: 77 }] }, /in use by INPALOAD \(pid 4312\), NcsDummy \(pid 77\)\. Ask Ryan to close it/],
     ["ediabas_unavailable", 503, { reason: "api32.dll missing" }, /could not be started in the VM \(api32.dll missing\)/],
     // As seen at the desk on 2026-11-21: describing a real SGBD with the cable unplugged.
@@ -399,6 +401,16 @@ describe("ediabas_describe", () => {
   });
 });
 
+describe("ediabas_describe text", () => {
+  it("says it needs the cable, can be slow, and ignores filter with job", async () => {
+    const { client } = await connect();
+    const d = (await client.listTools()).tools.find((t) => t.name === "ediabas_describe")!.description!;
+    expect(d).toMatch(/needs the cable attached to the VM/);
+    expect(d).toMatch(/tens of seconds/);
+    expect(d).toMatch(/`filter` is ignored when `job` is given/);
+  });
+});
+
 describe("ediabas_vehicle_status", () => {
   it("prints each reading's fields as returned, and per-reading errors", async () => {
     const { call } = await connect();
@@ -408,7 +420,7 @@ describe("ediabas_vehicle_status", () => {
     expect(r.text).toContain("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
     expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
-    expect(r.text).toMatch(/Cable KL15 .*error: EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
   });
 });
 
@@ -482,6 +494,8 @@ describe("ediabas_job", () => {
       /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
     ],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
+    ["job_not_found", 404, { ecu: "NVE_65", job: "STATUS_X" }, /^\[job_not_found\] NVE_65 has no job STATUS_X\./],
+    ["job_not_found", 404, null, /^\[job_not_found\] The SGBD has no such job\./],
     ["cable_in_use", 409, null, /in use by a BMW tool in the VM/],
     ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^\[cable_not_found\] (?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
     ["cable_not_found", 502, null, /^\[cable_not_found\] EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
@@ -653,8 +667,8 @@ describe("ediabas_read_faults", () => {
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "BAD", "GONE"] });
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.");
-    expect(r.text).toMatch(/BAD\n  Fault memory: error: EDIABAS reported error 19: IFH-0009/);
-    expect(r.text).toMatch(/GONE\n  Fault memory: error: Not run/);
+    expect(r.text).toMatch(/BAD\n  Fault memory: error: \[ediabas_error\] EDIABAS reported error 19: IFH-0009/);
+    expect(r.text).toMatch(/GONE\n  Fault memory: error: \[not_run\] Not run/);
   });
 
   it("names the BMW tool that stopped a batch midway instead of blaming the time limit", async () => {
@@ -678,7 +692,7 @@ describe("ediabas_read_faults", () => {
     });
     const { call } = await connect();
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "D_MOTOR"] });
-    expect(r.text).toMatch(/D_MOTOR\n  Fault memory: error: Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\)/);
+    expect(r.text).toMatch(/D_MOTOR\n  Fault memory: error: \[not_run\] Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\)/);
     expect(r.text).not.toMatch(/overall time limit/);
   });
 
@@ -699,7 +713,7 @@ describe("ediabas_read_faults", () => {
     });
     const { call } = await connect();
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65"] });
-    expect(r.text).toMatch(/NVE_65\n  Fault memory: error: EDIABAS could not initialise the diagnostic interface/);
+    expect(r.text).toMatch(/NVE_65\n  Fault memory: error: \[cable_not_found\] EDIABAS could not initialise the diagnostic interface/);
     expect(r.text).toMatch(/not connected to the VM/);
     expect(r.text).not.toMatch(/ECU did not answer/);
   });
@@ -728,8 +742,31 @@ describe("ediabas_read_faults", () => {
     const r = await call("ediabas_read_faults", { ecus, includeInfoMemory: true });
     expect(r.isError).toBeFalsy();
     expect(r.text).toMatch(/ECU_9\n  Fault memory: 2 entries/);
-    expect(r.text).toMatch(/ECU_10\n  Fault memory: error: The diagnostic cable is in use by WinKFP \(pid 9\)/);
-    expect(r.text).toMatch(/ECU_11\n  Fault memory: error: [^\n]+\n  Info memory: error: The diagnostic cable/);
+    expect(r.text).toMatch(/ECU_10\n  Fault memory: error: \[cable_in_use\] The diagnostic cable is in use by WinKFP \(pid 9\)/);
+    expect(r.text).toMatch(/ECU_11\n  Fault memory: error: [^\n]+\n  Info memory: error: \[cable_in_use\] The diagnostic cable/);
+  });
+
+  it("shows a module without info memory as such, not as a failure", async () => {
+    override("POST /ediabas/jobs", (q) => {
+      const items = (q.body as { items: { ecu: string; job: string }[] }).items;
+      return {
+        status: 200,
+        body: {
+          items: items.map((it) =>
+            it.job === "IS_LESEN"
+              ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
+              : it.ecu === "NOFS"
+                ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
+                : { ok: true, result: jobResult(it.ecu, it.job, [{ JOB_STATUS: "OKAY" }]), error: null },
+          ),
+          durationMs: 5,
+        },
+      };
+    });
+    const { call } = await connect();
+    const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "NOFS"], includeInfoMemory: true });
+    expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.\n  Info memory: no info memory on this module.");
+    expect(r.text).toMatch(/NOFS\n  Fault memory: error: \[job_not_found\] NOFS has no job FS_LESEN\./);
   });
 
   it("reads a repeated ECU once", async () => {

@@ -244,6 +244,13 @@ describe("MCP server", () => {
     expect(lines[1]).toMatch(/\tvm_list_windows\tok\t\d+$/);
   });
 
+  it("redacts the token from every stderr line, including audit warnings", async () => {
+    const { client, logs } = await connect({ env: { EDIABAS_AUDIT_LOG: `/dev/null/${AGENT_TOKEN}/audit.log` } });
+    await client.callTool({ name: "vm_health", arguments: {} });
+    expect(logs.some((l) => /audit/i.test(l))).toBe(true);
+    expect(logs.join("\n")).not.toContain(AGENT_TOKEN);
+  });
+
   it("does not fail the call when the audit log cannot be written", async () => {
     const { client, logs } = await connect({ env: { EDIABAS_AUDIT_LOG: "/dev/null/cannot/audit.log" } });
     const r = await client.callTool({ name: "vm_health", arguments: {} });

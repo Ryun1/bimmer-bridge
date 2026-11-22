@@ -92,7 +92,7 @@ describe("fault tables", () => {
       false,
     );
     expect(t).toContain("NVE_65\n  Fault memory: no faults stored.");
-    expect(t).toContain("D_MOTOR\n  Fault memory: error: There is no SGBD or group file named D_MOTOR");
+    expect(t).toContain("D_MOTOR\n  Fault memory: error: [ecu_not_found] There is no SGBD or group file named D_MOTOR");
     expect(t).toContain("X\n  Fault memory: error: The VM does not appear to be running.");
   });
 });
@@ -114,7 +114,7 @@ describe("job results", () => {
   });
 
   it("maps per-item errors, and unknown codes with their message", () => {
-    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("weird_code: something odd");
+    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("[weird_code] something odd");
     expect(itemErrorText(null)).toMatch(/no error/);
   });
 });

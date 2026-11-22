@@ -287,7 +287,8 @@ export function buildServer(parts: ServerParts): McpServer {
       description:
         "Without `job`: list an ECU's (SGBD's) jobs with their descriptions and whether each is runnable through the " +
         "bridge (optionally filtered by name substring). With `job`: that job's description, arguments and results. " +
-        "Use it to find job names and arguments; never guess them. Reads the SGBD file through EDIABAS; read-only.",
+        "`filter` is ignored when `job` is given. Use it to find job names and arguments; never guess them. Reads the SGBD " +
+        "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD; read-only.",
       inputSchema: {
         ecu: Name.describe("SGBD or group name, e.g. from ediabas_list_ecus."),
         job: Name.optional().describe("One job to describe."),
@@ -420,7 +421,7 @@ export function buildServer(parts: ServerParts): McpServer {
       const chunk = items.slice(start, start + BATCH_MAX);
       if (failure) {
         // A whole-request failure (cable in use, EDIABAS down, VM gone) stands in for the rest.
-        for (let i = 0; i < chunk.length; i++) results.push({ error: failure.message });
+        for (let i = 0; i < chunk.length; i++) results.push({ error: errorText(failure.code, failure.message) });
         continue;
       }
       try {
@@ -431,7 +432,7 @@ export function buildServer(parts: ServerParts): McpServer {
         const err = toBridgeError(e);
         if (start === 0) throw err;
         failure = err;
-        for (let i = 0; i < chunk.length; i++) results.push({ error: err.message });
+        for (let i = 0; i < chunk.length; i++) results.push({ error: errorText(err.code, err.message) });
       }
     }
 
@@ -482,6 +483,6 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     log,
     recorder,
   });
-  const audit = new AuditLog(config.auditLogPath, { warn: deps.log });
-  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log: deps.log });
+  const audit = new AuditLog(config.auditLogPath, { warn: log });
+  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log });
 }

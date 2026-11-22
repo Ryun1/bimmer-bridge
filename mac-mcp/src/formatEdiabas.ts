@@ -1,5 +1,5 @@
 import type { AgentErrorInfo, AgentVerdict, BatchItem, DescribeJob, DescribeList, EcuList, JobResult, Vehicle } from "./agentClient.js";
-import { cleanText, describeAgentError } from "./errors.js";
+import { cleanText, describeAgentError, errorText } from "./errors.js";
 import type { Verdict } from "./policy.js";
 
 /**
@@ -87,8 +87,8 @@ function plural(n: number, one: string, many = `${one}s`): string {
 /** Error text for a per-item error: the known message, else code and the agent's message. */
 export function itemErrorText(err: AgentErrorInfo | null | undefined): string {
   if (!err) return "failed (the agent gave no error)";
-  const code = cleanText(err.code, 64) || "error";
-  return describeAgentError(code, err.message, err.details) ?? `${code}: ${cleanText(err.message || "(no message)")}`;
+  const code = cleanText(err.code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") || "error";
+  return errorText(code, describeAgentError(code, err.message, err.details) ?? cleanText(err.message || "(no message)"));
 }
 
 // ---------------------------------------------------------------------------
@@ -198,9 +198,11 @@ export interface FaultReport {
   info?: BatchItem | { error: string } | undefined;
 }
 
-function itemSection(item: BatchItem | { error: string }, label: string): string[] {
+function itemSection(item: BatchItem | { error: string }, label: string, info = false): string[] {
   if ("ok" in item) {
     if (item.ok && item.result) return formatFaultTable(item.result, label);
+    // Not every module has an info memory; its SGBD then has no IS_LESEN. That is not a failure.
+    if (info && item.error?.code === "job_not_found") return [`  ${label}: no info memory on this module.`];
     return [`  ${label}: ${item.ok ? "no result returned" : `error: ${itemErrorText(item.error)}`}`];
   }
   return [`  ${label}: error: ${item.error}`];
@@ -214,7 +216,7 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
     out.push("");
     out.push(`${cleanName(r.ecu)}${variant && variant !== r.ecu.toUpperCase() ? ` (variant ${variant})` : ""}`);
     out.push(...itemSection(r.faults, "Fault memory"));
-    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory"));
+    if (includeInfo && r.info) out.push(...itemSection(r.info, "Info memory", true));
   }
   return out.join("\n");
 }
