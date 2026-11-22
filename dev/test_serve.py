@@ -766,10 +766,51 @@ class Startup(unittest.TestCase):
             self.assertEqual(text.count("    # shared:end\n"), 1, script)
             block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
             for name in ("New-AdminOnlyDirectory", "Remove-StaleStaging", "Copy-VerifiedExe",
-                         "Stop-Agent"):
+                         "Stop-Agent", "Set-FirewallRule", "Get-DefaultRoute", "Invoke-Http",
+                         "Wait-AgentAnswer"):
                 self.assertIn("function %s" % name, block, script)
             blocks.append(block)
         self.assertEqual(blocks[0], blocks[1])
+
+    def test_firewall_rule_is_made_in_the_shared_block_only(self):
+        # Install and Update both pin the rule to the current gateway (F10).
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
+            rest = text.replace(block, "")
+            self.assertIn("function Set-FirewallRule([int]$Port)", block, script)
+            self.assertIn("-RemoteAddress $gateway", block, script)
+            self.assertNotIn("New-NetFirewallRule", rest, script)
+            self.assertIn("        Set-FirewallRule $port\n", rest, script)
+
+    def test_a_bad_copy_is_not_deleted_by_the_copy(self):
+        # Copy-VerifiedExe reports a hash mismatch with $false; the caller restores the backup.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        copy = text.split("function Copy-VerifiedExe", 1)[1].split("\n    }\n", 1)[0]
+        self.assertNotIn("Remove-Item", copy)
+        self.assertNotIn("throw", copy)
+
+    def test_update_backs_up_rolls_back_and_merges(self):
+        # F10, F13: the update order, the backup, the rollback and the conflict-name merge.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        body = text[text.index("    $tmp = $null\n"):]
+        order = ["Disable-ScheduledTask", "        Stop-Agent\n", "$BackupPath $oldHash",
+                 "Copy-VerifiedExe $newExe $ExePath $exeHash", "Merge-ConflictDefaults\n",
+                 "Set-FirewallRule $port", "Enable-ScheduledTask", "Start-ScheduledTask",
+                 "Wait-AgentAnswer"]
+        at = [body.index(step) for step in order]
+        self.assertEqual(at, sorted(at))
+        self.assertIn("'EdiabasAgent.exe.bak'", text)
+        self.assertIn("Copy-VerifiedExe $BackupPath $ExePath $OldHash", text)
+        self.assertIn("'Rolled back to ' + $oldVersion", text)
+        self.assertIn("Wait-AgentAnswer $url $token 60", body)
+        finally_part = body[body.rindex("    } finally {\n"):]
+        self.assertIn("Enable-ScheduledTask", finally_part)
+        for name in ("'INPALOAD'", "'TOOL32'", "'NCSEXPER'", "'WINKFPT'", "'BMW Coding Tool'",
+                     "'WINKFP'", "'ISTAGUI'"):
+            self.assertIn(name, text)
+        self.assertIn("ConvertTo-Json -Depth 10", text)
+        self.assertIn("New-Object System.Text.UTF8Encoding($false)", text)
 
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))

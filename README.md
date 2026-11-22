@@ -428,10 +428,20 @@ After a code change, or to install a newer build:
 2. Start the VM and log in if it is not running, then on the Mac: `python3 dev/serve.py`
    (no `--accept-token` needed; the token does not change on an update).
 3. In the VM, in **Windows PowerShell run as administrator**, paste the **Update** line that
-   `serve.py` printed. It verifies the hash, stops the agent, replaces the exe, starts the
-   scheduled task and ends with `Updated to ediabas-bridge agent <version>`. It touches nothing
-   else (config, token, firewall, task settings). If it says the agent is not installed, use the
-   Install line instead.
+   `serve.py` printed. It verifies the hash, disables the scheduled task and stops the agent
+   (so the task's 5-minute trigger cannot start the exe mid-copy), copies the current exe to
+   `EdiabasAgent.exe.bak` (hash-checked), puts the new exe in place, adds to `config.json`'s
+   `conflictProcesses` any of the seven default BMW tools it lacks (it prints the names it
+   added; everything else in the file, approvals included, is kept, and a file it cannot read
+   is left alone with a warning), makes the firewall rule again for the current gateway,
+   enables and starts the task, and waits up to 60 s for the agent to answer `/health`
+   (`Agent is up.`, usually with the 403 note as at install). It ends with
+   `Updated to ediabas-bridge agent <version>`. If the copy fails, or the new agent does not
+   come up, it puts the backup back, starts it and says so (`Rolled back to <old version>`,
+   then a red `ERROR:`); the task is enabled again on every way out. The token, ACLs and task
+   settings are not touched. Running the same Update line a second time is a no-op update and
+   must also succeed. If it says the agent is not installed, or the scheduled task is missing,
+   use the Install line instead.
 4. Stop `serve.py` with Ctrl-C.
 5. **Restart Claude** so it starts the new MCP server from the rebuilt `mac-mcp/dist`: quit and
    reopen the desktop app, and start a new Claude Code session. An already-running server keeps
@@ -482,7 +492,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
 | **wrong_service**: "answered as the ediabas-bridge agent but could not prove it holds this Mac's token", or **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install). The Mac checks the agent's `/hello` proof before it sends the token, so a mismatch usually shows as the first; the token was not sent | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a failed proof (and uses it at once if the proof then matches) or a 401 (the next call proves the address with it first) |
 | **no_token** | Nothing in the Keychain (the first install's hand-off failed) | As for `unauthorized` |
-| **forbidden** | The agent or its firewall refused the Mac's address: requests are accepted only from the VM's default gateway | Re-run the Install line; it recreates the firewall rule for the VM's current gateway. `agent.log` in the VM shows the address and gateway the agent chose |
+| **forbidden** | The agent or its firewall refused the Mac's address: requests are accepted only from the VM's default gateway | Re-run the Install or the Update line; both recreate the firewall rule for the VM's current gateway. `agent.log` in the VM shows the address and gateway the agent chose |
 | **agent_outdated**, or `vm_health` says "Agent features: not reported" | The agent in the VM is an older build that lacks that endpoint | [Updating](#updating): run the Update line |
 | `vm_health` warns that the agent's job policy differs from the Mac's | The agent and the Mac server were built from different versions of `policy/policy.json` | Run `./release.sh`, the Update line, and restart Claude |
 | **bad_response** | The agent and the MCP server are different versions | As above |

@@ -66,29 +66,6 @@
         }
     }
 
-    function Get-DefaultRoute {
-        $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
-            Where-Object { $_.NextHop -ne '0.0.0.0' } |
-            Sort-Object -Property RouteMetric)
-        if ($routes.Count -eq 0) {
-            throw 'No IPv4 default gateway found. Is the VM network (UTM Shared Network) connected?'
-        }
-        if ($routes.Count -gt 1) {
-            Write-Warn ('Several IPv4 default routes; using ' + $routes[0].NextHop + ' on interface ' + $routes[0].InterfaceAlias)
-        }
-        return $routes[0]
-    }
-
-    function Get-InterfaceIPv4([int]$InterfaceIndex) {
-        $addr = @(Get-NetIPAddress -InterfaceIndex $InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-            Where-Object { $_.IPAddress -notlike '169.254.*' } |
-            Select-Object -First 1)
-        if ($addr.Count -eq 0) {
-            return $null
-        }
-        return $addr[0].IPAddress
-    }
-
     function Get-Sha256Hex([string]$Path) {
         return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash
     }
@@ -148,7 +125,9 @@
         }
     }
 
-    # Copies the verified exe and checks that what landed is the same file.
+    # Copies an exe and checks that what landed is the file with SHA-256 $Hash. Returns $false
+    # when the copy fails or the hash differs; the target is then left as it is, and the caller
+    # puts the backup back (update) or stops (install).
     function Copy-VerifiedExe([string]$From, [string]$To, [string]$Hash) {
         $copied = $false
         for ($i = 0; $i -lt 10 -and -not $copied; $i++) {
@@ -164,8 +143,8 @@
         }
         $landed = (Get-FileHash -Algorithm SHA256 -LiteralPath $To).Hash
         if ($landed -ine $Hash) {
-            Remove-Item -LiteralPath $To -Force -ErrorAction SilentlyContinue
-            throw ('The copied ' + $To + ' (SHA-256 ' + $landed + ') is not the verified exe (' + $Hash + '). It was deleted; run the line again.')
+            Write-Warn ('The copied ' + $To + ' (SHA-256 ' + $landed + ') is not the expected file (' + $Hash + ').')
+            return $false
         }
         return $true
     }
@@ -184,36 +163,67 @@
         }
         throw 'EdiabasAgent.exe is still running after 10 seconds; stop it in Task Manager and run this again.'
     }
-    # shared:end
 
-    function New-Grant($Sid, [string]$Rights) {
-        return New-Object psobject -Property @{ Sid = $Sid; Rights = $Rights }
+    function Get-DefaultRoute {
+        $routes = @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
+            Where-Object { $_.NextHop -ne '0.0.0.0' } |
+            Sort-Object -Property RouteMetric)
+        if ($routes.Count -eq 0) {
+            throw 'No IPv4 default gateway found. Is the VM network (UTM Shared Network) connected?'
+        }
+        if ($routes.Count -gt 1) {
+            Write-Warn ('Several IPv4 default routes; using ' + $routes[0].NextHop + ' on interface ' + $routes[0].InterfaceAlias)
+        }
+        return $routes[0]
     }
 
-    # Replaces the DACL with exactly the given grants and turns inheritance from the parent off.
-    function Set-ExactAcl([string]$Path, [bool]$IsDirectory, [object[]]$Grants) {
-        if ($IsDirectory) {
-            $acl = New-Object System.Security.AccessControl.DirectorySecurity
-            $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
-        } else {
-            $acl = New-Object System.Security.AccessControl.FileSecurity
-            $inherit = [System.Security.AccessControl.InheritanceFlags]::None
+    function Get-InterfaceIPv4([int]$InterfaceIndex) {
+        $addr = @(Get-NetIPAddress -InterfaceIndex $InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -notlike '169.254.*' } |
+            Select-Object -First 1)
+        if ($addr.Count -eq 0) {
+            return $null
         }
-        $acl.SetAccessRuleProtection($true, $false)
-        foreach ($g in $Grants) {
-            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-                ([System.Security.Principal.IdentityReference]($g.Sid)),
-                ([System.Security.AccessControl.FileSystemRights]($g.Rights)),
-                $inherit,
-                [System.Security.AccessControl.PropagationFlags]::None,
-                [System.Security.AccessControl.AccessControlType]::Allow)
-            $acl.AddAccessRule($rule)
+        return $addr[0].IPAddress
+    }
+
+    # The address the agent listens on: bindAddress from config.json, or for 'auto' the IPv4
+    # address of the default route's interface ($null when there is none).
+    function Resolve-BindAddress([string]$Configured, [int]$InterfaceIndex) {
+        if ($Configured -ieq 'auto') {
+            return Get-InterfaceIPv4 $InterfaceIndex
         }
-        if ($IsDirectory) {
-            [System.IO.Directory]::SetAccessControl($Path, $acl)
-        } else {
-            [System.IO.File]::SetAccessControl($Path, $acl)
+        return $Configured
+    }
+
+    function Read-ExistingConfig {
+        $result = New-Object psobject -Property @{ Port = $DefaultPort; BindAddress = 'auto' }
+        try {
+            $cfg = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+            $p = $cfg.PSObject.Properties['port']
+            if ($null -ne $p -and $null -ne $p.Value) { $result.Port = [int]($p.Value) }
+            $b = $cfg.PSObject.Properties['bindAddress']
+            if ($null -ne $b -and $null -ne $b.Value) { $result.BindAddress = [string]($b.Value) }
+        } catch {
+            Write-Warn ('Could not read port/bindAddress from the existing config.json (' + $_.Exception.Message + '); assuming port ' + $DefaultPort + ' and auto.')
         }
+        return $result
+    }
+
+    # The BMW tools that hold the cable while they run. A new config.json lists them as
+    # conflictProcesses; Update adds any of them that an existing config.json lacks.
+    function Get-DefaultConflictProcesses {
+        return @('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool', 'WINKFP', 'ISTAGUI')
+    }
+
+    # Inbound TCP to the agent, from the current IPv4 default gateway (the Mac) only. Made
+    # again on every install and update, so a gateway that changed since is picked up.
+    function Set-FirewallRule([int]$Port) {
+        $gateway = [string](Get-DefaultRoute).NextHop
+        Write-Step ('Firewall: inbound TCP ' + $Port + ' from ' + $gateway + ' only')
+        Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+        New-NetFirewallRule -DisplayName $RuleName -Direction Inbound -Action Allow -Protocol TCP `
+            -LocalPort $Port -RemoteAddress $gateway -Program $ExePath -Profile Any | Out-Null
     }
 
     function Find-InnerWebException($Exception) {
@@ -268,25 +278,58 @@
         }
     }
 
+    # Asks the agent's /health once a second until it answers over HTTP (any status) or
+    # $Seconds pass. Returns the last Invoke-Http result, or $null if none was made. From
+    # inside the VM the agent answers 403 (it serves the gateway only): the listener works.
+    function Wait-AgentAnswer([string]$Url, [string]$Token, [int]$Seconds) {
+        $auth = $null
+        if ($Token) { $auth = 'Bearer ' + $Token }
+        $result = $null
+        $deadline = (Get-Date).AddSeconds($Seconds)
+        while ((Get-Date) -lt $deadline) {
+            $result = Invoke-Http 'GET' $Url $auth $null 3000
+            if ($result.Status -ne 0) { break }
+            Start-Sleep -Seconds 1
+        }
+        return $result
+    }
+    # shared:end
+
+    function New-Grant($Sid, [string]$Rights) {
+        return New-Object psobject -Property @{ Sid = $Sid; Rights = $Rights }
+    }
+
+    # Replaces the DACL with exactly the given grants and turns inheritance from the parent off.
+    function Set-ExactAcl([string]$Path, [bool]$IsDirectory, [object[]]$Grants) {
+        if ($IsDirectory) {
+            $acl = New-Object System.Security.AccessControl.DirectorySecurity
+            $inherit = [System.Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+        } else {
+            $acl = New-Object System.Security.AccessControl.FileSecurity
+            $inherit = [System.Security.AccessControl.InheritanceFlags]::None
+        }
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($g in $Grants) {
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                ([System.Security.Principal.IdentityReference]($g.Sid)),
+                ([System.Security.AccessControl.FileSystemRights]($g.Rights)),
+                $inherit,
+                [System.Security.AccessControl.PropagationFlags]::None,
+                [System.Security.AccessControl.AccessControlType]::Allow)
+            $acl.AddAccessRule($rule)
+        }
+        if ($IsDirectory) {
+            [System.IO.Directory]::SetAccessControl($Path, $acl)
+        } else {
+            [System.IO.File]::SetAccessControl($Path, $acl)
+        }
+    }
+
     function New-Token {
         $bytes = New-Object byte[] 32
         $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
         try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
         return [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
-    }
-
-    function Read-ExistingConfig {
-        $result = New-Object psobject -Property @{ Port = $DefaultPort; BindAddress = 'auto' }
-        try {
-            $cfg = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
-            $p = $cfg.PSObject.Properties['port']
-            if ($null -ne $p -and $null -ne $p.Value) { $result.Port = [int]($p.Value) }
-            $b = $cfg.PSObject.Properties['bindAddress']
-            if ($null -ne $b -and $null -ne $b.Value) { $result.BindAddress = [string]($b.Value) }
-        } catch {
-            Write-Warn ('Could not read port/bindAddress from the existing config.json (' + $_.Exception.Message + '); assuming port ' + $DefaultPort + ' and auto.')
-        }
-        return $result
     }
 
     $tmp = $null
@@ -363,7 +406,14 @@
 
         # ---- 4. the exe ----
         Write-Step ('Installing EdiabasAgent.exe ' + $version)
+        $before = $null
+        if (Test-Path -LiteralPath $ExePath) { $before = Get-Sha256Hex $ExePath }
         if (-not (Copy-VerifiedExe $newExe $ExePath $exeHash)) {
+            # A copy that landed but differs is neither the old exe nor the verified one: remove it.
+            if ((Test-Path -LiteralPath $ExePath) -and (Get-Sha256Hex $ExePath) -ine $before) {
+                Remove-Item -LiteralPath $ExePath -Force -ErrorAction SilentlyContinue
+                throw ('The copied ' + $ExePath + ' is not the verified exe. It was deleted; run the line again.')
+            }
             throw ('Could not replace ' + $ExePath + ' (file in use?).')
         }
 
@@ -394,7 +444,7 @@
                 ediabasDll           = (Join-Path $ediabasRoot 'BIN\api32.dll')
                 ecuPath              = (Join-Path $ediabasRoot 'ECU')
                 logRoots             = [object[]]$logRoots
-                conflictProcesses    = [object[]]@('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool', 'WINKFP', 'ISTAGUI')
+                conflictProcesses    = [object[]]@(Get-DefaultConflictProcesses)
                 reviewedJobs         = [object[]]@()
                 jobTimeoutSeconds    = 30
                 maxJobTimeoutSeconds = 60
@@ -425,10 +475,7 @@
             (New-Grant $userSid 'Read'))
 
         # ---- 7. firewall ----
-        Write-Step ('Firewall: inbound TCP ' + $port + ' from ' + $gateway + ' only')
-        Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-        New-NetFirewallRule -DisplayName $RuleName -Direction Inbound -Action Allow -Protocol TCP `
-            -LocalPort $port -RemoteAddress $gateway -Program $ExePath -Profile Any | Out-Null
+        Set-FirewallRule $port
 
         # ---- 8. scheduled task ----
         if ($runElevated) { $runLevel = 'Highest' } else { $runLevel = 'Limited' }
@@ -457,22 +504,13 @@
         Write-Note 'The screen lock was NOT changed. A locked screen blocks screenshots (later phases).'
 
         # ---- 10. is it up? ----
-        $bindAddress = $existing.BindAddress
-        if ($bindAddress -ieq 'auto') {
-            $bindAddress = Get-InterfaceIPv4 $route.InterfaceIndex
-        }
+        $bindAddress = Resolve-BindAddress $existing.BindAddress $route.InterfaceIndex
         if (-not $bindAddress) {
             Write-Warn 'Could not work out the bind address; skipping the health check.'
         } else {
             $url = 'http://' + $bindAddress + ':' + $port + '/health'
             Write-Step ('Waiting up to 20 s for the agent at ' + $url)
-            $result = $null
-            $deadline = (Get-Date).AddSeconds(20)
-            while ((Get-Date) -lt $deadline) {
-                $result = Invoke-Http 'GET' $url ('Bearer ' + $token) $null 3000
-                if ($result.Status -ne 0) { break }
-                Start-Sleep -Seconds 1
-            }
+            $result = Wait-AgentAnswer $url $token 20
             if ($null -eq $result -or $result.Status -eq 0) {
                 $why = ''
                 if ($null -ne $result) { $why = ' (' + $result.Body + ')' }

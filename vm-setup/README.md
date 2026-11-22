@@ -8,7 +8,7 @@ on the Mac, and only then runs it. How the lines and the server work:
 | Script | Does | Window |
 |---|---|---|
 | `install.ps1` | installs or upgrades the agent in `C:\ProgramData\EdiabasBridge`: exe, `config.json` and `token.txt` (both kept if present), firewall rule and scheduled task `ediabas-bridge agent`, sleep on AC off; sends the token to the Mac on a first install or with `$SendToken=$true` (never prints it) | Windows PowerShell 5.1, as administrator |
-| `update.ps1` | replaces the exe only and restarts the scheduled task | Windows PowerShell 5.1, as administrator |
+| `update.ps1` | replaces the exe (previous one kept as `EdiabasAgent.exe.bak`, put back if the copy fails or the new agent does not answer `/health` within 60 s), adds missing default conflict processes to `config.json`, makes the firewall rule again for the current gateway, and restarts the scheduled task (disabled during the copy) | Windows PowerShell 5.1, as administrator |
 | `uninstall.ps1` | removes the task, the firewall rule and the program files; keeps `config.json`, `token.txt` and `logs\` by default (`$Purge=$true; ` at the start of the line removes them too; `$KeepData` is ignored) | Windows PowerShell 5.1, as administrator |
 | `discover.ps1` | read-only report of the VM (used once, for Phase 0); uploads it into `discovery/` on the Mac | Windows PowerShell 5.1 |
 
