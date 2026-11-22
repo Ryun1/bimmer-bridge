@@ -179,7 +179,7 @@ export function parsePolicy(text: string): Policy {
     globalExact: new Set(raw.allow.globalExact),
     patterns: raw.allow.patterns.map(compile),
     restrictedEcus: new Map(Object.entries(raw.allow.restrictedEcus).map(([k, v]) => [k, new Set(v)])),
-    denySubstrings: raw.deny.substrings.filter((s) => s.length > 0),
+    denySubstrings: raw.deny.substrings,
     denyTokens: raw.deny.tokens,
     screenIgnore: raw.descriptionScreen.ignore,
   };
