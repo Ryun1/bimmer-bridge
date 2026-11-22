@@ -45,8 +45,8 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   present or stored, frequency, logged conditions. Field names differ between SGBDs, so known
   names are mapped and every other field is passed through as `key=value`. An ECU with no
   faults says so. A per-ECU error is shown in that ECU's place, with its `[code]`; the others
-  still print. A module whose SGBD has no `IS_LESEN` shows "Info memory: no info memory on this
-  module." (not a failure).
+  still print. An `IS_LESEN` that fails with `ediabas_error` shows "Info memory: not read (...). Many
+  modules have no info memory (no IS_LESEN job); ediabas_describe <ECU> shows whether this one has it."
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - `ediabas_vehicle_status` prints each reading's result fields as returned (`key=value`); the
   field names are mapped to "ignition on/off" and volts once Phase 6 has confirmed them.
