@@ -42,7 +42,7 @@ internal sealed class ScreenEndpoints
 
         if (!await _one.WaitAsync(QueueWait, http.RequestAborted))
         {
-            await HandlerSupport.Fail(http, audit, CaptureRules.DesktopUnavailable("another capture is still running"));
+            await HandlerSupport.Fail(http, audit, CaptureRules.Busy());
             return;
         }
 

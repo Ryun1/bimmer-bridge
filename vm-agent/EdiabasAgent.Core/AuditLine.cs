@@ -90,9 +90,29 @@ public static class AuditLine
                 break;
             }
 
-            sb.Append(char.IsControl(c) || c == '\u2028' || c == '\u2029' ? '_' : c);
+            sb.Append(Unsafe(c) ? '_' : c);
         }
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Text for agent.log with every character <see cref="Format"/> would replace replaced by
+    /// <c>_</c>. No length limit.
+    /// </summary>
+    public static string Neutralise(string value) =>
+        string.Create(value.Length, value, (span, v) =>
+        {
+            for (var i = 0; i < v.Length; i++)
+            {
+                span[i] = Unsafe(v[i]) ? '_' : v[i];
+            }
+        });
+
+    // Control characters and line/paragraph separators could forge a line; format characters
+    // (U+202E right-to-left override, U+200B zero-width space, U+2066 isolates, U+FEFF) make a
+    // line read differently from what it holds.
+    private static bool Unsafe(char c) =>
+        char.IsControl(c) || c is '\u2028' or '\u2029'
+        || char.GetUnicodeCategory(c) == UnicodeCategory.Format;
 }

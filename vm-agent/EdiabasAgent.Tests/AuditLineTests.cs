@@ -44,6 +44,10 @@ public class AuditLineTests
     [InlineData("/health\u2028x")]
     [InlineData("/health\u2029x")]
     [InlineData("/health\u001bx")]
+    [InlineData("/health\u202Ecrt.exe")]
+    [InlineData("/health\u200Bx")]
+    [InlineData("/health\u2066x\u2069")]
+    [InlineData("/health\uFEFFx")]
     public void PathInjection_Neutralised(string path)
     {
         var line = AuditLine.Format(T, "192.168.64.1", "GET", path, null, 200, null, 1);
@@ -153,6 +157,26 @@ public class AuditLineTests
             Assert.False(ch != '\t' && char.IsControl(ch), $"control char U+{(int)ch:X4} in line");
             Assert.NotEqual('\u2028', ch);
             Assert.NotEqual('\u2029', ch);
+            Assert.False(char.GetUnicodeCategory(ch) == System.Globalization.UnicodeCategory.Format, $"format char U+{(int)ch:X4} in line");
         }
+    }
+
+    // A right-to-left override or zero-width space would make a line read differently from
+    // what it holds when Ryan looks at the audit log.
+    [Fact]
+    public void FormatCharacters_ReplacedLikeControlCharacters()
+    {
+        var line = AuditLine.Format(T, "192.168.64.1", "GET", "/a\u202Eb\u200Bc", null, 200, null, 1);
+        Assert.Contains("\t/a_b_c\t", line);
+    }
+
+    [Theory]
+    [InlineData("GET /x\u202Ey", "GET /x_y")]
+    [InlineData("GET /x\u200By\n", "GET /x_y_")]
+    [InlineData("GET /x\u2028y\u2029", "GET /x_y_")]
+    [InlineData("GET /plain", "GET /plain")]
+    public void Neutralise_ForLogText(string text, string expected)
+    {
+        Assert.Equal(expected, AuditLine.Neutralise(text));
     }
 }

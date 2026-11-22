@@ -154,6 +154,38 @@ public class LogServiceTests
         Assert.Empty(fs.Listed);
     }
 
+    // A root that is a junction somewhere /logs/read would refuse is not walked either: list
+    // and read decide from the same roots.
+    [Theory]
+    [InlineData(@"Z:\traces")]      // resolves onto a drive that is not a local fixed disk
+    [InlineData(@"C:\")]            // resolves to a bare drive
+    [InlineData(@"C:\a\con")]       // resolves to a path NormalizeFinal refuses
+    [InlineData(@"UNC\server\x")]   // resolves to a share
+    public void List_RootThatResolvesWhereReadRefuses_ShownMissingAndNotWalked(string final)
+    {
+        var fs = new FakeLogFileSystem().Dir(Trace, final);
+        fs.NonLocalDrives.Add('Z');
+        fs.Listings[Trace] = [new LogDirEntry("win.ini", false, false, 10, T0)];
+        var svc = new LogService([Trace], fs);
+
+        var r = svc.List(new LogListQuery(null, null, null, 50));
+        Assert.Equal([new LogRoot(0, Trace, false)], r.Roots);
+        Assert.Empty(r.Files);
+        Assert.Empty(fs.Listed);
+    }
+
+    [Fact]
+    public void List_RootThatIsALinkToALocalFolder_Walked()
+    {
+        var fs = new FakeLogFileSystem().Dir(Trace, @"D:\traces");
+        fs.Listings[Trace] = [new LogDirEntry("api.trc", false, false, 10, T0)];
+        var svc = new LogService([Trace], fs);
+
+        var r = svc.List(new LogListQuery(null, null, null, 50));
+        Assert.True(r.Roots[0].Exists);
+        Assert.Equal([@"C:\EDIABAS\TRACE\api.trc"], r.Files.Select(f => f.Path));
+    }
+
     [Fact]
     public void Read_RootThatIsALink_ComparedByWhereItResolves()
     {
@@ -443,6 +475,26 @@ public class LogServiceTests
         Assert.Equal(new GrepInfo("^apiJob", 2), v.Grep);
         Assert.Equal(0L, v.Offset);
         Assert.Equal(33L, v.Length); // the range, not the matches
+    }
+
+    private sealed class TickingClock : IRunnerClock
+    {
+        public long ElapsedMs => Now += 1000;
+        public long Now { get; private set; }
+        public DateTimeOffset UtcNow => T0.AddMilliseconds(Now);
+        public void Sleep(int milliseconds) => Now += milliseconds;
+    }
+
+    [Fact]
+    public void Read_GrepPastTheRequestDeadline_BadRequest()
+    {
+        var fs = new FakeLogFileSystem().Dir(Trace);
+        var svc = new LogService([Trace], fs, new TickingClock());
+        fs.File(@"C:\EDIABAS\TRACE\api.trc", string.Concat(Enumerable.Repeat("apiJob x\r\n", 20)));
+
+        var r = svc.Read(Read(@"C:\EDIABAS\TRACE\api.trc", grep: "apiJob"), out _);
+        Assert.Equal((400, "bad_request"), (r.Failure!.Status, r.Failure.Error.Code));
+        Assert.Equal("grep took too long; use a simpler pattern or a smaller range.", r.Failure.Error.Message);
     }
 
     [Fact]
