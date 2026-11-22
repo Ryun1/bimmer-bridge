@@ -35,3 +35,7 @@ ista-bridge-discovery*.txt
 # subagent workspace
 .superpowers/
 __pycache__/
+
+# local worktrees and agent scratch
+.worktrees/
+.superpowers/
