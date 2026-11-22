@@ -24,6 +24,8 @@ export const MESSAGES = {
   ediabasRequestLost:
     "The connection to the VM agent broke or timed out after this EDIABAS request may already have reached it, so the job may have run in the VM. " +
     "It was not sent again. Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  ediabasBusy:
+    "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
 
 /** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
@@ -31,6 +33,7 @@ export type LocalErrorCode =
   | "vm_not_running"
   | "agent_not_answering"
   | "ediabas_request_lost"
+  | "ediabas_busy"
   | "local_network_blocked"
   | "unauthorized"
   | "forbidden"
@@ -68,6 +71,11 @@ export function agentNotAnswering(): BridgeError {
 /** A request that runs an EDIABAS job failed after it may have reached the agent. */
 export function ediabasRequestLost(): BridgeError {
   return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+}
+
+/** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
+export function ediabasBusy(): BridgeError {
+  return new BridgeError("ediabas_busy", MESSAGES.ediabasBusy);
 }
 
 export function localNetworkBlocked(): BridgeError {

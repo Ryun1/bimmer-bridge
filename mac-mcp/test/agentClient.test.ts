@@ -51,6 +51,8 @@ interface Opts {
   ifaces?: unknown;
   requestTimeoutMs?: number;
   probeTimeoutMs?: number;
+  ediabasTimeoutMs?: number;
+  ediabasQueueWaitMs?: number;
 }
 
 function makeClient(o: Opts = {}) {
@@ -77,6 +79,8 @@ function makeClient(o: Opts = {}) {
     sources: { readFile, execFile, networkInterfaces },
     requestTimeoutMs: o.requestTimeoutMs,
     probeTimeoutMs: o.probeTimeoutMs,
+    ediabasTimeoutMs: o.ediabasTimeoutMs,
+    ediabasQueueWaitMs: o.ediabasQueueWaitMs,
   });
   return { client, readFile, execFile, networkInterfaces, fetchFn, logs };
 }
@@ -750,6 +754,109 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       await run(c).catch(() => undefined); // body shape is not the point here
       expect(calledUrls(fetchFn).slice(2).filter((u) => u.endsWith(path) || u.endsWith("/health")).length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe("one EDIABAS request at a time", () => {
+  /**
+   * Like the agent: /ediabas/* requests are served one at a time, each taking `workMs`; a
+   * request that arrives while another runs waits in the agent's queue.
+   */
+  async function oneAtATime(workMs: number) {
+    const state = { running: 0, maxRunning: 0, arrivedWhileBusy: 0 };
+    let tail = Promise.resolve();
+    const ok = stubHandler();
+    const a = await fake(ok);
+    a.setHandler((req, res) => {
+      if (!req.url?.startsWith("/ediabas/")) return ok(req, res);
+      if (state.running > 0) state.arrivedWhileBusy++;
+      state.running++;
+      state.maxRunning = Math.max(state.maxRunning, state.running);
+      tail = tail.then(
+        () =>
+          new Promise<void>((done) =>
+            setTimeout(() => {
+              ok(req, res);
+              state.running--;
+              done();
+            }, workMs),
+          ),
+      );
+    });
+    return { a, state };
+  }
+
+  it("sends two concurrent job calls one after the other; both succeed, neither is sent twice", async () => {
+    const { a, state } = await oneAtATime(100);
+    // Each job takes 100 ms; had both been sent at once, the second would wait 200 ms in the
+    // agent's queue and pass the 150 ms limit. The limit counts from sending, not queueing.
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, ediabasTimeoutMs: 150 });
+    await client.health();
+    const [r1, r2] = await Promise.all([client.runJob({ ecu: "NVE_65", job: "IDENT" }), client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }])]);
+    expect(r1.job).toBe("IDENT");
+    expect(r2.items).toHaveLength(1);
+    expect(state.arrivedWhileBusy).toBe(0);
+    expect(a.requests.filter((r) => r.path === "/ediabas/job")).toHaveLength(1);
+    expect(a.requests.filter((r) => r.path === "/ediabas/jobs")).toHaveLength(1);
+  });
+
+  it("keeps order: calls are sent in the order they were made", async () => {
+    const { a } = await oneAtATime(20);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.health();
+    await Promise.all([
+      client.runJob({ ecu: "A", job: "IDENT" }),
+      client.describeJob({ ecu: "B", job: "IDENT" }),
+      client.listEcus("C"),
+      client.vehicle(),
+    ]);
+    expect(a.requests.filter((r) => r.path.startsWith("/ediabas/")).map((r) => r.path.split("?")[0])).toEqual([
+      "/ediabas/job",
+      "/ediabas/describe",
+      "/ediabas/ecus",
+      "/ediabas/vehicle",
+    ]);
+  });
+
+  it("answers ediabas_busy without sending when the wait passes the limit", async () => {
+    const { a } = await oneAtATime(300);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, ediabasQueueWaitMs: 100 });
+    await client.health();
+    const first = client.runJob({ ecu: "NVE_65", job: "IDENT" });
+    const e = await errorOf(client.runJob({ ecu: "NVE_65", job: "FS_LESEN" }));
+    expect(e.code).toBe("ediabas_busy");
+    expect(e.message).toMatch(/another EDIABAS request is still running; this one was not sent/i);
+    expect((await first).job).toBe("IDENT");
+    expect(a.requests.filter((r) => r.path === "/ediabas/job").map((r) => JSON.parse(r.body).job)).toEqual(["IDENT"]);
+    // The queue is free again afterwards.
+    expect((await client.runJob({ ecu: "NVE_65", job: "FS_LESEN" })).job).toBe("FS_LESEN");
+  });
+
+  it("does not hold other calls behind an EDIABAS request", async () => {
+    const { a } = await oneAtATime(300);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.health();
+    const job = client.runJob({ ecu: "NVE_65", job: "IDENT" });
+    const started = performance.now();
+    await client.listWindows();
+    expect(performance.now() - started).toBeLessThan(250);
+    await job;
+  });
+
+  it("frees the queue after a failed request", async () => {
+    const { a } = await oneAtATime(10);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.health();
+    const ok = stubHandler();
+    let fail = true;
+    a.setHandler((req, res) => {
+      if (req.url === "/ediabas/job" && fail) {
+        fail = false;
+        json(res, 409, { error: { code: "cable_in_use", message: "x", details: null } });
+      } else ok(req, res);
+    });
+    expect((await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }))).code).toBe("cable_in_use");
+    expect((await client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
   });
 });
 
