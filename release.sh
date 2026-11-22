@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One command for a release (PLAN.md Phase 8): checks that the versions agree, runs every test
-# suite, builds the agent zip, the skill zips and the Mac server, then prints the SHA-256 of each zip
-# (the files to attach to the GitHub release) and the Update line. Stops at the first failure. It does not push, tag or deploy anything.
+# suite, builds the agent zip, the skill zips and the Mac server, then prints the SHA-256 of each
+# zip (the files to attach to the GitHub release) and the Update line. Stops at the first failure.
+# It does not push, tag or deploy anything.
 #
 #   ./release.sh                 everything
 #   ./release.sh --no-build      versions and tests only; no zip, no mac-mcp/dist
@@ -144,6 +145,8 @@ if [ "$NO_BUILD" -eq 0 ]; then
   fi
   # --no-link: build skills/dist/*.zip only; never touch ~/.claude/skills.
   step "Building the skill zips (skills/dist)"
+  # install.sh never clears skills/dist/, so a zip for a renamed or removed skill would be listed.
+  run rm -f skills/dist/*.zip
   run skills/install.sh --no-link
   step "Building the MCP server (mac-mcp/dist)"
   run npm --prefix mac-mcp run build
