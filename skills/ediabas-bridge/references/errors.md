@@ -69,6 +69,11 @@ never look for another tool, job or route (and never computer use on the VM wind
   real SGBD (with `TMODE` still answering), or `[cable_not_found]` after an agent restart.** Seen
   at the desk on 2026-11-21/22. Both cleared when the cable was ticked for the VM again in
   UTM's USB menu. Do not tell the user the ECU did not answer.
+- **After the Mac slept: `[ediabas_error]` 48 `IFH-0038: INTERFACE COMMAND NOT IMPLEMENTED`.**
+  Seen at the desk on 2026-11-22 on a `TMODE` job: sleeping hands the cable back to the Mac,
+  while the agent and `vm_health` stay up. Other files may give other codes after a sleep. If
+  the Mac may have slept since the cable last worked, ask the user to tick the cable for the VM
+  again in UTM's USB menu before suggesting anything about the car.
 - **`[ediabas_error]` "The job finished but its results could not be read".** The job ran.
   Report EDIABAS's code and text; do not run it again without asking the user.
 - **`[ediabas_request_lost]`.** Tell the user the job may have run. Call `vm_health`; repeat
