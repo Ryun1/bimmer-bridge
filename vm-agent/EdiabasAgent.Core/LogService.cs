@@ -40,11 +40,13 @@ public sealed class LogService
 
     private readonly IReadOnlyList<string> _roots;
     private readonly ILogFileSystem _fs;
+    private readonly IRunnerClock _clock;
 
-    public LogService(IReadOnlyList<string> roots, ILogFileSystem fs)
+    public LogService(IReadOnlyList<string> roots, ILogFileSystem fs, IRunnerClock? clock = null)
     {
         _roots = roots.Select(PathRules.TrimRoot).ToList();
         _fs = fs;
+        _clock = clock ?? new SystemRunnerClock();
     }
 
     // ------------------------------------------------------------------ query parsing
@@ -371,12 +373,12 @@ public sealed class LogService
             {
                 try
                 {
-                    text = LogText.Grep(text, regex, out var matched);
+                    text = LogText.Grep(text, regex, () => _clock.ElapsedMs, out var matched);
                     grepInfo = new GrepInfo(query.Grep!, matched);
                 }
                 catch (RegexMatchTimeoutException)
                 {
-                    return RequestParsing.Bad("grep", "grep took too long on this range.");
+                    return RequestParsing.Bad("grep", "grep took too long; use a simpler pattern or a smaller range.");
                 }
             }
 

@@ -113,13 +113,27 @@ public static class LogText
         }
     }
 
-    /// <summary>The lines of <paramref name="text"/> that match, joined with <c>\n</c>.</summary>
-    public static string Grep(string text, Regex regex, out int matchedLines)
+    /// <summary>All the lines of one request are matched within this many milliseconds.</summary>
+    public const int GrepDeadlineMs = 5000;
+
+    /// <summary>
+    /// The lines of <paramref name="text"/> that match, joined with <c>\n</c>. Throws
+    /// <see cref="RegexMatchTimeoutException"/> once <see cref="GrepDeadlineMs"/> have passed on
+    /// <paramref name="elapsedMs"/> (monotonic milliseconds): the regex's own timeout bounds one
+    /// line, this bounds the request.
+    /// </summary>
+    public static string Grep(string text, Regex regex, Func<long> elapsedMs, out int matchedLines)
     {
         var sb = new StringBuilder();
         matchedLines = 0;
+        var start = elapsedMs();
         foreach (var raw in text.Split('\n'))
         {
+            if (elapsedMs() - start > GrepDeadlineMs)
+            {
+                throw new RegexMatchTimeoutException(string.Empty, regex.ToString(), TimeSpan.FromMilliseconds(GrepDeadlineMs));
+            }
+
             var line = raw.EndsWith('\r') ? raw[..^1] : raw;
             if (!regex.IsMatch(line))
             {

@@ -477,6 +477,26 @@ public class LogServiceTests
         Assert.Equal(33L, v.Length); // the range, not the matches
     }
 
+    private sealed class TickingClock : IRunnerClock
+    {
+        public long ElapsedMs => Now += 1000;
+        public long Now { get; private set; }
+        public DateTimeOffset UtcNow => T0.AddMilliseconds(Now);
+        public void Sleep(int milliseconds) => Now += milliseconds;
+    }
+
+    [Fact]
+    public void Read_GrepPastTheRequestDeadline_BadRequest()
+    {
+        var fs = new FakeLogFileSystem().Dir(Trace);
+        var svc = new LogService([Trace], fs, new TickingClock());
+        fs.File(@"C:\EDIABAS\TRACE\api.trc", string.Concat(Enumerable.Repeat("apiJob x\r\n", 20)));
+
+        var r = svc.Read(Read(@"C:\EDIABAS\TRACE\api.trc", grep: "apiJob"), out _);
+        Assert.Equal((400, "bad_request"), (r.Failure!.Status, r.Failure.Error.Code));
+        Assert.Equal("grep took too long; use a simpler pattern or a smaller range.", r.Failure.Error.Message);
+    }
+
     [Fact]
     public void Read_BadGrep_BadRequestBeforeReading()
     {
