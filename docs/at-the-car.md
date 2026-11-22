@@ -30,7 +30,7 @@ car-session line and the longer idle time below are all untested there.
       90, the bridge keeps EDIABAS loaded for 90 s after its last call.
 - [ ] To record fixtures, register the recording server (`dev/record-server.ts`, see
       [development.md](development.md#recording-and-scrubbing)) in place of the production one, with `EDIABAS_RECORD_DIR` set to a
-      folder **outside the repo**, for example `~/ediabas-recordings/car-<date>`. Use **one
+      folder **outside the repo**, for example `~/ediabas-recordings/car-YYYYMMDD`. Use **one
       folder for the whole car session**: changing the folder means restarting Claude, which
       the ignition-on time cannot afford. Afterwards the folder is scrubbed once per scenario
       ([dev/fixtures/README.md](../dev/fixtures/README.md#recording-a-scenario)).
@@ -39,10 +39,13 @@ car-session line and the longer idle time below are all untested there.
 
       ```sh
       claude mcp remove bimmer-bridge -s user
-      claude mcp add --scope user bimmer-bridge -e EDIABAS_RECORD_DIR=$HOME/ediabas-recordings/car-<date> -- /opt/homebrew/bin/node --import "$PWD/dev/ts-resolve.mjs" "$PWD/dev/record-server.ts"
+      claude mcp add --scope user bimmer-bridge -e EDIABAS_RECORD_DIR=$HOME/ediabas-recordings/car-YYYYMMDD -- /opt/homebrew/bin/node --import "$PWD/dev/ts-resolve.mjs" "$PWD/dev/record-server.ts"
       claude mcp get bimmer-bridge   # must show record-server.ts and EDIABAS_RECORD_DIR
       ```
 
+      Replace `YYYYMMDD` with the date. If `claude mcp get bimmer-bridge` shows any
+      `Environment` entries for the production server (such as `EDIABAS_AGENT_URL`), add each
+      as another `-e KEY=value` after the name in both the recording and the restore command.
       Run them from the repo root, with the same `node` as the production registration (macOS's
       Local Network permission is tied to its path). Restart Claude, call `vm_health`, then
       **check the folder has a `GET-health` file**: a desk rehearsal on 2026-11-22 ran against

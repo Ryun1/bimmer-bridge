@@ -248,12 +248,18 @@ export function ediabasErrorId(n: number | null, text: string | null | undefined
   const m = text ? /\b(IFH|BIP|SYS|API|NET)-(\d{4})\b/.exec(text) : null;
   if (m) return `${m[1]}-${m[2]}`;
   if (n === null) return null;
-  const ranges: [string, number][] = [["NET", 150], ["API", 120], ["SYS", 90], ["BIP", 60], ["IFH", 10]];
-  for (const [name, base] of ranges) {
-    if (n >= base && n < base + 30) return `${name}-${String(n - base).padStart(4, "0")}`;
+  // Each family runs up to the next one's base; IFH is 50 codes wide (IFH-0000 to IFH-0049).
+  const families: [string, number, number][] = [["IFH", 10, 60], ["BIP", 60, 90], ["SYS", 90, 120], ["API", 120, 150], ["NET", 150, 250]];
+  for (const [name, from, to] of families) {
+    if (n >= from && n < to) return `${name}-${String(n - from).padStart(4, "0")}`;
   }
   return null;
 }
+
+/** What ediabas_vehicle_status can and cannot show about the car (rehearsal, 2026-11-22). */
+const IGNITION_CHECK =
+  "Ask the user whether the ignition is on: ediabas_vehicle_status shows the car is awake only through a configured voltage source " +
+  "(its battery and KL30 readings come from the cable).";
 
 /** Codes about the cable, the supply or the ignition rather than one ECU's answer. */
 const CABLE_SIDE_CODES = new Set(["IFH-0002", "IFH-0003", "IFH-0006", "IFH-0038", "IFH-0007", "IFH-0015", "IFH-0037", "IFH-0016", "IFH-0032"]);
@@ -377,7 +383,7 @@ export function describeAgentError(code: string, message: string | undefined, de
       const checkStatus = !(id !== null && CABLE_SIDE_CODES.has(id));
       // No IFH code comes from a wrong job name (EDIABAS gives SYS-0008 for that).
       const hint = run && !id?.startsWith("IFH-") ? " If the job name may be wrong, check it with ediabas_describe." : "";
-      const next = checkStatus ? "Check ediabas_vehicle_status, and ask the user before trying again." : "Ask the user before trying again.";
+      const next = checkStatus ? `${IGNITION_CHECK} Ask the user before trying again.` : "Ask the user before trying again.";
       return `EDIABAS reported ${what}. ${ediabasErrorAdvice(id)}${next}${hint}`;
     }
     case "cable_not_found": {
@@ -398,7 +404,7 @@ export function describeAgentError(code: string, message: string | undefined, de
     }
     case "job_timeout": {
       const s = detailNumber(details, "timeoutSeconds");
-      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering; check ediabas_vehicle_status and ask the user before trying again.`;
+      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering. ${IGNITION_CHECK} Ask the user before trying again.`;
     }
     case "window_not_found":
       return "No visible window in the VM matches that. Use vm_list_windows to see the window titles and handles, or ask for the desktop.";

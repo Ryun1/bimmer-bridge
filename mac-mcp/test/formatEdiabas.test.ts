@@ -317,15 +317,15 @@ describe("results that could not be read", () => {
   const tail = " Ask the user before trying again.";
 
   it("shows the number and text EDIABAS gave, or whichever one it gave, or neither", () => {
-    expect(text({ errorCode: 134, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 134: SYS-0002).${tail}`);
-    expect(text({ errorCode: 134, resultsUnread: true })).toBe(`${head} (EDIABAS error 134).${tail}`);
+    expect(text({ errorCode: 92, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 92: SYS-0002).${tail}`);
+    expect(text({ errorCode: 92, resultsUnread: true })).toBe(`${head} (EDIABAS error 92).${tail}`);
     expect(text({ errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS SYS-0002).${tail}`);
     expect(text({ resultsUnread: true })).toBe(`${head}.${tail}`);
   });
 
   it("is only used when the agent sets resultsUnread to true", () => {
-    for (const details of [{ errorCode: 134, errorText: "SYS-0002" }, { errorCode: 134, errorText: "SYS-0002", resultsUnread: "true" }]) {
-      expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 134: SYS-0002\. This often means the ECU did not answer/);
+    for (const details of [{ errorCode: 92, errorText: "SYS-0002" }, { errorCode: 92, errorText: "SYS-0002", resultsUnread: "true" }]) {
+      expect(text(details)).toMatch(/^\[ediabas_error\] EDIABAS reported error 92: SYS-0002\. This often means the ECU did not answer/);
     }
   });
 });
