@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { Config } from "./config.js";
 import {
@@ -11,6 +12,7 @@ import {
   forbidden,
   localNetworkBlocked,
   unauthorized,
+  unprovenAgent,
   vmNotRunning,
   wrongService,
 } from "./errors.js";
@@ -183,7 +185,21 @@ export interface Capture {
   width: number | null;
   height: number | null;
 }
-const AgentIdSchema = z.object({ agent: z.string() });
+const HelloSchema = z.object({ agent: z.string(), proof: z.unknown() });
+
+/**
+ * The agent's `/hello` proof for `nonce` (docs/api.md): lowercase hex
+ * HMAC-SHA256(key = SHA-256(token), "ediabas-bridge-hello-v1:" + nonce).
+ */
+export function helloProof(key: Buffer, nonce: string): string {
+  return createHmac("sha256", key).update(`ediabas-bridge-hello-v1:${nonce}`, "utf8").digest("hex");
+}
+
+/** Constant-time check of a `/hello` proof; anything but 64 lowercase hex characters fails. */
+function proofMatches(proof: unknown, key: Buffer, nonce: string): boolean {
+  if (typeof proof !== "string" || !/^[0-9a-f]{64}$/.test(proof)) return false;
+  return timingSafeEqual(Buffer.from(proof, "hex"), Buffer.from(helloProof(key, nonce), "hex"));
+}
 
 function isAgentErrorBody(body: string): boolean {
   try {
@@ -198,6 +214,8 @@ function isAgentErrorBody(body: string): boolean {
 export interface TokenSource {
   get(): Promise<string>;
   refresh(): Promise<string>;
+  /** SHA-256 of the current token: the key of the `/hello` proof. */
+  helloKey(): Promise<Buffer>;
 }
 
 export interface AgentClientOptions {
@@ -277,6 +295,8 @@ interface RequestSpec {
    * connection was never made, never after a failure that may have followed delivery.
    */
   runsJob?: boolean;
+  /** Sent without the token (`GET /hello` only), and not recorded. */
+  anonymous?: boolean;
 }
 
 interface RawResponse {
@@ -287,6 +307,9 @@ interface RawResponse {
 }
 
 const HEALTH: RequestSpec = { method: "GET", path: "/health" };
+
+/** Codes that say the address does not hold the agent this Mac knows: its cached address is dropped. */
+const NOT_THE_AGENT = new Set(["wrong_service", "bad_response"]);
 
 /** 403 codes that are agent decisions, not the gateway check. */
 const AGENT_403_CODES = new Set(["job_not_allowed", "job_needs_review", "path_not_allowed"]);
@@ -467,6 +490,7 @@ export class AgentClient {
     try {
       return await this.request(first.baseUrl, spec, ctx, parse);
     } catch (e) {
+      this.dropIfNotTheAgent(e);
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
       // A job request that may have reached the agent may have run: never send it twice.
@@ -479,11 +503,20 @@ export class AgentClient {
     try {
       return await this.request(second.baseUrl, spec, ctx, parse);
     } catch (e) {
+      this.dropIfNotTheAgent(e);
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
       if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       throw this.connectionError(e, second.baseUrl);
     }
+  }
+
+  /**
+   * Something that is not the agent answered at the cached address (another service took it
+   * over): forget the address, so the next call proves identity again before sending the token.
+   */
+  private dropIfNotTheAgent(e: unknown): void {
+    if (e instanceof BridgeError && NOT_THE_AGENT.has(e.code)) this.locator.invalidate();
   }
 
   /**
@@ -508,34 +541,57 @@ export class AgentClient {
     return onLink ? localNetworkBlocked() : vmNotRunning(this.opts.config.vmName);
   }
 
-  /** Discovery check: 200 from /health with exactly the agent's id. */
+  /**
+   * Discovery check (decision D5): `GET /hello` with a fresh nonce and no token. The address is
+   * accepted only when it answers as the agent with a proof that matches this Mac's token, so
+   * the token is never sent to anything that has not proved it already holds it.
+   */
   private async probe(baseUrl: string, ctx: CallContext): Promise<void> {
+    const where = hostPort(baseUrl);
+    // Read first: without a token there is nothing to check the proof against (no_token).
+    let key = await this.opts.tokens.helloKey();
+    const nonce = randomBytes(16).toString("hex");
+    const spec: RequestSpec = { method: "GET", path: "/hello", query: { nonce }, anonymous: true };
     let res: RawResponse;
     try {
-      res = await this.send(baseUrl, HEALTH, ctx, this.probeTimeoutMs, "probe");
+      res = await this.send(baseUrl, spec, ctx, this.probeTimeoutMs, "probe");
     } catch (e) {
       if (e instanceof ConnectionFailure) throw this.connectionError(e, baseUrl);
       throw e;
     }
     const body = Buffer.from(res.bytes).toString("utf8");
     if (res.status !== 200) {
-      this.log(`probe ${hostPort(baseUrl)} failed: HTTP ${res.status}`);
+      this.log(`probe ${where} failed: HTTP ${res.status}`);
       // A non-2xx without the agent's error shape came from some other service.
-      if (res.status !== 401 && res.status !== 403 && !isAgentErrorBody(body)) throw wrongService(baseUrl);
-      throw this.httpError(res.status, body, res.token, HEALTH);
+      if (!isAgentErrorBody(body)) throw wrongService(baseUrl);
+      // An agent older than /hello checks the token before the path, so it answers 401.
+      if (res.status === 401) throw agentOutdated(spec.path);
+      // Nothing was sent with the token, but the message is still redacted like any other.
+      throw this.httpError(res.status, body, await this.opts.tokens.get(), spec);
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(body);
     } catch {
-      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (200 without JSON)`);
+      this.log(`probe ${where} failed: not the agent (200 without JSON)`);
       throw wrongService(baseUrl);
     }
-    const id = AgentIdSchema.safeParse(parsed);
-    if (!id.success || id.data.agent !== AGENT_ID) {
-      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (wrong or missing "agent" field)`);
+    const hello = HelloSchema.safeParse(parsed);
+    if (!hello.success || hello.data.agent !== AGENT_ID) {
+      this.log(`probe ${where} failed: not the agent (wrong or missing "agent" field)`);
       throw wrongService(baseUrl);
     }
+    const proof = hello.data.proof;
+    if (proofMatches(proof, key, nonce)) return;
+    // The token may have just been installed: re-read it once per tool call and check again.
+    if (!ctx.tokenRefreshed) {
+      ctx.tokenRefreshed = true;
+      await this.opts.tokens.refresh();
+      key = await this.opts.tokens.helloKey();
+      if (proofMatches(proof, key, nonce)) return;
+    }
+    this.log(`probe ${where} failed: the proof does not match this Mac's token`);
+    throw unprovenAgent(where, this.opts.config.agentUrl !== undefined);
   }
 
   private async request<T>(baseUrl: string, spec: RequestSpec, ctx: CallContext, parse: (res: RawResponse) => T): Promise<T> {
@@ -543,17 +599,21 @@ export class AgentClient {
     const res = await this.send(baseUrl, spec, ctx, timeout, "request");
     if (res.status !== 200) {
       this.log(`request ${hostPort(baseUrl)} ${describeRequest(spec)} failed: HTTP ${res.status}`);
-      throw this.httpError(res.status, Buffer.from(res.bytes).toString("utf8"), res.token, spec);
+      const body = Buffer.from(res.bytes).toString("utf8");
+      // A non-2xx without the agent's error shape: another service holds this address now.
+      if (!isAgentErrorBody(body)) throw wrongService(baseUrl);
+      throw this.httpError(res.status, body, res.token, spec);
     }
     return parse(res);
   }
 
   /**
-   * One authenticated request. After a 401 the token is re-read (it may have just been
-   * installed) and the request repeated, at most once per tool call.
+   * One request, authenticated unless `spec.anonymous`. After the agent's 401 the token is
+   * re-read (it may have just been installed) and the request repeated, at most once per tool
+   * call; a 401 not in the agent's error shape is not answered with another token.
    */
   private async send(baseUrl: string, spec: RequestSpec, ctx: CallContext, timeoutMs: number, label: "probe" | "request"): Promise<RawResponse> {
-    let token = await this.opts.tokens.get();
+    let token = spec.anonymous ? "" : await this.opts.tokens.get();
     const attempt = async (t: string) => {
       try {
         return await this.fetchOnce(baseUrl, spec, t, timeoutMs);
@@ -566,7 +626,7 @@ export class AgentClient {
       }
     };
     let res = await attempt(token);
-    if (res.status === 401 && !ctx.tokenRefreshed) {
+    if (res.status === 401 && !spec.anonymous && !ctx.tokenRefreshed && isAgentErrorBody(Buffer.from(res.bytes).toString("utf8"))) {
       ctx.tokenRefreshed = true;
       const fresh = await this.opts.tokens.refresh();
       if (fresh !== token) {
@@ -586,7 +646,8 @@ export class AgentClient {
     const query = definedQuery(spec.query);
     const qs = new URLSearchParams(query).toString();
     const url = baseUrl + spec.path + (qs ? `?${qs}` : "");
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (!spec.anonymous) headers.authorization = `Bearer ${token}`;
     let body: string | undefined;
     if (spec.body !== undefined) {
       headers["content-type"] = "application/json; charset=utf-8";
@@ -611,7 +672,9 @@ export class AgentClient {
     } catch (e) {
       throw classify(e);
     }
-    if (this.opts.recorder) {
+    // `/hello` is not recorded: its proof is derived from the token, and the replay agent
+    // answers it itself.
+    if (this.opts.recorder && !spec.anonymous) {
       // The token is not part of the exchange: no request headers are recorded.
       await this.opts.recorder.record({
         time: new Date(),

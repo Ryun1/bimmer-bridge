@@ -28,10 +28,16 @@ their interactive session and can see the desktop for screenshots. A second copy
    `utmctl ip-address`, for the VM's MAC. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
    git-ignored `config.local.json`, else read from UTM's `config.plist` for the VM named by
    `EDIABAS_VM_NAME` / `vmName` (default `Windows`). Only an address on the same subnet
-   as a local `bridge*` interface is contacted, and only one whose `GET /health` answers as
-   `ediabas-bridge-agent` is used. The URL is cached (`mac-mcp/src/vmAddress.ts`).
+   as a local `bridge*` interface is contacted. Each candidate gets `GET /hello` with a fresh
+   random nonce and no token ([api.md](api.md#get-hello)); it is used only if it answers as
+   `ediabas-bridge-agent` with a proof that matches this Mac's token, checked in constant time.
+   Nothing that has not proved it holds the token is ever sent the token. The URL is cached
+   (`mac-mcp/src/vmAddress.ts`, `mac-mcp/src/agentClient.ts`).
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
-   Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
+   If the cached address answers like something other than the agent (`wrong_service`: an
+   error without the agent's error shape; `bad_response`: a 200 that does not match the
+   contract), the cache is dropped, so the next call proves the address again before it sends
+   the token. Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
    the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
    only a connection that was never made (refused, or a connect timeout) is retried.
 5. In the agent, `vm-agent/EdiabasAgent/Middleware.cs` runs, in order: source address (only
@@ -114,14 +120,19 @@ the recorder never records request headers.
   `agent`) through `serve.py --accept-token`, without anyone copying it. The agent keeps only
   its SHA-256 and compares in constant time. With `EDIABAS_AGENT_URL` set, the Mac server uses
   `EDIABAS_AGENT_TOKEN` only and never reads the Keychain, so the real token never goes to an
-  address set by hand.
+  address set by hand. Before the Mac sends the token to an address, that address must prove
+  it holds the token through `GET /hello`: an HMAC of a fresh nonce keyed with the token's
+  SHA-256, which the Mac checks in constant time. This holds for discovered addresses and for
+  `EDIABAS_AGENT_URL` alike. `/hello` exchanges are not recorded with `EDIABAS_RECORD_DIR`.
 - **The bind address.** The agent listens on one literal IPv4 address on UTM's shared network
   (`bindAddress: "auto"` picks it; never a wildcard, loopback, link-local or public address),
   HTTP/1 only. The Windows firewall rule `ediabas-bridge agent` allows TCP 8765 from the VM's
   gateway only, and the agent itself answers 403 to any other source before looking at the
   token.
 - **The Mac side.** The MCP server contacts only on-link addresses on a `bridge*` interface and
-  checks `/health` before using one. `serve.py` binds the Mac's bridge address (never
+  checks the `/hello` proof before it sends the token to one. A cached address that later
+  answers like another service is dropped; at most the one request that found that out has
+  gone to it with the token. `serve.py` binds the Mac's bridge address (never
   `0.0.0.0`), serves only the VM's address, and each pasted line runs a script only if its
   SHA-256 matches the one printed on the Mac ([deploy.md](deploy.md)).
 - **The log roots.** `/logs` and `/logs/read` read only under `logRoots` in the VM's config

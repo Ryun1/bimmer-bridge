@@ -111,9 +111,13 @@ are skipped and only `utmctl` is tried; if that finds nothing, `vm_not_running` 
 
 Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry first), then
 `arp -an`, then `utmctl ip-address <name>`. Only an address on the same subnet as a local
-`bridge*` interface is ever contacted, and it is accepted only if `GET /health` returns 200
-with `"agent": "ediabas-bridge-agent"`. The accepted URL is cached; on a connection failure
-the cache is cleared and discovery runs once more.
+`bridge*` interface is ever contacted, and it is accepted only if `GET /hello` (sent with a
+fresh random nonce and without the token) returns 200 with `"agent": "ediabas-bridge-agent"`
+and a proof that matches this Mac's token ([docs/api.md](../docs/api.md#get-hello)); the token
+is sent only after that. The accepted URL is cached; on a connection failure the cache is
+cleared and discovery runs once more, and on an answer that is not the agent's
+(`wrong_service`, `bad_response`) the cache is cleared and the next call proves the address
+again.
 
 ## Troubleshooting: macOS Local Network permission
 
@@ -140,7 +144,7 @@ refusal, `rule=…`. A write failure is reported on stderr and does not fail the
 
 ## Recording
 
-With `EDIABAS_RECORD_DIR` set, every agent exchange (discovery probes included) is written to
+With `EDIABAS_RECORD_DIR` set, every agent exchange except the `/hello` probe is written to
 that folder as one JSON file named
 `<UTC time>-<sequence>-<METHOD>-<path>[-<ECU>-<JOB>].json`, e.g.
 `20261121T150405123Z-0003-POST-ediabas_job-NVE_65-IDENT.json`:

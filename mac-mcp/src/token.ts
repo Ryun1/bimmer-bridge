@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { BridgeError, noToken } from "./errors.js";
 import type { ExecFileFn } from "./vmAddress.js";
 
@@ -71,6 +72,14 @@ export class TokenProvider {
     this.seen.add(token);
     this.cached = token;
     return token;
+  }
+
+  /**
+   * The key of the agent's `/hello` proof (docs/api.md): SHA-256 of the token's UTF-8 bytes.
+   * Throws `no_token` like `get()`.
+   */
+  async helloKey(): Promise<Buffer> {
+    return createHash("sha256").update(await this.get(), "utf8").digest();
   }
 
   /** Replace every token value this provider has handed out with "[redacted]". */

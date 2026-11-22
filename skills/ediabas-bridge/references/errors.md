@@ -13,7 +13,8 @@ never look for another tool, job or route (and never computer use on the VM wind
 - **`[local_network_blocked]`** is macOS blocking `node`, not the VM being off. Do not say the
   VM is down. The permission is tied to the `node` binary's path, so a Homebrew upgrade of
   node can bring the prompt back.
-- **`[no_token]`, `[unauthorized]`.** Relay the fix from the message: on the Mac,
+- **`[no_token]`, `[unauthorized]`, or `[wrong_service]` saying the agent "could not prove it
+  holds this Mac's token".** Relay the fix from the message: on the Mac,
   `python3 dev/serve.py --accept-token`, then paste the **Install** line it prints in the VM
   (it keeps the VM's token and sends it to the Keychain; the installer never shows the token).
   Never ask the user to paste the token into the chat or write it into a file.

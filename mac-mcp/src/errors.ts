@@ -112,6 +112,17 @@ export function wrongService(where: string): BridgeError {
   );
 }
 
+/**
+ * An address answered `/hello` as the agent but its proof did not match this Mac's token, so the
+ * token was not sent there. `agentUrlOverride`: the token came from EDIABAS_AGENT_TOKEN.
+ */
+export function unprovenAgent(where: string, agentUrlOverride = false): BridgeError {
+  const fix = agentUrlOverride
+    ? "Either EDIABAS_AGENT_TOKEN is not the token of the agent at EDIABAS_AGENT_URL, or something else answers there. Set the right token, or unset EDIABAS_AGENT_URL to use the VM."
+    : `Either the VM's token no longer matches the one on this Mac, or something else answers there. ${TOKEN_FIX}`;
+  return new BridgeError("wrong_service", `The address ${where} answered as the ediabas-bridge agent but could not prove it holds this Mac's token, so the token was not sent there. ${fix}`);
+}
+
 export function badResponse(what: string): BridgeError {
   return new BridgeError("bad_response", `The agent's response to ${what} did not match the expected format. The agent and this server may be different versions.`);
 }

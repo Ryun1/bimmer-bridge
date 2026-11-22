@@ -71,8 +71,9 @@ MCP server sends what Claude passed).
    for example `~/ediabas-recordings/nve-faults`.
 2. Run the MCP server with `EDIABAS_RECORD_DIR` set to it (in the MCP registration's `env`, or
    for one Claude Code session), then use the tools as the scenario says. Every agent
-   exchange, discovery probes included, lands in the folder as one JSON file; screenshots as
-   a `.jpg`/`.png` beside it. The token is never recorded.
+   exchange except the `/hello` probe lands in the folder as one JSON file; screenshots as
+   a `.jpg`/`.png` beside it. The token is never recorded, and neither is the `/hello` proof:
+   the replay agent computes it from its own token.
 3. Scrub into the fixtures folder (Node 24+, which runs the `.ts` file directly):
 
    ```sh

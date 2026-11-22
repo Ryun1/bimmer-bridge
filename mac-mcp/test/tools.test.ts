@@ -73,9 +73,9 @@ function override(key: string, r: Responder): void {
   agent.setHandler(stubHandler({ [key]: r }));
 }
 
-/** Requests other than discovery's /health probe. */
+/** Requests other than discovery's /hello probe and /health. */
 function toolRequests(): FakeAgent["requests"] {
-  return agent.requests.filter((r) => r.path !== "/health");
+  return agent.requests.filter((r) => r.path !== "/health" && !r.path.startsWith("/hello?"));
 }
 
 const brokenPolicy = () => PolicyGuard.load("/nonexistent/policy.json");
@@ -127,7 +127,7 @@ describe("error results", () => {
 
   it("gives a job request that may have run its own code", async () => {
     agent.setHandler((req, res) => {
-      if (req.url === "/health") stubHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) stubHandler()(req, res);
       else req.socket.destroy();
     });
     const { call, auditLines } = await connect();
@@ -718,7 +718,7 @@ describe("ediabas_job", () => {
 
   it("maps a 404 not_found (an older agent without the endpoint) to agent_outdated", async () => {
     agent.setHandler((req, res) => {
-      if (req.url === "/health") stubHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) stubHandler()(req, res);
       else res.writeHead(404, { "content-type": "application/json" }).end(JSON.stringify({ error: { code: "not_found", message: "No such path." } }));
     });
     const { call, auditLines } = await connect();
@@ -730,7 +730,7 @@ describe("ediabas_job", () => {
 
   it("does not re-send an EDIABAS call that timed out", async () => {
     agent.setHandler((req, res) => {
-      if (req.url === "/health") stubHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) stubHandler()(req, res);
       // never answers
     });
     const { call } = await connect({ ediabasTimeoutMs: 200 });
@@ -743,7 +743,7 @@ describe("ediabas_job", () => {
 
   it("does not re-send an EDIABAS job when the agent drops the connection after receiving it", async () => {
     agent.setHandler((req, res) => {
-      if (req.url === "/health") stubHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) stubHandler()(req, res);
       else req.socket.destroy(); // the agent died after reading the request
     });
     const { call } = await connect();
@@ -1115,10 +1115,12 @@ describe("recording", () => {
     override("GET /logs", () => agentErr(403, "path_not_allowed", "no", { reason: "x" }));
     await call("vm_logs_list");
     const files = (await readdir(rec)).sort();
-    // discovery's /health probe, then vm_health, the job's own /health, the job, the screenshot and the logs listing
-    expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(6);
+    // vm_health, the job's own /health, the job, the screenshot and the logs listing; discovery's
+    // /hello is not recorded (its proof comes from the token, and the replay agent answers it itself)
+    expect(files.filter((f) => f.endsWith(".json"))).toHaveLength(5);
     expect(files.filter((f) => f.endsWith(".jpg"))).toHaveLength(1);
-    expect(files.some((f) => /^\d{8}T\d{9}Z-0004-POST-ediabas_job-NVE_65-IDENT\.json$/.test(f))).toBe(true);
+    expect(files.some((f) => /^\d{8}T\d{9}Z-0003-POST-ediabas_job-NVE_65-IDENT\.json$/.test(f))).toBe(true);
+    expect(files.some((f) => f.includes("hello"))).toBe(false);
     const all = await Promise.all(files.filter((f) => f.endsWith(".json")).map((f) => readFile(join(rec, f), "utf8")));
     for (const t of all) {
       expect(t).not.toContain(AGENT_TOKEN);

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { TokenProvider } from "../src/token.js";
 import { BridgeError } from "../src/errors.js";
@@ -95,6 +96,21 @@ describe("TokenProvider", () => {
     expect(text).not.toContain(value);
     expect(text).not.toContain(ENV_TOKEN);
     expect(text).toContain("[redacted]");
+  });
+
+  it("helloKey is the SHA-256 of the token's UTF-8 bytes, and follows a refresh", async () => {
+    let value = KEYCHAIN_TOKEN;
+    const tp = new TokenProvider({ execFile: async () => value, warn: vi.fn(), service: "s", account: "a" });
+    expect((await tp.helloKey()).toString("hex")).toBe(createHash("sha256").update(KEYCHAIN_TOKEN, "utf8").digest("hex"));
+    value = "new_TOKEN_cccccccccccccccccccccccccccccccccccc";
+    await tp.refresh();
+    expect((await tp.helloKey()).toString("hex")).toBe(createHash("sha256").update(value, "utf8").digest("hex"));
+  });
+
+  it("helloKey throws no_token when there is no token", async () => {
+    const tp = new TokenProvider({ execFile: notFound, warn: vi.fn(), service: "s", account: "a" });
+    const err = await tp.helloKey().catch((e: unknown) => e);
+    expect((err as BridgeError).code).toBe("no_token");
   });
 
   describe("with an overridden agent URL (envOnly)", () => {

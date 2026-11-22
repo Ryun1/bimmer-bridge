@@ -6,7 +6,8 @@
  *   node dev/replay-agent.ts --scenario <name> [--port 8765] [--fixtures dev/fixtures] [--token <t>]
  *
  * The token comes from --token or EDIABAS_AGENT_TOKEN; a request without it gets 401 like the
- * real agent. Binds to 127.0.0.1 only. A request with no matching recording gets a 404
+ * real agent, except `GET /hello`, whose proof is computed live from that token (recordings
+ * never hold it). Binds to 127.0.0.1 only. A request with no matching recording gets a 404
  * `no_recording` naming what was asked: this file never makes up an answer.
  *
  * A scenario is a folder of recordings in the format mac-mcp/src/recorder.ts writes, plus an
@@ -16,7 +17,7 @@
  * Node 24+ runs this file directly (type stripping): keep it to erasable TypeScript and node:
  * built-ins only.
  */
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -314,6 +315,20 @@ function tokenOk(header: string | undefined, expected: Buffer): boolean {
   return m !== null && timingSafeEqual(digest(m[1]!), expected);
 }
 
+/** `GET /hello` like the agent (docs/api.md): the proof is HMAC-SHA256 keyed with SHA-256(token). */
+function answerHello(res: ServerResponse, url: URL, tokenHash: Buffer, log: (line: string) => void): void {
+  const keys = [...url.searchParams.keys()];
+  const nonce = url.searchParams.get("nonce") ?? "";
+  if (keys.length !== 1 || keys[0] !== "nonce" || !/^[0-9a-f]{32}$/.test(nonce)) {
+    log("GET /hello -> 400 (nonce must be 32 lowercase hex characters, given once)");
+    sendError(res, 400, "bad_request", "nonce must be 32 lowercase hex characters, given once.", { parameter: "nonce" });
+    return;
+  }
+  log("GET /hello -> 200 (proof computed from the replay token)");
+  const proof = createHmac("sha256", tokenHash).update(`ediabas-bridge-hello-v1:${nonce}`, "utf8").digest("hex");
+  sendJson(res, 200, { agent: "ediabas-bridge-agent", proof });
+}
+
 function readBody(req: IncomingMessage): Promise<Buffer | null> {
   return new Promise((resolveBody, reject) => {
     const chunks: Buffer[] = [];
@@ -378,7 +393,12 @@ export async function startReplayAgent(opts: ReplayOptions): Promise<ReplayAgent
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const url = new URL(req.url ?? "/", "http://replay.invalid");
     const method = req.method ?? "";
-    // Same order as the agent: token before anything else, so unknown paths stay hidden.
+    // Same order as the agent: token before anything else, so unknown paths stay hidden. Only
+    // GET /hello (that exact path) goes without it.
+    if (method === "GET" && url.pathname === "/hello") {
+      answerHello(res, url, expected, log);
+      return;
+    }
     if (!tokenOk(req.headers.authorization, expected)) {
       log(`${method} ${url.pathname} -> 401 unauthorized`);
       sendError(res, 401, "unauthorized", "Missing or invalid bearer token.", null, { "www-authenticate": "Bearer" });

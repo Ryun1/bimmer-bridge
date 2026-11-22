@@ -209,6 +209,30 @@ describe("auth and methods", () => {
     }
   });
 
+  it("answers GET /hello without a token, computing the proof from its token (not from recordings)", async () => {
+    normalScenario();
+    agent = await startReplayAgent({ scenario: loadScenario(root, "normal"), token: "test-token", port: 0, log: (l) => logs.push(l) });
+    const r = await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: null });
+    expect(r.status).toBe(200);
+    // the documented vector (docs/api.md "GET /hello")
+    expect(r.json()).toEqual({ agent: "ediabas-bridge-agent", proof: "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd" });
+    // a token sent with it is ignored
+    expect((await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: "wrong-token" })).json().proof).toBe(r.json().proof);
+  });
+
+  it("GET /hello: a bad nonce is 400 bad_request; other paths and methods still need the token", async () => {
+    normalScenario();
+    await start("normal");
+    for (const q of ["", "?nonce=", "?nonce=0011223344556677889900aabbccddee0", "?nonce=00112233445566778899AABBCCDDEEFF", "?nonce=00112233445566778899aabbccddeeff&x=1", "?nonce=00112233445566778899aabbccddeeff&nonce=00112233445566778899aabbccddeeff"]) {
+      const r = await call(`/hello${q}`, { token: null });
+      expect(r.status).toBe(400);
+      expect(r.json().error).toMatchObject({ code: "bad_request", details: { parameter: "nonce" } });
+    }
+    expect((await call("/hello/?nonce=00112233445566778899aabbccddeeff", { token: null })).status).toBe(401);
+    expect((await call("/hellox?nonce=00112233445566778899aabbccddeeff", { token: null })).status).toBe(401);
+    expect((await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: null, method: "POST", body: "{}" })).status).toBe(401);
+  });
+
   it("serves GET and POST only", async () => {
     normalScenario();
     await start("normal");

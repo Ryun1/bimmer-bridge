@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { AGENT_TOKEN, healthBody, json, windowsBody, type Handler } from "./fixtures.js";
+import { AGENT_TOKEN, answerHello, healthBody, json, windowsBody, type Handler } from "./fixtures.js";
 
 /**
  * A stub of the VM agent for the Phase 2/4/5/6 endpoints, following docs/api.md. Every
@@ -203,10 +203,11 @@ const VEHICLE_READINGS: Record<string, unknown> = {
 
 const KNOWN_PATHS = ["/health", "/windows", "/screen/capture", "/logs", "/logs/read", "/ediabas/ecus", "/ediabas/describe", "/ediabas/job", "/ediabas/jobs"];
 
-/** Routes like the agent: token (401), then path (404 not_found), then method (405). */
+/** Routes like the agent: GET /hello without a token, then token (401), path (404 not_found), method (405). */
 export function stubHandler(overrides: Record<string, Responder> = {}, token: string = AGENT_TOKEN): Handler {
   const responders = { ...defaultResponders(), ...overrides };
   return (req: IncomingMessage, res: ServerResponse) => {
+    if (answerHello(req, res, token)) return;
     if (req.headers.authorization !== `Bearer ${token}`) {
       json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token.", details: null } }, { "www-authenticate": "Bearer" });
       return;
