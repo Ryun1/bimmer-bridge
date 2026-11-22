@@ -14,7 +14,7 @@ internal sealed class AgentContext : IDisposable
     /// <summary>The endpoint groups this build has (docs/api.md /health <c>capabilities</c>).</summary>
     public static readonly IReadOnlyList<string> Capabilities = ["ediabas", "capture", "logs"];
 
-    public AgentContext(AgentConfig config, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
+    public AgentContext(AgentConfig config, string configPath, TokenAuth auth, AgentLog log, AuditLog audit, bool elevated, int sessionId)
     {
         Config = config;
         Auth = auth;
@@ -39,7 +39,8 @@ internal sealed class AgentContext : IDisposable
                 DllState,
                 config.JobTimeoutSeconds,
                 config.MaxJobTimeoutSeconds,
-                config.EdiabasIdleReleaseSeconds),
+                config.EdiabasIdleReleaseSeconds,
+                new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log))),
             log);
     }
 

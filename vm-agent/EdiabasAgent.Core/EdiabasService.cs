@@ -26,7 +26,7 @@ public sealed class RequestAudit
 /// <summary>
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
-/// <para>Per request: conflict check → (lazily, at the first job that will really run) apiInit
+/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) apiInit
 /// → per job: policy → Ecu file → description screen where required (and, for a call with
 /// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
@@ -61,6 +61,7 @@ public sealed class EdiabasService
     private readonly CableUse _cableUse;
     private readonly IEdiabasLog _log;
     private readonly DllLoadState _dll;
+    private readonly ApprovalReloader? _approvals;
     private readonly int _defaultTimeoutSeconds;
     private readonly int _maxTimeoutSeconds;
     private readonly long _idleReleaseMs;
@@ -88,7 +89,8 @@ public sealed class EdiabasService
         DllLoadState dll,
         int defaultTimeoutSeconds,
         int maxTimeoutSeconds,
-        int idleReleaseSeconds)
+        int idleReleaseSeconds,
+        ApprovalReloader? approvals = null)
     {
         _api = api;
         _conflicts = conflicts;
@@ -99,6 +101,7 @@ public sealed class EdiabasService
         _cableUse = cableUse;
         _log = log;
         _dll = dll;
+        _approvals = approvals;
         _maxTimeoutSeconds = Math.Max(1, maxTimeoutSeconds);
         _defaultTimeoutSeconds = Math.Clamp(defaultTimeoutSeconds, 1, _maxTimeoutSeconds);
         _idleReleaseMs = (long)Math.Clamp(idleReleaseSeconds, AgentConfig.MinIdleReleaseSeconds, AgentConfig.MaxIdleReleaseSeconds) * 1000;
@@ -166,6 +169,7 @@ public sealed class EdiabasService
 
     public Outcome<EcusResponse> ListEcus(string? filter)
     {
+        _approvals?.Refresh();
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -181,6 +185,7 @@ public sealed class EdiabasService
 
     public Outcome<JobResult> RunJob(JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = request.Ecu;
         audit.Job = request.Job;
         if (WaitedTooLong(queuedMs) is { } waited)
@@ -215,6 +220,7 @@ public sealed class EdiabasService
 
     public Outcome<BatchResponse> RunJobs(IReadOnlyList<JobRequest> items, int? timeoutSeconds, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         if (items.Count is < 1 or > MaxBatchItems)
         {
             return ApiFailure.Of(ApiErrors.BadRequest, $"items must hold 1 to {MaxBatchItems} jobs.", new ParameterDetails("items"));
@@ -245,6 +251,7 @@ public sealed class EdiabasService
 
     public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         if (WaitedTooLong(queuedMs) is { } waited)
         {
             return waited;
@@ -284,6 +291,7 @@ public sealed class EdiabasService
 
     public Outcome<DescribeListResponse> DescribeList(string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = ecu;
         if (WaitedTooLong(queuedMs) is { } waited)
         {
@@ -344,6 +352,7 @@ public sealed class EdiabasService
 
     public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
     {
+        _approvals?.Refresh();
         audit.Ecu = ecu;
         audit.Job = job;
         if (WaitedTooLong(queuedMs) is { } waited)

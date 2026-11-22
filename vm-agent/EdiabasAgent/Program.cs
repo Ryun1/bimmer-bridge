@@ -170,7 +170,7 @@ internal static class Program
                 log.Info("config and token are valid");
             }
 
-            using var ctx = new AgentContext(config, new TokenAuth(state.Token), log, new AuditLog(config.LogDirectory), elevated, sessionId);
+            using var ctx = new AgentContext(config, configPath, new TokenAuth(state.Token), log, new AuditLog(config.LogDirectory), elevated, sessionId);
             state = state with { Token = null };
 
             if (ctx.Policy.Loaded)
