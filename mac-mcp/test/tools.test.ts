@@ -28,6 +28,7 @@ interface Setup {
   policy?: PolicyGuard;
   fetch?: typeof fetch;
   ediabasTimeoutMs?: number;
+  now?: () => number;
 }
 
 async function connect(s: Setup = {}) {
@@ -47,6 +48,7 @@ async function connect(s: Setup = {}) {
     policy: s.policy,
     fetch: s.fetch,
     ediabasTimeoutMs: s.ediabasTimeoutMs,
+    now: s.now,
   });
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0.0.0" });
@@ -82,6 +84,7 @@ describe("tool list", () => {
       [
         "ediabas_describe",
         "ediabas_job",
+        "ediabas_jobs",
         "ediabas_list_ecus",
         "ediabas_read_faults",
         "ediabas_vehicle_status",
@@ -97,10 +100,37 @@ describe("tool list", () => {
       expect(t.title).toBeTruthy();
     }
     const byName = Object.fromEntries(tools.map((t) => [t.name, t]));
-    expect(Object.keys(byName.ediabas_job!.inputSchema.properties ?? {}).sort()).toEqual(["args", "ecu", "job", "raw", "results"]);
+    expect(Object.keys(byName.ediabas_job!.inputSchema.properties ?? {}).sort()).toEqual(["args", "ecu", "job", "raw", "results", "timeoutSeconds"]);
     expect(Object.keys(byName.ediabas_read_faults!.inputSchema.properties ?? {}).sort()).toEqual(["ecus", "includeInfoMemory"]);
+    expect(Object.keys(byName.ediabas_jobs!.inputSchema.properties ?? {}).sort()).toEqual(["jobs", "raw", "timeoutSeconds"]);
+    expect(Object.keys(byName.ediabas_describe!.inputSchema.properties ?? {}).sort()).toEqual(["ecu", "filter", "job", "namesOnly"]);
     expect(Object.keys(byName.vm_logs_read!.inputSchema.properties ?? {}).sort()).toEqual(["grep", "length", "offset", "path", "tailBytes"]);
     expect(Object.keys(byName.vm_screenshot!.inputSchema.properties ?? {}).sort()).toEqual(["maxEdge", "window"]);
+  });
+});
+
+describe("error results", () => {
+  it("start with their code in brackets", async () => {
+    const { call } = await connect();
+    const refused = await call("ediabas_job", { ecu: "NVE_65", job: "FS_LOESCHEN" });
+    expect(refused.text).toMatch(/^\[job_not_allowed\] Refused by the job policy/);
+    override("POST /ediabas/job", () => agentErr(409, "cable_in_use", "x", null));
+    const busy = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(busy.text).toMatch(/^\[cable_in_use\] The diagnostic cable is in use/);
+    const bad = await call("vm_logs_read", { path: "C:\\x.log", offset: 5 });
+    expect(bad.text).toMatch(/^\[invalid_arguments\] /);
+  });
+
+  it("gives a job request that may have run its own code", async () => {
+    agent.setHandler((req, res) => {
+      if (req.url === "/health") stubHandler()(req, res);
+      else req.socket.destroy();
+    });
+    const { call, auditLines } = await connect();
+    await call("vm_health");
+    const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(r.text).toMatch(/^\[ediabas_request_lost\] The connection to the VM agent broke/);
+    expect((await auditLines()).at(-1)).toContain("\tediabas_request_lost\t");
   });
 });
 
@@ -111,7 +141,16 @@ describe("vm_health", () => {
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
     expect(r.text).toContain("Job policy: agent version 3; Mac version 3.");
-    expect(r.text).not.toMatch(/WARNING/);
+    expect(r.text).not.toMatch(/WARNING: the agent's job policy/);
+  });
+
+  it("starts with this server's version from package.json and its start time", async () => {
+    const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    const { call } = await connect({ now: () => new Date(2026, 10, 22, 9, 5, 7).getTime() });
+    const r = await call("vm_health");
+    expect(r.text.split("\n")[0]).toBe(`Mac server ${pkg.version}, started 2026-11-22 09:05:07`);
+    // The stub agent reports 0.1.0.
+    expect(r.text).toContain("The Mac server and the agent are different versions; restart Claude or update the agent.");
   });
 
   it("warns when the agent's policy version differs", async () => {
@@ -182,6 +221,8 @@ describe("vm_screenshot", () => {
     ["window_not_found", 404, null, /vm_list_windows/],
     ["window_minimized", 409, { handle: "0x1", title: "INPA" }, /"INPA" is minimised.*Ask Ryan to restore it/],
     ["desktop_unavailable", 503, null, /locked.*log in to or unlock/],
+    ["capture_busy", 503, null, /^\[capture_busy\] (?![\s\S]*locked)Another screenshot is still being taken in the VM; try again in a moment\./],
+    ["capture_failed", 500, null, /^\[capture_failed\] (?![\s\S]*locked)The window could not be captured/],
   ] as const)("maps %s", async (code, status, details, msg) => {
     override("GET /screen/capture", () => agentErr(status, code, "x", details));
     const { call } = await connect();
@@ -253,6 +294,71 @@ describe("vm_logs_list / vm_logs_read", () => {
   });
 });
 
+describe("text budget", () => {
+  const BUDGET = 60_000;
+
+  it("a 5000-name ECU list stays under the budget and ends with the hint", async () => {
+    override("GET /ediabas/ecus", () => ({
+      status: 200,
+      body: { ecuPath: "C:\\EDIABAS\\ECU", count: 5000, truncated: false, files: Array.from({ length: 5000 }, (_, i) => ({ name: `SGBD_NAME_${i}`, type: "prg" })) },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_list_ecus");
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toBe("4500 more; use filter to narrow the list.");
+  });
+
+  it("a 400-job describe stays under the budget and ends with the hint", async () => {
+    override("GET /ediabas/describe", () => ({
+      status: 200,
+      body: {
+        ecu: "BIG",
+        variant: "BIG",
+        jobCount: 400,
+        jobs: Array.from({ length: 400 }, (_, i) => ({
+          name: `STATUS_JOB_${i}`,
+          comment: `Description ${i} `.padEnd(400, "x"),
+          verdict: { allowed: true, rule: "allow.pattern", review: "passed" },
+        })),
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_describe", { ecu: "BIG" });
+    expect(r.isError).toBeFalsy();
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toMatch(/^… cut at \d+ of \d+ characters\. .*filter.*job/);
+  });
+
+  it("a 65536-byte log stays under the budget and ends with the hint", async () => {
+    override("GET /logs/read", (q) => ({
+      status: 200,
+      body: {
+        path: q.query.get("path"),
+        sizeBytes: 65536,
+        modifiedAt: null,
+        offset: 0,
+        length: 65536,
+        encoding: "windows-1252",
+        truncated: false,
+        text: Array.from({ length: 1024 }, (_, i) => `${String(i).padStart(5, "0")} `.padEnd(63, "t")).join("\r\n"),
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("vm_logs_read", { path: "C:\\EDIABAS\\TRACE\\api.trc", tailBytes: 65536 });
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toMatch(/^… cut at \d+ of \d+ characters\. .*(tailBytes|offset and length).*grep/);
+  });
+
+  it("vm_logs_read reads 16384 bytes from the end by default and at most 65536", async () => {
+    const { call } = await connect();
+    await call("vm_logs_read", { path: "C:\\a.trc" });
+    expect(new URL(toolRequests()[0]!.path, "http://x").searchParams.get("tailBytes")).toBe("16384");
+    expect((await call("vm_logs_read", { path: "C:\\a.trc", tailBytes: 65537 })).isError).toBe(true);
+    expect((await call("vm_logs_read", { path: "C:\\a.trc", offset: 0, length: 65537 })).isError).toBe(true);
+    expect(toolRequests()).toHaveLength(1);
+  });
+});
+
 describe("ediabas_list_ecus", () => {
   it("lists groups and SGBDs", async () => {
     const { call } = await connect();
@@ -295,7 +401,7 @@ describe("ediabas_describe", () => {
 
   it.each([
     ["ecu_not_found", 404, { ecu: "NOPE" }, /no SGBD or group file named NOPE.*ediabas_list_ecus/i],
-    ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /NVE_65 NOPE.*ediabas_describe/],
+    ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /^\[job_not_found\] NVE_65 has no job NOPE\. .*ediabas_describe/],
     ["cable_in_use", 409, { processes: [{ name: "INPALOAD", pid: 4312 }, { name: "NcsDummy", pid: 77 }] }, /in use by INPALOAD \(pid 4312\), NcsDummy \(pid 77\)\. Ask Ryan to close it/],
     ["ediabas_unavailable", 503, { reason: "api32.dll missing" }, /could not be started in the VM \(api32.dll missing\)/],
     // As seen at the desk on 2026-11-21: describing a real SGBD with the cable unplugged.
@@ -309,6 +415,16 @@ describe("ediabas_describe", () => {
   });
 });
 
+describe("ediabas_describe text", () => {
+  it("says it needs the cable, can be slow, and ignores filter with job", async () => {
+    const { client } = await connect();
+    const d = (await client.listTools()).tools.find((t) => t.name === "ediabas_describe")!.description!;
+    expect(d).toMatch(/needs the cable attached to the VM/);
+    expect(d).toMatch(/tens of seconds/);
+    expect(d).toMatch(/`filter` is ignored when `job` is given/);
+  });
+});
+
 describe("ediabas_vehicle_status", () => {
   it("prints each reading's fields as returned, and per-reading errors", async () => {
     const { call } = await connect();
@@ -318,7 +434,7 @@ describe("ediabas_vehicle_status", () => {
     expect(r.text).toContain("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
     expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
-    expect(r.text).toMatch(/Cable KL15 .*error: EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
+    expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 159: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
   });
 });
 
@@ -336,7 +452,8 @@ describe("ediabas_job", () => {
   it("returns the agent's JSON with raw: true", async () => {
     const { call } = await connect();
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", raw: true });
-    expect(JSON.parse(r.text)).toMatchObject({ ecu: "NVE_65", job: "IDENT", sets: [{ KM_STAND: 195712 }] });
+    const json = r.text.split("\n\nCar session: ")[0]!;
+    expect(JSON.parse(json)).toMatchObject({ ecu: "NVE_65", job: "IDENT", sets: [{ KM_STAND: 195712 }] });
   });
 
   it.each([
@@ -384,17 +501,19 @@ describe("ediabas_job", () => {
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. Ryan decides/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "", matched: [] }, /has no description/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Jobbeschreibung", matched: [] }, /^(?![\s\S]*suggests)[\s\S]*description has nothing in it but a label \("Jobbeschreibung"\), so the agent cannot tell that it only reads/],
-    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^(?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
+    ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^\[ediabas_error\] (?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
     [
       "ediabas_error",
       502,
       { errorCode: 16, errorText: "IFH-0006: COMMAND NOT ACCEPTED" },
-      /^EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
+      /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
     ],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
+    ["job_not_found", 404, { ecu: "NVE_65", job: "STATUS_X" }, /^\[job_not_found\] NVE_65 has no job STATUS_X\./],
+    ["job_not_found", 404, null, /^\[job_not_found\] The SGBD has no such job\./],
     ["cable_in_use", 409, null, /in use by a BMW tool in the VM/],
-    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^(?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
-    ["cable_not_found", 502, null, /^EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
+    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /^\[cable_not_found\] (?![\s\S]*ECU did not answer)[\s\S]*cable is not connected to the VM/],
+    ["cable_not_found", 502, null, /^\[cable_not_found\] EDIABAS could not initialise the diagnostic interface: the K\+DCAN cable/],
   ] as const)("maps the agent's %s", async (code, status, details, msg) => {
     override("POST /ediabas/job", () => agentErr(status, code, "agent message", details));
     const { call, auditLines } = await connect();
@@ -409,17 +528,17 @@ describe("ediabas_job", () => {
     [
       "a BMW tool started during the request",
       "A BMW tool started during the request (INPALOAD pid 4312); no further jobs are started.",
-      /^Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\); no further jobs are started\."/,
+      /^\[not_run\] Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\); no further jobs are started\."/,
     ],
     [
       "the time limit",
       "The request reached its 60 s limit before IDENT started.",
-      /^Not run: the agent said: "The request reached its 60 s limit before IDENT started\."/,
+      /^\[not_run\] Not run: the agent said: "The request reached its 60 s limit before IDENT started\."/,
     ],
     [
       "an earlier job that ignored apiBreak",
       "An earlier job did not stop after apiBreak; no further jobs are started.",
-      /^Not run: the agent said: "An earlier job did not stop after apiBreak/,
+      /^\[not_run\] Not run: the agent said: "An earlier job did not stop after apiBreak/,
     ],
   ] as const)("passes the agent's reason through for a 503 not_run (%s)", async (_why, message, msg) => {
     override("POST /ediabas/job", () => agentErr(503, "not_run", message, null));
@@ -435,7 +554,7 @@ describe("ediabas_job", () => {
     override("POST /ediabas/job", () => agentErr(503, "not_run", "", null));
     const { call } = await connect();
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
-    expect(r.text).toMatch(/^Not run: the agent did not start this job and gave no reason\./);
+    expect(r.text).toMatch(/^\[not_run\] Not run: the agent did not start this job and gave no reason\./);
   });
 
   it("shows that the agent must be restarted when EDIABAS is stuck", async () => {
@@ -490,6 +609,121 @@ describe("ediabas_job", () => {
       expect(r.text).toMatch(/may have run in the VM\. It was not sent again/);
       expect(agent.requests.filter((q) => q.path === path)).toHaveLength(1);
     }
+  });
+});
+
+describe("timeoutSeconds and namesOnly", () => {
+  it("ediabas_job passes timeoutSeconds, 1 to 60", async () => {
+    const { call } = await connect();
+    await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 45 });
+    expect(JSON.parse(toolRequests()[0]!.body)).toEqual({ ecu: "NVE_65", job: "IDENT", timeoutSeconds: 45 });
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 61 })).isError).toBe(true);
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", timeoutSeconds: 0 })).isError).toBe(true);
+    expect(toolRequests()).toHaveLength(1);
+  });
+
+  it("ediabas_jobs passes timeoutSeconds for each item, as the agent's request field", async () => {
+    const { call } = await connect();
+    await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 20 });
+    expect(JSON.parse(toolRequests()[0]!.body)).toEqual({ items: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 20 });
+    expect((await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 61 })).isError).toBe(true);
+  });
+
+  it("ediabas_describe with namesOnly asks for no comments and says what that means", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_describe", { ecu: "NVE_65", namesOnly: true });
+    expect(new URL(toolRequests()[0]!.path, "http://x").searchParams.get("comments")).toBe("false");
+    expect(r.text.split("\n")[1]).toBe("(names only: not screened, verdicts by name)");
+    await call("ediabas_describe", { ecu: "NVE_65" });
+    expect(new URL(toolRequests()[1]!.path, "http://x").searchParams.has("comments")).toBe(false);
+  });
+});
+
+describe("ediabas_jobs", () => {
+  const items = (r: { body: string }) => JSON.parse(r.body).items;
+
+  it("runs several jobs in one request and prints one block per item in order", async () => {
+    const { call, auditLines } = await connect();
+    const r = await call("ediabas_jobs", {
+      jobs: [
+        { ecu: "NVE_65", job: "IDENT" },
+        { ecu: "D_MOTOR", job: "FS_LESEN", results: "F_ORT_NR" },
+        { ecu: "NVE_65", job: "STATUS_X", args: "1;2" },
+      ],
+    });
+    expect(r.isError).toBeFalsy();
+    const reqs = toolRequests();
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.path).toBe("/ediabas/jobs");
+    expect(items(reqs[0]!)).toEqual([
+      { ecu: "NVE_65", job: "IDENT" },
+      { ecu: "D_MOTOR", job: "FS_LESEN", results: "F_ORT_NR" },
+      { ecu: "NVE_65", job: "STATUS_X", args: "1;2" },
+    ]);
+    expect(r.text).toMatch(/^3 of 3 ran\.\n\nNVE_65 IDENT: job status OKAY/);
+    expect(r.text.indexOf("D_MOTOR FS_LESEN:")).toBeGreaterThan(r.text.indexOf("NVE_65 IDENT:"));
+    expect(r.text.indexOf("NVE_65 STATUS_X:")).toBeGreaterThan(r.text.indexOf("D_MOTOR FS_LESEN:"));
+    expect((await auditLines())[0]).toMatch(/\tediabas_jobs\tok\t\d+\tecu=NVE_65,D_MOTOR,NVE_65\tjob=IDENT,FS_LESEN,STATUS_X$/);
+  });
+
+  it("shows a failed item as its [code] line and counts what ran", async () => {
+    override("POST /ediabas/jobs", (q) => ({
+      status: 200,
+      body: {
+        items: (q.body as { items: { ecu: string; job: string }[] }).items.map((it) =>
+          it.ecu === "BAD"
+            ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: "BAD", job: it.job } } }
+            : { ok: true, result: jobResult(it.ecu, it.job, [{ A: 1 }]), error: null },
+        ),
+        durationMs: 5,
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }, { ecu: "BAD", job: "IDENT" }] });
+    expect(r.isError).toBeFalsy();
+    expect(r.text).toMatch(/^1 of 2 ran\./);
+    expect(r.text).toContain("\n\nBAD IDENT: [job_not_found] BAD has no job IDENT.");
+  });
+
+  it("returns the agent's JSON per item with raw: true", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], raw: true });
+    const [, json] = r.text.split("\n\n");
+    expect(JSON.parse(json!)).toMatchObject({ ecu: "NVE_65", job: "IDENT" });
+  });
+
+  it("refuses the whole call on the Mac if any item is refused, with zero requests", async () => {
+    const fetchSpy = vi.fn<typeof fetch>((...a) => fetch(...a));
+    const { call, auditLines } = await connect({ fetch: fetchSpy });
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }, { ecu: "NVE_65", job: "FS_LOESCHEN" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[job_not_allowed\] Refused by the job policy: NVE_65 FS_LOESCHEN/);
+    expect(r.text).toMatch(/Nothing was sent to the VM/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect((await auditLines())[0]).toMatch(/\tjob_not_allowed\t\d+\tecu=NVE_65,NVE_65\tjob=IDENT,FS_LOESCHEN\trule=deny\.substring:LOESCH$/);
+  });
+
+  it("refuses arguments that fail the policy's shape check, with zero requests", async () => {
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT", args: "gr\u00fcn" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("rule shape.args");
+    expect(agent.requests).toHaveLength(0);
+  });
+
+  it("rejects 21 items, and none, by the schema", async () => {
+    const { call } = await connect();
+    expect((await call("ediabas_jobs", { jobs: Array.from({ length: 21 }, () => ({ ecu: "NVE_65", job: "IDENT" })) })).isError).toBe(true);
+    expect((await call("ediabas_jobs", { jobs: [] })).isError).toBe(true);
+    expect(agent.requests).toHaveLength(0);
+  });
+
+  it("returns isError when the request fails as a whole", async () => {
+    override("POST /ediabas/jobs", () => agentErr(409, "cable_in_use", "x", null));
+    const { call } = await connect();
+    const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/^\[cable_in_use\]/);
   });
 });
 
@@ -563,8 +797,8 @@ describe("ediabas_read_faults", () => {
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "BAD", "GONE"] });
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.");
-    expect(r.text).toMatch(/BAD\n  Fault memory: error: EDIABAS reported error 19: IFH-0009/);
-    expect(r.text).toMatch(/GONE\n  Fault memory: error: Not run/);
+    expect(r.text).toMatch(/BAD\n  Fault memory: error: \[ediabas_error\] EDIABAS reported error 19: IFH-0009/);
+    expect(r.text).toMatch(/GONE\n  Fault memory: error: \[not_run\] Not run/);
   });
 
   it("names the BMW tool that stopped a batch midway instead of blaming the time limit", async () => {
@@ -588,7 +822,7 @@ describe("ediabas_read_faults", () => {
     });
     const { call } = await connect();
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "D_MOTOR"] });
-    expect(r.text).toMatch(/D_MOTOR\n  Fault memory: error: Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\)/);
+    expect(r.text).toMatch(/D_MOTOR\n  Fault memory: error: \[not_run\] Not run: the agent said: "A BMW tool started during the request \(INPALOAD pid 4312\)/);
     expect(r.text).not.toMatch(/overall time limit/);
   });
 
@@ -609,7 +843,7 @@ describe("ediabas_read_faults", () => {
     });
     const { call } = await connect();
     const r = await call("ediabas_read_faults", { ecus: ["NVE_65"] });
-    expect(r.text).toMatch(/NVE_65\n  Fault memory: error: EDIABAS could not initialise the diagnostic interface/);
+    expect(r.text).toMatch(/NVE_65\n  Fault memory: error: \[cable_not_found\] EDIABAS could not initialise the diagnostic interface/);
     expect(r.text).toMatch(/not connected to the VM/);
     expect(r.text).not.toMatch(/ECU did not answer/);
   });
@@ -638,14 +872,70 @@ describe("ediabas_read_faults", () => {
     const r = await call("ediabas_read_faults", { ecus, includeInfoMemory: true });
     expect(r.isError).toBeFalsy();
     expect(r.text).toMatch(/ECU_9\n  Fault memory: 2 entries/);
-    expect(r.text).toMatch(/ECU_10\n  Fault memory: error: The diagnostic cable is in use by WinKFP \(pid 9\)/);
-    expect(r.text).toMatch(/ECU_11\n  Fault memory: error: [^\n]+\n  Info memory: error: The diagnostic cable/);
+    expect(r.text).toMatch(/ECU_10\n  Fault memory: error: \[cable_in_use\] The diagnostic cable is in use by WinKFP \(pid 9\)/);
+    expect(r.text).toMatch(/ECU_11\n  Fault memory: error: [^\n]+\n  Info memory: error: \[cable_in_use\] The diagnostic cable/);
+  });
+
+  it("shows a module without info memory as such, not as a failure", async () => {
+    override("POST /ediabas/jobs", (q) => {
+      const items = (q.body as { items: { ecu: string; job: string }[] }).items;
+      return {
+        status: 200,
+        body: {
+          items: items.map((it) =>
+            it.job === "IS_LESEN"
+              ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
+              : it.ecu === "NOFS"
+                ? { ok: false, result: null, error: { code: "job_not_found", message: "x", details: { ecu: it.ecu, job: it.job } } }
+                : { ok: true, result: jobResult(it.ecu, it.job, [{ JOB_STATUS: "OKAY" }]), error: null },
+          ),
+          durationMs: 5,
+        },
+      };
+    });
+    const { call } = await connect();
+    const r = await call("ediabas_read_faults", { ecus: ["NVE_65", "NOFS"], includeInfoMemory: true });
+    expect(r.text).toContain("NVE_65\n  Fault memory: no faults stored.\n  Info memory: no info memory on this module.");
+    expect(r.text).toMatch(/NOFS\n  Fault memory: error: \[job_not_found\] NOFS has no job FS_LESEN\./);
   });
 
   it("reads a repeated ECU once", async () => {
     const { call } = await connect();
     await call("ediabas_read_faults", { ecus: ["NVE_65", "nve_65"] });
     expect(JSON.parse(toolRequests()[0]!.body).items).toHaveLength(1);
+  });
+});
+
+describe("car session line", () => {
+  const LINE = /\n\nCar session: (\d+ min )?\d+ s since the first read from the car \(aim to finish within 10 min\)\.$/;
+
+  it("ends every car-facing result once a read from the car succeeded, and no other", async () => {
+    const clock = { t: 0 };
+    const { call } = await connect({ now: () => clock.t });
+    const first = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" });
+    expect(first.text).toMatch(/\n\nCar session: 0 s since the first read from the car \(aim to finish within 10 min\)\.$/);
+    clock.t = 250_000;
+    expect((await call("ediabas_read_faults", { ecus: ["NVE_65"] })).text).toMatch(/Car session: 4 min 10 s since/);
+    expect((await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] })).text).toMatch(LINE);
+    expect((await call("ediabas_vehicle_status")).text).toMatch(LINE);
+    for (const [tool, args] of [
+      ["ediabas_describe", { ecu: "NVE_65" }],
+      ["ediabas_list_ecus", {}],
+      ["vm_health", {}],
+      ["vm_list_windows", {}],
+    ] as const) {
+      expect((await call(tool, args)).text, tool).not.toMatch(/Car session/);
+    }
+  });
+
+  it("is not started by TMODE or UTILITY, or by a failed read", async () => {
+    const { call } = await connect({ now: () => 0 });
+    expect((await call("ediabas_job", { ecu: "TMODE", job: "LESE_INTERFACE_TYP" })).text).not.toMatch(/Car session/);
+    expect((await call("ediabas_job", { ecu: "UTILITY", job: "STATUS_UBATT" })).text).not.toMatch(/Car session/);
+    override("POST /ediabas/job", () => agentErr(502, "ediabas_error", "x", { errorCode: 19, errorText: "IFH-0009" }));
+    expect((await call("ediabas_job", { ecu: "NVE_65", job: "IDENT" })).text).not.toMatch(/Car session/);
+    // The stub's vehicle status has one voltage read from NVE_65: that is a read from the car.
+    expect((await call("ediabas_vehicle_status")).text).toMatch(/Car session: 0 s/);
   });
 });
 

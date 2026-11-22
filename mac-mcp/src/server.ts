@@ -2,23 +2,17 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { AgentClient, type BatchItem } from "./agentClient.js";
+import { AgentClient } from "./agentClient.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import type { Config } from "./config.js";
-import { BridgeError, badResponse, cleanText, toBridgeError } from "./errors.js";
+import { BridgeError, errorText, toBridgeError } from "./errors.js";
+import { BATCH_MAX, readFaults, runJobBatch } from "./faults.js";
 import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
-import {
-  formatDescribeJob,
-  formatDescribeList,
-  formatEcus,
-  formatFaultReport,
-  formatJobRaw,
-  formatJobResult,
-  formatVehicle,
-  type FaultReport,
-} from "./formatEdiabas.js";
-import { PolicyGuard, jobNotAllowed } from "./policy.js";
+import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle } from "./formatEdiabas.js";
+import { PolicyGuard } from "./policy.js";
 import { FolderRecorder } from "./recorder.js";
+import { CarSession } from "./carSession.js";
+import { TEXT_BUDGET, fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
 import type { DiscoverySources } from "./vmAddress.js";
 
@@ -35,14 +29,15 @@ export const SERVER_VERSION: string = (() => {
 })();
 
 export const INSTRUCTIONS = [
-  "ediabas-bridge reads BMW diagnostic information from a Windows VM (UTM) on this Mac that runs EDIABAS, INPA and related tools on a cable to Ryan's car.",
-  "Call vm_health first and on its own; read its answer before any other tool, as it says whether the VM is reachable and a BMW tool holds the cable.",
+  "ediabas-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to Ryan's car.",
+  "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
-  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job, ediabas_vehicle_status reads ignition and voltages.",
-  "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car, and jobs that may do more than read are refused.",
-  "Never retry a refusal or look for another way to do what was refused.",
-  "A tool that reports agent_outdated is not installed in the VM yet: say so rather than offering it.",
+  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition and voltages.",
+  "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
+  "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
+  "[agent_outdated]: that tool is not installed in the VM yet; say so.",
+  "[ediabas_request_lost]: the job may have run; do not repeat it unless Ryan asks.",
   "If the VM or agent is unreachable, tell the user the fix the message gives rather than retrying.",
 ].join(" ");
 
@@ -58,9 +53,10 @@ export function stderrLog(message: string): void {
   process.stderr.write(`[ediabas-bridge] ${message}\n`);
 }
 
-/** The most items one /ediabas/jobs request may carry (docs/api.md). */
-export const BATCH_MAX = 20;
 export const MAX_FAULT_ECUS = 20;
+/** vm_logs_read: the largest range, and the tail read when no range is given. */
+const LOG_READ_MAX = 65_536;
+const LOG_TAIL_DEFAULT = 16_384;
 
 type Client = Pick<
   AgentClient,
@@ -84,6 +80,8 @@ export interface ServerParts {
   /** Remove secrets from text before it leaves a tool handler. */
   redact: (text: string) => string;
   log: (message: string) => void;
+  /** The clock (ms since the epoch); default Date.now. */
+  now?: (() => number) | undefined;
 }
 
 type ToolOutput = string | { text: string; image: { data: string; mimeType: string } };
@@ -94,6 +92,21 @@ interface AuditInfo {
   job?: string;
 }
 
+/** The closing line of a result cut to the text budget: how to narrow that tool's call. */
+const NARROW_HINT: Record<string, string> = {
+  vm_logs_read: "Read a smaller range (a smaller tailBytes, or offset and length) or use grep.",
+  vm_logs_list: "Narrow with root, glob, since or limit.",
+  ediabas_list_ecus: "Use filter.",
+  ediabas_describe: "Use filter, or job to describe one job.",
+  ediabas_job: "Use results to ask for fewer result fields.",
+  ediabas_jobs: "Use results on the items, or ask for fewer items.",
+  ediabas_read_faults: "Ask for fewer ECUs.",
+};
+const DEFAULT_HINT = "Ask for less.";
+
+/** Tools whose results end with the car-session line. */
+const CAR_TOOLS = new Set(["ediabas_job", "ediabas_jobs", "ediabas_read_faults", "ediabas_vehicle_status"]);
+
 function invalidArguments(message: string): BridgeError {
   return new BridgeError("invalid_arguments", message);
 }
@@ -102,27 +115,40 @@ function invalidArguments(message: string): BridgeError {
 // name gets the policy's refusal and an audit line.
 const Name = z.string().max(256);
 const Filter = z.string().min(1).max(64);
+/** Per job; the agent clamps it to its own maximum. */
+const JobTimeout = z.number().int().min(1).max(60).optional().describe("Seconds each job may run, 1-60 (default: the agent's setting).");
 const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
 
 /** Builds the McpServer and registers the tools. No transport is attached. */
 export function buildServer(parts: ServerParts): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
   const { client, policy } = parts;
+  const car = new CarSession(parts.now);
+  const mac = { version: SERVER_VERSION, startedAt: new Date((parts.now ?? Date.now)()) };
+  const onOk = (ecu: string) => car.record(ecu);
 
   async function run(tool: string, body: () => Promise<ToolOutput>, info?: AuditInfo): Promise<CallToolResult> {
     const started = performance.now();
     let outcome = "ok";
     let rule: string | undefined;
     let result: CallToolResult;
+    let footer: string | null = null;
+    // The car-session line is added after the cut, so it is always the last line.
+    const fit = (text: string) => {
+      const budget = TEXT_BUDGET - (footer ? footer.length + 2 : 0);
+      const t = fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT, budget);
+      return footer ? `${t}\n\n${footer}` : t;
+    };
     try {
       const out = await body();
+      if (CAR_TOOLS.has(tool)) footer = car.line();
       if (typeof out === "string") {
-        result = { content: [{ type: "text", text: parts.redact(out) }] };
+        result = { content: [{ type: "text", text: fit(out) }] };
       } else {
         result = {
           content: [
             { type: "image", data: out.image.data, mimeType: out.image.mimeType },
-            { type: "text", text: parts.redact(out.text) },
+            { type: "text", text: fit(out.text) },
           ],
         };
       }
@@ -131,7 +157,8 @@ export function buildServer(parts: ServerParts): McpServer {
       outcome = err.code;
       rule = err.rule;
       if (err.code === "internal_error") parts.log(parts.redact(`${tool}: ${err.message}`));
-      result = { isError: true, content: [{ type: "text", text: parts.redact(err.message) }] };
+      if (CAR_TOOLS.has(tool)) footer = car.line();
+      result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message)) }] };
     }
     try {
       await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule });
@@ -150,14 +177,14 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "VM agent health",
       description:
-        "Check the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
+        "Check this Mac server's version and start time and the Windows VM's ediabas-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
         "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
         "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
         "which features the agent has, and its job policy version against this Mac's. " +
         "Call this first in a session, and again when another tool fails. Read-only.",
       annotations: { title: "VM agent health", ...READ_ONLY },
     },
-    async () => run("vm_health", async () => formatHealth(await client.health(), policy.version)),
+    async () => run("vm_health", async () => formatHealth(await client.health(), policy.version, mac)),
   );
 
   server.registerTool(
@@ -219,14 +246,14 @@ export function buildServer(parts: ServerParts): McpServer {
       title: "Read a VM log file",
       description:
         "Read part of a log file in the VM's allowed log folders (absolute Windows path from vm_logs_list). Give either " +
-        "`tailBytes` (the end of the file; default 65536) or `offset` and `length`; at most 262144 bytes. `grep` (a regular " +
+        "`tailBytes` (the end of the file; default 16384) or `offset` and `length`; at most 65536 bytes. `grep` (a regular " +
         "expression, up to 200 characters) keeps only matching lines. Returns a header line (path, byte range, encoding, " +
         "whether more exists) and the text. Read-only.",
       inputSchema: {
         path: z.string().min(1).max(1024).describe("Absolute path of the log file in the VM."),
-        tailBytes: z.number().int().min(1).max(262144).optional().describe("Read this many bytes from the end."),
+        tailBytes: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Read this many bytes from the end."),
         offset: z.number().int().min(0).optional().describe("Start of the range in bytes (with length)."),
-        length: z.number().int().min(1).max(262144).optional().describe("Length of the range in bytes (with offset)."),
+        length: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Length of the range in bytes (with offset)."),
         grep: z.string().min(1).max(200).optional().describe("Regular expression; only matching lines are returned."),
       },
       annotations: { title: "Read a VM log file", ...READ_ONLY },
@@ -236,7 +263,7 @@ export function buildServer(parts: ServerParts): McpServer {
         const ranged = a.offset !== undefined || a.length !== undefined;
         if (ranged && a.tailBytes !== undefined) throw invalidArguments("Give either tailBytes, or offset and length, not both.");
         if (ranged && (a.offset === undefined || a.length === undefined)) throw invalidArguments("offset and length go together: give both.");
-        return formatLogRead(await client.readLog(a));
+        return formatLogRead(await client.readLog(ranged || a.tailBytes !== undefined ? a : { ...a, tailBytes: LOG_TAIL_DEFAULT }));
       }),
   );
 
@@ -269,11 +296,14 @@ export function buildServer(parts: ServerParts): McpServer {
       description:
         "Without `job`: list an ECU's (SGBD's) jobs with their descriptions and whether each is runnable through the " +
         "bridge (optionally filtered by name substring). With `job`: that job's description, arguments and results. " +
-        "Use it to find job names and arguments; never guess them. Reads the SGBD file through EDIABAS; read-only.",
+        "`filter` is ignored when `job` is given. `namesOnly` lists names without reading descriptions: faster, but " +
+        "nothing is screened, so verdicts go by name only. Use it to find job names and arguments; never guess them. Reads the SGBD " +
+        "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD; read-only.",
       inputSchema: {
         ecu: Name.describe("SGBD or group name, e.g. from ediabas_list_ecus."),
         job: Name.optional().describe("One job to describe."),
         filter: Filter.optional().describe("Case-insensitive substring of job names (job list only)."),
+        namesOnly: z.boolean().optional().describe("Job list only: names without descriptions (faster; not screened)."),
       },
       annotations: { title: "Describe an SGBD's jobs", ...READ_ONLY },
     },
@@ -286,8 +316,12 @@ export function buildServer(parts: ServerParts): McpServer {
             const d = await client.describeJob({ ecu: a.ecu, job: a.job });
             return formatDescribeJob(d, policy.evaluate({ ecu: a.ecu, job: a.job }));
           }
-          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter });
-          return formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
+          const namesOnly = a.namesOnly === true;
+          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
+          const text = formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
+          if (!namesOnly) return text;
+          const [head, ...rest] = text.split("\n");
+          return [head, "(names only: not screened, verdicts by name)", ...rest].join("\n");
         },
         { ecu: a.ecu, job: a.job ?? "(job list)" },
       ),
@@ -307,7 +341,10 @@ export function buildServer(parts: ServerParts): McpServer {
         "ediabas_vehicle_status",
         async () => {
           policy.require();
-          return formatVehicle(await client.vehicle());
+          const v = await client.vehicle();
+          // Only the voltage sources are modules in the car; the rest read the cable.
+          for (const s of v.voltages) if (s.ok && s.result && s.ecu) onOk(s.ecu);
+          return formatVehicle(v);
         },
         { ecu: "(vehicle)", job: "STATUS_ZUENDUNG,STATUS_UBATT,voltages,LESE_SPANNUNG_KL30,LESE_SPANNUNG_KL15" },
       ),
@@ -328,6 +365,7 @@ export function buildServer(parts: ServerParts): McpServer {
         args: z.string().max(1000).optional().describe("Job arguments, semicolon-separated."),
         results: z.string().max(1000).optional().describe("Result names to return, semicolon-separated."),
         raw: z.boolean().optional().describe("Return the agent's JSON instead of formatted text."),
+        timeoutSeconds: JobTimeout,
       },
       annotations: { title: "Run one EDIABAS read job", ...READ_ONLY },
     },
@@ -337,10 +375,49 @@ export function buildServer(parts: ServerParts): McpServer {
         async () => {
           const req = { ecu: a.ecu, job: a.job, args: a.args, results: a.results };
           policy.check(req);
-          const r = await client.runJob(req);
+          const r = await client.runJob({ ...req, timeoutSeconds: a.timeoutSeconds });
+          onOk(a.ecu);
           return a.raw ? formatJobRaw(r) : formatJobResult(r);
         },
         { ecu: a.ecu, job: a.job },
+      ),
+  );
+
+  server.registerTool(
+    "ediabas_jobs",
+    {
+      title: "Run several EDIABAS read jobs",
+      description:
+        "Run 1-20 read-only EDIABAS jobs in one request, each `{ecu, job, args?, results?}` as for ediabas_job, and " +
+        "show one block per job in the order given, a failed job as its [code] line, under a header saying how many ran. " +
+        "Every job is checked against the job policy first: if one is refused, nothing is sent. Find names and arguments " +
+        "with ediabas_describe first. Read-only.",
+      inputSchema: {
+        jobs: z
+          .array(
+            z.object({
+              ecu: Name.describe("SGBD or group name."),
+              job: Name.describe("Job name, from ediabas_describe."),
+              args: z.string().max(1000).optional().describe("Job arguments, semicolon-separated."),
+              results: z.string().max(1000).optional().describe("Result names to return, semicolon-separated."),
+            }),
+          )
+          .min(1)
+          .max(BATCH_MAX)
+          .describe("The jobs to run, 1-20."),
+        raw: z.boolean().optional().describe("Return the agent's JSON for each job instead of formatted text."),
+        timeoutSeconds: JobTimeout,
+      },
+      annotations: { title: "Run several EDIABAS read jobs", ...READ_ONLY },
+    },
+    async (a) =>
+      run(
+        "ediabas_jobs",
+        async () => {
+          const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
+          return (await runJobBatch({ client, policy, onOk }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
+        },
+        { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
       ),
   );
 
@@ -360,69 +437,10 @@ export function buildServer(parts: ServerParts): McpServer {
     },
     async (a) => {
       const includeInfo = a.includeInfoMemory === true;
-      const jobs = includeInfo ? ["FS_LESEN", "IS_LESEN"] : ["FS_LESEN"];
-      return run("ediabas_read_faults", () => readFaults(a.ecus, jobs, includeInfo), { ecu: a.ecus.join(","), job: jobs.join(",") });
+      const jobs = includeInfo ? "FS_LESEN,IS_LESEN" : "FS_LESEN";
+      return run("ediabas_read_faults", () => readFaults({ client, policy, onOk }, a.ecus, includeInfo), { ecu: a.ecus.join(","), job: jobs });
     },
   );
-
-  async function readFaults(ecusIn: string[], jobs: string[], includeInfo: boolean): Promise<string> {
-    // The same ECU twice (any case) is read once.
-    const seen = new Set<string>();
-    const ecus = ecusIn.filter((e) => {
-      const k = e.toUpperCase();
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    });
-
-    // Every item is checked before anything is sent; any refusal stops the whole call.
-    const refused: { ecu: string; job: string; rule: string }[] = [];
-    const items: { ecu: string; job: string }[] = [];
-    for (const ecu of ecus) {
-      for (const job of jobs) {
-        const v = policy.evaluate({ ecu, job });
-        if (!v.allowed) refused.push({ ecu, job, rule: v.rule });
-        items.push({ ecu, job });
-      }
-    }
-    if (refused.length === 1) throw jobNotAllowed(refused[0]!.ecu, refused[0]!.job, refused[0]!.rule);
-    if (refused.length > 1) {
-      const list = refused.map((r) => `${cleanText(r.ecu, 80) || "(empty)"} ${r.job} (rule ${r.rule})`).join("; ");
-      const e = new BridgeError(
-        "job_not_allowed",
-        `Refused by the job policy: ${list}. Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell Ryan it was refused.`,
-      );
-      e.rule = refused[0]!.rule;
-      throw e;
-    }
-
-    const results: (BatchItem | { error: string })[] = [];
-    let failure: BridgeError | null = null;
-    for (let start = 0; start < items.length; start += BATCH_MAX) {
-      const chunk = items.slice(start, start + BATCH_MAX);
-      if (failure) {
-        // A whole-request failure (cable in use, EDIABAS down, VM gone) stands in for the rest.
-        for (let i = 0; i < chunk.length; i++) results.push({ error: failure.message });
-        continue;
-      }
-      try {
-        const r = await client.runJobs(chunk);
-        if (r.items.length !== chunk.length) throw badResponse("POST /ediabas/jobs");
-        results.push(...r.items);
-      } catch (e) {
-        const err = toBridgeError(e);
-        if (start === 0) throw err;
-        failure = err;
-        for (let i = 0; i < chunk.length; i++) results.push({ error: err.message });
-      }
-    }
-
-    const reports: FaultReport[] = ecus.map((ecu, i) => {
-      const at = i * jobs.length;
-      return { ecu, faults: results[at]!, info: includeInfo ? results[at + 1] : undefined };
-    });
-    return formatFaultReport(reports, includeInfo);
-  }
 
   return server;
 }
@@ -435,6 +453,8 @@ export interface AppDeps extends DiscoverySources {
   probeTimeoutMs?: number;
   /** The job policy; default policy/policy.json at the repo root. */
   policy?: PolicyGuard;
+  /** The clock (ms since the epoch); default Date.now. */
+  now?: () => number;
 }
 
 /** Wires config + system access into a ready server. */
@@ -464,6 +484,6 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     log,
     recorder,
   });
-  const audit = new AuditLog(config.auditLogPath, { warn: deps.log });
-  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log: deps.log });
+  const audit = new AuditLog(config.auditLogPath, { warn: log });
+  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now });
 }

@@ -24,12 +24,16 @@ export const MESSAGES = {
   ediabasRequestLost:
     "The connection to the VM agent broke or timed out after this EDIABAS request may already have reached it, so the job may have run in the VM. " +
     "It was not sent again. Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  ediabasBusy:
+    "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
 
 /** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
 export type LocalErrorCode =
   | "vm_not_running"
   | "agent_not_answering"
+  | "ediabas_request_lost"
+  | "ediabas_busy"
   | "local_network_blocked"
   | "unauthorized"
   | "forbidden"
@@ -64,9 +68,14 @@ export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
 }
 
-/** A request that runs an EDIABAS job failed after it may have reached the agent. Same code as a dead agent. */
+/** A request that runs an EDIABAS job failed after it may have reached the agent. */
 export function ediabasRequestLost(): BridgeError {
-  return new BridgeError("agent_not_answering", MESSAGES.ediabasRequestLost);
+  return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+}
+
+/** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
+export function ediabasBusy(): BridgeError {
+  return new BridgeError("ediabas_busy", MESSAGES.ediabasBusy);
 }
 
 export function localNetworkBlocked(): BridgeError {
@@ -114,8 +123,8 @@ export function agentError(
   message: string | undefined,
   details?: unknown,
 ): BridgeError {
-  const safeCode = code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : `http_${status}`;
-  const known = safeCode ? describeAgentError(safeCode, message, details) : null;
+  const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || `http_${status}`;
+  const known = describeAgentError(safeCode, message, details);
   if (known) {
     const e = new BridgeError(safeCode, known);
     const rule = detailString(details, "rule");
@@ -123,7 +132,7 @@ export function agentError(
     return e;
   }
   const safeMessage = message ? cleanText(message) : "(no message)";
-  return new BridgeError(safeCode || `http_${status}`, `The agent reported an error: ${safeCode} — ${safeMessage} (HTTP ${status}).`);
+  return new BridgeError(safeCode, `The agent reported an error: ${safeCode} — ${safeMessage} (HTTP ${status}).`);
 }
 
 export const UPDATE_HINT =
@@ -215,8 +224,12 @@ export function describeAgentError(code: string, message: string | undefined, de
       const ecu = detailString(details, "ecu");
       return `There is no SGBD or group file${ecu ? ` named ${cleanText(ecu, 80)}` : ""} in the VM's EDIABAS Ecu folder. Use ediabas_list_ecus to find the right name; never guess names.`;
     }
-    case "job_not_found":
-      return `The SGBD has no such job (${ecuJob(details)}). Use ediabas_describe on that ECU to see its jobs; never guess names.`;
+    case "job_not_found": {
+      const ecu = detailString(details, "ecu");
+      const job = detailString(details, "job");
+      const what = ecu && job ? `${cleanText(ecu, 80)} has no job ${cleanText(job, 80)}.` : "The SGBD has no such job.";
+      return `${what} Use ediabas_describe on that ECU to see its jobs; never guess names.`;
+    }
     case "ediabas_error": {
       const n = detailNumber(details, "errorCode");
       const text = detailString(details, "errorText");
@@ -258,6 +271,10 @@ export function describeAgentError(code: string, message: string | undefined, de
     }
     case "desktop_unavailable":
       return "The VM's screen cannot be captured: Windows is locked, showing a secure desktop, or nobody is logged in. Ask Ryan to log in to or unlock Windows, then ask again.";
+    case "capture_busy":
+      return "Another screenshot is still being taken in the VM; try again in a moment.";
+    case "capture_failed":
+      return "The window could not be captured (Windows failed to copy its image; this is not the lock screen). Try again once, or capture the desktop instead.";
     case "path_not_allowed": {
       const reason = detailString(details, "reason");
       return `That path is outside the folders the agent may read${reason ? ` (${cleanText(reason, 120)})` : ""}. Use vm_logs_list to see the allowed folders and files; do not try other spellings of the path.`;
@@ -280,6 +297,11 @@ export function describeAgentError(code: string, message: string | undefined, de
     default:
       return null;
   }
+}
+
+/** The text of a failed tool call: the code in brackets, then the message. */
+export function errorText(code: string, message: string): string {
+  return `[${code}] ${message}`;
 }
 
 /** Anything thrown that is not a BridgeError becomes a generic internal error (no stack). */

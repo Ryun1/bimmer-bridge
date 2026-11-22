@@ -92,7 +92,7 @@ describe("fault tables", () => {
       false,
     );
     expect(t).toContain("NVE_65\n  Fault memory: no faults stored.");
-    expect(t).toContain("D_MOTOR\n  Fault memory: error: There is no SGBD or group file named D_MOTOR");
+    expect(t).toContain("D_MOTOR\n  Fault memory: error: [ecu_not_found] There is no SGBD or group file named D_MOTOR");
     expect(t).toContain("X\n  Fault memory: error: The VM does not appear to be running.");
   });
 });
@@ -114,7 +114,7 @@ describe("job results", () => {
   });
 
   it("maps per-item errors, and unknown codes with their message", () => {
-    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("weird_code: something odd");
+    expect(itemErrorText({ code: "weird_code", message: "something\nodd" })).toBe("[weird_code] something odd");
     expect(itemErrorText(null)).toMatch(/no error/);
   });
 });
@@ -147,6 +147,19 @@ describe("describe / ecus", () => {
     expect(t).toMatch(/^2 files in C:\\EDIABAS\\ECU \(truncated: 5000 matched; narrow the filter\):/);
     expect(formatEcus(EcusSchema.parse({ ecuPath: null, count: 0, truncated: false, files: [] }), "zz")).toBe('No SGBD or group files matching "zz".');
   });
+
+  it("ECU list prints at most 500 names, then how many more", () => {
+    const files = [
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `G${i}`, type: "grp" })),
+      ...Array.from({ length: 4990 }, (_, i) => ({ name: `P${String(i).padStart(4, "0")}`, type: "prg" })),
+    ];
+    const t = formatEcus(EcusSchema.parse({ ecuPath: null, count: 5000, truncated: false, files }), undefined);
+    expect(t).toMatch(/^5000 files:/);
+    expect(t).toContain("Groups (grp): G0, G1");
+    expect(t).toContain("P0489");
+    expect(t).not.toContain("P0490");
+    expect(t.split("\n").at(-1)).toBe("4500 more; use filter to narrow the list.");
+  });
 });
 
 describe("health, capture, logs", () => {
@@ -169,7 +182,7 @@ describe("health, capture, logs", () => {
     expect(formatLogList({ roots: [], files: [], truncated: false })).toBe("Log folders:\n  none configured in the agent\n\nNo matching files.");
   });
 
-  it("log text is capped", () => {
+  it("log text is not capped here (the tool's text budget applies)", () => {
     const r = LogReadSchema.parse({
       path: "C:\\a.log",
       sizeBytes: 1,
@@ -182,7 +195,6 @@ describe("health, capture, logs", () => {
     });
     const t = formatLogRead(r);
     expect(t).toMatch(/^C:\\a\.log: bytes 0-1 of 1, encoding windows-1252, modified unknown, truncated: yes\n\n/);
-    expect(t.length).toBeLessThan(301_000);
-    expect(t).toMatch(/cut at 300000 characters\)$/);
+    expect(t).not.toMatch(/cut at/);
   });
 });
