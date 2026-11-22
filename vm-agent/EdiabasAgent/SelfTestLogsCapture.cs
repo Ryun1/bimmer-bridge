@@ -133,11 +133,16 @@ internal static partial class SelfTest
 
             checks.Add(Guard($"{name}: 8.3 short names", () =>
             {
+                // GetShortPathName shortens every component, the temporary folder above the root
+                // included. Only the file name is used short below the root: a short spelling of
+                // the root itself is refused before anything is opened (the path must be spelt
+                // under a root; LogServiceTests.Read_ShortNameOfTheRoot_RefusedWithoutOpening).
                 var shortSecret = ShortName(secret);
-                var shortInside = ShortName(inside);
-                if (shortSecret is null || shortInside is null
+                var shortInsideFull = ShortName(inside);
+                var shortFile = shortInsideFull is null ? null : Path.GetFileName(shortInsideFull);
+                if (shortSecret is null || shortFile is null
                     || string.Equals(shortSecret, secret, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(shortInside, inside, StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(shortFile, Path.GetFileName(inside), StringComparison.OrdinalIgnoreCase))
                 {
                     return new Check($"{name}: 8.3 short names", Outcome.Skip, "this volume does not make 8.3 names");
                 }
@@ -148,10 +153,28 @@ internal static partial class SelfTest
                     return outsideCheck;
                 }
 
+                // A short file name below the root, spelt in full: read.
+                var shortInside = Path.Combine(root, shortFile);
                 var insideCheck = ExpectRead($"{name}: 8.3 short names", logs, shortInside);
-                return insideCheck.Outcome == Outcome.Pass
-                    ? new Check($"{name}: 8.3 short names", Outcome.Pass, $"{shortSecret} refused, {shortInside} read")
-                    : insideCheck;
+                if (insideCheck.Outcome != Outcome.Pass)
+                {
+                    return insideCheck;
+                }
+
+                var detail = $"{shortSecret} refused, {shortInside} read";
+                // The root spelt with a short name (when a folder on its path has one): refused.
+                if (!shortInsideFull!.StartsWith(root + @"\", StringComparison.OrdinalIgnoreCase))
+                {
+                    var rootCheck = ExpectRefused($"{name}: 8.3 short names", logs, shortInsideFull, PathRules.OutsideRoots);
+                    if (rootCheck.Outcome != Outcome.Pass)
+                    {
+                        return rootCheck;
+                    }
+
+                    detail += $", {shortInsideFull} refused (the root spelt short)";
+                }
+
+                return new Check($"{name}: 8.3 short names", Outcome.Pass, detail);
             }));
 
             checks.Add(Guard($"{name}: device names", () =>
