@@ -21,6 +21,11 @@ public sealed class ConfigLoadResult
 
     public AgentConfig? Config { get; }
     public IReadOnlyList<string> Errors { get; }
+
+    /// <summary>Problems that do not stop the agent (an unknown key, a log root that grants
+    /// nothing). Empty when the load failed.</summary>
+    public IReadOnlyList<string> Warnings => Config?.Warnings ?? [];
+
     public bool Ok => Config is not null && Errors.Count == 0;
 
     internal static ConfigLoadResult Success(AgentConfig config) => new(config, []);
@@ -29,8 +34,8 @@ public sealed class ConfigLoadResult
 
 /// <summary>
 /// The agent's configuration (<c>C:\ProgramData\EdiabasBridge\config.json</c>).
-/// Missing properties take the defaults below; unknown properties are ignored;
-/// comments and trailing commas are tolerated.
+/// Missing properties take the defaults below; unknown top-level properties are ignored with a
+/// warning; comments and trailing commas are tolerated.
 /// </summary>
 public sealed class AgentConfig
 {
@@ -62,6 +67,10 @@ public sealed class AgentConfig
 
     public const int MinIdleReleaseSeconds = 5;
     public const int MaxIdleReleaseSeconds = 600;
+
+    /// <summary>Set by <see cref="Parse"/>; logged when the agent starts.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<string> Warnings { get; private set; } = [];
 
     [JsonIgnore]
     public bool IsAutoBind => string.Equals(BindAddress, AutoBind, StringComparison.OrdinalIgnoreCase);
@@ -115,7 +124,67 @@ public sealed class AgentConfig
         }
 
         var errors = config.Validate();
-        return errors.Count == 0 ? ConfigLoadResult.Success(config) : ConfigLoadResult.Failure(errors);
+        if (errors.Count > 0)
+        {
+            return ConfigLoadResult.Failure(errors);
+        }
+
+        config.Warnings = [.. UnknownKeys(json), .. config.LogRootWarnings()];
+        return ConfigLoadResult.Success(config);
+    }
+
+    private static readonly HashSet<string> KnownKeys = new(
+        typeof(AgentConfig).GetProperties()
+            .Where(p => p.CanWrite && p.SetMethod!.IsPublic && !Attribute.IsDefined(p, typeof(JsonIgnoreAttribute)))
+            .Select(p => JsonNamingPolicy.CamelCase.ConvertName(p.Name)),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Top-level keys the agent does not read. A typo ("reviewJobs") would otherwise
+    /// be silent and the setting would keep its default.</summary>
+    private static List<string> UnknownKeys(string json)
+    {
+        var warnings = new List<string>();
+        try
+        {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+            });
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return warnings;
+            }
+
+            foreach (var p in doc.RootElement.EnumerateObject())
+            {
+                if (!KnownKeys.Contains(p.Name))
+                {
+                    warnings.Add($"config: unknown key \"{Printable(p.Name)}\" is ignored (a typo?)");
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // The serializer accepted it; nothing more to say.
+        }
+
+        return warnings;
+    }
+
+    /// <summary>A log root the path rules refuse grants nothing and is shown missing; say so at start.</summary>
+    private List<string> LogRootWarnings()
+    {
+        var warnings = new List<string>();
+        for (var i = 0; i < LogRoots.Count; i++)
+        {
+            if (PathRules.Check(PathRules.TrimRoot(LogRoots[i])) is { } reason)
+            {
+                warnings.Add($"logRoots[{i}]: \"{Printable(LogRoots[i])}\" is not used ({reason}); write a full path such as C:\\EDIABAS\\TRACE");
+            }
+        }
+
+        return warnings;
     }
 
     /// <summary>Returns every validation error; empty when the config is valid.</summary>

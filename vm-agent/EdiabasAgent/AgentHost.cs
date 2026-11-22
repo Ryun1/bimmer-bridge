@@ -36,6 +36,12 @@ internal sealed class AgentHost
 
     public async Task RunAsync(CancellationToken stop)
     {
+        // Config problems that do not stop the agent (an unknown key, an unusable log root).
+        foreach (var warning in _ctx.Config.Warnings)
+        {
+            Log.Warn(warning);
+        }
+
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
         try
