@@ -10,7 +10,7 @@ the car**). They show that the files are in the VM and what the SGBDs declare; n
 files is known to be fitted to this car, and no result has been read. Their descriptions,
 result names and verdicts are in `../job-cookbook.md` ("Battery-drain related jobs").
 
-| File | Runnable (review passed) | Needs review: the bridge refuses them; Ryan decides |
+| File | Runnable (review passed) | Failed the description screen; approved by Ryan on 2026-11-22 (`reviewedJobs` in the VM config), so runnable while that config stands |
 |---|---|---|
 | `CAS` | `STATUS_PA_WUP` | `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP` |
 | `KOMB60` | `STATUS_KLEMMENSPANNUNG`, `STATUS_KLEMMEN`, `STATUS_KL30_H_ZAEHLER` | — |

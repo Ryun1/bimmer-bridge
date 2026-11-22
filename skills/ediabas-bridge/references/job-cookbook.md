@@ -170,6 +170,14 @@ if any, after " — "; tabs in the SGBD's text are shown as one space. "In the j
 the full list showed for the same job. Every job here takes no arguments (`arguments` was
 empty for all of them). Result names are listed as declared, in the SGBD's order.
 
+**Approved by Ryan on 2026-11-22.** All five needs-review jobs below (`CAS`
+`STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
+`MPM_60` `STATUS_AD_WERTE_LESEN`) are listed in `reviewedJobs` in the VM's
+`C:\ProgramData\EdiabasBridge\config.json`, and `ediabas_describe` of each then returned
+review `reviewed`: the bridge now runs them. The approval lives only in that VM config, not in
+the repo; after a fresh install the list is empty and they are refused again until Ryan adds
+them back. The verdicts in the tables below are as first recorded, before the approval.
+
 **Needs review: the bridge will refuse to run these** (`job_needs_review`). Ryan decides;
 the safe default is to skip them. The likely trigger is a screen term from
 `policy/policy.json` `descriptionScreen.terms` found in the recorded description
