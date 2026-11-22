@@ -2,32 +2,23 @@ using EdiabasAgent.Core;
 
 namespace EdiabasAgent.Tests;
 
-/// <summary>A scripted config.json: its last-write time and text.</summary>
+/// <summary>A scripted config.json: its text, or a queue of exceptions to throw first.</summary>
 public sealed class FakeConfigFile : IConfigFile
 {
-    /// <summary>Null: the file is missing.</summary>
-    public DateTime? Stamp { get; set; } = new DateTime(2026, 11, 22, 10, 0, 0, DateTimeKind.Utc);
-
     public string Text { get; set; } = "{}";
 
-    public bool ReadThrows { get; set; }
+    /// <summary>Thrown by the next reads, one per read, before the text is returned again.</summary>
+    public Queue<Exception> Failures { get; } = new();
 
     public int Reads { get; private set; }
-
-    public DateTime? LastWriteUtc() => Stamp;
 
     public string ReadAllText()
     {
         Reads++;
-        return ReadThrows ? throw new IOException("in use") : Text;
+        return Failures.Count > 0 ? throw Failures.Dequeue() : Text;
     }
 
-    /// <summary>A new write: later time, new text.</summary>
-    public void Write(string text)
-    {
-        Stamp = (Stamp ?? new DateTime(2026, 11, 22, 10, 0, 0, DateTimeKind.Utc)).AddSeconds(1);
-        Text = text;
-    }
+    public void Write(string text) => Text = text;
 }
 
 /// <summary>reviewedJobs is re-read when config.json changes; nothing else is.</summary>
@@ -89,7 +80,7 @@ public class ApprovalReloadTests
     }
 
     [Fact]
-    public void Unchanged_File_IsNotReadAgain()
+    public void Unchanged_File_IsReadEveryRequest_AndSaysNothing()
     {
         _file.Text = Config("NVE_65:STATUS_B");
         var svc = Service(State("NVE_65:STATUS_B"));
@@ -97,8 +88,55 @@ public class ApprovalReloadTests
         Assert.True(RunB(svc).Ok);
         Assert.True(RunB(svc).Ok);
 
-        Assert.Equal(1, _file.Reads); // the first request, to be sure nothing changed since start-up
+        Assert.Equal(3, _file.Reads);
         Assert.Empty(ReReads); // same list: nothing to say
+    }
+
+    [Fact]
+    public void Refresh_ReadFailsThenSucceeds_RemovalApplies()
+    {
+        _file.Text = Config();
+        var state = State("NVE_65:STATUS_B");
+        var reloader = new ApprovalReloader(_file, state, _log);
+        _file.Failures.Enqueue(new IOException("in use"));
+
+        reloader.Refresh();
+        reloader.Refresh();
+
+        Assert.Equal(ApprovalKind.None, state.Current.Lookup("NVE_65", "STATUS_B").Kind);
+    }
+
+    [Fact]
+    public void Refresh_SameBadText_WarnsOnce()
+    {
+        _file.Text = "{ not json";
+        var state = State("NVE_65:STATUS_B");
+        var reloader = new ApprovalReloader(_file, state, _log);
+
+        reloader.Refresh();
+        reloader.Refresh();
+        reloader.Refresh();
+
+        Assert.Single(Warnings);
+        Assert.Equal(new ApprovalCounts(0, 1), state.Current.Counts);
+    }
+
+    [Fact]
+    public void Refresh_FileMissing_KeepsListAndWarnsOnce()
+    {
+        var state = State("NVE_65:STATUS_B");
+        var reloader = new ApprovalReloader(_file, state, _log);
+        for (var i = 0; i < 3; i++)
+        {
+            _file.Failures.Enqueue(new FileNotFoundException("gone"));
+        }
+
+        reloader.Refresh();
+        reloader.Refresh();
+        reloader.Refresh();
+
+        Assert.Single(Warnings);
+        Assert.Equal(new ApprovalCounts(0, 1), state.Current.Counts);
     }
 
     [Theory]
@@ -144,18 +182,18 @@ public class ApprovalReloadTests
         _file.Text = Config("NVE_65:STATUS_B");
         var svc = Service(State("NVE_65:STATUS_B"));
 
-        _file.Stamp = null;
+        _file.Failures.Enqueue(new FileNotFoundException("gone"));
+        _file.Failures.Enqueue(new FileNotFoundException("gone"));
         Assert.True(RunB(svc).Ok);
         Assert.True(RunB(svc).Ok);
         Assert.Single(Warnings);
 
-        _file.Write(Config());
-        _file.ReadThrows = true;
+        _file.Failures.Enqueue(new IOException("in use"));
+        _file.Failures.Enqueue(new IOException("in use"));
         Assert.True(RunB(svc).Ok);
         Assert.True(RunB(svc).Ok);
         Assert.Equal(2, Warnings.Count());
 
-        _file.ReadThrows = false;
         _file.Write(Config());
         Assert.Equal("job_needs_review", RunB(svc).Failure!.Error.Code);
     }

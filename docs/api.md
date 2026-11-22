@@ -241,10 +241,9 @@ call. An unpinned approval reads nothing. A pin that no longer holds is `job_nee
   in the agent config."
 - "The description of {JOB} could not be read, so its approval cannot be checked."
 
-**No restart.** At the start of every EDIABAS request the agent checks config.json's last-write
-time. When it has changed, it re-reads `reviewedJobs` and nothing else. A file that is missing,
-unreadable or not a valid config keeps the previous list and logs one warning per change; a
-later good save is picked up.
+**No restart.** At the start of every EDIABAS request the agent re-reads `reviewedJobs`, and
+nothing else, from config.json. A file that is missing, unreadable or not a valid config keeps
+the previous list and logs one warning per distinct problem; a later good read is picked up.
 
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
