@@ -1,3 +1,5 @@
+using System;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 
@@ -21,7 +23,44 @@ namespace EdiabasLib.Native
         public static EdiabasNet Create(string ecuPath, EdInterfaceBase iface, bool noInitForVJobs)
         {
             EnsureEncoding();
+            CheckActivateSupported();
             return CreateCore(ecuPath, iface, noInitForVJobs);
+        }
+
+        /// Binds EdiabasNet's static register table to ed, the instance about to run a job.
+        /// Call it before every ResolveSgbdFile/ExecuteJob when more than one instance exists.
+        /// Upstream is unmodified: this reaches the private RegisterList and
+        /// Register.SetEdiabas (EdiabasNet.cs:1586-1599, 1865, 3224-3227) by reflection.
+        public static void Activate(EdiabasNet ed)
+        {
+            if (ed == null) throw new ArgumentNullException(nameof(ed));
+            var (list, setEdiabas) = RegisterMembers();
+            lock (Gate)
+            {
+                foreach (var reg in (Array)list.GetValue(null))
+                {
+                    setEdiabas.Invoke(reg, new object[] { ed });
+                }
+            }
+        }
+
+        /// Throws, naming what is missing, if Activate cannot work against this EdiabasLib.
+        public static void CheckActivateSupported() => RegisterMembers();
+
+        static (FieldInfo List, MethodInfo SetEdiabas) _registerMembers;
+
+        static (FieldInfo, MethodInfo) RegisterMembers()
+        {
+            var cached = _registerMembers;
+            if (cached.List != null) return cached;
+            var list = typeof(EdiabasNet).GetField("RegisterList", BindingFlags.NonPublic | BindingFlags.Static)
+                ?? throw new InvalidOperationException("EdiabasNet.RegisterList not found; EdiabasFactory.Activate needs it (check the EdiabasLib pin)");
+            var register = list.FieldType.GetElementType()
+                ?? throw new InvalidOperationException("EdiabasNet.RegisterList is not an array; EdiabasFactory.Activate needs it");
+            var set = register.GetMethod("SetEdiabas", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null, new[] { typeof(EdiabasNet) }, null)
+                ?? throw new InvalidOperationException("EdiabasNet.Register.SetEdiabas not found; EdiabasFactory.Activate needs it (check the EdiabasLib pin)");
+            _registerMembers = (list, set);
+            return _registerMembers;
         }
 
         internal static void EnsureEncoding()
