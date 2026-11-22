@@ -6,7 +6,9 @@ real session, scrubbed and reviewed.** Nothing is written by hand: no invented E
 responses, no edited values. If a scenario needs an answer nobody has recorded yet, the
 scenario waits for a session that records it.
 
-There are no scenarios yet. They are recorded in Phase 2 (at the desk) and Phase 6 (at the car).
+Two scenarios exist, recorded at the desk on 2026-11-21: `idle` and `inpa-open` (an overlay on
+`idle`). The others in the table below wait for Phase 6, at the car
+([docs/at-the-car.md](../../docs/at-the-car.md)).
 
 ## Layout
 
@@ -71,7 +73,7 @@ MCP server sends what Claude passed).
    for one Claude Code session), then use the tools as the scenario says. Every agent
    exchange, discovery probes included, lands in the folder as one JSON file; screenshots as
    a `.jpg`/`.png` beside it. The token is never recorded.
-3. Scrub into the fixtures folder:
+3. Scrub into the fixtures folder (Node 24+, which runs the `.ts` file directly):
 
    ```sh
    node dev/scrub-fixtures.ts ~/ediabas-recordings/nve-faults nve-faults --dry-run   # see what it would replace

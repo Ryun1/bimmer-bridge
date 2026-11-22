@@ -1,98 +1,106 @@
 # ediabas-bridge
 
-A read-only bridge that lets Claude look into the Windows VM in UTM where BMW Standard Tools
-(INPA, Tool32, NCS Expert, WinKFP) and EDIABAS talk to the car over the K+DCAN cable. A small
-agent in the VM (`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes
-screenshots and reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds
-the VM, calls the agent and offers those as tools to Claude Code and the Claude desktop app.
-Skills in `skills/` teach Claude how to run a diagnostic session.
+A read-only bridge that lets Claude read BMW diagnostics from Ryan's 2005 E61 550i. The car is
+reached through a Windows VM in UTM on the Mac, where BMW Standard Tools (INPA, Tool32, NCS
+Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. A small agent in the VM
+(`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes screenshots and
+reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds the VM, calls
+the agent and offers ten tools to Claude Code and the Claude desktop app. Skills in `skills/`
+teach Claude how to run a diagnostic session.
 
-**What it will never do.** v1 is read-only. There is no endpoint, tool, flag or setting that
-can click or type in the VM, clear faults, code, flash, run activations or adaptations, send
-raw telegrams or change the EDIABAS configuration. Anything that writes to the car is done by
-Ryan, by hand, in INPA or NCS Expert. See [Safety rules](#safety-rules).
+## What it does and does not do
+
+It does:
+- read fault memory (`FS_LESEN`, `IS_LESEN`) from up to 20 ECUs in one call;
+- run one allowlisted read-only job (identification, `STATUS_` reads) and show its results;
+- list the SGBD files in the VM and describe an SGBD's jobs, saying which are runnable;
+- report ignition and voltage readings;
+- list the windows open in the VM and take a screenshot of one, or of the desktop;
+- list and read trace files under the configured log folders (by default `C:\EDIABAS\TRACE`
+  and `C:\NCSEXPER\WORK`).
+
+It does not, and has no endpoint, tool, flag or setting that could:
+- click, type or send any other input to the VM;
+- clear faults, code, flash, or run activations or adaptations;
+- send raw telegrams or change the EDIABAS configuration;
+- use the cable while a BMW tool is open in the VM (there is no override).
+
+Anything that writes to the car is done by Ryan, by hand, in INPA or NCS Expert. How each of
+these limits is enforced: [docs/safety.md](docs/safety.md).
 
 No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`).
 
-- [PLAN.md](PLAN.md) — build plan v2
-- [docs/api.md](docs/api.md) — the agent's HTTP contract
-- [docs/tools.md](docs/tools.md) — the MCP tools and their error codes
-- [docs/deploy.md](docs/deploy.md) — how files and the token move between the Mac and the VM
-- [mac-mcp/README.md](mac-mcp/README.md) — the MCP server: environment variables, discovery, recording
-- [dev/fixtures/README.md](dev/fixtures/README.md) — the replay agent and recorded fixtures
-- [docs/plan-review.md](docs/plan-review.md) — review of the original plan and why v2 differs
-- [docs/plan-v1-original.md](docs/plan-v1-original.md) — the original plan (ISTA-based)
+## How a request flows
+
+```
+Claude (Claude Code or the desktop app)
+  |  MCP over stdio
+  v
+MCP server on the Mac (mac-mcp)     job policy check, audit line; finds the VM; token from the Keychain
+  |  HTTP on UTM's shared network, port 8765, Bearer token
+  v
+agent in the VM (EdiabasAgent.exe)  source address and token check, job policy check, description
+  |                                 screen, BMW-tool conflict check, audit line
+  v
+EDIABAS (api32.dll)  ->  K+DCAN cable (USB, passed through to the VM by UTM)  ->  car  ->  ECU
+```
+
+A refused job stops on the Mac and never reaches the VM; the agent checks again on its own. One
+EDIABAS request runs at a time. Details: [docs/architecture.md](docs/architecture.md).
+
+## Where to find what
+
+| Doc | What it holds |
+|---|---|
+| this README | status, setup from scratch, updating, uninstalling, troubleshooting, logs, releasing |
+| [docs/architecture.md](docs/architecture.md) | components, the request path, the agent's threads, where the policy runs, logs, trust boundaries |
+| [docs/safety.md](docs/safety.md) | each read-only guarantee and what enforces it; the job policy in plain words; approving one job |
+| [docs/at-the-car.md](docs/at-the-car.md) | checklist for a session at the car (Phase 6) |
+| [docs/development.md](docs/development.md) | building and testing without the car, the replay agent, recording fixtures, policy fixtures |
+| [docs/api.md](docs/api.md) | the agent's HTTP contract, including the exact job policy rules |
+| [docs/tools.md](docs/tools.md) | the ten MCP tools and their error codes |
+| [docs/deploy.md](docs/deploy.md) | how files and the token move between the Mac and the VM (`dev/serve.py`, the pasted lines) |
+| [mac-mcp/README.md](mac-mcp/README.md) | the MCP server: environment variables, finding the VM, token, recording |
+| [vm-agent/README.md](vm-agent/README.md) | the agent: projects, config file, command-line options |
+| [vm-setup/README.md](vm-setup/README.md) | the four PowerShell scripts run in the VM |
+| [policy/README.md](policy/README.md) | the job policy file and its shared test cases |
+| [dev/README.md](dev/README.md) | the deploy server, the replay agent and the fixture scrubber |
+| [dev/fixtures/README.md](dev/fixtures/README.md) | recorded fixtures: layout, recording and scrubbing a scenario |
+| [skills/README.md](skills/README.md) | the two skills, their evals and how to install them |
+| [docs/bmw-e61-skill-addition.md](docs/bmw-e61-skill-addition.md) | a section to paste into the separate `bmw-e61` skill |
+| [docs/phase-results.md](docs/phase-results.md) | historical: Phase 0 VM discovery, Phase 1 to 5 acceptance results |
+| [PLAN.md](PLAN.md) | historical: build plan v2 |
+| [docs/plan-review.md](docs/plan-review.md) | historical: review of the original plan and why v2 differs |
+| [docs/plan-v1-original.md](docs/plan-v1-original.md) | historical: the original (ISTA-based) plan |
 
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
+Version 0.2.2 (agent, MCP server and `VERSION`), job policy version 2. The build work is merged
+to `main`.
+
 | Phase | State |
 |---|---|
 | 0 Discovery | done (2026-11-21) |
-| 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, survives a reboot |
-| 2 EDIABAS at the desk | done (2026-11-21): agent 0.2.0 deployed, every desk check passes |
+| 1 Agent skeleton | done (2026-11-21): installed in the VM, self-test passes, came back after a Windows restart |
+| 2 EDIABAS at the desk | done (2026-11-21, agent 0.2.0): every desk check passes. Agent 0.2.2 deployed and used at the desk on 2026-11-22 |
 | 3 Mac MCP | done: all ten tools. Checked in Claude Code and in the desktop app (`ediabas_describe` on `NVE_65`, 2026-11-21) |
 | 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
 | 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
 | 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
-| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 pass with the skills. Evals 01, 03, 04, 06 and the reference files wait for recordings from Phase 6 |
-| 8 Hardening | this README, `VERSION`, `release.sh` |
+| 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 pass with the skills; skill references filled from the desk recordings of 2026-11-21/22 |
+| 8 Hardening | built: `VERSION`, `release.sh`, the docs. The plan's acceptance check (reinstalling from this README alone) has not been run; updates from the README's lines have |
 
-### Phase 2, 4 and 5 results (2026-11-21, no car)
+Open:
+- **Phase 6 at the car**, Ryan's: [docs/at-the-car.md](docs/at-the-car.md).
+- **Evals 01, 03, 04 and 06** wait for the `nve-faults`, `needs-review` and `battery` fixtures,
+  recorded at the car ([dev/fixtures/README.md](dev/fixtures/README.md)).
+- **Skill reference entries that need car recordings**: the vehicle-status field names, the
+  engine SGBD, and the SGBDs that can only be described with the control unit answering.
+- **Restart checks on 0.2.x**: that the agent comes back after the VM reboots, and that the
+  bridge works again after the Mac sleeps. The reboot check passed on the Phase 1 agent only.
 
-| Check | Result |
-|---|---|
-| a refused job (`FS_LOESCHEN`, `TMODE SENDE_TELEGRAMM`) | 403 `job_not_allowed` with the rule; EDIABAS never started |
-| `TMODE INFO`, `TMODE _JOBS`, cable unplugged | 200. First call after boot about 10 s, later calls under 0.5 s |
-| `describe TMODE` | 25 jobs with verdicts: `INFO` and four `LESE_*` reads runnable, every set, send and raw-telegram job refused |
-| batch of allowed + refused + unknown ECU | each item answered on its own, one init/end cycle |
-| with INPA open | every `/ediabas/*` call 409 `cable_in_use` naming `INPALOAD`; EDIABAS not touched |
-| `describe NVE_65`, cable not in the VM | 502 `cable_not_found` (EDIABAS error 28, `IFH-0018`): a real SGBD does not load without the interface |
-| idle release | agent unloads `api32.dll` 20 s after the last call, `ebas32.exe` is then gone from the process list, and the next call works |
-| `describe NVE_65`, cable in the VM but not in the car | 200: 59 jobs, 22 runnable (15 by name, 7 `STATUS_` reads that passed the description screen), 37 refused |
-| `--selftest` | PASS, 19 of 19: config, policy, token ACL, bind address, firewall rule, listener, all 20 DLL exports, log-path cases (`..`, junction, symlink, alternate data stream, 8.3 names, device names, hard link), desktop capture |
-| screenshot of the desktop and of one window | readable image; bad size 400, unknown window 404 |
-| screenshot with INPA open | the INPA loader menu, readable |
-| screenshot with the VM locked | 503 `desktop_unavailable` |
-| logs | both roots listed newest first; `ABLAUF.TRC` read; `..`, other folders, the agent's own token file, alternate data streams, device names, `\\?\` paths and forward slashes all refused |
-| the same through the MCP tools | `vm_health`, `ediabas_list_ecus`, `ediabas_describe`, `ediabas_job`, refusals and `cable_in_use` messages all correct |
-
-Found and fixed during these checks:
-- `ebas32.exe` (EDIABAS's host process) stayed running after `apiEnd` for as long as the agent
-  had `api32.dll` loaded. The agent now unloads the DLL after `ediabasIdleReleaseSeconds`
-  (default 20) without an EDIABAS request.
-- EDIABAS error 28 (`IFH-0018`) is now reported as `cable_not_found` with what to do.
-- A batch could run longer than the Mac's 75 s timeout; every job is now bounded by the
-  request's time budget.
-- The Mac server no longer sends the Keychain token to an address set with `EDIABAS_AGENT_URL`.
-
-### Phase 1 and 3 acceptance results (2026-11-21)
-
-| Check | Result |
-|---|---|
-| `/health` from the Mac with the token | 200 |
-| without a token, or with a wrong one | 401 |
-| unknown path / wrong method (with token) | 404 / 405 |
-| listeners in the VM (`netstat`) | one, on `192.168.64.3:8765` |
-| `EdiabasAgent.exe --selftest` | PASS, 5 of 5 (config, token ACL, bind address, firewall rule, listener) |
-| `update.ps1` | replaced the exe and restarted the agent |
-| Windows restart | agent back about 30 s after going down, in session 1 |
-| token hand-off | installer stored it in the Mac's Keychain; nobody copied it |
-| MCP tools against the live VM | `vm_health` and `vm_list_windows` both correct |
-| fresh Claude Code session ("is the VM up?") | used the tools unprompted and answered correctly |
-| Claude desktop app ("is the BMW VM up?") | called `vm_health` and answered correctly, after `node` was allowed under macOS Local Network |
-
-Found and fixed during acceptance:
-- The self-test rejected the range form (`192.168.64.1-192.168.64.1`) in which Windows reports
-  a single-address firewall rule.
-- **macOS Local Network permission.** The desktop app starts the server in a way that makes
-  macOS treat `node` as its own app, so the first call shows "node would like to find devices
-  on your local network" and fails until it is allowed (System Settings > Privacy & Security >
-  Local Network). The server used to report this as "VM not running"; it now reports
-  `local_network_blocked` with the fix, and logs the underlying failure to stderr. The
-  permission is tied to the `node` binary's path, so a Homebrew upgrade of node can prompt again.
-- With only the server's built-in notes (no skill), the desktop app offered screenshots and
-  car reads that are not built. The notes and the health text now say what does not exist yet.
+The acceptance results of Phases 0 to 5 are in [docs/phase-results.md](docs/phase-results.md).
 <!-- /STATUS -->
 
 ## Layout
@@ -102,10 +110,11 @@ Found and fixed during acceptance:
 | `vm-agent/` | the Windows agent (C#, .NET 10, win-x86). `vm-agent/build.sh` writes `release/EdiabasAgent.zip` |
 | `vm-setup/` | `discover.ps1`, `install.ps1`, `update.ps1`, `uninstall.ps1`, run in the VM |
 | `mac-mcp/` | the local MCP server Claude starts (TypeScript); built to `mac-mcp/dist/index.js` |
-| `policy/` | `policy.json`, the job policy both sides load, and `policy-cases.json`, its test cases |
+| `policy/` | `policy.json`, the job policy both sides load, and its shared test cases `policy-cases.json` and `policy-parse-cases.json` |
 | `dev/serve.py` | Mac-side server that hands the scripts and the agent to the VM and takes the token back |
 | `dev/replay-agent.ts` | a stand-in agent that answers from recorded fixtures (no VM, no car) |
-| `skills/` | Claude skills for using the tools; `skills/install.sh` installs them |
+| `dev/scrub-fixtures.ts` | copies a raw recording into `dev/fixtures/` with identifiers removed |
+| `skills/` | Claude skills for using the tools, and their evals; `skills/install.sh` installs them |
 | `release.sh` | checks versions, runs every test suite, builds the agent zip and the MCP server |
 
 ---
@@ -120,7 +129,8 @@ root unless it says otherwise.
 ### 1. Prerequisites on the Mac
 
 ```sh
-brew install node          # Node 20 or later; also gives the stable path /opt/homebrew/bin/node
+brew install node          # Node 24 or later (the MCP server needs 20+, the dev tools 24+);
+                           # also gives the stable path /opt/homebrew/bin/node
 brew install dotnet@10     # .NET 10 SDK, to build and test the agent
 python3 --version          # Python 3, for dev/serve.py (the macOS one is enough)
 ```
@@ -211,8 +221,11 @@ Optional check in the VM (elevated Windows PowerShell), with the agent running:
 Get-Content 'C:\ProgramData\EdiabasBridge\logs\selftest.txt'
 ```
 
-It checks the config, the token's permissions, the bind address, the firewall rule and the
-listener, with no network traffic and no cable, and writes the same report to `selftest.txt`.
+It checks the config, the job policy built into the agent, the token file's permissions, the
+bind address, the firewall rule, the listener, that `api32.dll` loads and has every export the
+agent uses (nothing in it is called; skipped while a BMW tool or the running agent has it
+loaded), the log-path refusals and a desktop capture. It sends no network traffic and does not
+use the cable, and writes the same report to `selftest.txt`.
 
 ### 4. Register the MCP server
 
@@ -347,7 +360,10 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | **ediabas_error** or **job_timeout** | EDIABAS reached the interface but the ECU did not answer: ignition off, cable not in the car, or that ECU is not fitted | Check `ediabas_vehicle_status`, then decide before trying again |
 | **ediabas_error** 16 `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD, after the cable was unplugged from the Mac and plugged back in | UTM does not hand a replugged cable back to the VM by itself | Tick the cable for the VM in UTM's USB menu, then ask again |
 | The first EDIABAS call after a pause takes about 10 s | Expected. The agent unloads EDIABAS after about 20 s with no EDIABAS request, so that nothing holds the interface open; the next call loads it again | Nothing. The Mac waits up to 75 s for EDIABAS calls |
-| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | Ryan decides. To allow that one job, add `"ECU:JOB"` (upper case) to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM, then restart Windows (the agent reads its config at start-up). Never make this routine. Approved so far (2026-11-22, in the VM's config only): `CAS:STATUS_WAKEUP_HISTORY`, `CAS:STATUS_KL15_ABSCHALTUNG`, `CAS:STATUS_KLEMMENVERHINDERER`, `CAS:STATUS_WUP`, `MPM_60:STATUS_AD_WERTE_LESEN` |
+| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | Ryan decides. To allow that one job, add `"ECU:JOB"` (upper case) to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM, then restart Windows (the agent reads its config at start-up); steps in [docs/safety.md](docs/safety.md#approving-one-job). Never make this routine. Approved so far (2026-11-22, in the VM's config only): `CAS:STATUS_WAKEUP_HISTORY`, `CAS:STATUS_KL15_ABSCHALTUNG`, `CAS:STATUS_KLEMMENVERHINDERER`, `CAS:STATUS_WUP`, `MPM_60:STATUS_AD_WERTE_LESEN` |
+| **ediabas_unavailable**, or `vm_health` says "EDIABAS: STUCK" | A job did not stop after `apiBreak`; the agent then leaves EDIABAS alone until it restarts (`/health` `ediabas.stuck`). The same code also means `api32.dll` is missing or EDIABAS would not start | Restart Windows in the VM, which restarts the agent. If `vm_health` says "EDIABAS DLL: NOT found", check `ediabasDll` in the VM's `config.json` |
+| **not_run** | The agent did not start the job, or stopped it: the request's time budget ran out, a BMW tool was opened during the request, an earlier job did not stop, or the request was abandoned. The message says which | Act on the message (close the tool, describe with a `filter`, ...). Do not retry in a loop |
+| **agent_not_answering** after a call that runs an EDIABAS job, saying the job may have run | The connection broke or timed out after the request may have reached the agent. Such requests are never sent a second time | Call `vm_health` before asking again |
 | **job_not_allowed** | The job policy refused the job by name | By design. Do not look for another job or tool that does the same; writes are done by hand in INPA or NCS Expert |
 | **desktop_unavailable** (screenshots) | Windows is locked, showing a secure desktop (for example a UAC prompt), or nobody is logged in | Log in to or unlock Windows. The installer does not change the screen lock |
 | **window_minimized** | The window asked for is minimised; the agent never restores windows | Restore it in the VM, then ask again |
@@ -359,6 +375,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | `iwr` gets `403 Forbidden` (`only the VM's address is served`) | `serve.py` took a different address for the VM (an old DHCP lease) | Restart it with `python3 dev/serve.py --client <VM address>` (`ipconfig` in the VM shows it) |
 | Install prints `Could not send the token to the Mac (HTTP 403)` and a `security add-generic-password ...` command | `serve.py` was started without `--accept-token` | Either run the printed `security` command once on the Mac (it contains the token: do not paste it anywhere else), or restart `serve.py --accept-token` and run the Install line again |
 | Install prints `The agent did not answer within 20 s` | The agent could not start or bind | Read `agent.log` in the VM, and run the `--selftest` check from [step 3](#3-install-the-agent-in-the-vm) |
+| **agent_not_answering** after `config.json` was edited and the agent restarted | The config is invalid (for example `maxJobTimeoutSeconds` above 60, or `jobTimeoutSeconds` above it). The agent does not exit: it logs the problem and re-reads the config and token every 30 s | Read `agent.log` in the VM, fix `config.json`; the agent starts within 30 s |
 | `serve.py` says `no UTM shared-network interface (bridge1xx) ... is up` | The VM is not running, so the Mac has no bridge address to bind | Start the VM, then `serve.py` |
 | `serve.py` says `no DHCP lease for the VM's MAC` | The VM has not taken an address yet, or `EDIABAS_VM_MAC` is not its MAC | Start the VM and log in, or pass `--client <VM address>` |
 | A tool you expect (screenshots, logs, EDIABAS) is not offered, after an update | Claude is still running the old MCP server | Quit and reopen the desktop app; start a new Claude Code session |
@@ -374,30 +391,21 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | Mac | `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log` | the MCP server's stderr when the desktop app runs it (discovery, failed probes; never the token) |
 | Mac | the terminal running `serve.py` | one line per request it served, including `PUT /token` |
 
+`agent.log` and `audit.log` in the VM each roll over to a `.1` file at 5 MB (one old file is
+kept). What each audit line holds: [docs/architecture.md](docs/architecture.md#logs-and-audit).
 In Claude Code, `/mcp` shows whether the server is connected.
 
 ---
 
 ## Safety rules
 
-The ten rules of [PLAN.md section 2](PLAN.md#2-hard-safety-rules-non-negotiable), with where
-each is enforced. They are enforced in code, not only in tool descriptions or skills. Check any
-change against this list. **Anything that runs against the car is Ryan's, at the car**; Claude
-Code may run only offline jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is
-unplugged.
+The ten hard rules of [PLAN.md section 2](PLAN.md#2-hard-safety-rules-non-negotiable) are
+enforced in code on both sides, not only in tool descriptions or skills. Which code enforces
+each one, how the job policy decides, and how to approve a single job are in
+[docs/safety.md](docs/safety.md). Check any change against that list.
 
-| # | Rule | Enforced in |
-|---|---|---|
-| 1 | No input into the VM: no click, keystroke, mouse or clipboard | There is no such route: `vm-agent/EdiabasAgent/Endpoints.cs` (the route table). Capture never restores, focuses, moves or resizes a window (`vm-agent/EdiabasAgent/Capture/`). The Mac server registers only read-only tools (`mac-mcp/src/server.ts`) |
-| 2 | No writes to the car in v1: no clearing, coding, programming, activations or adaptations | No endpoint for them (`Endpoints.cs`); the job policy (rule 3) refuses them by name |
-| 3 | EDIABAS is default-deny | `policy/policy.json`, applied by `vm-agent/EdiabasAgent.Core/JobPolicy.cs` (plus the description screen in `CommentScreen.cs`) and by `mac-mcp/src/policy.ts` before anything leaves the Mac. Both test suites run every case in `policy/policy-cases.json`; a policy change without a case change is a bug |
-| 4 | One user of the cable at a time; no override | `vm-agent/EdiabasAgent/Proc/ConflictCheck.cs` and `vm-agent/EdiabasAgent.Core/ConflictMatcher.cs`, run before every EDIABAS call in `EdiabasService.cs`; the process list is `conflictProcesses` in the VM's `config.json` |
-| 5 | Release the interface when idle | One `apiInit` … `apiEnd` per request in `vm-agent/EdiabasAgent.Core/EdiabasService.cs`; the runner in `vm-agent/EdiabasAgent/Ediabas/` unloads EDIABAS after about 20 s idle |
-| 6 | Network exposure: bind to the shared-network address only, firewall to the Mac only, source-address check, Bearer token compared in constant time, token in the Keychain on the Mac | Bind: `vm-agent/EdiabasAgent.Core/BindAddressSelector.cs`. Firewall rule: `vm-setup/install.ps1`. Source check: `vm-agent/EdiabasAgent/Middleware.cs`. Token: `vm-agent/EdiabasAgent.Core/TokenAuth.cs`. Mac: `mac-mcp/src/token.ts` (Keychain) and `mac-mcp/src/vmAddress.ts` (only on-link addresses are contacted). `--selftest` checks bind, firewall and token permissions in the VM |
-| 7 | Read-only file access under configured roots; the agent writes only its own logs | `vm-agent/EdiabasAgent.Core/PathRules.cs`, `LogService.cs` and `vm-agent/EdiabasAgent/Logs/LogAccess.cs`. Folder and token permissions: `vm-setup/install.ps1` |
-| 8 | Never change the EDIABAS configuration: no edits to `EDIABAS.INI` or `obd.ini`, no `apiSetConfig` | `vm-agent/EdiabasAgent/Ediabas/Api32.cs` does not declare `apiSetConfig`; nothing in the agent writes those files |
-| 9 | Audit trail on both sides | VM: `vm-agent/EdiabasAgent/Audit/AuditLog.cs` (format in `vm-agent/EdiabasAgent.Core/AuditLine.cs`). Mac: `mac-mcp/src/audit.ts` |
-| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](PLAN.md#12-working-agreements-for-claude-code)), repeated in the skills. Ryan runs everything at the car |
+**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only offline
+jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is unplugged.
 
 ---
 
@@ -439,47 +447,5 @@ To exercise the MCP server and the skills with no VM and no car, use the replay 
 [dev/fixtures/README.md](dev/fixtures/README.md).
 
 `serve.py` also prints a **Discovery** line: it runs `vm-setup/discover.ps1`, which only reads,
-and uploads its report into `discovery/` (git-ignored). It was used once for Phase 0, below.
-
----
-
-## Phase 0 findings (VM discovery, 2026-11-21)
-
-Facts the later phases build on. Source: `discover.ps1` run in the VM.
-
-| Item | Finding |
-|---|---|
-| Windows | Windows 11 Home 24H2 (build 26100), ARM64, 4 cores, 4 GB |
-| User | `ryan`, an administrator. **UAC is switched off** (`EnableLUA = 0`), so every process, including the agent, runs elevated whatever run level the task asks for |
-| PowerShell | Windows PowerShell 5.1 only; no PowerShell 7, no .NET runtime (the agent is self-contained) |
-| Network | one adapter, `192.168.64.3/24`, gateway `192.168.64.1`, category Public |
-| ISTA | **not installed** (no `ISTAGUI.exe`, no `C:\Rheingold`, no `C:\ProgramData\BMW`) |
-| EDIABAS | 7.3.0 in `C:\EDIABAS`. `Bin\api32.dll` is 32-bit x86. `Bin\api64.dll` also exists. Config in `Bin\EDIABAS.INI` |
-| `Api.h` | present at `C:\EDIABAS\Api\WIN32\Api.h`; a copy is in `discovery/` (not committed). It is the source of truth for Phase 2's P/Invoke |
-| EDIABAS host process | `C:\EDIABAS\Bin\ebas32.exe` exists. Phase 2 must check whether it stays running after `apiEnd` |
-| EDIABAS settings | `Interface = STD:OBD`, `EcuPath = C:\EDIABAS\ECU`, `TracePath = C:\EDIABAS\TRACE`, `Simulation = 0`, **`ApiTrace = 0` and `IfhTrace = 0`** (no traces are being written) |
-| `obd.ini` | `Port=Com1`, `Hardware=USB`, `RETRY=ON`, no `UBATT` line |
-| Cable | **no COM port present** at discovery time (cable not passed through to the VM) |
-| SGBD files | 1,251 `.prg` and 353 `.grp` in `C:\EDIABAS\ECU`. `TMODE`, `UTILITY`, `NVE_65`, `N62_TUE`, `ME9N62_2` and `D_MOTOR` are all present |
-| INPA | 5.0.6, `C:\EC-APPS\INPA\BIN\INPALOAD.exe` |
-| Tool32 | 4.0.3, `C:\EDIABAS\Bin\Tool32.exe` |
-| NCS Expert | 4.0.1, `C:\NCSEXPER\BIN\NCSEXPER.exe` |
-| WinKFP | 5.3.1, `C:\EC-APPS\NFS\BIN\winkfpt.exe` |
-| NCS Dummy | `C:\NCS Dummy\NcsDummy.exe` (does not use the cable) |
-| BMW Coding Tool | `C:\BMW Coding Tool v250\BMW Coding Tool.exe` |
-| Shortcuts | none is flagged "run as administrator" (moot with UAC off) |
-| Desktop zip | `VRRTuning_2021_BMWTOOLPACK.zip`, the installer pack the tools came from |
-| Trace folders | `C:\EDIABAS\TRACE` holds one empty file; `C:\NCSEXPER\WORK` has no module trace yet |
-| Guest agent | QEMU guest agent and SPICE tools are running, so `utmctl ip-address` works |
-| Power | sleep after 15 min on AC (the installer sets this to never); display off after 5 min; no screen-lock timeout configured |
-
-### What this changes
-
-- **Elevation:** the plan's "not elevated by default" cannot hold on this VM while UAC is off.
-  The agent's folder permissions therefore don't constrain it. This is a property of the VM,
-  not something the bridge should change.
-- **Conflict list:** `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT` and `BMW Coding Tool` are all
-  confirmed process names, and match the installed config.
-- **Logs (Phase 5):** with EDIABAS tracing off there is little to read. Turning it on means
-  editing `EDIABAS.INI`, which the safety rules forbid the bridge to do; it would be Ryan's choice.
-- **Phase 2 desk test:** `TMODE.PRG` is present, so the no-cable test is available.
+and uploads its report into `discovery/` (git-ignored). It was used once, for Phase 0
+([docs/phase-results.md](docs/phase-results.md)).

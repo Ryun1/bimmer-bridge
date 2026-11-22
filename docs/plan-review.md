@@ -1,5 +1,7 @@
 # Plan review — 2026-11-21
 
+> Historical record: the review of the original plan, 2026-11-21. For the current state, see the [README](../README.md).
+
 > **Status:** adopted. [PLAN.md](../PLAN.md) v2 incorporates this review, with the
 > recommended option taken for each decision at the end. See the addendum at the bottom for
 > what changed after the review was written. This review refers to the

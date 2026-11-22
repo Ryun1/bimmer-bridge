@@ -1,5 +1,7 @@
 # ista-bridge — build plan
 
+> Historical record: the original, ISTA-based plan, replaced by [PLAN.md](../PLAN.md). For the current state, see the [README](../README.md).
+
 **Audience:** Claude Code, running on Ryan's Mac.
 **Goal:** let Claude (in the Claude desktop app and in cloud sessions linked to this Mac) see into the Windows VM running in UTM. Claude should be able to read ISTA's screen as text, take screenshots of ISTA, read ISTA/EDIABAS logs and run **read-only** EDIABAS diagnostic jobs against Ryan's car.
 

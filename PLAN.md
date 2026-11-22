@@ -1,5 +1,7 @@
 # ediabas-bridge — build plan v2
 
+> Historical record: the build plan as written before and during the build. For the current state, see the [README](README.md).
+
 **Audience:** Claude Code, running natively on Ryan's Mac.
 **Goal:** let Claude (Claude Code, the Claude desktop app, and cloud sessions linked to this
 Mac) see into the Windows VM in UTM that runs BMW Standard Tools. Claude should be able to
