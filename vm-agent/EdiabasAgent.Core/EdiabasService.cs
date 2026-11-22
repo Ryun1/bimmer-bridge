@@ -513,32 +513,9 @@ public sealed class EdiabasService
             return new ItemRun(new BatchItem(false, null, initFailure.Error), ecu, job, null, initFailure);
         }
 
-        if (verdict.Screen && !_screen.IsReviewed(verdict.Ecu!, verdict.Job!))
+        if (verdict.Screen && ScreenJob(session, verdict.Ecu!, verdict.Job!, request.Args, timeout, ct) is { } screenFailure)
         {
-            var d = ReadDescription(session, verdict.Ecu!, verdict.Job!, timeout, ct);
-            if (!d.Ok)
-            {
-                return Fail(d.Failure!);
-            }
-
-            var description = NullIfBlank(d.Value!.Text);
-            var screened = _screen.Screen(description);
-            if (!screened.Passed)
-            {
-                return Fail(
-                    ApiFailure.Of(
-                        ApiErrors.JobNeedsReview,
-                        description is null
-                            ? $"{verdict.Job} has no description, so it cannot be shown to be a read. Ryan can approve it in the agent config."
-                            : $"The description of {verdict.Job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config.",
-                        new JobReviewDetails(verdict.Ecu!, verdict.Job!, description, screened.Matched)),
-                    RequestAudit.ScreenRule);
-            }
-
-            if (!string.IsNullOrEmpty(request.Args) && ScreenArguments(session, verdict.Ecu!, verdict.Job!, timeout, ct) is { } argFailure)
-            {
-                return Fail(argFailure, RequestAudit.ScreenRule);
-            }
+            return Fail(screenFailure, screenFailure.Error.Code == ApiErrors.JobNeedsReview ? RequestAudit.ScreenRule : null);
         }
 
         var run = Execute(session, verdict.Ecu!, verdict.Job!, request.Args ?? "", request.Results ?? "", timeout, ct);
@@ -550,6 +527,72 @@ public sealed class EdiabasService
         var read = run.Value!;
         var result = new JobResult(verdict.Ecu!, verdict.Job!, read.Variant, read.JobStatus, read.SystemResults, read.Sets, _clock.ElapsedMs - itemStart);
         return new ItemRun(new BatchItem(true, result, null), ecu, job, null, null);
+    }
+
+    /// <summary>
+    /// The screen for a job allowed only by the name pattern. Null when the job may run. An
+    /// unpinned approval skips it without reading anything. Otherwise the description is read;
+    /// a pinned approval then runs the job only when the description still hashes to the pin,
+    /// and an unapproved job goes through the description and argument screens. A failure that
+    /// is about the request (time, cancel, a BMW tool) keeps its own code.
+    /// </summary>
+    private ApiFailure? ScreenJob(Session session, string ecu, string job, string? args, int timeout, CancellationToken ct)
+    {
+        var approval = _screen.Approval(ecu, job);
+        if (approval.Kind == ApprovalKind.Unpinned)
+        {
+            return null;
+        }
+
+        var d = ReadDescription(session, ecu, job, timeout, ct);
+        if (approval.Kind == ApprovalKind.Pinned)
+        {
+            return CheckPin(approval, d, ecu, job);
+        }
+
+        if (!d.Ok)
+        {
+            return d.Failure!;
+        }
+
+        var description = NullIfBlank(d.Value!.Text);
+        var screened = _screen.Screen(description);
+        if (!screened.Passed)
+        {
+            return ApiFailure.Of(
+                ApiErrors.JobNeedsReview,
+                description is null
+                    ? $"{job} has no description, so it cannot be shown to be a read. Ryan can approve it in the agent config."
+                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. Ryan can approve it in the agent config.",
+                new JobReviewDetails(ecu, job, description, screened.Matched));
+        }
+
+        return string.IsNullOrEmpty(args) ? null : ScreenArguments(session, ecu, job, timeout, ct);
+    }
+
+    /// <summary>
+    /// A pinned approval holds only for the description Ryan read: one that changed, is empty or
+    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips both screens.
+    /// </summary>
+    private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
+    {
+        if (!read.Ok && read.Failure!.Error.Code != ApiErrors.EdiabasError)
+        {
+            return read.Failure;
+        }
+
+        var description = read.Ok ? NullIfBlank(read.Value!.Text) : null;
+        if (approval.Matches(description))
+        {
+            return null;
+        }
+
+        var message = description is not null
+            ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). Ryan can approve it again in the agent config."
+            : read.Ok
+                ? $"{job} has no description now, so its approval cannot be checked. Ryan can approve it again in the agent config."
+                : $"The description of {job} could not be read, so its approval cannot be checked.";
+        return ApiFailure.Of(ApiErrors.JobNeedsReview, message, new JobReviewDetails(ecu, job, description, []));
     }
 
     /// <summary>
@@ -862,9 +905,22 @@ public sealed class EdiabasService
             return new JobVerdict(v.Allowed, v.Rule, Review.NotRequired);
         }
 
-        if (_screen.IsReviewed(v.Ecu!, v.Job!))
+        // The same decision a run would make (ScreenJob).
+        var approval = _screen.Approval(v.Ecu!, v.Job!);
+        if (approval.Kind == ApprovalKind.Unpinned)
         {
             return new JobVerdict(true, v.Rule, Review.Reviewed);
+        }
+
+        if (approval.Kind == ApprovalKind.Pinned)
+        {
+            var pinned = fetch switch
+            {
+                DescriptionFetch.Skipped => Review.NotChecked,
+                DescriptionFetch.Read when approval.Matches(comment) => Review.Reviewed,
+                _ => Review.NeedsReview,
+            };
+            return new JobVerdict(true, v.Rule, pinned);
         }
 
         var review = fetch switch

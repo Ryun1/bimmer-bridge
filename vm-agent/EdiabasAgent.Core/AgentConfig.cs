@@ -216,6 +216,7 @@ public sealed class AgentConfig
         RequireList(errors, "logRoots", LogRoots, allowBlankEntries: false);
         RequireList(errors, "conflictProcesses", ConflictProcesses, allowBlankEntries: false);
         RequireList(errors, "reviewedJobs", ReviewedJobs, allowBlankEntries: false);
+        ValidateReviewedJobs(errors);
 
         if (VoltageSources is null)
         {
@@ -258,6 +259,25 @@ public sealed class AgentConfig
         }
 
         return errors;
+    }
+
+    /// <summary>A pin that does not parse must not quietly become a name-only approval, or approve nothing
+    /// without a word: either way Ryan should hear about it.</summary>
+    private void ValidateReviewedJobs(List<string> errors)
+    {
+        if (ReviewedJobs is null)
+        {
+            return;
+        }
+
+        for (var i = 0; i < ReviewedJobs.Count; i++)
+        {
+            var entry = ReviewedJobs[i];
+            if (!string.IsNullOrWhiteSpace(entry) && !ApprovalList.TryParseEntry(entry, out _, out _))
+            {
+                errors.Add($"reviewedJobs[{i}]: must be \"ECU:JOB\" or \"ECU:JOB@\" followed by {ApprovalList.HashLength} lower-case hex digits (got \"{Printable(entry)}\")");
+            }
+        }
     }
 
     private static void RequireNonEmpty(List<string> errors, string name, string? value)
