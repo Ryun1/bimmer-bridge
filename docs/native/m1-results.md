@@ -88,8 +88,11 @@ car's own modules**:
 
 This is the design's open risk 5 happening for real: the gate fails these reads safely, but
 natively they cannot run (on the VM they can). `NVE_65 STATUS_BORDNETZSPANNUNG` is also the
-`voltageSources` example in docs/api.md. Whether to allow 0x30 with "report current state"
-(and which 0x31 routines, if any) is **Ryan's decision**, with its own test case, before M2.
+`voltageSources` example in docs/api.md.
+
+**Decision (Ryan, 2026-11-22): keep the gate strict for now.** The SID list is unchanged; these
+24 reads stay VM-only until revisited. Any later change (0x30 with option 01 only, or named
+0x31 routines) is made with its own test case.
 
 ## 3. Describe for every `.prg` (desk session)
 
@@ -174,8 +177,9 @@ Every difference, explained or fixed:
 
 ## 5. For M2
 
-- **Decide on the gate and 0x30/0x31 reads** (section 2, "The gate against real reads"): 24
-  `STATUS_` reads on NVE_65, CAS and LM_60 are refused natively today.
+- **Gate and 0x30/0x31 reads: strict for now** (Ryan, 2026-11-22). 24 `STATUS_` reads on
+  NVE_65, CAS and LM_60 are refused natively and stay on the VM; M2's comparisons skip them,
+  and a `voltageSources` entry on one of them gives `frame_refused` natively.
 
 - The MCP server's native backend (`EDIABAS_BACKEND=native`) and `bridge_health`, with the
   cable's free/locked state.
