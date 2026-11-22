@@ -157,6 +157,11 @@ mode **Shared Network**), BMW Standard Tools already installed in the VM, and a 
 who is an administrator. Do the steps in order. Every command on the Mac is run from the repo
 root unless it says otherwise.
 
+The defaults are Ryan's VM. If yours is not, set `EDIABAS_VM_MAC` to its MAC address (UTM >
+the VM > Network) and `EDIABAS_VM_NAME` if it is not named `Windows`: `export` them before
+`serve.py`, add `-e EDIABAS_VM_MAC=…` to `claude mcp add`, and add an `"env"` object to the
+desktop app's entry.
+
 ### 1. Prerequisites on the Mac
 
 ```sh
@@ -182,6 +187,19 @@ Install the MCP server's dependencies once (`release.sh` stops if they are missi
 ```
 
 ### 2. Build and test
+
+**From a GitHub release** (no .NET SDK needed): clone the tag, since a "Source code" download
+has no `.git` and `release.sh` stops without one, then use the release's prebuilt agent zip and
+build only the Mac server:
+
+```sh
+git clone --branch v0.3.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
+mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
+shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
+(cd mac-mcp && npm ci && npm run build)
+```
+
+Then continue at step 3. **From source:**
 
 ```sh
 ./release.sh
@@ -301,8 +319,8 @@ skills/install.sh
 It links each skill (`ediabas-bridge`, `bmw-standard-tools`) into `~/.claude/skills/` for
 Claude Code, so edits in the repo take effect at once, and builds `skills/dist/<skill>.zip`.
 It refuses, and leaves alone, anything already in `~/.claude/skills/` under the same name that
-is not its own link. Upload the two zips to claude.ai for the desktop app and cloud sessions
-(the exact upload menu was not recorded when this was written).
+is not its own link. Upload the two zips in claude.ai's Skills settings for the desktop app and
+cloud sessions. A GitHub release has both zips attached.
 
 `docs/bmw-e61-skill-addition.md` is a short section to paste into the separate `bmw-e61`
 skill by hand, so that it hands over to this bridge.
@@ -377,7 +395,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| **vm_not_running**: "The VM does not appear to be running" | The VM is off, or UTM's shared network is not up on the Mac | Start the `Windows` VM in UTM and log in |
+| **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or `EDIABAS_VM_MAC` is not this VM's MAC | Start the `Windows` VM in UTM and log in |
 | **agent_not_answering**: "The VM is up but the agent is not answering" | Nobody is logged in to Windows (the agent starts at log-on), or the agent is not installed or has stopped | Log in to Windows and wait about 30 s. If it persists, read `agent.log` in the VM (see logs below) and re-run the Install line |
 | **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
 | **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install) | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a 401 |
@@ -434,13 +452,15 @@ In Claude Code, `/mcp` shows whether the server is connected.
 
 ## Safety rules
 
-The ten hard rules of [PLAN.md section 2](PLAN.md#2-hard-safety-rules-non-negotiable) are
-enforced in code on both sides, not only in tool descriptions or skills. Which code enforces
+The ten hard rules (listed in [docs/safety.md](docs/safety.md), first written in
+[PLAN.md section 2](PLAN.md#2-hard-safety-rules-non-negotiable), now historical) are enforced in code on both sides, not only in tool descriptions or skills. Which code enforces
 each one, how the job policy decides, and how to approve a single job are in
 [docs/safety.md](docs/safety.md). Check any change against that list.
 
-**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only offline
-jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is unplugged.
+**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only jobs that
+cannot reach a module: the `TMODE` and `UTILITY` info jobs, and `ediabas_describe` (the `_JOBS`
+family), after Ryan confirms the cable is not plugged into the car (it may still be in the VM;
+a real SGBD does not load without it).
 
 ---
 
@@ -473,6 +493,10 @@ jobs (`TMODE`, the `_JOBS` family) after Ryan confirms the cable is unplugged.
    line.
 
 It stops at the first failure and never pushes, tags or deploys anything.
+
+To publish: tag `vX.Y.Z` on the commit `release.sh` built and push the tag, then create a
+GitHub release from it with `release/EdiabasAgent.zip`, `release/EdiabasAgent.zip.sha256` and
+`skills/dist/*.zip` attached and notes from the README's status section.
 
 To run one part by hand:
 

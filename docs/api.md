@@ -156,7 +156,7 @@ a file where an allow name, a deny substring or token, a restricted ECU key or o
 names is not upper-case; an `allow.patterns` entry has a backslash or a non-ASCII character;
 `version` or `maxArgLength` is not written as a plain integer (`3.0` and `3e0` are refused); or
 any text has a lone surrogate. Deny entries are compared as written. The agent then refuses every job
-(`policy_unavailable`) and the Mac every `ediabas_*` tool. Both run
+(`job_not_allowed`, rule `policy_unavailable`) and the Mac every `ediabas_*` tool. Both run
 `policy/policy-parse-cases.json`, which lists policy texts each side must accept or refuse.
 
 Evaluation, in this order. The first rule that decides wins; `rule` is the string returned.

@@ -89,6 +89,7 @@ use …`. Codes (also the audit outcome):
 | `window_not_found`, `window_minimized`, `desktop_unavailable` | agent | screenshots: wrong title, minimised window (Ryan restores it), locked screen, secure desktop or nobody logged in |
 | `capture_busy` | agent | another screenshot is still being taken in the VM; nothing was captured. Try again in a moment |
 | `capture_failed` | agent | the desktop was available but Windows failed to copy the image or read the screen size. Try again once, or capture the desktop instead |
+| `bad_request` | agent | the agent rejected a parameter (for example a bad `grep` pattern in `vm_logs_read`, or a grep over the 5 s limit). Fix the argument; do not retry it unchanged |
 | `path_not_allowed`, `file_not_found` | agent | logs: outside the allowed folders, or no such file |
 
 ## Recording (for fixtures)
