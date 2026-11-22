@@ -197,10 +197,11 @@ skills/install.sh
 ```
 
 It links each skill (`bimmer-bridge`, `bmw-standard-tools`) into `~/.claude/skills/` for
-Claude Code, so edits in the repo take effect at once, and builds `skills/dist/<skill>.zip`.
+Claude Code, so edits in the repo take effect at once, and builds `skills/dist/<skill>.skill`.
 It refuses, and leaves alone, anything already in `~/.claude/skills/` under the same name that
-is not its own link. Upload the two zips in claude.ai's Skills settings for the desktop app and
-cloud sessions. A GitHub release has both zips attached.
+is not its own link. For the desktop app and cloud sessions, upload the two `.skill` files on
+claude.ai (Plugins, then Add); a `.skill` file is a zip, under the extension claude.ai's upload
+accepts. A GitHub release has both attached.
 
 Optional: if you keep a car-specific skill of your own (one that interprets fault codes and
 keeps a fault log), [skills/bmw-e61-skill-addition.md](../skills/bmw-e61-skill-addition.md) is a short
@@ -251,7 +252,9 @@ After a code change, or to install a newer build:
    reopen the desktop app, and start a new Claude Code session. An already-running server keeps
    the old code.
 6. Skills: Claude Code sees changes at once through the links. For claude.ai, run
-   `skills/install.sh` again and upload the new zips.
+   `skills/install.sh` again, then for each changed skill use **Upload new version** in its
+   menu (claude.ai, Plugins) with the new `skills/dist/<skill>.skill`. Do not upload a
+   `SKILL.md` on its own: it replaces all the skill's files and drops its references.
 7. Check with `vm_health`: the Mac server's version and the agent's should both be the new
    one, with no version or policy-version warning.
 
@@ -274,7 +277,8 @@ over. On the Mac:
    moved. The tools are now `mcp__bimmer-bridge__*`, so any permission rules that name
    `mcp__ediabas-bridge__` need the new prefix.
 4. Replace the skill: `rm ~/.claude/skills/ediabas-bridge`, then `skills/install.sh`. On
-   claude.ai, delete the uploaded `ediabas-bridge` skill and upload `skills/dist/bimmer-bridge.zip`.
+   claude.ai, delete the uploaded `ediabas-bridge` skill and upload `skills/dist/bimmer-bridge.skill`
+   (0.6.2 and earlier built `bimmer-bridge.zip`: the same archive, renamed to `.skill`).
 5. Restart Claude and check with `vm_health`.
 
 ## Upgrading to 0.5.0

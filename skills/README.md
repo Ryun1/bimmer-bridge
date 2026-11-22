@@ -5,7 +5,7 @@
 | `bimmer-bridge/` | how to run a diagnostic session with the `vm_*` and `ediabas_*` tools: health check first, short ignition-on time, finding jobs with `ediabas_describe`, what each error means. References hold only names and results confirmed by real sessions, recorded on a 2005 E61 550i: an example for other cars, whose ECUs and jobs differ |
 | `bmw-standard-tools/` | helping the user drive INPA, Tool32, NCS Expert and WinKFP by hand, with their risks; watching mode from screenshots |
 | `evals/` | eight eval scenarios, run against the replay agent with and without the skills. They are written around the E61 the bridge was built on (night vision, its battery drain, its INPA loader screen) |
-| `install.sh` | links each skill into `~/.claude/skills/` and builds `skills/dist/<skill>.zip` for claude.ai |
+| `install.sh` | links each skill into `~/.claude/skills/` and builds `skills/dist/<skill>.skill` (a zip) for claude.ai |
 
 ```sh
 skills/install.sh        # [--dest <dir>] [--no-link] [--no-zip]

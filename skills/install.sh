@@ -3,14 +3,16 @@
 #  - Links each skill directory (one that has a SKILL.md) into the Claude Code skills folder,
 #    so edits in the repo take effect at once. Re-running replaces this repo's own links and
 #    refuses to touch anything else that is already there.
-#  - Builds one zip per skill in skills/dist/ for upload to claude.ai (desktop app and cloud
-#    sessions). The user does the upload.
+#  - Builds one <skill>.skill file per skill in skills/dist/ for upload to claude.ai (desktop
+#    app and cloud sessions): a zip archive under the extension claude.ai's upload accepts.
+#    The user does the upload.
 #
 # Usage: skills/install.sh [--dest <dir>] [--no-zip] [--no-link]
 #   --dest <dir>  where to link the skills (default: ~/.claude/skills)
+#   --no-zip      do not build the .skill files
 set -euo pipefail
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
 
 SKILLS_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 DEST="${HOME}/.claude/skills"
@@ -75,18 +77,19 @@ if [ "$DO_LINK" -eq 1 ]; then
 fi
 
 if [ "$DO_ZIP" -eq 1 ]; then
-  command -v zip >/dev/null || { echo "zip not found; cannot build the upload zips" >&2; exit 1; }
+  command -v zip >/dev/null || { echo "zip not found; cannot build the .skill files" >&2; exit 1; }
   dist="$SKILLS_DIR/dist"   # git-ignored
   mkdir -p "$dist"
   for name in "${skills[@]}"; do
-    # The zip holds the skill folder at its top level, which is the layout claude.ai expects.
-    # Built in a fresh temporary folder and moved into place, so a failed build never leaves
-    # a half-written zip and a re-run never appends to an old one.
+    # A .skill file is a zip holding the skill folder at its top level, the layout claude.ai
+    # expects. Built in a fresh temporary folder and moved into place, so a failed build never
+    # leaves a half-written file and a re-run never appends to an old one.
     tmpd="$(mktemp -d)"
     (cd "$SKILLS_DIR" && zip -q -r -X "$tmpd/$name.zip" "$name" -x '*.DS_Store')
-    mv -f "$tmpd/$name.zip" "$dist/$name.zip"
+    mv -f "$tmpd/$name.zip" "$dist/$name.skill"
     rmdir "$tmpd"
-    echo "zipped   $dist/$name.zip"
+    rm -f "$dist/$name.zip"   # left by 0.6.2 and earlier; claude.ai's upload does not take it
+    echo "built    $dist/$name.skill"
   done
 fi
 
