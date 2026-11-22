@@ -16,7 +16,7 @@ Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `
 exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
 together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
 
-Status: sections 2–3 done (2026-11-22); **waiting for the rest of the desk session.**
+Status: sections 1–3 done (2026-11-22); **waiting for sections 4–7 of the desk session.**
 
 ---
 
@@ -39,12 +39,17 @@ VM (PowerShell):
 Get-FileHash C:\EDIABAS\Ecu\E60.prg,C:\EDIABAS\Ecu\NVE_65.prg,C:\EDIABAS\Ecu\TMODE.prg
 ```
 
+Done 2026-11-22. Explorer's copy over UTM's WebDAV share stalled part-way, so the folder was
+zipped in the VM, the single zip copied across, and unzipped to `~/ediabas-ecu/Ecu` (the
+census runs on that path). The stalled copy left two hidden WebDAV temp files (`.goutputstream-*`)
+beside the SGBDs; they are not counted below and the census ignores them.
+
 | | Mac | VM | Match |
 |---|---|---|---|
-| File count | | | |
-| `E60.prg` SHA-256 | | | |
-| `NVE_65.prg` SHA-256 | | | |
-| `TMODE.prg` SHA-256 | | | |
+| File count | 1,604 | 1,604 | yes |
+| `E60.prg` SHA-256 | `e5a6ac53ac56f825ef0efe579806aac508d73ff05e2d605b3bcfd5d51d4a44c4` | same | yes |
+| `NVE_65.prg` SHA-256 | `bdabfdde5df1d7e513de111e5205071bf967ba7b3477a2b706869370112a8b48` | same | yes |
+| `TMODE.prg` SHA-256 | `4aa6c73c780e1cf299720124dce9140eac3f210877cb262e428ebe3f6dc5b3a9` | same | yes |
 
 ## 2. Concept census (Claude, after section 1)
 
