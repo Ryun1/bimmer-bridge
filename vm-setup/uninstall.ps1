@@ -2,12 +2,12 @@
 #
 # Run in an elevated Windows PowerShell 5.1 window inside the VM: paste the Uninstall line that
 # dev/serve.py prints (it checks this file's SHA-256 before running it).
-# To keep config.json, token.txt and logs\ for a later reinstall, put $KeepData=$true; at the
-# start of that line.
 #
-# Stops and removes the scheduled task and the firewall rule and removes
-# C:\ProgramData\EdiabasBridge. Restores nothing else: the sleep setting changed by
-# install.ps1 is left as it is.
+# Stops and removes the scheduled task and the firewall rule and removes the program files from
+# C:\ProgramData\EdiabasBridge, keeping config.json (with the hand-approved reviewedJobs),
+# token.txt and logs\ for a later reinstall. To remove those too, put $Purge=$true; at the start
+# of that line. ($KeepData is no longer needed: keeping them is the default.)
+# Restores nothing else: the sleep setting changed by install.ps1 is left as it is.
 # This file must stay ASCII-only and Windows PowerShell 5.1 compatible (it runs via iex).
 
 & {
@@ -52,9 +52,13 @@
 
     try {
         # Options first, so they are cleared even when a check below stops the script.
-        $keepData = ((Get-OneShotVar 'KeepData') -eq $true)
+        $purge = ((Get-OneShotVar 'Purge') -eq $true)
+        $keepDataSet = ($null -ne (Get-OneShotVar 'KeepData'))
         Assert-Elevated
         Assert-WindowsPowerShell
+        if ($keepDataSet) {
+            Write-Host '    $KeepData is ignored: config.json, token.txt and logs\ are kept unless $Purge=$true is set.'
+        }
 
         # ---- task ----
         $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
@@ -87,13 +91,14 @@
 
         # ---- files ----
         if (Test-Path -LiteralPath $Root) {
-            if ($keepData) {
+            if ($purge) {
+                Write-Step ('Removing ' + $Root + ' with config.json, token.txt and logs\ ($Purge)')
+                Remove-Item -LiteralPath $Root -Recurse -Force
+            } else {
                 Write-Step ('Removing ' + $Root + ' except config.json, token.txt and logs\')
                 Get-ChildItem -LiteralPath $Root -Force | Where-Object { $Keep -notcontains $_.Name } |
                     Remove-Item -Recurse -Force
-            } else {
-                Write-Step ('Removing ' + $Root)
-                Remove-Item -LiteralPath $Root -Recurse -Force
+                Write-Host '    Kept for a later reinstall. To remove them too: the Uninstall line with $Purge=$true; at its start.'
             }
         } else {
             Write-Step ($Root + ' not found')

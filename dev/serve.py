@@ -575,7 +575,8 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
         lines += ["Update:"] + line("update.ps1", sha)
     else:
         lines += ["", "(release/%s not built; install/update lines not shown)" % ZIP_NAME]
-    lines += ["Uninstall (add $KeepData=$true; at the start to keep config, token and logs):"]
+    lines += ["Uninstall (keeps config, token and logs; add $Purge=$true; at the start to "
+              "remove them too):"]
     lines += line("uninstall.ps1")
     if accept_token:
         lines += ["", "Accepting one agent token on PUT /token for this run."]

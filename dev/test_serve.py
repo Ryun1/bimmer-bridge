@@ -593,7 +593,9 @@ class Startup(unittest.TestCase):
             self.assertNotIn("| iex", line)
             self.assertNotIn("irm", line)
             line.encode("ascii")
-        self.assertIn("$KeepData=$true; ", "\n".join(lines))
+        text = "\n".join(lines)
+        self.assertIn("$Purge=$true; ", text)
+        self.assertNotIn("KeepData", text)
 
     def test_install_line_sends_the_token_only_with_accept_token(self):
         # install.ps1 sends the token on a first install, or when $SendToken is true; serve.py
@@ -618,7 +620,7 @@ class Startup(unittest.TestCase):
         # it read, so a later paste in the same window does not inherit them.
         setup = serve.REPO_ROOT / "vm-setup"
         for script, names in (("install.ps1", ("Elevated", "SendToken")),
-                              ("uninstall.ps1", ("KeepData",))):
+                              ("uninstall.ps1", ("KeepData", "Purge"))):
             text = (setup / script).read_text(encoding="ascii")
             self.assertIn("Remove-Variable -Name $Name -Scope Global", text, script)
             for name in names:
