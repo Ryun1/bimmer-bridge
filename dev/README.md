@@ -17,8 +17,13 @@ node dev/scrub-fixtures.ts <raw-folder> <scenario> [--fixtures <dir>] [--dry-run
 ```
 
 `serve.py` needs only Python 3's standard library. It refuses to start without the VM running
-(no UTM bridge address) or without a DHCP lease for the VM's MAC (`EDIABAS_VM_MAC`, or pass
-`--client`). The TypeScript tools have no dependencies and need Node 24+ (they run through type
+(no UTM bridge address) or without a DHCP lease for the VM's MAC (or pass `--client`). It finds
+the MAC as the MCP server does: `EDIABAS_VM_MAC`, else `vmMac` in `config.local.json` at the repo
+root (git-ignored; see `config.local.example.json`), else the first network card in UTM's
+`~/Library/Containers/com.utmapp.UTM/Data/Documents/<name>.utm/config.plist`, where the name is
+`EDIABAS_VM_NAME`, else `vmName` in `config.local.json`, else `Windows`. With no MAC from any of
+these it stops and says to set `EDIABAS_VM_MAC` or `EDIABAS_VM_NAME`. A broken
+`config.local.json` is a warning, not an error. The TypeScript tools have no dependencies and need Node 24+ (they run through type
 stripping). More: [docs/development.md](../docs/development.md).
 
 `./release.sh` (repo root) and `vm-agent/build.sh` check the git tree: they stop on

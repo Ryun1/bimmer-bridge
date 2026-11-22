@@ -29,7 +29,7 @@ Facts are marked **[confirmed]** (checked on this Mac or in a cited source) or *
 - **Mac:** Apple Silicon, macOS. Node v24.16.0 under nvm **[confirmed]**. No .NET SDK yet
   **[confirmed]**. Claude Code runs natively here and can reach the UTM network directly.
 - **VM:** UTM VM named `Windows`, QEMU backend, aarch64, network mode **Shared**, MAC
-  `F2:E5:81:1E:82:07` **[confirmed from UTM's config]**. Windows on ARM runs the 32-bit
+  `<VM MAC>` **[confirmed from UTM's config]**. Windows on ARM runs the 32-bit
   x86 BMW tools under emulation.
 - **Cable:** K+DCAN USB, passed through to the VM. INPA already talks to the car through it,
   so the EDIABAS configuration is known to work.
@@ -401,10 +401,10 @@ Re-running it upgrades in place. `uninstall.ps1` reverses everything.
 ## 7. Mac MCP server specification
 
 - TypeScript, `@modelcontextprotocol/sdk`, stdio, `zod`. Output `mac-mcp/dist/index.js`.
-- **Finding the VM.** `vmAddress.ts` looks up MAC `F2:E5:81:1E:82:07` in
+- **Finding the VM.** `vmAddress.ts` looks up MAC `<VM MAC>` in
   `/var/db/dhcpd_leases`, then `arp -an`, then `utmctl ip-address Windows`. Env
   `EDIABAS_AGENT_URL` overrides. Details **[confirmed on this Mac]**:
-  - macOS prints MAC bytes without leading zeros (`f2:e5:81:1e:82:7`), so compare numerically.
+  - macOS prints MAC bytes without leading zeros (e.g. `a2:b:c3` for `A2:0B:C3`), so compare numerically.
   - The lease file holds two entries for this MAC, `192.168.65.3` (2025) and `192.168.64.3`
     (today), so the subnet has changed before. Take the entry with the latest expiry, and
     accept an address only after `/health` answers there with the right token.
@@ -437,7 +437,7 @@ All tools carry `readOnlyHint: true`. There is no destructive tool.
 - Fault tables: one row per set — code in hex (`F_ORT_NR`), text (`F_ORT_TEXT`), present or
   stored, frequency, logged conditions. Field names vary by SGBD: map the known ones and pass
   the rest through as `key=value`.
-- **Distances in miles first**, km in brackets: `121,609 mi (195,712 km)`.
+- **Distances in miles first**, km in brackets: `100,000 mi (160,935 km)`.
 
 ### Registration
 - **Claude Code:** `claude mcp add ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`.

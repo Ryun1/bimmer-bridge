@@ -33,7 +33,7 @@ export function checkAll(policy: PolicyGuard, items: JobRequest[]): void {
     const list = refused.map((r) => `${cleanText(r.ecu, 80) || "(empty)"} ${cleanText(r.job, 80) || "(empty)"} (rule ${r.rule})`).join("; ");
     const e = new BridgeError(
       "job_not_allowed",
-      `Refused by the job policy: ${list}. Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell Ryan it was refused.`,
+      `Refused by the job policy: ${list}. Nothing was sent to the VM. The bridge is read-only; do not look for another job, ECU or tool to do the same thing. Tell the user it was refused.`,
     );
     e.rule = refused[0]!.rule;
     throw e;

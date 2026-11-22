@@ -219,7 +219,7 @@ describe("vm_screenshot", () => {
 
   it.each([
     ["window_not_found", 404, null, /vm_list_windows/],
-    ["window_minimized", 409, { handle: "0x1", title: "INPA" }, /"INPA" is minimised.*Ask Ryan to restore it/],
+    ["window_minimized", 409, { handle: "0x1", title: "INPA" }, /"INPA" is minimised.*Ask the user to restore it/],
     ["desktop_unavailable", 503, null, /locked.*log in to or unlock/],
     ["capture_busy", 503, null, /^\[capture_busy\] (?![\s\S]*locked)Another screenshot is still being taken in the VM; try again in a moment\./],
     ["capture_failed", 500, null, /^\[capture_failed\] (?![\s\S]*locked)The window could not be captured/],
@@ -402,10 +402,10 @@ describe("ediabas_describe", () => {
   it.each([
     ["ecu_not_found", 404, { ecu: "NOPE" }, /no SGBD or group file named NOPE.*ediabas_list_ecus/i],
     ["job_not_found", 404, { ecu: "NVE_65", job: "NOPE" }, /^\[job_not_found\] NVE_65 has no job NOPE\. .*ediabas_describe/],
-    ["cable_in_use", 409, { processes: [{ name: "INPALOAD", pid: 4312 }, { name: "NcsDummy", pid: 77 }] }, /in use by INPALOAD \(pid 4312\), NcsDummy \(pid 77\)\. Ask Ryan to close it/],
+    ["cable_in_use", 409, { processes: [{ name: "INPALOAD", pid: 4312 }, { name: "NcsDummy", pid: 77 }] }, /in use by INPALOAD \(pid 4312\), NcsDummy \(pid 77\)\. Ask the user to close it/],
     ["ediabas_unavailable", 503, { reason: "api32.dll missing" }, /could not be started in the VM \(api32.dll missing\)/],
     // As seen at the desk on 2026-11-21: describing a real SGBD with the cable unplugged.
-    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /\(EDIABAS error 28: IFH-0018: INITIALIZATION ERROR\): the K\+DCAN cable is not connected to the VM\..*pass it through to the Windows VM in UTM\. Do not retry until he says it is connected\./],
+    ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /\(EDIABAS error 28: IFH-0018: INITIALIZATION ERROR\): the K\+DCAN cable is not connected to the VM\..*pass it through to the Windows VM in UTM\. Do not retry until the user says it is connected\./],
   ] as const)("maps %s", async (code, status, details, msg) => {
     override("GET /ediabas/describe", () => agentErr(status, code, "x", details));
     const { call } = await connect();
@@ -444,7 +444,7 @@ describe("ediabas_job", () => {
     const r = await call("ediabas_job", { ecu: "nve_65", job: "ident", results: "ID_BMW_NR" });
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("NVE_65 IDENT: job status OKAY, variant NVE_65, 300 ms, 1 result set");
-    expect(r.text).toContain("  KM_STAND=121,609 mi (195,712 km)");
+    expect(r.text).toContain("  KM_STAND=100,000 mi (160,935 km)");
     expect(JSON.parse(toolRequests()[0]!.body)).toEqual({ ecu: "nve_65", job: "ident", results: "ID_BMW_NR" });
     expect((await auditLines())[0]).toMatch(/\tediabas_job\tok\t\d+\tecu=nve_65\tjob=ident$/);
   });
@@ -453,7 +453,7 @@ describe("ediabas_job", () => {
     const { call } = await connect();
     const r = await call("ediabas_job", { ecu: "NVE_65", job: "IDENT", raw: true });
     const json = r.text.split("\n\nCar session: ")[0]!;
-    expect(JSON.parse(json)).toMatchObject({ ecu: "NVE_65", job: "IDENT", sets: [{ KM_STAND: 195712 }] });
+    expect(JSON.parse(json)).toMatchObject({ ecu: "NVE_65", job: "IDENT", sets: [{ KM_STAND: 160935 }] });
   });
 
   it.each([
@@ -498,7 +498,7 @@ describe("ediabas_job", () => {
 
   it.each([
     ["job_not_allowed", 403, { ecu: "NVE_65", job: "STATUS_X", rule: "deny.token:START" }, /agent refused NVE_65 STATUS_X under its job policy \(rule deny.token:START\)/],
-    ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. Ryan decides/],
+    ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Startet\u0007 den Test", matched: ["start"] }, /matched: start\)\. Description: "Startet\s+den Test"\. The user decides/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "", matched: [] }, /has no description/],
     ["job_needs_review", 403, { ecu: "NVE_65", job: "STATUS_X", description: "Jobbeschreibung", matched: [] }, /^(?![\s\S]*suggests)[\s\S]*description has nothing in it but a label \("Jobbeschreibung"\), so the agent cannot tell that it only reads/],
     ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009: NO RESPONSE" }, /^\[ediabas_error\] (?![\s\S]*UTM)EDIABAS reported error 159: IFH-0009: NO RESPONSE\. This often means the ECU did not answer/],
@@ -506,13 +506,13 @@ describe("ediabas_job", () => {
       "ediabas_error",
       502,
       { errorCode: 16, errorText: "IFH-0006: COMMAND NOT ACCEPTED" },
-      /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(Ryan ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
+      /^\[ediabas_error\] EDIABAS reported error 16: IFH-0006: COMMAND NOT ACCEPTED\. The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself \(the user ticks it in UTM's USB menu\)\. Otherwise the ECU did not answer/,
     ],
     [
       "ediabas_error",
       502,
       { errorCode: 134, errorText: "SYS-0002: SOMETHING", resultsUnread: true },
-      /^\[ediabas_error\] The job finished but its results could not be read \(EDIABAS error 134: SYS-0002: SOMETHING\)\. Ask Ryan before trying again\.$/,
+      /^\[ediabas_error\] The job finished but its results could not be read \(EDIABAS error 134: SYS-0002: SOMETHING\)\. Ask the user before trying again\.$/,
     ],
     ["ediabas_error", 502, { errorCode: 159, errorText: "IFH-0009", resultsUnread: false }, /^\[ediabas_error\] EDIABAS reported error 159: IFH-0009\. This often means the ECU did not answer/],
     ["job_timeout", 504, { timeoutSeconds: 30 }, /did not finish within 30 s/],
@@ -703,7 +703,7 @@ describe("ediabas_jobs", () => {
     const { call } = await connect();
     const r = await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }] });
     expect(r.text).toContain(
-      "\n\nNVE_65 IDENT: [ediabas_error] The job finished but its results could not be read (EDIABAS error 134: SYS-0002). Ask Ryan before trying again.",
+      "\n\nNVE_65 IDENT: [ediabas_error] The job finished but its results could not be read (EDIABAS error 134: SYS-0002). Ask the user before trying again.",
     );
     expect(r.text).not.toMatch(/did not answer|cable/i);
   });
@@ -760,7 +760,7 @@ describe("ediabas_read_faults", () => {
     expect(JSON.parse(reqs[0]!.body)).toEqual({ items: [{ ecu: "NVE_65", job: "FS_LESEN" }, { ecu: "D_MOTOR", job: "FS_LESEN" }] });
     expect(r.text).toMatch(/^Fault memory for 2 ECUs \(FS_LESEN\):/);
     expect(r.text).toContain("\nNVE_65\n  Fault memory: 2 entries\n  1. 0xA752  Synthetic fault A");
-    expect(r.text).toContain("present/stored: Fault currently present | frequency: 3 | logged at: 121,609 mi (195,712 km)");
+    expect(r.text).toContain("present/stored: Fault currently present | frequency: 3 | logged at: 100,000 mi (160,935 km)");
     expect(r.text).toContain("conditions: Engine speed = 820 1/min; Coolant temperature = 90 degC");
     expect(r.text).toContain("\n\nD_MOTOR\n  Fault memory: 2 entries");
     expect((await auditLines())[0]).toMatch(/\tediabas_read_faults\tok\t\d+\tecu=NVE_65,D_MOTOR\tjob=FS_LESEN$/);

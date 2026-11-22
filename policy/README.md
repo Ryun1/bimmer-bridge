@@ -18,4 +18,11 @@ Changing the policy:
 3. Run `./release.sh`, deploy with the Update line and restart Claude, so that both sides run the
    same version (`vm_health` warns when they differ).
 
+Other chassis: the `E60` entry in `allow.restrictedEcus` is the group SGBD of the
+E60/E61/E63/E64 (5 and 6 Series), and its functional jobs (`IDENT_FUNKTIONAL`,
+`FS_LESEN_FUNKTIONAL`) read identification and fault memory from the ECUs on those cars in one
+call. Owners of another chassis can add their own group SGBD with the same kind of functional
+read jobs, as a policy change like any other: add cases for it, raise `version`, and rebuild and
+deploy so that the Mac server and the agent both run the new version.
+
 What the rules mean, in plain words: [docs/safety.md](../docs/safety.md#the-job-policy-in-plain-words).

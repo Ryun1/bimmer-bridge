@@ -1,12 +1,43 @@
 # ediabas-bridge
 
-A read-only bridge that lets Claude read BMW diagnostics from Ryan's 2005 E61 550i. The car is
-reached through a Windows VM in UTM on the Mac, where BMW Standard Tools (INPA, Tool32, NCS
-Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. A small agent in the VM
-(`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes screenshots and
+A read-only bridge that lets Claude read diagnostics from a BMW through EDIABAS. The car is
+reached through a Windows VM in UTM on a Mac, where BMW Standard Tools (INPA, Tool32, NCS
+Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. It was built on a 2005 E61
+550i and is meant for any car EDIABAS can talk to ([Which cars](#which-cars)). A small agent
+in the VM (`vm-agent/`, C#) runs allowlisted read-only EDIABAS jobs, lists windows, takes screenshots and
 reads trace files. A local MCP server on the Mac (`mac-mcp/`, TypeScript) finds the VM, calls
 the agent and offers eleven tools to Claude Code and the Claude desktop app. Skills in `skills/`
 teach Claude how to run a diagnostic session.
+
+## Which cars
+
+Any BMW that EDIABAS and the SGBD files installed in the VM support. In practice that means the
+E-series (roughly the late 1990s to about 2013: E46, E39, E60/E61, E90, E70 and the rest) over a
+K+DCAN cable, and possibly F-series cars over ENET or an ICOM where their SGBDs are installed.
+The bridge only runs read jobs by name through EDIABAS; nothing in its code is
+chassis-specific, and it finds a car's modules with `ediabas_list_ecus` and their jobs with
+`ediabas_describe` rather than from a built-in list.
+
+**What has actually been tested:** one car, a 2005 E61 550i, with a K+DCAN USB cable, EDIABAS
+7.3.0 and Windows 11 on ARM in UTM on an Apple Silicon Mac. Every check so far was at the desk,
+with the cable in the VM but not in the car ([docs/phase-results.md](docs/phase-results.md)):
+no job has yet been run against a car ([Status](#status)). ENET, ICOM and F-series cars are
+untested.
+
+What is specific to a car or chassis:
+- **Whole-car jobs.** The job policy allows `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` (which
+  modules answer, and all their faults, in one job) only on the `E60` group SGBD, which covers
+  the E60/E61. For another chassis whose group SGBD has these jobs, add it to
+  `policy/policy.json` with its test cases ([policy/README.md](policy/README.md)), then rebuild
+  and run the Update line (the agent embeds the policy); until then, read modules one SGBD at a
+  time.
+- **`voltageSources`** in the agent's config: extra voltage jobs for `ediabas_vehicle_status`.
+  Empty by default; the `UTILITY` and `TMODE` readings work on any car. An E60/E61 with night vision
+  can add `NVE_65` `STATUS_BORDNETZSPANNUNG` (that module's supply voltage)
+  ([vm-agent/README.md](vm-agent/README.md)).
+- **The skills' reference data** (ECU map, job cookbook, playbooks, the INPA screen) was
+  recorded on that E61's VM. For another car it is an example only: the skills tell Claude to
+  find the car's own names with `ediabas_list_ecus` and `ediabas_describe`.
 
 ## What it does and does not do
 
@@ -15,7 +46,7 @@ It does:
 - run allowlisted read-only jobs (identification, `STATUS_` reads), one at a time or up to 20
   in one call, and show their results;
 - read which modules answer, and all their faults, in one whole-car job (`E60`
-  `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL`; not yet run at the car);
+  `IDENT_FUNKTIONAL`, `FS_LESEN_FUNKTIONAL` on an E60/E61; not yet run at the car);
 - list the SGBD files in the VM and describe an SGBD's jobs, saying which are runnable;
 - report ignition and voltage readings;
 - list the windows open in the VM and take a screenshot of one, or of the desktop;
@@ -28,7 +59,7 @@ It does not, and has no endpoint, tool, flag or setting that could:
 - send raw telegrams or change the EDIABAS configuration;
 - use the cable while a BMW tool is open in the VM (there is no override).
 
-Anything that writes to the car is done by Ryan, by hand, in INPA or NCS Expert. How each of
+Anything that writes to the car is done by the owner, by hand, in INPA or NCS Expert. How each of
 these limits is enforced: [docs/safety.md](docs/safety.md).
 
 No BMW software, SGBD files or headers are stored in this repo (see `.gitignore`).
@@ -70,19 +101,27 @@ EDIABAS request runs at a time. Details: [docs/architecture.md](docs/architectur
 | [dev/README.md](dev/README.md) | the deploy server, the replay agent and the fixture scrubber |
 | [dev/fixtures/README.md](dev/fixtures/README.md) | recorded fixtures: layout, recording and scrubbing a scenario |
 | [skills/README.md](skills/README.md) | the two skills, their evals and how to install them |
-| [docs/bmw-e61-skill-addition.md](docs/bmw-e61-skill-addition.md) | a section to paste into the separate `bmw-e61` skill |
+| [docs/bmw-e61-skill-addition.md](docs/bmw-e61-skill-addition.md) | optional: a section to paste into a car-specific skill of your own (written for a private `bmw-e61` skill), so it hands over to the bridge |
 | [docs/phase-results.md](docs/phase-results.md) | historical: Phase 0 VM discovery, Phase 1 to 5 acceptance results |
-| [PLAN.md](PLAN.md) | historical: build plan v2 |
+| [PLAN.md](PLAN.md) | historical: build plan v2 (written for the original owner's car and VM) |
 | [docs/plan-review.md](docs/plan-review.md) | historical: review of the original plan and why v2 differs |
 | [docs/plan-review-fixes.md](docs/plan-review-fixes.md) | historical: the review fixes that became 0.3.0, task by task |
 | [docs/plan-v1-original.md](docs/plan-v1-original.md) | historical: the original (ISTA-based) plan |
 
+The historical docs are kept as written at the time, for one owner's car and VM; where they
+disagree with the current docs, the current docs win.
+
+Personal settings and notes stay out of the repo: the VM's name or MAC go in the git-ignored
+`config.local.json` at the repo root (see [Setup from scratch](#setup-from-scratch)), and notes
+about your own car belong in a git-ignored file or your own skill, not in the committed docs or
+skill references.
+
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.3.0 (agent, MCP server and `VERSION`), job policy version 3, eleven MCP tools.
-**0.3.0 is built but not yet installed in the VM, and nothing in it has been run at the car.**
-The VM still runs agent 0.2.2 with policy version 2 until Ryan runs the Update line.
+Version 0.4.0 (agent, MCP server and `VERSION`), job policy version 3, eleven MCP tools.
+**0.3.0 and 0.4.0 are built but not yet installed in the VM, and nothing in them has been run at the car.**
+The original owner's VM still runs agent 0.2.2 with policy version 2 until the Update line is run there.
 
 | Phase | State |
 |---|---|
@@ -92,14 +131,14 @@ The VM still runs agent 0.2.2 with policy version 2 until Ryan runs the Update l
 | 3 Mac MCP | done: the ten tools of 0.2.x (`ediabas_jobs`, the eleventh, came in 0.3.0). Checked in Claude Code and in the desktop app (`ediabas_describe` on `NVE_65`, 2026-11-21) |
 | 4 Screenshots | done (2026-11-21): INPA screenshot readable, locked screen refused |
 | 5 Logs | done (2026-11-21): listing, reading and every path refusal pass, in the VM self-test too |
-| 6 At the car | built (vehicle status, fault tables). **Not run: this is Ryan's, at the car** |
+| 6 At the car | built (vehicle status, fault tables). **Not run: this is the owner's, at the car** |
 | 7 Skills | both skills installed; replay agent with `idle` and `inpa-open` fixtures; evals 02, 05, 07 and 08 passed with the skills (2026-11-21), but for 07 and 08 the run without the skills was not shown to do worse, so PLAN.md's acceptance is not met for them; skill references filled from the desk recordings of 2026-11-21/22 |
 | 8 Hardening | built: `VERSION`, `release.sh`, the docs. The plan's acceptance check (reinstalling from this README alone) has not been run; updates from the README's lines have |
 
 Open:
-- **Phase 6 at the car**, Ryan's: [docs/at-the-car.md](docs/at-the-car.md).
-- **Install 0.3.0** in the VM and check it at the desk: `vm_health` shows both versions as
-  0.3.0; `ediabas_describe` on `E60` shows the two whole-car jobs as allowed; the job verdicts
+- **Phase 6 at the car**, the owner's: [docs/at-the-car.md](docs/at-the-car.md).
+- **Install 0.4.0** in the VM and check it at the desk: `vm_health` shows both versions as
+  0.4.0; `ediabas_describe` on `E60` shows the two whole-car jobs as allowed; the job verdicts
   in the skill references are re-recorded under policy version 3.
 - **Evals 01, 03 and 06** wait for the `nve-faults` and `battery` fixtures, recorded at the car;
   eval 04's `needs-review` fixture can be recorded at the desk
@@ -109,6 +148,17 @@ Open:
   engine SGBD, and the SGBDs that can only be described with the control unit answering.
 - **Restart checks on 0.2.x**: that the agent comes back after the VM reboots, and that the
   bridge works again after the Mac sleeps. The reboot check passed on the Phase 1 agent only.
+
+### What changed in 0.4.0
+
+- Usable by anyone with an EDIABAS-supported BMW: no owner name in messages, docs or skills;
+  see [Which cars](#which-cars).
+- The VM's MAC has no built-in default: it is read from UTM's config for the VM named
+  `Windows` (or `vmName`), with an optional git-ignored `config.local.json` (`vmName`, `vmMac`,
+  `agentPort`) and the `EDIABAS_VM_*` environment variables as overrides.
+- The agent's `voltageSources` default is empty (it was the E60/E61 night-vision module);
+  existing `config.json` files are unchanged.
+- `discover.ps1` no longer checks for E61-specific SGBD files.
 
 ### What changed in 0.3.0
 
@@ -147,20 +197,45 @@ The acceptance results of Phases 0 to 5 are in [docs/phase-results.md](docs/phas
 | `dev/scrub-fixtures.ts` | copies a raw recording into `dev/fixtures/` with identifiers removed |
 | `skills/` | Claude skills for using the tools, and their evals; `skills/install.sh` installs them |
 | `release.sh` | checks versions, runs every test suite, builds the agent zip and the MCP server |
+| `config.local.example.json` | example of `config.local.json` (git-ignored): your VM's name or MAC, read by the MCP server and `dev/serve.py` |
 
 ---
 
 ## Setup from scratch
 
-What you start with: this repo on the Mac, UTM with the Windows VM named `Windows` (network
-mode **Shared Network**), BMW Standard Tools already installed in the VM, and a Windows user
-who is an administrator. Do the steps in order. Every command on the Mac is run from the repo
-root unless it says otherwise.
+What you start with:
+- a Mac with this repo and [UTM](https://mac.getutm.app/) (tested on Apple Silicon; the paths
+  below are Homebrew's Apple Silicon ones);
+- a Windows VM in UTM with network mode **Shared Network** (tested: Windows 11 on ARM, where the
+  32-bit BMW tools run under x86 emulation), and a Windows user who is an administrator;
+- BMW Standard Tools (EDIABAS, with the SGBD files for your car, and usually INPA, Tool32 and
+  NCS Expert) already installed in the VM and working with your car;
+- a K+DCAN USB cable passed through to the VM with UTM's USB menu (tested), or another
+  interface EDIABAS is set up for (untested).
 
-The defaults are Ryan's VM. If yours is not, set `EDIABAS_VM_MAC` to its MAC address (UTM >
-the VM > Network) and `EDIABAS_VM_NAME` if it is not named `Windows`: `export` them before
-`serve.py`, add `-e EDIABAS_VM_MAC=…` to `claude mcp add`, and add an `"env"` object to the
-desktop app's entry.
+Do the steps in order. Every command on the Mac is run from the repo root unless it says
+otherwise.
+
+**Pointing the bridge at your VM.** By default the bridge looks for the UTM VM named `Windows`
+and reads its MAC address from UTM's own config for that VM
+(`~/Library/Containers/com.utmapp.UTM/Data/Documents/Windows.utm/config.plist`). If your VM is
+called `Windows`, there is nothing to set. Otherwise the easy way is a `config.local.json` at
+the repo root (git-ignored), read by both the MCP server and `dev/serve.py`:
+
+```sh
+cp config.local.example.json config.local.json   # then edit it
+```
+
+```json
+{ "vmName": "My BMW VM" }
+```
+
+`vmName` is the VM's name as UTM shows it; `vmMac` (optional) is its MAC address (UTM > the VM >
+Network), for when the MAC cannot be read from UTM's config. The environment variables
+`EDIABAS_VM_NAME` and `EDIABAS_VM_MAC` override the file, for example `export` before
+`serve.py`, or `-e` on `claude mcp add`. The order: environment variable, then
+`config.local.json`, then the MAC read from UTM's config for the named VM, with `Windows` as the
+default name. Other settings: [mac-mcp/README.md](mac-mcp/README.md).
 
 ### 1. Prerequisites on the Mac
 
@@ -193,7 +268,7 @@ has no `.git` and `release.sh` stops without one, then use the release's prebuil
 build only the Mac server:
 
 ```sh
-git clone --branch v0.3.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
+git clone --branch v0.4.0 https://github.com/Ryun1/ediabas-bridge && cd ediabas-bridge
 mkdir -p release   # put EdiabasAgent.zip and EdiabasAgent.zip.sha256 from the release here
 shasum -a 256 release/EdiabasAgent.zip; cat release/EdiabasAgent.zip.sha256   # must match
 (cd mac-mcp && npm ci && npm run build)
@@ -212,7 +287,7 @@ SHA-256. It stops at the first failure with `release.sh: FAILED: <reason>`. Deta
 
 ### 3. Install the agent in the VM
 
-1. Start the `Windows` VM in UTM and log in to Windows. The agent runs in your logged-in
+1. Start the VM in UTM and log in to Windows. The agent runs in your logged-in
    session, so someone must be logged in for it to work at all.
 2. On the Mac, start the deploy server so that it will accept the agent's token:
 
@@ -322,8 +397,10 @@ It refuses, and leaves alone, anything already in `~/.claude/skills/` under the 
 is not its own link. Upload the two zips in claude.ai's Skills settings for the desktop app and
 cloud sessions. A GitHub release has both zips attached.
 
-`docs/bmw-e61-skill-addition.md` is a short section to paste into the separate `bmw-e61`
-skill by hand, so that it hands over to this bridge.
+Optional: if you keep a car-specific skill of your own (one that interprets fault codes and
+keeps a fault log), [docs/bmw-e61-skill-addition.md](docs/bmw-e61-skill-addition.md) is a short
+section to paste into it by hand so that it hands over to this bridge. It was written for the
+original owner's `bmw-e61` skill; adapt the names.
 
 ### 6. First check
 
@@ -395,7 +472,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or `EDIABAS_VM_MAC` is not this VM's MAC | Start the `Windows` VM in UTM and log in |
+| **vm_not_running**: "The VM does not appear to be running" | The VM is off, UTM's shared network is not up on the Mac, or the bridge is looking for a different VM: the VM is not named `Windows` and `vmName` / `EDIABAS_VM_NAME` is not set, or `vmMac` / `EDIABAS_VM_MAC` is not this VM's MAC | Start the VM in UTM and log in. If it is running, set `vmName` (or `vmMac`) in `config.local.json` ([Setup from scratch](#setup-from-scratch)) and restart Claude |
 | **agent_not_answering**: "The VM is up but the agent is not answering" | Nobody is logged in to Windows (the agent starts at log-on), or the agent is not installed or has stopped | Log in to Windows and wait about 30 s. If it persists, read `agent.log` in the VM (see logs below) and re-run the Install line |
 | **local_network_blocked**, or macOS asked "node would like to find devices on your local network" | macOS Local Network permission for `node`. The desktop app starts the server so that macOS treats `node` as its own app | System Settings > Privacy & Security > Local Network: allow `node`, then ask again. The permission follows the node binary's real path, so after a Homebrew upgrade of node it can ask again |
 | **unauthorized**: "The agent rejected the token" | The Keychain token does not match the VM's `token.txt` (for example after an uninstall with `$Purge=$true` and a new install) | On the Mac `python3 dev/serve.py --accept-token`, then paste the Install line again in the VM. It keeps the VM's token and sends it to the Keychain. Nothing else needs a restart: the server re-reads the token after a 401 |
@@ -406,11 +483,11 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | **bad_response** | The agent and the MCP server are different versions | As above |
 | **policy_unavailable** | `policy/policy.json` could not be loaded by the Mac server; every `ediabas_*` tool refuses | Restore the file from git, then restart Claude |
 | **cable_in_use**, naming a process | A BMW tool that uses the cable is open in the VM (INPA, Tool32, NCS Expert, WinKFP, BMW Coding Tool, or anything with `api32.dll` loaded). There is no override, by design | Close that tool in the VM, then ask once more. Do not retry in a loop |
-| **cable_not_found**: EDIABAS error 28, `IFH-0018: INITIALIZATION ERROR` | The K+DCAN cable is not connected to the VM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it | Plug the cable into the Mac and pass it through to the `Windows` VM in UTM (the USB button in the VM's toolbar), then ask again |
+| **cable_not_found**: EDIABAS error 28, `IFH-0018: INITIALIZATION ERROR` | The K+DCAN cable is not connected to the VM. Needed even for `ediabas_describe` of a real SGBD; only `TMODE` and `UTILITY` load without it | Plug the cable into the Mac and pass it through to the VM in UTM (the USB button in the VM's toolbar), then ask again |
 | **ediabas_error** or **job_timeout** | EDIABAS reached the interface but the ECU did not answer: ignition off, cable not in the car, or that ECU is not fitted | Check `ediabas_vehicle_status`, then decide before trying again |
 | **ediabas_error** 16 `IFH-0006: COMMAND NOT ACCEPTED` on every real SGBD, after the cable was unplugged from the Mac and plugged back in | UTM does not hand a replugged cable back to the VM by itself | Tick the cable for the VM in UTM's USB menu, then ask again |
 | The first EDIABAS call after a pause takes about 10 s | Expected. The agent unloads EDIABAS after `ediabasIdleReleaseSeconds` (default 20 s) with no EDIABAS request, so that nothing holds the interface open; the next call loads it again | Nothing. The Mac waits up to 75 s for an EDIABAS call, counted from when it is sent. For a session at the car see [docs/at-the-car.md](docs/at-the-car.md) |
-| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | Ryan decides. To allow that one job, `ediabas_describe` on it prints the entry to add to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM (`"ECU:JOB@hash"`, pinned to the description as it is now); the agent picks it up at the next EDIABAS call, no restart. Steps in [docs/safety.md](docs/safety.md#approving-one-job). Never make this routine. Approved so far by name, unpinned (2026-11-22, in the VM's config only): `CAS:STATUS_WAKEUP_HISTORY`, `CAS:STATUS_KL15_ABSCHALTUNG`, `CAS:STATUS_KLEMMENVERHINDERER`, `CAS:STATUS_WUP`, `MPM_60:STATUS_AD_WERTE_LESEN` |
+| **job_needs_review**, quoting a job's description | A `STATUS_` job whose description suggests it may do more than read, or has none | The owner decides. To allow that one job, `ediabas_describe` on it prints the entry to add to `reviewedJobs` in `C:\ProgramData\EdiabasBridge\config.json` in the VM (`"ECU:JOB@hash"`, pinned to the description as it is now); the agent picks it up at the next EDIABAS call, no restart. Steps in [docs/safety.md](docs/safety.md#approving-one-job). Never make this routine |
 | **ediabas_unavailable**, or `vm_health` says "EDIABAS: STUCK" | A job did not stop after `apiBreak`; the agent then leaves EDIABAS alone until it restarts (`/health` `ediabas.stuck`). The same code also means `api32.dll` is missing or EDIABAS would not start | Restart Windows in the VM, which restarts the agent. If `vm_health` says "EDIABAS DLL: NOT found", check `ediabasDll` in the VM's `config.json` |
 | **not_run** | The agent did not start the job, or stopped it: the request's time budget ran out, a BMW tool was opened during the request, an earlier job did not stop, or the request was abandoned. The message says which | Act on the message (close the tool, describe with a `filter`, ...). Do not retry in a loop |
 | **ediabas_request_lost**: the job may have run | The connection broke or timed out after the request may have reached the agent. Such requests are never sent a second time | Call `vm_health`; ask again only if the result is still needed |
@@ -430,7 +507,7 @@ codes are listed in [docs/tools.md](docs/tools.md#errors).
 | Install prints `The agent did not answer within 20 s` | The agent could not start or bind | Read `agent.log` in the VM, and run the `--selftest` check from [step 3](#3-install-the-agent-in-the-vm) |
 | **agent_not_answering** after `config.json` was edited and the agent restarted | The config is invalid (for example `maxJobTimeoutSeconds` above 60, or `jobTimeoutSeconds` above it). The agent does not exit: it logs the problem and re-reads the config and token every 30 s | Read `agent.log` in the VM, fix `config.json`; the agent starts within 30 s |
 | `serve.py` says `no UTM shared-network interface (bridge1xx) ... is up` | The VM is not running, so the Mac has no bridge address to bind | Start the VM, then `serve.py` |
-| `serve.py` says `no DHCP lease for the VM's MAC` | The VM has not taken an address yet, or `EDIABAS_VM_MAC` is not its MAC | Start the VM and log in, or pass `--client <VM address>` |
+| `serve.py` says `no DHCP lease for the VM's MAC` | The VM has not taken an address yet, or the MAC it looked for is not this VM's (wrong `vmName` / `vmMac`, or the environment variables) | Start the VM and log in, check `config.local.json`, or pass `--client <VM address>` |
 | A tool you expect (screenshots, logs, EDIABAS) is not offered, after an update | Claude is still running the old MCP server | Quit and reopen the desktop app; start a new Claude Code session |
 
 ### Logs and audit files
@@ -457,9 +534,9 @@ The ten hard rules (listed in [docs/safety.md](docs/safety.md), first written in
 each one, how the job policy decides, and how to approve a single job are in
 [docs/safety.md](docs/safety.md). Check any change against that list.
 
-**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only jobs that
+**Anything that runs against the car is run by the owner, at the car.** Claude Code may run only jobs that
 cannot reach a module: the `TMODE` and `UTILITY` info jobs, and `ediabas_describe` (the `_JOBS`
-family), after Ryan confirms the cable is not plugged into the car (it may still be in the VM;
+family), after the owner confirms the cable is not plugged into the car (it may still be in the VM;
 a real SGBD does not load without it).
 
 ---

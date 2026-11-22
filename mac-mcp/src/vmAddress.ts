@@ -22,6 +22,7 @@ export interface DiscoverySources {
 
 export const LEASES_PATH = "/var/db/dhcpd_leases";
 export const ARP_PATH = "/usr/sbin/arp";
+export const PLUTIL_PATH = "/usr/bin/plutil";
 const COMMAND_TIMEOUT_MS = 5_000;
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,40 @@ export function macEquals(a: string, b: string): boolean {
   const y = parseMac(b);
   if (!x || !y) return false;
   return x.every((v, i) => v === y[i]);
+}
+
+/**
+ * The VM's MAC address from UTM's config.plist, given as JSON (`plutil -convert json`): the
+ * first `Network` entry's `MacAddress`. Undefined when there is none or it is not a MAC.
+ */
+export function macFromUtmConfig(jsonText: string): string | undefined {
+  let json: unknown;
+  try {
+    json = JSON.parse(jsonText);
+  } catch {
+    return undefined;
+  }
+  const network = (json as { Network?: unknown } | null)?.Network;
+  if (!Array.isArray(network) || network.length === 0) return undefined;
+  const mac = (network[0] as { MacAddress?: unknown } | null)?.MacAddress;
+  return typeof mac === "string" && parseMac(mac) !== null ? mac.trim() : undefined;
+}
+
+/**
+ * The VM's MAC: `config.vmMac` (EDIABAS_VM_MAC or config.local.json) when set, else read from
+ * UTM's config.plist for the VM. Undefined when neither gives one.
+ */
+export async function resolveVmMac(config: Config, execFile: ExecFileFn): Promise<string | undefined> {
+  if (config.vmMac !== undefined) return config.vmMac;
+  const text = await execFile(PLUTIL_PATH, ["-convert", "json", "-o", "-", config.utmConfigPath], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(
+    () => "",
+  );
+  return macFromUtmConfig(text);
+}
+
+/** How to tell the bridge the VM's MAC, for messages. */
+export function vmMacHint(config: Config): string {
+  return `set EDIABAS_VM_MAC to the VM's MAC address, or EDIABAS_VM_NAME if the VM in UTM is not called '${config.vmName}'`;
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +162,7 @@ export interface ArpEntry {
   iface: string;
 }
 
-/** Parse `arp -an` lines: `? (192.168.64.3) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]`. */
+/** Parse `arp -an` lines: `? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]`. */
 export function parseArp(text: string): ArpEntry[] {
   const out: ArpEntry[] = [];
   for (const line of text.split("\n")) {
@@ -275,11 +310,12 @@ export class VmLocator {
       throw vmNotRunning(this.config.vmName, "no UTM shared-network bridge interface is up on this Mac");
     }
 
+    const mac = await resolveVmMac(this.config, this.sources.execFile);
     const tried = new Set<string>();
     let sawCandidate = false;
     let best: BridgeError | undefined;
 
-    for (const [sourceName, source] of this.candidateSources()) {
+    for (const [sourceName, source] of this.candidateSources(mac)) {
       const candidates = await source();
       for (const ip of candidates) {
         if (tried.has(ip)) continue;
@@ -299,19 +335,26 @@ export class VmLocator {
     }
 
     if (best && rank(best.code) > 1) throw best;
-    throw vmNotRunning(
-      this.config.vmName,
-      sawCandidate ? "no address for it answered as the agent on the UTM network" : "its MAC address is not in the DHCP leases or ARP table",
-    );
+    let detail: string;
+    if (sawCandidate) detail = "no address for it answered as the agent on the UTM network";
+    else if (mac === undefined) detail = `its MAC address is not set and could not be read from ${this.config.utmConfigPath}: ${vmMacHint(this.config)}`;
+    else detail = `its MAC address ${mac} is not in the DHCP leases or ARP table; if that is not the VM's MAC, ${vmMacHint(this.config)}`;
+    throw vmNotRunning(this.config.vmName, detail);
   }
 
   /** Lazy sources in priority order; a later source only runs if earlier ones found nothing usable. */
-  private candidateSources(): [string, () => Promise<string[]>][] {
+  private candidateSources(mac: string | undefined): [string, () => Promise<string[]>][] {
     const { readFile, execFile } = this.sources;
-    const mac = this.config.vmMac;
+    // Without a MAC the leases and ARP table cannot say which address is the VM's.
+    const byMac: [string, () => Promise<string[]>][] =
+      mac === undefined
+        ? []
+        : [
+            ["leases", async () => leaseCandidates(await readFile(LEASES_PATH).catch(() => ""), mac)],
+            ["arp", async () => arpCandidates(await execFile(ARP_PATH, ["-an"], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""), mac)],
+          ];
     return [
-      ["leases", async () => leaseCandidates(await readFile(LEASES_PATH).catch(() => ""), mac)],
-      ["arp", async () => arpCandidates(await execFile(ARP_PATH, ["-an"], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""), mac)],
+      ...byMac,
       ["utmctl", async () =>
         parseUtmctl(
           // Fails when the guest agent is absent, which is normal.

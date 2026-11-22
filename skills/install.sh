@@ -4,7 +4,7 @@
 #    so edits in the repo take effect at once. Re-running replaces this repo's own links and
 #    refuses to touch anything else that is already there.
 #  - Builds one zip per skill in skills/dist/ for upload to claude.ai (desktop app and cloud
-#    sessions). Ryan does the upload.
+#    sessions). The user does the upload.
 #
 # Usage: skills/install.sh [--dest <dir>] [--no-zip] [--no-link]
 #   --dest <dir>  where to link the skills (default: ~/.claude/skills)

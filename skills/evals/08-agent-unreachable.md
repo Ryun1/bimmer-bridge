@@ -13,8 +13,8 @@ installed (ediabas-bridge) and without them. The skill passes when the with-skil
 without-skill run fails or does worse. It needs no fixture.
 
 ## Must
-- Calls `vm_health`, gets the error, and tells Ryan the likely cause (VM off or still starting, nobody logged in to Windows, agent not running) and the fix from the message.
-- Stops after one check; offers to check again once Ryan has fixed it.
+- Calls `vm_health`, gets the error, and tells the user the likely cause (VM off or still starting, nobody logged in to Windows, agent not running) and the fix from the message.
+- Stops after one check; offers to check again once the user has fixed it.
 
 ## Must not
 - Invents or summarises fault results.

@@ -7,6 +7,7 @@ import {
   AGENT_TOKEN,
   LOOPBACK_BRIDGE,
   NO_BRIDGE,
+  TEST_VM_MAC,
   VM_BRIDGE,
   closedPort,
   contractHandler,
@@ -38,7 +39,8 @@ function staticTokens(token: string | null = AGENT_TOKEN): TokenSource & { refre
 }
 
 function config(env: Record<string, string> = {}): Config {
-  return loadConfig(env, "/nonexistent-home").config;
+  // The VM MAC comes from the environment so discovery never runs plutil (see vmMac tests below).
+  return loadConfig({ EDIABAS_VM_MAC: TEST_VM_MAC, ...env }, "/nonexistent-home").config;
 }
 
 interface Opts {
@@ -48,6 +50,8 @@ interface Opts {
   leases?: string | null;
   arp?: string | null;
   utm?: string | null;
+  /** `plutil -convert json` output for UTM's config.plist; null: plutil fails (no such file). */
+  plutil?: string | null;
   ifaces?: unknown;
   requestTimeoutMs?: number;
   probeTimeoutMs?: number;
@@ -64,6 +68,10 @@ function makeClient(o: Opts = {}) {
     if (file === "/usr/sbin/arp") {
       if (o.arp == null) throw new Error("arp failed");
       return o.arp;
+    }
+    if (file === "/usr/bin/plutil") {
+      if (o.plutil == null) throw new Error("plutil: file does not exist");
+      return o.plutil;
     }
     if (o.utm == null) throw new Error("utmctl: guest agent not running");
     return o.utm;
@@ -288,7 +296,7 @@ describe("AgentClient discovery", () => {
     const { client, fetchFn } = makeClient({
       ifaces: NO_BRIDGE,
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]",
+      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
     });
     const e = await errorOf(client.health());
     expect(e.code).toBe("vm_not_running");
@@ -319,7 +327,7 @@ describe("AgentClient discovery", () => {
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(async () => okResponse()),
       leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }),
-      arp: "? (10.1.2.3) at f2:e5:81:1e:82:7 on en0 ifscope [ethernet]",
+      arp: "? (10.1.2.3) at 2:0:0:0:0:1 on en0 ifscope [ethernet]",
       utm: "172.16.0.9\n",
     });
     expect((await errorOf(client.health())).code).toBe("vm_not_running");
@@ -422,7 +430,7 @@ describe("AgentClient discovery", () => {
     const viaArp = makeClient({
       fetch: fetchMock,
       leases: null,
-      arp: "? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]\n? (192.168.64.5) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]\n",
+      arp: "? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]\n? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]\n",
     });
     await viaArp.client.health();
     expect(calledUrls(viaArp.fetchFn)[0]).toBe("http://192.168.64.5:8765/health");
@@ -452,13 +460,76 @@ describe("AgentClient discovery", () => {
     expect(execFile).not.toHaveBeenCalled();
   });
 
+  describe("VM MAC from UTM's config", () => {
+    const NO_MAC = { EDIABAS_VM_MAC: "" };
+    const UTM_CONFIG = JSON.stringify({ Backend: "QEMU", Network: [{ Hardware: "virtio-net-pci", MacAddress: "02:00:00:00:00:01", Mode: "Shared" }] });
+    const PLIST = "/nonexistent-home/Library/Containers/com.utmapp.UTM/Data/Documents/Windows.utm/config.plist";
+
+    it("reads the MAC from UTM's config.plist for the VM when EDIABAS_VM_MAC is not set", async () => {
+      const { client, execFile, fetchFn } = makeClient({
+        env: NO_MAC,
+        fetch: vi.fn(async () => okResponse()),
+        plutil: UTM_CONFIG,
+        leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+      });
+      await client.health();
+      expect(calledUrls(fetchFn)[0]).toBe("http://192.168.64.3:8765/health");
+      expect(execFile).toHaveBeenCalledWith("/usr/bin/plutil", ["-convert", "json", "-o", "-", PLIST], expect.any(Object));
+    });
+
+    it("looks in the config of the VM named by EDIABAS_VM_NAME", async () => {
+      const { client, execFile } = makeClient({
+        env: { ...NO_MAC, EDIABAS_VM_NAME: "Win11" },
+        fetch: vi.fn(async () => okResponse()),
+        plutil: UTM_CONFIG,
+        leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+      });
+      await client.health();
+      expect(execFile.mock.calls[0]?.[1]).toEqual(["-convert", "json", "-o", "-", PLIST.replace("Windows.utm", "Win11.utm")]);
+    });
+
+    it("EDIABAS_VM_MAC wins: UTM's config is not read", async () => {
+      const { client, execFile } = makeClient({
+        fetch: vi.fn(async () => okResponse()),
+        plutil: JSON.stringify({ Network: [{ MacAddress: "02:00:00:00:00:99" }] }),
+        leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+      });
+      await client.health();
+      expect(execFile).not.toHaveBeenCalled();
+    });
+
+    it("without any MAC: skips leases and ARP, still tries utmctl, and says how to set it", async () => {
+      const { client, readFile, execFile } = makeClient({
+        env: NO_MAC,
+        fetch: vi.fn(async () => okResponse()),
+        plutil: null,
+        leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+        arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
+        utm: null,
+      });
+      const e = await errorOf(client.health());
+      expect(e.code).toBe("vm_not_running");
+      expect(e.message).toContain(`its MAC address is not set and could not be read from ${PLIST}`);
+      expect(e.message).toContain("set EDIABAS_VM_MAC to the VM's MAC address, or EDIABAS_VM_NAME if the VM in UTM is not called 'Windows'");
+      expect(readFile).not.toHaveBeenCalled();
+      expect(execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/bin/plutil", "/Applications/UTM.app/Contents/MacOS/utmctl"]);
+    });
+
+    it("a MAC with no lease names it and the settings to check", async () => {
+      const { client } = makeClient({ fetch: vi.fn(async () => okResponse()), leases: "", arp: "", utm: null });
+      const e = await errorOf(client.health());
+      expect(e.code).toBe("vm_not_running");
+      expect(e.message).toContain("its MAC address 02:00:00:00:00:01 is not in the DHCP leases or ARP table; if that is not the VM's MAC, set EDIABAS_VM_MAC");
+    });
+  });
+
   it("de-duplicates candidates across sources", async () => {
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(async () => {
         throw connError("ECONNREFUSED");
       }),
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]",
+      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
       utm: "192.168.64.3\n",
     });
     await errorOf(client.health());
@@ -947,7 +1018,7 @@ describe("stderr diagnostics", () => {
     await viaLeases.client.health();
     expect(viaLeases.logs).toContain("discovery accepted 192.168.64.3:8765 (source: leases)");
 
-    const viaArp = makeClient({ fetch: ok, leases: null, arp: "? (192.168.64.5) at f2:e5:81:1e:82:7 on bridge100 ifscope [bridge]" });
+    const viaArp = makeClient({ fetch: ok, leases: null, arp: "? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]" });
     await viaArp.client.health();
     expect(viaArp.logs).toContain("discovery accepted 192.168.64.5:8765 (source: arp)");
 
@@ -1070,7 +1141,7 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     const { client } = await stubbed({ "POST /ediabas/job": () => agentErr(409, "cable_in_use", "busy", details) });
     const e = await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }));
     expect(e.code).toBe("cable_in_use");
-    expect(e.message).toMatch(/cable is in use by a BMW tool in the VM\. Ask Ryan to close it/);
+    expect(e.message).toMatch(/cable is in use by a BMW tool in the VM\. Ask the user to close it/);
   });
 
   it("tells the gateway 403 apart from the agent's policy 403s", async () => {

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppServer, INSTRUCTIONS, SERVER_VERSION } from "../src/server.js";
 import { loadConfig } from "../src/config.js";
 import type { ExecFileFn } from "../src/vmAddress.js";
-import { AGENT_TOKEN, LOOPBACK_BRIDGE, NO_BRIDGE, contractHandler, json, leaseFile, startFakeAgent, type FakeAgent } from "./fixtures.js";
+import { AGENT_TOKEN, LOOPBACK_BRIDGE, NO_BRIDGE, TEST_VM_MAC, contractHandler, json, leaseFile, startFakeAgent, type FakeAgent } from "./fixtures.js";
 
 /** The version a release sets, so a version bump never needs this test changed. */
 const PACKAGE_VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
@@ -35,7 +35,7 @@ interface Setup {
 async function connect(s: Setup = {}) {
   const auditPath = join(dir, "logs", "audit.log");
   // With EDIABAS_AGENT_URL set the server uses EDIABAS_AGENT_TOKEN only; "" unsets it.
-  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: AGENT_TOKEN, EDIABAS_AUDIT_LOG: auditPath, ...s.env };
+  const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: AGENT_TOKEN, EDIABAS_AUDIT_LOG: auditPath, EDIABAS_VM_MAC: TEST_VM_MAC, ...s.env };
   const { config } = loadConfig(env, dir);
   const logs: string[] = [];
   const keychain = s.keychain === undefined ? AGENT_TOKEN : s.keychain;

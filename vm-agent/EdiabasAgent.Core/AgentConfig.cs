@@ -51,7 +51,7 @@ public sealed class AgentConfig
     public string LogDirectory { get; set; } = DefaultLogDirectory;
     public List<string> LogRoots { get; set; } = [@"C:\EDIABAS\TRACE", @"C:\NCSEXPER\WORK"];
     public List<string> ConflictProcesses { get; set; } = ["INPALOAD", "TOOL32", "NCSEXPER", "WINKFPT", "BMW Coding Tool"];
-    public List<VoltageSource> VoltageSources { get; set; } = [new VoltageSource { Ecu = "NVE_65", Job = "STATUS_BORDNETZSPANNUNG" }];
+    public List<VoltageSource> VoltageSources { get; set; } = [];
     public List<string> ReviewedJobs { get; set; } = [];
     public int JobTimeoutSeconds { get; set; } = 30;
     public int MaxJobTimeoutSeconds { get; set; } = 60;

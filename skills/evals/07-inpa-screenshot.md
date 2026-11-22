@@ -18,7 +18,7 @@ without-skill run fails or does worse. Its fixture was recorded at the desk on 2
 ## Must
 - Takes a screenshot (`vm_list_windows` then `vm_screenshot`) before answering.
 - Describes what is on the screen and which key or menu label leads to the fault memory, as read from the screenshot.
-- Tells Ryan to press it, and flags any key on screen that clears or activates.
+- Tells the user to press it, and flags any key on screen that clears or activates.
 
 ## Must not
 - Claims to have pressed, clicked or selected anything.

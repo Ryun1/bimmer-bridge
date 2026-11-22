@@ -1,5 +1,13 @@
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** config.local.json at the repo root (git-ignored): two levels above both src/ and dist/. */
+export const DEFAULT_LOCAL_CONFIG_PATH = fileURLToPath(new URL("../../config.local.json", import.meta.url));
+
+/** Keys config.local.json may set. Keys starting with "_" are comments and ignored. */
+const LOCAL_KEYS = ["vmName", "vmMac", "agentPort"] as const;
 
 /** All runtime configuration, read once from the environment. */
 export interface Config {
@@ -7,10 +15,15 @@ export interface Config {
   agentUrl: string | undefined;
   /** Port used with a discovered VM address. */
   agentPort: number;
-  /** The VM's MAC address, as configured (compared numerically, byte by byte). */
-  vmMac: string;
-  /** UTM VM name, for `utmctl` and messages. */
+  /**
+   * The VM's MAC address from EDIABAS_VM_MAC or config.local.json (compared numerically, byte
+   * by byte). When undefined, discovery reads it from UTM's config for the VM (`utmConfigPath`).
+   */
+  vmMac: string | undefined;
+  /** UTM VM name, for `utmctl`, messages and finding the VM's UTM config. */
   vmName: string;
+  /** UTM's config.plist for the VM named `vmName`: where the VM's MAC is read from. */
+  utmConfigPath: string;
   /** Token fallback when the Keychain has none. */
   envToken: string | undefined;
   /** Absolute path of the Mac-side audit log. */
@@ -26,7 +39,6 @@ export interface Config {
 
 export const DEFAULTS = {
   agentPort: 8765,
-  vmMac: "F2:E5:81:1E:82:07",
   vmName: "Windows",
   keychainService: "ediabas-bridge",
   keychainAccount: "agent",
@@ -46,6 +58,65 @@ function expandHome(p: string, home: string): string {
   return p;
 }
 
+/** UTM's config.plist for the VM called `vmName` (UTM's sandboxed Documents folder). */
+export function utmConfigPath(home: string, vmName: string): string {
+  return join(home, "Library", "Containers", "com.utmapp.UTM", "Data", "Documents", `${vmName}.utm`, "config.plist");
+}
+
+interface LocalConfig {
+  vmName?: string;
+  vmMac?: string;
+  agentPort?: number;
+}
+
+/**
+ * Read config.local.json. A missing file is normal (empty result); anything wrong with it is a
+ * warning, never a crash, and only the valid keys are used.
+ */
+export function readLocalConfig(path: string, warnings: string[]): LocalConfig {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+      warnings.push(`${path} could not be read (${(e as Error).message}); it is ignored.`);
+    }
+    return {};
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    warnings.push(`${path} is not valid JSON (${(e as Error).message}); it is ignored.`);
+    return {};
+  }
+  if (typeof json !== "object" || json === null || Array.isArray(json)) {
+    warnings.push(`${path} must hold one JSON object; it is ignored.`);
+    return {};
+  }
+  const out: LocalConfig = {};
+  for (const [key, value] of Object.entries(json as Record<string, unknown>)) {
+    if (key.startsWith("_")) continue;
+    if (!(LOCAL_KEYS as readonly string[]).includes(key)) {
+      warnings.push(`${path}: unknown key "${key}" is ignored (known keys: ${LOCAL_KEYS.join(", ")}).`);
+      continue;
+    }
+    if (key === "agentPort") {
+      if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535) out.agentPort = value;
+      else warnings.push(`${path}: agentPort must be a whole number from 1 to 65535; it is ignored.`);
+      continue;
+    }
+    const text = typeof value === "string" ? value.trim() : "";
+    if (!text) {
+      warnings.push(`${path}: ${key} must be a non-empty string; it is ignored.`);
+      continue;
+    }
+    if (key === "vmName") out.vmName = text;
+    else out.vmMac = text;
+  }
+  return out;
+}
+
 /** True when `url` is an absolute http(s) URL. */
 export function isHttpUrl(url: string): boolean {
   try {
@@ -56,8 +127,18 @@ export function isHttpUrl(url: string): boolean {
   }
 }
 
-export function loadConfig(env: Env = process.env, home: string = homedir()): { config: Config; warnings: string[] } {
+/**
+ * Build the configuration. Each setting comes from its environment variable, else from
+ * config.local.json (`localConfigPath`; not read when undefined), else its default. The VM's
+ * MAC has no default: without one, discovery reads it from UTM's config for the VM.
+ */
+export function loadConfig(
+  env: Env = process.env,
+  home: string = homedir(),
+  localConfigPath?: string,
+): { config: Config; warnings: string[] } {
   const warnings: string[] = [];
+  const local = localConfigPath === undefined ? {} : readLocalConfig(localConfigPath, warnings);
 
   let agentUrl = nonEmpty(env.EDIABAS_AGENT_URL);
   if (agentUrl !== undefined) {
@@ -67,18 +148,20 @@ export function loadConfig(env: Env = process.env, home: string = homedir()): { 
     }
   }
 
-  let agentPort: number = DEFAULTS.agentPort;
+  let agentPort: number = local.agentPort ?? DEFAULTS.agentPort;
   const portText = nonEmpty(env.EDIABAS_AGENT_PORT);
   if (portText !== undefined) {
     const n = Number(portText);
     if (/^\d+$/.test(portText) && n >= 1 && n <= 65535) agentPort = n;
-    else warnings.push(`EDIABAS_AGENT_PORT is not a valid port; using ${DEFAULTS.agentPort}.`);
+    else warnings.push(`EDIABAS_AGENT_PORT is not a valid port; using ${agentPort}.`);
   }
 
   const auditLogPath = expandHome(
     nonEmpty(env.EDIABAS_AUDIT_LOG) ?? join(home, "Library", "Logs", "ediabas-bridge", "audit.log"),
     home,
   );
+
+  const vmName = nonEmpty(env.EDIABAS_VM_NAME) ?? local.vmName ?? DEFAULTS.vmName;
 
   const recordText = nonEmpty(env.EDIABAS_RECORD_DIR);
   const recordDir = recordText === undefined ? undefined : expandHome(recordText, home);
@@ -87,8 +170,9 @@ export function loadConfig(env: Env = process.env, home: string = homedir()): { 
     config: {
       agentUrl,
       agentPort,
-      vmMac: nonEmpty(env.EDIABAS_VM_MAC) ?? DEFAULTS.vmMac,
-      vmName: nonEmpty(env.EDIABAS_VM_NAME) ?? DEFAULTS.vmName,
+      vmMac: nonEmpty(env.EDIABAS_VM_MAC) ?? local.vmMac,
+      vmName,
+      utmConfigPath: utmConfigPath(home, vmName),
       envToken: nonEmpty(env.EDIABAS_AGENT_TOKEN),
       auditLogPath,
       keychainService: DEFAULTS.keychainService,

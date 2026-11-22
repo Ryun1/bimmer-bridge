@@ -2,6 +2,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 
 export const AGENT_TOKEN = "TESTtoken_0123456789abcdefghijklmnopqrstuvwx"; // 43 chars, fake
+/** A made-up VM MAC (locally administered), as configured and as macOS prints it. */
+export const TEST_VM_MAC = "02:00:00:00:00:01";
+export const TEST_VM_MAC_SHORT = "2:0:0:0:0:1";
 
 export function healthBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -14,7 +17,7 @@ export function healthBody(overrides: Record<string, unknown> = {}): Record<stri
       osArchitecture: "Arm64",
       processArchitecture: "X86",
     },
-    user: "ryan",
+    user: "user",
     elevated: false,
     sessionId: 1,
     bindAddress: "192.168.64.3",
@@ -139,6 +142,6 @@ export const NO_BRIDGE = {
 
 export function leaseFile(...entries: { ip: string; mac?: string; lease: number }[]): string {
   return entries
-    .map((e) => `{\n\tname=host\n\tip_address=${e.ip}\n\thw_address=1,${e.mac ?? "f2:e5:81:1e:82:7"}\n\tidentifier=1,${e.mac ?? "f2:e5:81:1e:82:7"}\n\tlease=0x${e.lease.toString(16)}\n}\n`)
+    .map((e) => `{\n\tname=host\n\tip_address=${e.ip}\n\thw_address=1,${e.mac ?? TEST_VM_MAC_SHORT}\n\tidentifier=1,${e.mac ?? TEST_VM_MAC_SHORT}\n\tlease=0x${e.lease.toString(16)}\n}\n`)
     .join("");
 }

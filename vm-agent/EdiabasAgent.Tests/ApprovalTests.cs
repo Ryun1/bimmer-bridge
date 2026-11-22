@@ -148,7 +148,7 @@ public class ApprovalTests
         Assert.Equal(403, r.Failure!.Status);
         Assert.Equal("job_needs_review", r.Failure.Error.Code);
         Assert.Equal(
-            $"The description of STATUS_X has changed since it was approved (now {StatusLesenHash}). Ryan can approve it again in the agent config.",
+            $"The description of STATUS_X has changed since it was approved (now {StatusLesenHash}). The user can approve it again in the agent config.",
             r.Failure.Error.Message);
         var d = Assert.IsType<JobReviewDetails>(r.Failure.Error.Details);
         Assert.Equal("Status lesen", d.Description);

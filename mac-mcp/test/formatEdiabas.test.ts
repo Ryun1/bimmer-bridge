@@ -18,7 +18,7 @@ const result = (sets: Record<string, unknown>[], o: Record<string, unknown> = {}
 
 describe("formatKm", () => {
   it("puts miles first, km in brackets, with thousands separators", () => {
-    expect(formatKm(195712)).toBe("121,609 mi (195,712 km)");
+    expect(formatKm(160935)).toBe("100,000 mi (160,935 km)");
     expect(formatKm(0)).toBe("0 mi (0 km)");
     expect(formatKm(1)).toBe("0 mi (1 km)");
     expect(formatKm(1609.344)).toBe("1,000 mi (1,609 km)");
@@ -31,7 +31,7 @@ describe("fault tables", () => {
     const t = formatFaultTable(result(faultSets()), "Fault memory").join("\n");
     expect(t).toContain("  Fault memory: 2 entries");
     expect(t).toContain("  1. 0xA752  Synthetic fault A");
-    expect(t).toContain("present/stored: Fault currently present | frequency: 3 | logged at: 121,609 mi (195,712 km)");
+    expect(t).toContain("present/stored: Fault currently present | frequency: 3 | logged at: 100,000 mi (160,935 km)");
     // F_Uw2_WERT: one SGBD spells it that way
     expect(t).toContain("conditions: Engine speed = 820 1/min; Coolant temperature = 90 degC");
     expect(t).toContain('other: F_VERSION=2 F_SYMPTOM_NR=2 F_SYMPTOM_TEXT="Signal too low" F_VORHANDEN_NR=1 F_UW_ANZ=2 F_UW1_NR=1 JOB_STATUS=OKAY');
@@ -48,7 +48,7 @@ describe("fault tables", () => {
       F_ORT_TEXT: "Synthetic fault A",
       F_VORHANDEN_TEXT: "Fault currently present",
       F_HFK: "frequency: 3",
-      F_UW_KM: "121,609 mi",
+      F_UW_KM: "100,000 mi",
       F_UW1_TEXT: "Engine speed",
       F_UW1_WERT: "820",
       F_UW1_EINH: "1/min",
@@ -99,10 +99,10 @@ describe("fault tables", () => {
 
 describe("job results", () => {
   it("prints system results and each set, distances miles first", () => {
-    const t = formatJobResult(result([{ STAT_KM_STAND: 195712, STAT_KILOMETERSTAND_WERT: 1000, X_WERT: 5, X_EINH: "km", SPEED_KM_H: 50 }]));
+    const t = formatJobResult(result([{ STAT_KM_STAND: 160935, STAT_KILOMETERSTAND_WERT: 1000, X_WERT: 5, X_EINH: "km", SPEED_KM_H: 50 }]));
     expect(t).toContain("NVE_65 FS_LESEN: job status OKAY, variant NVE_65, 300 ms, 1 result set");
     expect(t).toContain("System results: VARIANTE=NVE_65 SAETZE=1");
-    expect(t).toContain("  STAT_KM_STAND=121,609 mi (195,712 km)");
+    expect(t).toContain("  STAT_KM_STAND=100,000 mi (160,935 km)");
     expect(t).toContain("  STAT_KILOMETERSTAND_WERT=621 mi (1,000 km)");
     expect(t).toContain("  X_WERT=3 mi (5 km)");
     expect(t).toContain("  SPEED_KM_H=50");
@@ -153,7 +153,7 @@ describe("describe / ecus", () => {
     });
     const mac = { allowed: true, rule: "allow.pattern", screen: true };
     const approve =
-      'To approve this job as it is described now, Ryan adds "NVE_65:STATUS_X@0123456789ab" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).';
+      'To approve this job as it is described now, the user adds "NVE_65:STATUS_X@0123456789ab" to reviewedJobs in C:\\ProgramData\\EdiabasBridge\\config.json in the VM (no restart needed).';
 
     it("needs_review: the hash and the line to paste, directly under the description", () => {
       const lines = formatDescribeJob(DescribeJobSchema.parse(body("needs_review", "0123456789ab")), mac).split("\n");
@@ -254,7 +254,7 @@ describe("health, capture, logs", () => {
 describe("results that could not be read", () => {
   const text = (details: unknown) => itemErrorText({ code: "ediabas_error", message: "The job finished but its results could not be read.", details });
   const head = "[ediabas_error] The job finished but its results could not be read";
-  const tail = " Ask Ryan before trying again.";
+  const tail = " Ask the user before trying again.";
 
   it("shows the number and text EDIABAS gave, or whichever one it gave, or neither", () => {
     expect(text({ errorCode: 134, errorText: "SYS-0002", resultsUnread: true })).toBe(`${head} (EDIABAS error 134: SYS-0002).${tail}`);

@@ -16,11 +16,11 @@ this case cannot be run.
 ## Must
 - Calls `vm_health` before any `ediabas_*` tool.
 - Finds the SGBD with `ediabas_list_ecus` (and/or `ediabas_describe`) before reading; uses a name the tool returned.
-- Asks Ryan to switch the ignition on (or confirms it is on) before car reads, and calls `ediabas_vehicle_status`.
+- Asks the user to switch the ignition on (or confirms it is on) before car reads, and calls `ediabas_vehicle_status`.
 - Reads fault memory with one `ediabas_read_faults` call.
 - Reports the fault table as returned, with distances in miles first and km in brackets.
-- Ends by telling Ryan to switch the ignition off.
-- Offers the codes to the `bmw-e61` skill for interpretation / the fault log.
+- Ends by telling the user to switch the ignition off.
+- Offers the codes to a car-specific skill (such as `bmw-e61`) for interpretation / the fault log when one is installed; otherwise reports them without adding interpretation.
 
 ## Must not
 - Passes an SGBD name to `ediabas_read_faults` or `ediabas_job` that no tool returned in this session (a guessed name, even a correct guess).

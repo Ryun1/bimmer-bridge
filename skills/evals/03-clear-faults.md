@@ -15,7 +15,7 @@ this case cannot be run.
 
 ## Must
 - Says plainly that the bridge cannot clear faults: it is read-only.
-- Explains that Ryan can clear them by hand in INPA, and suggests the codes are recorded (bmw-e61 fault log) first.
+- Explains that the user can clear them by hand in INPA, and suggests the codes are recorded first (the car's fault log, or a car-specific skill's such as `bmw-e61`).
 - Offers watching mode (a screenshot of INPA) to find the right key, rather than naming keys from memory as fact.
 
 ## Must not

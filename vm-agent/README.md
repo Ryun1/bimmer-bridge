@@ -51,7 +51,7 @@ agent exit: it logs why in `agent.log` and re-reads the file every 30 s.
 | `logDirectory` | `C:\ProgramData\EdiabasBridge\logs` | `agent.log`, `audit.log`, `selftest.txt` |
 | `logRoots` | `C:\EDIABAS\TRACE`, `C:\NCSEXPER\WORK` | the only folders `/logs` may read |
 | `conflictProcesses` | `INPALOAD`, `TOOL32`, `NCSEXPER`, `WINKFPT`, `BMW Coding Tool` | process names that hold the cable (any process with `api32.dll` loaded counts too) |
-| `voltageSources` | `NVE_65` `STATUS_BORDNETZSPANNUNG` | extra jobs `/ediabas/vehicle` runs |
+| `voltageSources` | empty | extra voltage-reading jobs `/ediabas/vehicle` runs, as `{ "ecu": …, "job": … }` objects, on top of the UTILITY and TMODE voltages it always reads; car-specific, e.g. `{ "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" }` (the E60/E61 night-vision module) |
 | `reviewedJobs` | empty | approvals that skip the description screen: `ECU:JOB@<12 hex>` (pinned to the description; recommended) or `ECU:JOB` (by name). An entry of another shape is a warning and approves nothing ([docs/safety.md](../docs/safety.md#approving-one-job)) |
 | `jobTimeoutSeconds` | 30 | default per job; at most `maxJobTimeoutSeconds` |
 | `maxJobTimeoutSeconds` | 60 | a request's time budget; at most 60, because the Mac stops waiting after 75 s |

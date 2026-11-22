@@ -239,7 +239,7 @@ public class CaptureRulesTests
         Assert.Null(f.Error.Details);
     }
 
-    // Three different answers: only a locked screen, secure desktop or session 0 tells Ryan to
+    // Three different answers: only a locked screen, secure desktop or session 0 tells the user to
     // unlock the VM. A capture queued too long and a failed GDI copy say what happened.
     [Fact]
     public void CaptureFailures_MapToTheirOwnCodes()

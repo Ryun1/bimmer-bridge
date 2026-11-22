@@ -9,8 +9,10 @@ Implements the routes in docs/deploy.md and nothing else:
   PUT /token                                                      only with --accept-token
 
 Only the VM may talk to it: every request from any other address is refused (403). The VM's
-address is the latest DHCP lease for its MAC (EDIABAS_VM_MAC, default the same as the MCP
-server's), or the one given with --client.
+address is the latest DHCP lease for its MAC, or the one given with --client. The MAC is found
+as the MCP server finds it: EDIABAS_VM_MAC, else vmMac in config.local.json at the repo root,
+else the first network card in UTM's config.plist for the VM (EDIABAS_VM_NAME, else vmName in
+config.local.json, else "Windows").
 
 Standard library only. Run from anywhere:
   python3 dev/serve.py [--bind IP] [--client VM-IP] [--port N] [--accept-token]
@@ -23,6 +25,7 @@ import http.server
 import ipaddress
 import json
 import os
+import plistlib
 import re
 import subprocess
 import sys
@@ -52,9 +55,16 @@ KEYCHAIN_ACCOUNT = "agent"
 SECURITY_TOOL = "/usr/bin/security"
 
 LEASES_PATH = "/var/db/dhcpd_leases"
-# The VM's MAC address. Same default and variable as the MCP server (mac-mcp/src/config.ts).
-VM_MAC_DEFAULT = "F2:E5:81:1E:82:07"
+# The VM's MAC address and UTM name: the same variables, local file and UTM lookup as the MCP
+# server (mac-mcp/src/config.ts and vmAddress.ts).
 VM_MAC_ENV = "EDIABAS_VM_MAC"
+VM_NAME_ENV = "EDIABAS_VM_NAME"
+VM_NAME_DEFAULT = "Windows"
+LOCAL_CONFIG_PATH = REPO_ROOT / "config.local.json"
+# Keys config.local.json may set (keys starting with "_" are comments). agentPort is for the
+# MCP server; serve.py accepts it without using it.
+LOCAL_KEYS = ("vmName", "vmMac", "agentPort")
+UTM_DOCUMENTS = Path.home() / "Library" / "Containers" / "com.utmapp.UTM" / "Data" / "Documents"
 
 
 # --------------------------------------------------------------------------- bind address
@@ -195,6 +205,79 @@ def vm_lease_address(leases_text, mac):
         if best is None or expiry > best[0]:
             best = (expiry, addr)
     return best[1] if best else None
+
+
+def read_local_config(path):
+    """(settings, warnings) from config.local.json. A missing file gives ({}, []); anything
+    wrong with it is a warning, never an error, and only the valid keys are used."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        return {}, []
+    except OSError as e:
+        return {}, ["%s could not be read (%s); it is ignored." % (path, e)]
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        return {}, ["%s is not valid JSON (%s); it is ignored." % (path, e)]
+    if not isinstance(data, dict):
+        return {}, ["%s must hold one JSON object; it is ignored." % path]
+    out, warnings = {}, []
+    for key, value in data.items():
+        if key.startswith("_"):
+            continue
+        if key not in LOCAL_KEYS:
+            warnings.append('%s: unknown key "%s" is ignored (known keys: %s).'
+                            % (path, key, ", ".join(LOCAL_KEYS)))
+        elif key == "agentPort":
+            if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535:
+                out[key] = value
+            else:
+                warnings.append("%s: agentPort must be a whole number from 1 to 65535; it is "
+                                "ignored." % path)
+        elif isinstance(value, str) and value.strip():
+            out[key] = value.strip()
+        else:
+            warnings.append("%s: %s must be a non-empty string; it is ignored." % (path, key))
+    return out, warnings
+
+
+def utm_config_path(vm_name, documents=None):
+    """UTM's config.plist for the VM called `vm_name`."""
+    return Path(documents if documents is not None else UTM_DOCUMENTS) / ("%s.utm" % vm_name) / "config.plist"
+
+
+def mac_from_utm_config(path):
+    """The first `Network` entry's `MacAddress` in UTM's config.plist, or None."""
+    try:
+        with open(path, "rb") as f:
+            data = plistlib.load(f)
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return None
+    network = data.get("Network") if isinstance(data, dict) else None
+    if not isinstance(network, list) or not network or not isinstance(network[0], dict):
+        return None
+    mac = network[0].get("MacAddress")
+    if not isinstance(mac, str) or _mac_bytes(mac) is None:
+        return None
+    return mac.strip()
+
+
+def resolve_vm(env, local, documents=None):
+    """(vm_name, mac, plist_path): environment, then config.local.json, then UTM's config.plist
+    for the MAC (default name "Windows"). `mac` is None when nothing gives one."""
+    vm_name = (env.get(VM_NAME_ENV) or "").strip() or local.get("vmName") or VM_NAME_DEFAULT
+    plist = utm_config_path(vm_name, documents)
+    mac = (env.get(VM_MAC_ENV) or "").strip() or local.get("vmMac")
+    if not mac:
+        mac = mac_from_utm_config(plist)
+    return vm_name, mac, plist
+
+
+def vm_mac_hint(vm_name):
+    return ("set %s to the VM's MAC address, or %s if the VM in UTM is not called '%s' "
+            "(or vmMac / vmName in %s)" % (VM_MAC_ENV, VM_NAME_ENV, vm_name, LOCAL_CONFIG_PATH.name))
 
 
 def read_leases():
@@ -595,8 +678,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="ediabas-bridge deploy/discovery server")
     parser.add_argument("--bind", help="IPv4 address to bind (default: UTM bridge1xx address)")
     parser.add_argument("--client", help="the VM's IPv4 address, the only one served (default: "
-                        "the latest DHCP lease for the VM's MAC, %s or %s)"
-                        % (VM_MAC_ENV, VM_MAC_DEFAULT))
+                        "the latest DHCP lease for the VM's MAC: %s, else vmMac in "
+                        "config.local.json, else read from UTM's config for the VM)" % VM_MAC_ENV)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port (default 8000)")
     parser.add_argument("--accept-token", action="store_true",
                         help="accept one agent token on PUT /token and store it in the Keychain")
@@ -623,12 +706,21 @@ def main(argv=None):
     if args.client is not None:
         client = args.client
     else:
-        mac = (os.environ.get(VM_MAC_ENV) or "").strip() or VM_MAC_DEFAULT
+        local, warnings = read_local_config(LOCAL_CONFIG_PATH)
+        for w in warnings:
+            print("warning: %s" % w, file=sys.stderr)
+        vm_name, mac, plist = resolve_vm(os.environ, local)
+        if not mac:
+            print("error: the VM's MAC address is not set and could not be read from %s: %s. "
+                  "Or pass --client <VM IPv4 address> (ipconfig in the VM shows it)."
+                  % (plist, vm_mac_hint(vm_name)), file=sys.stderr)
+            return 1
         client = vm_lease_address(read_leases(), mac)
         if client is None:
             print("error: no DHCP lease for the VM's MAC %s in %s. Start the VM, or pass "
-                  "--client <VM IPv4 address> (ipconfig in the VM shows it)."
-                  % (mac, LEASES_PATH), file=sys.stderr)
+                  "--client <VM IPv4 address> (ipconfig in the VM shows it). If %s is not the "
+                  "VM's MAC, %s."
+                  % (mac, LEASES_PATH, mac, vm_mac_hint(vm_name)), file=sys.stderr)
             return 1
     try:
         client = validate_client(bind, client)

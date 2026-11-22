@@ -29,7 +29,7 @@ export const SERVER_VERSION: string = (() => {
 })();
 
 export const INSTRUCTIONS = [
-  "ediabas-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to Ryan's car.",
+  "ediabas-bridge reads BMW diagnostics through EDIABAS in a Windows VM (UTM) on this Mac, cabled to the user's car.",
   "Call vm_health first and on its own; read its answer before any other tool: it says whether the VM is reachable and a BMW tool holds the cable.",
   "vm_list_windows and vm_screenshot show what is open in the VM; vm_logs_list and vm_logs_read read EDIABAS and tool logs.",
   "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
@@ -37,7 +37,7 @@ export const INSTRUCTIONS = [
   "Everything is read-only: you cannot click, type, clear faults, code or flash anything in the VM or the car.",
   "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review]) or look for another way to do it.",
   "[agent_outdated]: that tool is not installed in the VM yet; say so.",
-  "[ediabas_request_lost]: the job may have run; do not repeat it unless Ryan asks.",
+  "[ediabas_request_lost]: the job may have run; do not repeat it unless the user asks.",
   "If the VM or agent is unreachable, tell the user the fix the message gives rather than retrying.",
 ].join(" ");
 

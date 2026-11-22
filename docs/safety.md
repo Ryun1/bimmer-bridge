@@ -5,9 +5,9 @@ The bridge is read-only by construction. The rules were first written in
 table below is the current list and says which code enforces each one. They are enforced in code on both sides, not only in tool descriptions or
 skills, which are guidance. Check any change against this list.
 
-**Anything that runs against the car is Ryan's, at the car.** Claude Code may run only jobs that
+**Anything that runs against the car is run by the owner, at the car.** Claude Code may run only jobs that
 cannot reach a module: the `TMODE` and `UTILITY` info jobs, and `ediabas_describe` (the `_JOBS`
-family), after Ryan confirms the cable is not plugged into the car (it may still be in the VM;
+family), after the owner confirms the cable is not plugged into the car (it may still be in the VM;
 a real SGBD does not load without it).
 
 ## The rules and what enforces them
@@ -23,7 +23,7 @@ a real SGBD does not load without it).
 | 7 | Read-only file access under configured roots; the agent writes only its own logs | `vm-agent/EdiabasAgent.Core/PathRules.cs`, `vm-agent/EdiabasAgent.Core/LogService.cs` and `vm-agent/EdiabasAgent/Logs/LogAccess.cs`. `/logs/read` checks the path as written against the roots before it opens anything, then checks where the opened file really is ([api.md](api.md#logs)). Folder and token permissions: `vm-setup/install.ps1` |
 | 8 | Never change the EDIABAS configuration: no edits to `EDIABAS.INI` or `obd.ini`, no `apiSetConfig` | `vm-agent/EdiabasAgent/Ediabas/Api32.cs` declares only what read jobs need, and not `apiSetConfig`; nothing in the agent writes those files |
 | 9 | Audit trail on both sides | VM: `vm-agent/EdiabasAgent/Audit/AuditLog.cs` (format in `vm-agent/EdiabasAgent.Core/AuditLine.cs`). Mac: `mac-mcp/src/audit.ts`. See [architecture.md](architecture.md#logs-and-audit) |
-| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](../PLAN.md#12-working-agreements-for-claude-code)), repeated in the skills. Ryan runs everything at the car |
+| 10 | Never test against the car unattended | Not a code check: a working rule ([PLAN.md section 12](../PLAN.md#12-working-agreements-for-claude-code)), repeated in the skills. The owner runs everything at the car |
 
 Two more limits follow from the timeouts: the agent refuses to start with
 `maxJobTimeoutSeconds` above 60, and the Mac never sends a request that runs an EDIABAS job a
@@ -81,14 +81,14 @@ contains `setz`. Nothing broader is ignored. Exact rules: [api.md](api.md#job-po
 
 ## Approving one job
 
-A `job_needs_review` refusal is Ryan's decision, made for one job at a time after reading its
+A `job_needs_review` refusal is the owner's decision, made for one job at a time after reading its
 description. The safe default is not to run it, and approving must never become routine. The
 approval list lives only in the VM, in the agent's config, not in this repo.
 
 An entry in `reviewedJobs` takes one of two forms:
 
-- `"ECU:JOB@<12 hex>"`, pinned: approves the job only while its description is the one Ryan
-  read. If the SGBD's description changes, the job is refused again with `job_needs_review`.
+- `"ECU:JOB@<12 hex>"`, pinned: approves the job only while its description is the one the
+  owner read. If the SGBD's description changes, the job is refused again with `job_needs_review`.
   This is the recommended form.
 - `"ECU:JOB"`, unpinned: approves the job by name, whatever its description says now or later.
 
@@ -96,7 +96,7 @@ Steps:
 
 1. Run `ediabas_describe` on the job (with `job`). Under the description it prints
    `Description hash: <hash>`, and for a job that needs review the exact line to paste:
-   `To approve this job as it is described now, Ryan adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
+   `To approve this job as it is described now, the user adds "ECU:JOB@<hash>" to reviewedJobs in C:\ProgramData\EdiabasBridge\config.json in the VM (no restart needed).`
 2. In the VM, open `C:\ProgramData\EdiabasBridge\config.json` as an administrator (the folder
    grants users read access only).
 3. Add the entry to the `reviewedJobs` list, upper case, with the ECU name as it is asked for

@@ -395,7 +395,7 @@
                 ecuPath              = (Join-Path $ediabasRoot 'ECU')
                 logRoots             = [object[]]$logRoots
                 conflictProcesses    = [object[]]@('INPALOAD', 'TOOL32', 'NCSEXPER', 'WINKFPT', 'BMW Coding Tool')
-                voltageSources       = [object[]]@([ordered]@{ ecu = 'NVE_65'; job = 'STATUS_BORDNETZSPANNUNG' })
+                voltageSources       = [object[]]@()
                 reviewedJobs         = [object[]]@()
                 jobTimeoutSeconds    = 30
                 maxJobTimeoutSeconds = 60

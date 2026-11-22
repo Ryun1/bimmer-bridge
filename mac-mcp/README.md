@@ -48,7 +48,7 @@ and the call is never sent a second time; nor is an `ediabas_list_ecus` call tha
 
 **No cable.** EDIABAS error 28 (`IFH-0018`) comes back as `cable_not_found`: the cable is not
 connected to the VM. Even `ediabas_describe` of a real SGBD needs it (seen at the desk on
-2026-11-21); the message asks Ryan to connect it and not to retry until he has.
+2026-11-21); the message asks the user to connect it and not to retry until they have.
 
 ## Build and test
 
@@ -85,13 +85,27 @@ token is re-read once, so a newly stored token is picked up without a restart.
 |---|---|---|
 | `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/health` agent check still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
 | `EDIABAS_AGENT_PORT` | `8765` | port used with a discovered address |
-| `EDIABAS_VM_MAC` | `F2:E5:81:1E:82:07` | the VM's MAC address |
-| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl` and messages |
+| `EDIABAS_VM_MAC` | read from UTM | the VM's MAC address; when unset, read from UTM's config for the VM (see Finding the VM) |
+| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl`, messages and finding the VM's MAC in UTM's config |
 | `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none; the only token used with `EDIABAS_AGENT_URL` |
 | `EDIABAS_AUDIT_LOG` | `~/Library/Logs/ediabas-bridge/audit.log` | audit log path |
 | `EDIABAS_RECORD_DIR` | — | record every agent exchange into this folder (see Recording) |
 
+**`config.local.json`.** Settings for one machine can also go in `config.local.json` at the repo
+root (git-ignored; copy `config.local.example.json`). It is read once at start-up (restart Claude
+after changing it) and may set `vmName`, `vmMac` and `agentPort`; keys starting with `_` are
+comments. An environment variable wins over the file, and the file wins over the defaults. A file
+that is not valid JSON, an unknown key or a bad value is a warning on stderr and is ignored; the
+server still starts. `dev/serve.py` reads the same file for `vmName` and `vmMac`.
+
 ## Finding the VM
+
+The VM's MAC is `EDIABAS_VM_MAC`, else `vmMac` in `config.local.json`, else the first network
+card's `MacAddress` in UTM's config for the VM,
+`~/Library/Containers/com.utmapp.UTM/Data/Documents/<EDIABAS_VM_NAME>.utm/config.plist` (read
+with `plutil` at each discovery). When none of these gives a MAC, the DHCP leases and ARP table
+are skipped and only `utmctl` is tried; if that finds nothing, `vm_not_running` says to set
+`EDIABAS_VM_MAC`, or `EDIABAS_VM_NAME` if the VM in UTM has another name.
 
 Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry first), then
 `arp -an`, then `utmctl ip-address <name>`. Only an address on the same subnet as a local

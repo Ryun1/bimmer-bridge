@@ -41,7 +41,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -49,7 +49,7 @@ Never touches the cable and never loads the EDIABAS DLL.
     "osArchitecture": "Arm64",
     "processArchitecture": "X86"
   },
-  "user": "ryan",
+  "user": "owner",
   "elevated": false,
   "sessionId": 1,
   "bindAddress": "192.168.64.3",
@@ -210,15 +210,15 @@ the screen, never the name rules (see "Approvals").
 `reviewedJobs`, and called with non-empty `args` gets one more call after its description
 passed: `_ARGUMENTS` for that job. Every `ARG` name and `ARGCOMMENT` goes through the same
 screen. It fails with `job_needs_review` and one of these messages:
-- "The argument description of {JOB} mentions: {terms}. Ryan can approve it in the agent config."
+- "The argument description of {JOB} mentions: {terms}. The user can approve it in the agent config."
 - "{JOB} takes arguments but they are not described, so the call cannot be shown to be a read.
-  Ryan can approve it in the agent config." (an EDIABAS error on `_ARGUMENTS`, or no rows)
+  The user can approve it in the agent config." (an EDIABAS error on `_ARGUMENTS`, or no rows)
 
 `details.description` then holds the argument text. Call order: `_JOBCOMMENTS`, `_ARGUMENTS`,
 the job.
 
 ## Approvals (`reviewedJobs`)
-`reviewedJobs` in the agent config holds Ryan's approvals of single jobs that the description
+`reviewedJobs` in the agent config holds the owner's approvals of single jobs that the description
 screen refuses. Two entry forms:
 - `"ECU:JOB"` approves the job by name, whatever its description says.
 - `"ECU:JOB@hhhhhhhhhhhh"` (12 lower-case hex digits) approves it only while its description
@@ -235,10 +235,10 @@ description, trimmed: every value of the `_JOBCOMMENTS` sets, one per line, join
 
 For a pinned job the agent reads `_JOBCOMMENTS`, then runs the job; there is no `_ARGUMENTS`
 call. An unpinned approval reads nothing. A pin that no longer holds is `job_needs_review`:
-- "The description of {JOB} has changed since it was approved (now {hash}). Ryan can approve it
-  again in the agent config."
-- "{JOB} has no description now, so its approval cannot be checked. Ryan can approve it again in
-  the agent config."
+- "The description of {JOB} has changed since it was approved (now {hash}). The user can approve
+  it again in the agent config."
+- "{JOB} has no description now, so its approval cannot be checked. The user can approve it again
+  in the agent config."
 - "The description of {JOB} could not be read, so its approval cannot be checked."
 
 **No restart.** At the start of every EDIABAS request the agent checks config.json's last-write
@@ -385,7 +385,9 @@ failure does not stop the rest. Per-item error codes: `job_not_allowed`, `job_ne
 Runs, in one cycle and through the same policy as any other job: `UTILITY STATUS_ZUENDUNG`,
 `UTILITY STATUS_UBATT`, every `voltageSources` entry, `TMODE LESE_SPANNUNG_KL30` and
 `TMODE LESE_SPANNUNG_KL15`. Returns each as an item of the `/ediabas/jobs` shape; the agent
-does not interpret result names (they are confirmed at the car in Phase 6).
+does not interpret result names (they are confirmed at the car in Phase 6). `voltageSources`
+in the agent config is empty by default, so `voltages` is `[]`; the example below shows one
+entry an E60/E61 owner might add (the night-vision module's supply voltage).
 
 ```json
 { "ignition": { "ok": true, "result": { }, "error": null },

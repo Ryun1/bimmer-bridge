@@ -255,7 +255,7 @@ All require `Authorization: Bearer`. All responses are JSON unless noted, and er
 - `window=ista` resolves to the largest visible top-level window of ISTA's process.
 - Walk the Control View. For each element emit: `controlType`, `name`, `automationId`, `className`, `value` (ValuePattern), `toggleState`, `isSelected`, `isEnabled`, `isOffscreen`, `bounds`, children.
 - **Tables:** for elements supporting GridPattern/TablePattern (DataGrid, ListView), emit `columns` (header names) and `rows` (cell text arrays) instead of walking every cell as a node. ISTA's fault memory and test-plan lists are tables, so this matters most.
-- **`format=text` rendering:** indented lines like `[Button] Read fault memory` and `[Edit] Mileage = 195,712`. Render tables as pipe-separated rows under their header. Skip empty, offscreen and pure layout containers (Pane/Group/Custom with no name and a single child) to keep output compact.
+- **`format=text` rendering:** indented lines like `[Button] Read fault memory` and `[Edit] Mileage = 160,935`. Render tables as pipe-separated rows under their header. Skip empty, offscreen and pure layout containers (Pane/Group/Custom with no name and a single child) to keep output compact.
 - Return `{ window: {title, pid, elevated}, nodeCount, truncated, text | tree }`.
 - If ISTA is elevated and the agent isn't, return a specific error that names UIPI and tells Ryan to fix the scheduled task.
 - If the desktop is locked or on the secure desktop, return a specific `desktop_unavailable` error.
@@ -330,7 +330,7 @@ Every tool has a precise description and MCP annotations: `readOnlyHint: true` o
 
 ### Formatting (`format.ts`)
 - Fault tables: one row per set. Show the code as hex (from `F_ORT_NR`) with its text (`F_ORT_TEXT`), present/stored state, frequency count and logged mileage/conditions where the SGBD provides them. Field names vary by SGBD, so map the known ones and pass the rest through as `key=value`.
-- **Mileage:** wherever a result is in km (e.g. `F_UW_KM` or any field whose unit/name indicates km), show miles first with km in brackets, e.g. `121,609 mi (195,712 km)`. Ryan wants distances in miles.
+- **Mileage:** wherever a result is in km (e.g. `F_UW_KM` or any field whose unit/name indicates km), show miles first with km in brackets, e.g. `100,000 mi (160,935 km)`. Ryan wants distances in miles.
 - Append the raw JSON after the text, truncated sensibly.
 
 ### Confirmation dialog (`confirm.ts`)
