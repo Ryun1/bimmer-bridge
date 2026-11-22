@@ -149,13 +149,10 @@ export function formatLogList(l: LogList): string {
   return out.join("\n");
 }
 
-const LOG_TEXT_MAX = 300_000;
-
 /** Log text keeps its line breaks and tabs; every other control character is removed. */
 function cleanLogText(s: string): string {
   // eslint-disable-next-line no-control-regex
-  const t = s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
-  return t.length > LOG_TEXT_MAX ? `${t.slice(0, LOG_TEXT_MAX)}\n… (cut at ${LOG_TEXT_MAX} characters)` : t;
+  return s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g, "");
 }
 
 export function formatLogRead(r: LogRead): string {

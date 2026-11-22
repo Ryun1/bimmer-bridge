@@ -248,11 +248,8 @@ function cleanDeep(v: unknown): unknown {
   return v;
 }
 
-const RAW_MAX = 200_000;
-
 export function formatJobRaw(r: JobResult): string {
-  const t = JSON.stringify(cleanDeep(r), null, 2);
-  return t.length > RAW_MAX ? `${t.slice(0, RAW_MAX)}\n… (cut at ${RAW_MAX} characters)` : t;
+  return JSON.stringify(cleanDeep(r), null, 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +329,9 @@ export function formatVehicle(v: Vehicle): string {
   return out.join("\n");
 }
 
+/** The most ECU names one listing prints. */
+const ECU_NAMES_MAX = 500;
+
 export function formatEcus(e: EcuList, filter: string | undefined): string {
   const where = e.ecuPath ? ` in ${cleanText(e.ecuPath, 200)}` : "";
   const match = filter ? ` matching "${cleanText(filter, 64)}"` : "";
@@ -341,8 +341,16 @@ export function formatEcus(e: EcuList, filter: string | undefined): string {
   const grp = by("grp");
   const other = e.files.filter((f) => !["prg", "grp"].includes(f.type.toLowerCase())).map((f) => `${cleanName(f.name)} (${cleanText(f.type, 10)})`);
   const out = [`${plural(e.files.length, "file")}${match}${where}${e.truncated ? ` (truncated: ${e.count > e.files.length ? `${e.count} matched; ` : ""}narrow the filter)` : ""}:`];
-  if (grp.length) out.push(`Groups (grp): ${grp.join(", ")}`);
-  if (prg.length) out.push(`SGBDs (prg): ${prg.join(", ")}`);
-  if (other.length) out.push(`Other: ${other.join(", ")}`);
+  let left = ECU_NAMES_MAX;
+  const line = (label: string, names: string[]) => {
+    const shown = names.slice(0, left);
+    left -= shown.length;
+    if (shown.length) out.push(`${label}: ${shown.join(", ")}`);
+  };
+  line("Groups (grp)", grp);
+  line("SGBDs (prg)", prg);
+  line("Other", other);
+  const more = grp.length + prg.length + other.length - ECU_NAMES_MAX;
+  if (more > 0) out.push(`${more} more; use filter to narrow the list.`);
   return out.join("\n");
 }

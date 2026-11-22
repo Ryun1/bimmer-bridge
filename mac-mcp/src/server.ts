@@ -19,6 +19,7 @@ import {
 } from "./formatEdiabas.js";
 import { PolicyGuard, jobNotAllowed } from "./policy.js";
 import { FolderRecorder } from "./recorder.js";
+import { fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
 import type { DiscoverySources } from "./vmAddress.js";
 
@@ -62,6 +63,9 @@ export function stderrLog(message: string): void {
 /** The most items one /ediabas/jobs request may carry (docs/api.md). */
 export const BATCH_MAX = 20;
 export const MAX_FAULT_ECUS = 20;
+/** vm_logs_read: the largest range, and the tail read when no range is given. */
+const LOG_READ_MAX = 65_536;
+const LOG_TAIL_DEFAULT = 16_384;
 
 type Client = Pick<
   AgentClient,
@@ -95,6 +99,18 @@ interface AuditInfo {
   job?: string;
 }
 
+/** The closing line of a result cut to the text budget: how to narrow that tool's call. */
+const NARROW_HINT: Record<string, string> = {
+  vm_logs_read: "Read a smaller range (a smaller tailBytes, or offset and length) or use grep.",
+  vm_logs_list: "Narrow with root, glob, since or limit.",
+  ediabas_list_ecus: "Use filter.",
+  ediabas_describe: "Use filter, or job to describe one job.",
+  ediabas_job: "Use results to ask for fewer result fields.",
+  ediabas_jobs: "Use results on the items, or ask for fewer items.",
+  ediabas_read_faults: "Ask for fewer ECUs.",
+};
+const DEFAULT_HINT = "Ask for less.";
+
 function invalidArguments(message: string): BridgeError {
   return new BridgeError("invalid_arguments", message);
 }
@@ -115,15 +131,16 @@ export function buildServer(parts: ServerParts): McpServer {
     let outcome = "ok";
     let rule: string | undefined;
     let result: CallToolResult;
+    const fit = (text: string) => fitText(parts.redact(text), NARROW_HINT[tool] ?? DEFAULT_HINT);
     try {
       const out = await body();
       if (typeof out === "string") {
-        result = { content: [{ type: "text", text: parts.redact(out) }] };
+        result = { content: [{ type: "text", text: fit(out) }] };
       } else {
         result = {
           content: [
             { type: "image", data: out.image.data, mimeType: out.image.mimeType },
-            { type: "text", text: parts.redact(out.text) },
+            { type: "text", text: fit(out.text) },
           ],
         };
       }
@@ -132,7 +149,7 @@ export function buildServer(parts: ServerParts): McpServer {
       outcome = err.code;
       rule = err.rule;
       if (err.code === "internal_error") parts.log(parts.redact(`${tool}: ${err.message}`));
-      result = { isError: true, content: [{ type: "text", text: parts.redact(errorText(err.code, err.message)) }] };
+      result = { isError: true, content: [{ type: "text", text: fit(errorText(err.code, err.message)) }] };
     }
     try {
       await parts.audit.record({ time: new Date(), tool, outcome, durationMs: performance.now() - started, ...info, rule });
@@ -220,14 +237,14 @@ export function buildServer(parts: ServerParts): McpServer {
       title: "Read a VM log file",
       description:
         "Read part of a log file in the VM's allowed log folders (absolute Windows path from vm_logs_list). Give either " +
-        "`tailBytes` (the end of the file; default 65536) or `offset` and `length`; at most 262144 bytes. `grep` (a regular " +
+        "`tailBytes` (the end of the file; default 16384) or `offset` and `length`; at most 65536 bytes. `grep` (a regular " +
         "expression, up to 200 characters) keeps only matching lines. Returns a header line (path, byte range, encoding, " +
         "whether more exists) and the text. Read-only.",
       inputSchema: {
         path: z.string().min(1).max(1024).describe("Absolute path of the log file in the VM."),
-        tailBytes: z.number().int().min(1).max(262144).optional().describe("Read this many bytes from the end."),
+        tailBytes: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Read this many bytes from the end."),
         offset: z.number().int().min(0).optional().describe("Start of the range in bytes (with length)."),
-        length: z.number().int().min(1).max(262144).optional().describe("Length of the range in bytes (with offset)."),
+        length: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Length of the range in bytes (with offset)."),
         grep: z.string().min(1).max(200).optional().describe("Regular expression; only matching lines are returned."),
       },
       annotations: { title: "Read a VM log file", ...READ_ONLY },
@@ -237,7 +254,7 @@ export function buildServer(parts: ServerParts): McpServer {
         const ranged = a.offset !== undefined || a.length !== undefined;
         if (ranged && a.tailBytes !== undefined) throw invalidArguments("Give either tailBytes, or offset and length, not both.");
         if (ranged && (a.offset === undefined || a.length === undefined)) throw invalidArguments("offset and length go together: give both.");
-        return formatLogRead(await client.readLog(a));
+        return formatLogRead(await client.readLog(ranged || a.tailBytes !== undefined ? a : { ...a, tailBytes: LOG_TAIL_DEFAULT }));
       }),
   );
 

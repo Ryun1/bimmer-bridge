@@ -278,6 +278,71 @@ describe("vm_logs_list / vm_logs_read", () => {
   });
 });
 
+describe("text budget", () => {
+  const BUDGET = 60_000;
+
+  it("a 5000-name ECU list stays under the budget and ends with the hint", async () => {
+    override("GET /ediabas/ecus", () => ({
+      status: 200,
+      body: { ecuPath: "C:\\EDIABAS\\ECU", count: 5000, truncated: false, files: Array.from({ length: 5000 }, (_, i) => ({ name: `SGBD_NAME_${i}`, type: "prg" })) },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_list_ecus");
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toBe("4500 more; use filter to narrow the list.");
+  });
+
+  it("a 400-job describe stays under the budget and ends with the hint", async () => {
+    override("GET /ediabas/describe", () => ({
+      status: 200,
+      body: {
+        ecu: "BIG",
+        variant: "BIG",
+        jobCount: 400,
+        jobs: Array.from({ length: 400 }, (_, i) => ({
+          name: `STATUS_JOB_${i}`,
+          comment: `Description ${i} `.padEnd(400, "x"),
+          verdict: { allowed: true, rule: "allow.pattern", review: "passed" },
+        })),
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("ediabas_describe", { ecu: "BIG" });
+    expect(r.isError).toBeFalsy();
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toMatch(/^… cut at \d+ of \d+ characters\. .*filter.*job/);
+  });
+
+  it("a 65536-byte log stays under the budget and ends with the hint", async () => {
+    override("GET /logs/read", (q) => ({
+      status: 200,
+      body: {
+        path: q.query.get("path"),
+        sizeBytes: 65536,
+        modifiedAt: null,
+        offset: 0,
+        length: 65536,
+        encoding: "windows-1252",
+        truncated: false,
+        text: Array.from({ length: 1024 }, (_, i) => `${String(i).padStart(5, "0")} `.padEnd(63, "t")).join("\r\n"),
+      },
+    }));
+    const { call } = await connect();
+    const r = await call("vm_logs_read", { path: "C:\\EDIABAS\\TRACE\\api.trc", tailBytes: 65536 });
+    expect(r.text.length).toBeLessThanOrEqual(BUDGET);
+    expect(r.text.split("\n").at(-1)).toMatch(/^… cut at \d+ of \d+ characters\. .*(tailBytes|offset and length).*grep/);
+  });
+
+  it("vm_logs_read reads 16384 bytes from the end by default and at most 65536", async () => {
+    const { call } = await connect();
+    await call("vm_logs_read", { path: "C:\\a.trc" });
+    expect(new URL(toolRequests()[0]!.path, "http://x").searchParams.get("tailBytes")).toBe("16384");
+    expect((await call("vm_logs_read", { path: "C:\\a.trc", tailBytes: 65537 })).isError).toBe(true);
+    expect((await call("vm_logs_read", { path: "C:\\a.trc", offset: 0, length: 65537 })).isError).toBe(true);
+    expect(toolRequests()).toHaveLength(1);
+  });
+});
+
 describe("ediabas_list_ecus", () => {
   it("lists groups and SGBDs", async () => {
     const { call } = await connect();
