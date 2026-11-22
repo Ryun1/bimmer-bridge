@@ -638,6 +638,13 @@ public sealed class EdiabasService
             throw new InvalidOperationException("apiJob without a successful apiInit");
         }
 
+        // The one gate every apiJob passes: a client that has gone starts nothing more, whether
+        // the next job is its own or one of the agent's info jobs.
+        if (ct.IsCancellationRequested)
+        {
+            return NotRun($"The request was abandoned before {job} started.");
+        }
+
         // The request budget binds every job, not only the decision to start an item: no job may
         // run past it, so the whole request ends within maxJobTimeoutSeconds plus the break grace.
         var budgetLeftMs = session.StartMs + (long)_maxTimeoutSeconds * 1000 - _clock.ElapsedMs;
