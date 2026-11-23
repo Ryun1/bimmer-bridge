@@ -150,8 +150,14 @@ Every remaining non-match, explained:
 | A-SITZ_B, A-SITZ_F, `KOPIE VON C_ACC` (3) | `both_error` (`job_not_allowed`) | both refuse | File names outside the policy's name pattern (`-`, spaces); same answer on both sides |
 | 00MDS410 | `both_error` (`ediabas_error`) | both fail | Same answer on both sides |
 
-Not covered by this run: the comments of the 90 SGBDs above (unchecked, not mismatched), and
-the 24 gate-refused reads (section 2), which describe does not run.
+**The 90 SGBDs' unchecked comments, sampled (2026-11-23).** The agent's 60 s limit is a
+constant ([#16](https://github.com/Ryun1/bimmer-bridge/issues/16)), so the gap was closed by
+sampling: `describe-diff.ts --sample 3` took three of each SGBD's unchecked jobs, spread over
+it, and described each one alone on both sides (its own budget). **258 jobs on 90 SGBDs: all
+258 match** (comment, description hash, verdict, arguments and results), no timeouts. The other
+4,500-odd jobs on those SGBDs are covered by this sample, not compared one by one.
+
+Not covered: the 24 gate-refused reads (section 2), which describe does not run.
 
 Groups (`.grp`) are not compared: natively they give `needs_car` until a live request has
 resolved them (353 `.grp` files in the folder).
