@@ -510,7 +510,7 @@ describe("ediabas_describe text", () => {
   it("says it needs the cable, can be slow, and ignores filter with job", async () => {
     const { client } = await connect();
     const d = (await client.listTools()).tools.find((t) => t.name === "ediabas_describe")!.description!;
-    expect(d).toMatch(/needs the cable attached to the VM/);
+    expect(d).toMatch(/needs the cable, and can take/);
     expect(d).toMatch(/tens of seconds/);
     expect(d).toMatch(/`filter` is ignored when `job` is given/);
   });
@@ -552,7 +552,7 @@ describe("ediabas_vehicle_status", () => {
     );
     const r = await call("ediabas_vehicle_status");
     expect(r.isError).toBe(true);
-    expect(r.text).toMatch(/^\[job_not_allowed\] config\.local\.json voltageSources\[0\] \(NVE_65 STEUERN_X\) is refused by the job policy \(rule deny\.substring:STEUER\)\. Nothing was sent to the VM\./);
+    expect(r.text).toMatch(/^\[job_not_allowed\] config\.local\.json voltageSources\[0\] \(NVE_65 STEUERN_X\) is refused by the job policy \(rule deny\.substring:STEUER\)\. Nothing was sent\./);
     expect(r.text).toMatch(/fix voltageSources in config\.local\.json on the Mac/);
     expect(agent.requests.filter((q) => q.path.startsWith("/ediabas/"))).toEqual([]);
   });

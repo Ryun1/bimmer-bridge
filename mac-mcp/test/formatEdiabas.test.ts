@@ -381,3 +381,22 @@ describe("vehicle status", () => {
     expect(formatVehicle({ items: [item, item, item, item] }, [])).toContain("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
   });
 });
+
+describe("native cable errors in a batch item", () => {
+  it("cable_not_found from the native engine (error 9001) says to untick the cable in UTM", () => {
+    const t = itemErrorText({ code: "cable_not_found", message: "No K+DCAN cable was found.", details: { errorCode: 9001, errorText: "no_device" } });
+    expect(t).toMatch(/^\[cable_not_found\]/);
+    expect(t).toMatch(/untick it in UTM's USB menu/);
+    expect(t).not.toMatch(/pass it through/);
+  });
+
+  it("cable_not_found from the VM (error 28) still says to pass the cable through", () => {
+    const t = itemErrorText({ code: "cable_not_found", message: "m", details: { errorCode: 28, errorText: "IFH-0018" } });
+    expect(t).toMatch(/pass it through/);
+  });
+
+  it("cable_in_use from the native engine (error 9002) names no BMW tool", () => {
+    const t = itemErrorText({ code: "cable_in_use", message: "Another program is using the cable.", details: { errorCode: 9002, errorText: "locked" } });
+    expect(t).toMatch(/Another program on this Mac holds the cable/);
+  });
+});

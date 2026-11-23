@@ -142,13 +142,17 @@ export function engineError(code: string | undefined, message: string | undefine
   return new BridgeError(safeCode, `The native engine reported an error: ${safeCode} — ${message ? cleanText(message) : "(no message)"}.`);
 }
 
+/** The reserved EDIABAS error numbers the native engine gives for libkline's reasons (NativeErrorCodes). */
+const NATIVE_CODE_MIN = 9001;
+const NATIVE_CODE_MAX = 9007;
+
 function describeEngineError(code: string, message: string | undefined, details: unknown): string | null {
   const said = message ? ` The engine said: "${cleanText(message, 200)}".` : "";
   switch (code) {
     case "cable_not_found":
       return (
-        "No K+DCAN cable is attached to this Mac. If the Windows VM has it, the user unticks it in UTM's USB menu so the Mac gets it back; " +
-        "otherwise they plug it in. Run bridge_health to check (it says absent until then). Do not retry until the user says it is connected."
+        "No K+DCAN cable is attached to this Mac. If the Windows VM has it, ask the user to untick it in UTM's USB menu so the Mac gets it back; " +
+        "otherwise to plug it in. Run bridge_health to check (it says absent until then). Do not retry until the user says it is connected."
       );
     case "cable_in_use":
       return `Another program on this Mac holds the cable (another ediabasd or kline session).${said} Ask the user to close it, then ask again once. Do not retry in a loop.`;
@@ -382,6 +386,12 @@ function ediabasErrorAdvice(id: string | null): string {
  * suggests a way around a refusal.
  */
 export function describeAgentError(code: string, message: string | undefined, details: unknown, run = false): string | null {
+  // The native engine's own reasons (9001-9007): the cable is on the Mac, not in the VM.
+  const n = detailNumber(details, "errorCode");
+  if (n !== null && n >= NATIVE_CODE_MIN && n <= NATIVE_CODE_MAX) {
+    const native = describeEngineError(code, message, details);
+    if (native) return native;
+  }
   const agentSaid = message ? ` The agent said: "${cleanText(message, 200)}".` : "";
   switch (code) {
     case "job_not_allowed": {

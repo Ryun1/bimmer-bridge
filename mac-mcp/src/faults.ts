@@ -1,4 +1,5 @@
-import type { AgentClient, BatchItem, JobsResponse } from "./agentClient.js";
+import type { BatchItem, JobsResponse } from "./agentClient.js";
+import type { EdiabasBackend } from "./backend.js";
 import { BridgeError, badResponse, cleanText, errorText, toBridgeError } from "./errors.js";
 import { formatFaultReport, formatJobRaw, formatJobResult, itemErrorText, type FaultReport } from "./formatEdiabas.js";
 import { jobNotAllowed, type JobRequest, type PolicyGuard } from "./policy.js";
@@ -13,7 +14,7 @@ import { jobNotAllowed, type JobRequest, type PolicyGuard } from "./policy.js";
 export const BATCH_MAX = 20;
 
 export interface BatchDeps {
-  client: Pick<AgentClient, "runJobs">;
+  client: Pick<EdiabasBackend, "runJobs">;
   policy: PolicyGuard;
   /** Called with the ECU of each item that ran. */
   onOk?: ((ecu: string) => void) | undefined;
@@ -114,4 +115,33 @@ export async function runJobBatch(
     return `${name}: ${it.ok ? "no result returned" : itemErrorText(it.error)}`;
   });
   return { text: [`${ran} of ${items.length} ran.`, ...blocks].join("\n\n"), items: r.items };
+}
+
+/**
+ * ediabas_vehicle_status on the native backend: the fixed readings (ignition, battery, the
+ * cable's KL30 and KL15) in one request, then the voltage sources in a second. The engine's
+ * frame gate fails a whole request, so a refused source must not take the fixed readings with
+ * it; a whole-request failure of the second request stands in for each source. Answers in
+ * vehicleBatch's order, as formatVehicle reads it.
+ */
+export async function runVehicleSplit(deps: BatchDeps, sources: JobRequest[]): Promise<Pick<JobsResponse, "items">> {
+  const fixed: JobRequest[] = [
+    { ecu: "UTILITY", job: "STATUS_ZUENDUNG" },
+    { ecu: "UTILITY", job: "STATUS_UBATT" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL30" },
+    { ecu: "TMODE", job: "LESE_SPANNUNG_KL15" },
+  ];
+  checkAll(deps.policy, [...fixed, ...sources]);
+  await deps.beforeSend?.();
+  const f = (await runChunk(deps, fixed)).items;
+  let s: BatchItem[] = [];
+  if (sources.length) {
+    try {
+      s = (await runChunk(deps, sources)).items;
+    } catch (e) {
+      const err = toBridgeError(e);
+      s = sources.map(() => ({ ok: false, result: null, error: { code: err.code, message: err.message } }));
+    }
+  }
+  return { items: [f[0]!, f[1]!, ...s, f[2]!, f[3]!] };
 }

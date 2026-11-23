@@ -3,12 +3,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { AgentClient, type Health } from "./agentClient.js";
+import type { EdiabasBackend } from "./backend.js";
 import { ApprovalWatch } from "./approvalWatch.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import { type Config, type VoltageSource, voltageSourceErrors } from "./config.js";
-import { BridgeError, errorText, policyMismatch, toBridgeError } from "./errors.js";
-import { BATCH_MAX, readFaults, runBatch, runJobBatch } from "./faults.js";
-import { formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
+import { BridgeError, configError, errorText, policyMismatch, toBridgeError } from "./errors.js";
+import { BATCH_MAX, readFaults, runBatch, runJobBatch, runVehicleSplit } from "./faults.js";
+import { formatBridgeHealth, formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
+import { NativeClient, type NativeHealth, type SpawnFn } from "./nativeClient.js";
 import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle, vehicleBatch } from "./formatEdiabas.js";
 import { PolicyGuard } from "./policy.js";
 import { CarSession } from "./carSession.js";
@@ -39,6 +41,18 @@ export const INSTRUCTIONS = [
   "[agent_outdated]: that tool is not installed in the VM yet; say so.",
   "[ediabas_request_lost]: the job may have run; do not repeat it unless the user asks.",
   "If the VM or agent is unreachable, relay the message's fix rather than retrying.",
+].join(" ");
+
+/** The instructions on the native backend (EDIABAS_BACKEND=native): no VM. */
+export const NATIVE_INSTRUCTIONS = [
+  "bimmer-bridge reads BMW diagnostics through its own EDIABAS engine (ediabasd) on this Mac, over the K+DCAN cable to the user's car.",
+  "Call bridge_health first and on its own; read its answer before any other tool: it says whether the engine runs and whether the cable is on this Mac and free.",
+  "ediabas_list_ecus and ediabas_describe find ECU and job names: use them, never guess names.",
+  "ediabas_read_faults reads fault memory, ediabas_job runs one allowed read job and ediabas_jobs several, ediabas_vehicle_status reads ignition and voltages; battery/KL30 are cable readings.",
+  "Everything is read-only: you cannot clear faults, code or flash anything in the car.",
+  "Errors start with a code in brackets. Never retry a refusal ([job_not_allowed], [job_needs_review], [frame_refused]) or look for another way to do it.",
+  "[ediabas_request_lost]: the job may have run; do not repeat it unless the user asks.",
+  "If the engine or the cable is unavailable, relay the message's fix rather than retrying.",
 ].join(" ");
 
 const READ_ONLY: ToolAnnotations = {
@@ -73,7 +87,14 @@ type Client = Pick<
 >;
 
 export interface ServerParts {
-  client: Client;
+  /** The VM agent: present on the VM backend only, and with it the vm_* tools. */
+  client?: Client | undefined;
+  /** Where the ediabas_* tools go: the VM agent or the native engine. */
+  ediabas: EdiabasBackend;
+  /** The native engine's health: present on the native backend only, and with it bridge_health. */
+  nativeHealth?: (() => Promise<NativeHealth>) | undefined;
+  /** An unknown EDIABAS_BACKEND: every ediabas_* tool reports it as config_error before sending anything. */
+  backendError?: string | undefined;
   policy: PolicyGuard;
   audit: AuditSink;
   /** Remove secrets from text before it leaves a tool handler. */
@@ -128,8 +149,9 @@ const ISO_8601 = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,7})?)?(Z|[+-]\d{
 
 /** Builds the McpServer and registers the tools. No transport is attached. */
 export function buildServer(parts: ServerParts): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: INSTRUCTIONS });
-  const { client, policy } = parts;
+  const native = parts.nativeHealth !== undefined;
+  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: native ? NATIVE_INSTRUCTIONS : INSTRUCTIONS });
+  const { client, policy, ediabas } = parts;
   const voltageSources = parts.voltageSources ?? [];
   const car = new CarSession(parts.now);
   const mac = { version: SERVER_VERSION, startedAt: new Date((parts.now ?? Date.now)()) };
@@ -147,10 +169,20 @@ export function buildServer(parts: ServerParts): McpServer {
    * request would have: the VM is unreachable either way.
    */
   async function preflight(): Promise<{ notice: string | null }> {
-    const h = await client.health();
+    if (parts.backendError !== undefined) throw configError(parts.backendError);
     // Compared whole, not by version: two files with the same version can still differ.
     const macSha = policy.sha256;
-    if (h.policySha256 && macSha && h.policySha256.toLowerCase() !== macSha) throw policyMismatch(h.policySha256.toLowerCase(), macSha);
+    const check = (sha: string | null | undefined) => {
+      if (sha && macSha && sha.toLowerCase() !== macSha) throw policyMismatch(sha.toLowerCase(), macSha);
+    };
+    if (parts.nativeHealth) {
+      // ediabasd reads reviewedJobs once at start, so there is no approvals watch on native.
+      check((await parts.nativeHealth()).policySha256);
+      return { notice: null };
+    }
+    if (!client) throw new BridgeError("internal_error", "Internal error: no backend to check before sending.");
+    const h = await client.health();
+    check(h.policySha256);
     return { notice: noticeOf(h) };
   }
 
@@ -201,108 +233,130 @@ export function buildServer(parts: ServerParts): McpServer {
   }
 
   // -------------------------------------------------------------------------
-  // VM tools
+  // VM tools: on the VM backend only
   // -------------------------------------------------------------------------
 
-  server.registerTool(
-    "vm_health",
-    {
-      title: "VM agent health",
-      description:
-        "Check this Mac server's version and start time and the Windows VM's bimmer-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
-        "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
-        "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
-        "which features the agent has, and its job policy version against this Mac's. " +
-        "Call this first in a session, and again when another tool fails. Read-only.",
-      annotations: { title: "VM agent health", ...READ_ONLY },
-    },
-    async () =>
-      run("vm_health", async (ctx) => {
-        const h = await client.health();
-        ctx.notice = noticeOf(h);
-        return formatHealth(h, policy.version, mac, policy.sha256);
-      }),
-  );
-
-  server.registerTool(
-    "vm_list_windows",
-    {
-      title: "List VM windows",
-      description:
-        "List the visible top-level windows in the Windows VM as a table (title, process, pid, size, minimised), " +
-        "front-most first. Use it to see what the user has open there, e.g. which INPA or Tool32 screen is showing. " +
-        "Read-only: it cannot click, type or change anything.",
-      annotations: { title: "List VM windows", ...READ_ONLY },
-    },
-    async () => run("vm_list_windows", async () => formatWindows(await client.listWindows())),
-  );
-
-  server.registerTool(
-    "vm_screenshot",
-    {
-      title: "Screenshot of the VM",
-      description:
-        "Capture the VM's screen, or one window, as an image, followed by one line naming the window, its size and the capture method. " +
-        "`window` is a handle from vm_list_windows (0x...), part of a window title, or `desktop` (default). " +
-        "A minimised window cannot be captured: the bridge never restores, focuses or moves windows. Read-only.",
-      inputSchema: {
-        window: z.string().min(1).max(256).optional().describe("Window handle (0x...), title substring, or 'desktop' (default)."),
-        maxEdge: z.number().int().min(200).max(4000).optional().describe("Longest image edge in pixels, 200-4000 (default 1600)."),
+  if (client) {
+    server.registerTool(
+      "vm_health",
+      {
+        title: "VM agent health",
+        description:
+          "Check this Mac server's version and start time and the Windows VM's bimmer-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
+          "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
+          "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
+          "which features the agent has, and its job policy version against this Mac's. " +
+          "Call this first in a session, and again when another tool fails. Read-only.",
+        annotations: { title: "VM agent health", ...READ_ONLY },
       },
-      annotations: { title: "Screenshot of the VM", ...READ_ONLY },
-    },
-    async (a) =>
-      run("vm_screenshot", async () => {
-        const c = await client.capture({ window: a.window ?? "desktop", maxEdge: a.maxEdge ?? 1600 });
-        return { text: formatCaptureCaption(c), image: { data: Buffer.from(c.data).toString("base64"), mimeType: c.mimeType } };
-      }),
-  );
+      async () =>
+        run("vm_health", async (ctx) => {
+          const h = await client.health();
+          ctx.notice = noticeOf(h);
+          return formatHealth(h, policy.version, mac, policy.sha256);
+        }),
+    );
 
-  server.registerTool(
-    "vm_logs_list",
-    {
-      title: "List VM log files",
-      description:
-        "List log files in the VM's allowed log folders (EDIABAS traces and similar): first the folders with their index, " +
-        "then path, size and modified time, newest first. Filter by folder index (`root`), file-name pattern (`glob`, * and ?), " +
-        "modified since (`since`, ISO 8601) and `limit` (1-200). Read-only.",
-      inputSchema: {
-        root: z.number().int().min(0).max(1000).optional().describe("Index of one log folder, from an earlier listing."),
-        glob: z.string().min(1).max(200).optional().describe("File-name pattern with * and ?, case-insensitive."),
-        since: z.string().max(40).regex(ISO_8601, "an ISO 8601 date or time").optional().describe("Only files modified at or after this ISO 8601 time."),
-        limit: z.number().int().min(1).max(200).optional().describe("Most files to list, 1-200."),
+    server.registerTool(
+      "vm_list_windows",
+      {
+        title: "List VM windows",
+        description:
+          "List the visible top-level windows in the Windows VM as a table (title, process, pid, size, minimised), " +
+          "front-most first. Use it to see what the user has open there, e.g. which INPA or Tool32 screen is showing. " +
+          "Read-only: it cannot click, type or change anything.",
+        annotations: { title: "List VM windows", ...READ_ONLY },
       },
-      annotations: { title: "List VM log files", ...READ_ONLY },
-    },
-    async (a) => run("vm_logs_list", async () => formatLogList(await client.listLogs(a))),
-  );
+      async () => run("vm_list_windows", async () => formatWindows(await client.listWindows())),
+    );
 
-  server.registerTool(
-    "vm_logs_read",
-    {
-      title: "Read a VM log file",
-      description:
-        "Read part of a log file in the VM's allowed log folders (absolute Windows path from vm_logs_list). Give either " +
-        "`tailBytes` (the end of the file; default 16384) or `offset` and `length`; at most 65536 bytes. `grep` (a regular " +
-        "expression, up to 200 characters) keeps only matching lines. Returns a header line (path, byte range, encoding, " +
-        "whether more exists) and the text. Read-only.",
-      inputSchema: {
-        path: z.string().min(1).max(1024).describe("Absolute path of the log file in the VM."),
-        tailBytes: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Read this many bytes from the end."),
-        offset: z.number().int().min(0).optional().describe("Start of the range in bytes (with length)."),
-        length: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Length of the range in bytes (with offset)."),
-        grep: z.string().min(1).max(200).optional().describe("Regular expression; only matching lines are returned."),
+    server.registerTool(
+      "vm_screenshot",
+      {
+        title: "Screenshot of the VM",
+        description:
+          "Capture the VM's screen, or one window, as an image, followed by one line naming the window, its size and the capture method. " +
+          "`window` is a handle from vm_list_windows (0x...), part of a window title, or `desktop` (default). " +
+          "A minimised window cannot be captured: the bridge never restores, focuses or moves windows. Read-only.",
+        inputSchema: {
+          window: z.string().min(1).max(256).optional().describe("Window handle (0x...), title substring, or 'desktop' (default)."),
+          maxEdge: z.number().int().min(200).max(4000).optional().describe("Longest image edge in pixels, 200-4000 (default 1600)."),
+        },
+        annotations: { title: "Screenshot of the VM", ...READ_ONLY },
       },
-      annotations: { title: "Read a VM log file", ...READ_ONLY },
-    },
-    async (a) =>
-      run("vm_logs_read", async () => {
-        const ranged = a.offset !== undefined || a.length !== undefined;
-        if (ranged && a.tailBytes !== undefined) throw invalidArguments("Give either tailBytes, or offset and length, not both.");
-        if (ranged && (a.offset === undefined || a.length === undefined)) throw invalidArguments("offset and length go together: give both.");
-        return formatLogRead(await client.readLog(ranged || a.tailBytes !== undefined ? a : { ...a, tailBytes: LOG_TAIL_DEFAULT }));
-      }),
-  );
+      async (a) =>
+        run("vm_screenshot", async () => {
+          const c = await client.capture({ window: a.window ?? "desktop", maxEdge: a.maxEdge ?? 1600 });
+          return { text: formatCaptureCaption(c), image: { data: Buffer.from(c.data).toString("base64"), mimeType: c.mimeType } };
+        }),
+    );
+
+    server.registerTool(
+      "vm_logs_list",
+      {
+        title: "List VM log files",
+        description:
+          "List log files in the VM's allowed log folders (EDIABAS traces and similar): first the folders with their index, " +
+          "then path, size and modified time, newest first. Filter by folder index (`root`), file-name pattern (`glob`, * and ?), " +
+          "modified since (`since`, ISO 8601) and `limit` (1-200). Read-only.",
+        inputSchema: {
+          root: z.number().int().min(0).max(1000).optional().describe("Index of one log folder, from an earlier listing."),
+          glob: z.string().min(1).max(200).optional().describe("File-name pattern with * and ?, case-insensitive."),
+          since: z.string().max(40).regex(ISO_8601, "an ISO 8601 date or time").optional().describe("Only files modified at or after this ISO 8601 time."),
+          limit: z.number().int().min(1).max(200).optional().describe("Most files to list, 1-200."),
+        },
+        annotations: { title: "List VM log files", ...READ_ONLY },
+      },
+      async (a) => run("vm_logs_list", async () => formatLogList(await client.listLogs(a))),
+    );
+
+    server.registerTool(
+      "vm_logs_read",
+      {
+        title: "Read a VM log file",
+        description:
+          "Read part of a log file in the VM's allowed log folders (absolute Windows path from vm_logs_list). Give either " +
+          "`tailBytes` (the end of the file; default 16384) or `offset` and `length`; at most 65536 bytes. `grep` (a regular " +
+          "expression, up to 200 characters) keeps only matching lines. Returns a header line (path, byte range, encoding, " +
+          "whether more exists) and the text. Read-only.",
+        inputSchema: {
+          path: z.string().min(1).max(1024).describe("Absolute path of the log file in the VM."),
+          tailBytes: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Read this many bytes from the end."),
+          offset: z.number().int().min(0).optional().describe("Start of the range in bytes (with length)."),
+          length: z.number().int().min(1).max(LOG_READ_MAX).optional().describe("Length of the range in bytes (with offset)."),
+          grep: z.string().min(1).max(200).optional().describe("Regular expression; only matching lines are returned."),
+        },
+        annotations: { title: "Read a VM log file", ...READ_ONLY },
+      },
+      async (a) =>
+        run("vm_logs_read", async () => {
+          const ranged = a.offset !== undefined || a.length !== undefined;
+          if (ranged && a.tailBytes !== undefined) throw invalidArguments("Give either tailBytes, or offset and length, not both.");
+          if (ranged && (a.offset === undefined || a.length === undefined)) throw invalidArguments("offset and length go together: give both.");
+          return formatLogRead(await client.readLog(ranged || a.tailBytes !== undefined ? a : { ...a, tailBytes: LOG_TAIL_DEFAULT }));
+        }),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Native engine health: on the native backend only
+  // -------------------------------------------------------------------------
+
+  const nativeHealth = parts.nativeHealth;
+  if (nativeHealth) {
+    server.registerTool(
+      "bridge_health",
+      {
+        title: "Native engine health",
+        description:
+          "Check this Mac server's version and start time and the native EDIABAS engine (ediabasd): its version, libkline's, the Ecu folder it reads, " +
+          "the cable (absent, free, or locked by another session; and the latency the last session applied, without opening the cable) " +
+          "and its job policy version against this Mac's. Call this first in a session, and again when another tool fails. Read-only.",
+        annotations: { title: "Native engine health", ...READ_ONLY },
+      },
+      async () => run("bridge_health", async () => formatBridgeHealth(await nativeHealth(), policy.version, mac, policy.sha256)),
+    );
+  }
 
   // -------------------------------------------------------------------------
   // EDIABAS tools. Policy first: a refusal never leaves the Mac.
@@ -313,7 +367,7 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "List EDIABAS ECU files",
       description:
-        "List the SGBD (.prg) and group (.grp) names in the VM's EDIABAS Ecu folder, optionally filtered by a " +
+        "List the SGBD (.prg) and group (.grp) names in the EDIABAS Ecu folder, optionally filtered by a " +
         "case-insensitive name substring. Use it to find the exact ECU name before describing or reading it; never guess " +
         "names. Reads files only; does not talk to the car.",
       inputSchema: { filter: Filter.optional().describe("Case-insensitive substring of the name.") },
@@ -323,7 +377,7 @@ export function buildServer(parts: ServerParts): McpServer {
       run("ediabas_list_ecus", async (ctx) => {
         policy.require();
         ctx.notice = (await preflight()).notice;
-        return formatEcus(await client.listEcus(a.filter), a.filter);
+        return formatEcus(await ediabas.listEcus(a.filter), a.filter);
       }),
   );
 
@@ -336,7 +390,7 @@ export function buildServer(parts: ServerParts): McpServer {
         "bridge (optionally filtered by name substring). With `job`: that job's description, arguments and results. " +
         "`filter` is ignored when `job` is given. `namesOnly` lists names without reading descriptions: faster, but " +
         "nothing is screened, so verdicts go by name only. Use it to find job names and arguments; never guess them. Reads the SGBD " +
-        "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD; read-only.",
+        "file through EDIABAS, so it needs the cable, and can take tens of seconds on a large SGBD; read-only.",
       inputSchema: {
         ecu: Name.describe("SGBD or group name, e.g. from ediabas_list_ecus."),
         job: Name.optional().describe("One job to describe."),
@@ -352,11 +406,11 @@ export function buildServer(parts: ServerParts): McpServer {
           policy.checkShape(a.ecu, a.job);
           ctx.notice = (await preflight()).notice;
           if (a.job !== undefined) {
-            const d = await client.describeJob({ ecu: a.ecu, job: a.job });
+            const d = await ediabas.describeJob({ ecu: a.ecu, job: a.job });
             return formatDescribeJob(d, policy.evaluate({ ecu: a.ecu, job: a.job }));
           }
           const namesOnly = a.namesOnly === true;
-          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
+          const d = await ediabas.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
           const text = formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
           if (!namesOnly) return text;
           const [head, ...rest] = text.split("\n");
@@ -371,7 +425,7 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "Vehicle status",
       description:
-        "Read ignition (UTILITY STATUS_ZUENDUNG), battery (UTILITY STATUS_UBATT), the interface's KL30/KL15 voltages (TMODE) and any voltage sources configured on the Mac, in one EDIABAS request. " +
+        "Read ignition (UTILITY STATUS_ZUENDUNG), battery (UTILITY STATUS_UBATT), the interface's KL30/KL15 voltages (TMODE) and any voltage sources configured on the Mac. " +
         "Each reading's result fields are shown as returned. The battery and KL30 readings come from the cable's own lines and read the same with no car connected; " +
           "only a configured voltage source (a module) shows the car is awake. Read-only.",
       annotations: { title: "Vehicle status", ...READ_ONLY },
@@ -386,14 +440,16 @@ export function buildServer(parts: ServerParts): McpServer {
           if (bad.length) {
             const e = new BridgeError(
               "job_not_allowed",
-              `${bad.join(" ")} Nothing was sent to the VM. Tell the user to fix voltageSources in config.local.json on the Mac and restart the MCP server (restart Claude).`,
+              `${bad.join(" ")} Nothing was sent. Tell the user to fix voltageSources in config.local.json on the Mac and restart the MCP server (restart Claude).`,
             );
             e.rule = voltageSources.map((s) => policy.evaluate(s)).find((v) => !v.allowed)?.rule;
             throw e;
           }
           const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
           // TMODE and UTILITY read the cable; only a voltage source starts the car session.
-          return formatVehicle(await runBatch({ client, policy, onOk, beforeSend }, items), voltageSources);
+          const deps = { client: ediabas, policy, onOk, beforeSend };
+          // Native: sources in a request of their own, so a gate refusal cannot take the fixed readings with it.
+          return formatVehicle(native ? await runVehicleSplit(deps, voltageSources) : await runBatch(deps, items), voltageSources);
         },
         { ecu: items.map((i) => i.ecu).join(","), job: items.map((i) => i.job).join(",") },
       );
@@ -405,7 +461,7 @@ export function buildServer(parts: ServerParts): McpServer {
     {
       title: "Run one EDIABAS read job",
       description:
-        "Run one read-only EDIABAS job on an ECU and return its result sets as text (or the agent's JSON with raw: true). " +
+        "Run one read-only EDIABAS job on an ECU and return its result sets as text (or the raw JSON with raw: true). " +
         "Only jobs the job policy allows run; anything that could write, clear, activate or code is refused, and a refusal " +
         "is final. Find names and arguments with ediabas_describe first. `args` and `results` are EDIABAS's " +
         "semicolon-separated strings.",
@@ -414,7 +470,7 @@ export function buildServer(parts: ServerParts): McpServer {
         job: Name.describe("Job name, from ediabas_describe."),
         args: z.string().max(1000).optional().describe("Job arguments, semicolon-separated."),
         results: z.string().max(1000).optional().describe("Result names to return, semicolon-separated."),
-        raw: z.boolean().optional().describe("Return the agent's JSON instead of formatted text."),
+        raw: z.boolean().optional().describe("Return the raw JSON instead of formatted text."),
         timeoutSeconds: JobTimeout,
       },
       annotations: { title: "Run one EDIABAS read job", ...READ_ONLY },
@@ -426,7 +482,7 @@ export function buildServer(parts: ServerParts): McpServer {
           const req = { ecu: a.ecu, job: a.job, args: a.args, results: a.results };
           policy.check(req);
           ctx.notice = (await preflight()).notice;
-          const r = await client.runJob({ ...req, timeoutSeconds: a.timeoutSeconds });
+          const r = await ediabas.runJob({ ...req, timeoutSeconds: a.timeoutSeconds });
           onOk(a.ecu);
           return a.raw ? formatJobRaw(r) : formatJobResult(r);
         },
@@ -456,7 +512,7 @@ export function buildServer(parts: ServerParts): McpServer {
           .min(1)
           .max(BATCH_MAX)
           .describe("The jobs to run, 1-20."),
-        raw: z.boolean().optional().describe("Return the agent's JSON for each job instead of formatted text."),
+        raw: z.boolean().optional().describe("Return the raw JSON for each job instead of formatted text."),
         timeoutSeconds: JobTimeout,
       },
       annotations: { title: "Run several EDIABAS read jobs", ...READ_ONLY },
@@ -467,7 +523,7 @@ export function buildServer(parts: ServerParts): McpServer {
         async (ctx) => {
           const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
           const items = a.jobs.map((j) => ({ ecu: j.ecu, job: j.job, args: j.args, results: j.results }));
-          return (await runJobBatch({ client, policy, onOk, beforeSend }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
+          return (await runJobBatch({ client: ediabas, policy, onOk, beforeSend }, items, { raw: a.raw, timeoutSeconds: a.timeoutSeconds })).text;
         },
         { ecu: a.jobs.map((j) => j.ecu).join(","), job: a.jobs.map((j) => j.job).join(",") },
       ),
@@ -494,7 +550,7 @@ export function buildServer(parts: ServerParts): McpServer {
         "ediabas_read_faults",
         (ctx) => {
           const beforeSend = async () => void (ctx.notice = (await preflight()).notice);
-          return readFaults({ client, policy, onOk, beforeSend }, a.ecus, includeInfo);
+          return readFaults({ client: ediabas, policy, onOk, beforeSend }, a.ecus, includeInfo);
         },
         { ecu: a.ecus.join(","), job: jobs },
       );
@@ -514,6 +570,8 @@ export interface AppDeps extends DiscoverySources {
   policy?: PolicyGuard;
   /** The clock (ms since the epoch); default Date.now. */
   now?: () => number;
+  /** For tests: how the native backend starts ediabasd. */
+  spawnEdiabasd?: SpawnFn;
 }
 
 /** Wires config + system access into a ready server. */
@@ -531,6 +589,21 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
   const policy = deps.policy ?? PolicyGuard.load();
   if (policy.error) log(`warning: job policy not loaded (${policy.error}); every ediabas_* tool will refuse with policy_unavailable.`);
   for (const e of voltageSourceErrors(config.voltageSources, policy)) log(`config error: ${e} ediabas_vehicle_status refuses until it is fixed.`);
+  const audit = new AuditLog(config.auditLogPath, { warn: log });
+  const common = { policy, audit, redact: (t: string) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources };
+
+  if (config.backend === "native" && config.backendError === undefined) {
+    const engine = new NativeClient({
+      binary: config.ediabasdPath,
+      configPath: config.ediabasdConfig,
+      env: config.dotnetRoot ? { DOTNET_ROOT: config.dotnetRoot } : undefined,
+      spawn: deps.spawnEdiabasd,
+      log,
+    });
+    log(`backend: native (ediabasd at ${config.ediabasdPath})`);
+    return buildServer({ ...common, ediabas: engine, nativeHealth: () => engine.health() });
+  }
+
   const client = new AgentClient({
     config,
     tokens,
@@ -541,6 +614,7 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
     probeTimeoutMs: deps.probeTimeoutMs,
     log,
   });
-  const audit = new AuditLog(config.auditLogPath, { warn: log });
-  return buildServer({ client, policy, audit, redact: (t) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources });
+  // An unknown backend: the VM tools still work; the ediabas_* tools report the config error
+  // rather than quietly using the VM in place of what was asked for.
+  return buildServer({ ...common, client, ediabas: client, backendError: config.backendError });
 }

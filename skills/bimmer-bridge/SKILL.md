@@ -39,8 +39,15 @@ is a decision, not an obstacle. Report it.
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 
+**Native backend.** If the session offers `bridge_health` and no `vm_*` tools, the bridge runs
+its own engine on the Mac (`EDIABAS_BACKEND=native`) instead of the VM. Then call `bridge_health`
+wherever this skill says `vm_health`: it shows the engine, the Ecu folder and the cable. If it
+says the cable is absent, the VM may still have it: ask the user to untick it in UTM's USB menu.
+There are no VM windows, screenshots or logs to read in that mode, and a read the cable layer
+refuses is `[frame_refused]`: final, like any refusal.
+
 Names are base names; the prefix differs between Claude Code and the desktop app. All eleven
-are built. If a session offers fewer, Claude is running an old Mac server: ask the user to
+are built on the VM backend (seven on native). If a session offers fewer, Claude is running an old Mac server: ask the user to
 restart Claude. `[agent_outdated]` means the VM agent is older than the Mac server (`vm_health` shows
 both): it needs the Update line; say so and stop. Do not get the result another way.
 

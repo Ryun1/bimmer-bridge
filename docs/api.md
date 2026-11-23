@@ -543,7 +543,8 @@ holds the cable; `unsupported`, that the device is not an FTDI FT232R. `latency`
 last live session in this process applied (`"1ms"`, `"16ms"`, `"unsupported"`), null before any.
 `policySha256` is the SHA-256 of the embedded policy file, as the VM agent's `/health` gives it.
 There is no `vehicle` method, as the agent has no vehicle endpoint: the MCP server reads vehicle
-status as one `jobs` batch on either backend.
+status as `jobs` batches (one on the VM; on native two, the voltage sources apart, so a gate
+refusal of one cannot fail the fixed readings).
 
 **What differs from the VM.**
 - **Describe never touches the cable.** `_` jobs (`_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`,

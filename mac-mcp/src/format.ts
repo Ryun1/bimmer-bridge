@@ -1,5 +1,6 @@
 import type { Capture, Health, LogList, LogRead, WindowList } from "./agentClient.js";
 import { UPDATE_HINT } from "./errors.js";
+import type { NativeHealth } from "./nativeClient.js";
 
 /** Strip control characters from text that came from the VM (window titles, process names). */
 function clean(s: string | null | undefined, fallback = "unknown"): string {
@@ -125,6 +126,50 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null, 
   }
   lines.push(`Last cable use: ${h.lastCableUseAt ? clean(h.lastCableUseAt) : "never (since the agent started)"}`);
   lines.push(...policyLines(h, macPolicyVersion, macPolicySha256));
+  return lines.join("\n");
+}
+
+/** The cable's line in bridge_health, with what to do when it is not free. */
+function cableLine(c: NativeHealth["cable"]): string {
+  const port = c.port ? clean(c.port) : null;
+  const latency = c.latency ? `latency ${clean(c.latency)}` : "latency not applied yet (no session since the engine started)";
+  switch (c.state) {
+    case "free":
+      return `cable: free (${port ?? "port unknown"}, ${latency})`;
+    case "locked":
+      return `cable: locked (${port ?? "port unknown"}): another session on this Mac holds it (another ediabasd or a kline command). It must be closed before a read.`;
+    case "absent":
+      return (
+        `cable: absent${port ? ` (${port})` : ""}: the K+DCAN cable is not on this Mac. If the Windows VM has it, untick it in UTM's USB menu ` +
+        "so the Mac gets it back; otherwise plug it in. Every read fails with [cable_not_found] until then."
+      );
+    case "several":
+      return "cable: several FTDI cables are plugged in; set port in ediabasd's config to the one to use.";
+    case "unsupported":
+      return `cable: unsupported (${port ?? "port unknown"}): not an FTDI FT232R K+DCAN cable (USB 0403:6001).`;
+    default:
+      return `cable: ${clean(c.state)}${port ? ` (${port})` : ""}: its state could not be read.`;
+  }
+}
+
+/** bridge_health: the Mac server, the native engine, the cable and the job policy. */
+export function formatBridgeHealth(h: NativeHealth, macPolicyVersion: number | null, mac: MacServerInfo, macPolicySha256: string | null): string {
+  const lines = [
+    `Mac server ${mac.version}, started ${localTime(mac.startedAt)}; backend: native`,
+    `Engine: ${clean(h.engine)} ${clean(h.version)}, libkline ${clean(h.kline)}`,
+    `Ecu folder: ${clean(h.ecuPath)}`,
+    cableLine(h.cable),
+  ];
+  const engineV = h.policyVersion ?? null;
+  const engineSha = h.policySha256 ? clean(h.policySha256) : null;
+  const sha = (x: string | null) => (x ? ` (sha256 ${x.slice(0, 12)})` : "");
+  const macText = macPolicyVersion === null ? "could not be loaded, so every EDIABAS tool refuses" : `version ${macPolicyVersion}${sha(macPolicySha256)}`;
+  lines.push(`Job policy: engine ${engineV === null ? "does not report one" : `version ${engineV}`}${sha(engineSha)}; Mac ${macText}.`);
+  if (engineSha !== null && macPolicySha256 !== null && engineSha.toLowerCase() !== macPolicySha256) {
+    lines.push(
+      `WARNING: the engine's policy file is not the same file as this Mac's, so every ediabas_* tool refuses with [policy_mismatch]. Rebuild ediabasd from this checkout, or restart Claude.`,
+    );
+  }
   return lines.join("\n");
 }
 

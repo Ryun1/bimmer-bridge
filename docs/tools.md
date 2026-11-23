@@ -3,9 +3,21 @@
 What the Mac server (`mac-mcp`) offers Claude. The HTTP side is in [api.md](api.md). Skills
 are written against this file. Every tool has `readOnlyHint: true`; none is destructive.
 
+**Backends.** `EDIABAS_BACKEND` (else `backend` in `config.local.json`) chooses where the
+`ediabas_*` tools go: `vm` (the default) is the VM agent below; `native` runs `ediabasd serve`
+(the native engine, [api.md](api.md#ediabasd-stdio-native-engine)) as a child process on the Mac.
+Anything else is a start-up warning, and every `ediabas_*` tool answers `config_error` until it
+is fixed (the `vm_*` tools still work). On `native` there are no `vm_*` tools; `bridge_health`
+takes `vm_health`'s place, and the six `ediabas_*` tools are the same. The Mac's policy check runs
+on both backends; on native, each `ediabas_*` call first reads the engine's `health` and refuses
+with `policy_mismatch` when its policy hash differs from the Mac's (there is no approvals watch:
+`ediabasd` reads `reviewedJobs` at start). `ediabasd` takes one request at a time and the server
+never resends one; if the engine exits or stops answering, the next call starts a fresh one.
+
 | Tool | Arguments | Agent call | Returns |
 |---|---|---|---|
 | `vm_health` | — | `GET /health` | status text: first `Mac server {version}, started {local time}`, then the agent line (warns "WARNING: The Mac server and the agent are different versions; restart Claude or update the agent." when the two versions differ), session, BMW tools running, EDIABAS DLL and whether it is loaded (or stuck, or held open after a failed apiEnd, until the agent restarts), last cable use, policy version, and `Approved jobs: N pinned, M ignored.` when the agent reports approvals |
+| `bridge_health` (native only) | — | `ediabasd` `health` | `Mac server {version}, started {local time}; backend: native`, the engine and libkline versions, the Ecu folder, the cable (`cable: free ({port}, latency {1ms\|16ms})`; `absent` says the cable is not on this Mac and to untick it in UTM's USB menu if the VM has it; `locked`, `several`, `unsupported`), and the engine's policy version and hash against the Mac's |
 | `vm_list_windows` | — | `GET /windows` | table |
 | `vm_screenshot` | `window?` (handle, title substring, or `desktop`; default `desktop`), `maxEdge?` (200–4000, default 1600) | `GET /screen/capture` | an image, then one line: title, size, capture method |
 | `vm_logs_list` | `root?` (index), `glob?`, `since?` (ISO 8601), `limit?` (1–200) | `GET /logs` | the roots, then path / size / modified, newest first |
@@ -51,7 +63,10 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then
-  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. The result ends with a note that
+  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. On the native backend it sends two:
+  the four fixed readings, then the voltage sources, because the engine's frame gate fails a
+  whole request; a source the gate refuses (`NVE_65 STATUS_BORDNETZSPANNUNG` is one) shows
+  `[frame_refused]` in its place and the other readings still print. The result ends with a note that
   `STAT_UBATT` and the cable's KL30 come from the cable's own lines (with no car connected they
   read `STAT_UBATT=1` and KL30 `E02E0000`, rehearsal 2026-11-22), so only a voltage source shows
   the car is awake. Voltage sources are car-specific

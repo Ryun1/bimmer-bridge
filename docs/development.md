@@ -62,6 +62,23 @@ these it stops and says to set `EDIABAS_VM_MAC` or `EDIABAS_VM_NAME`. A broken
 `config.local.json` is a warning, not an error. The TypeScript tools have no dependencies and
 need Node 24+ (they run through type stripping).
 
+## Trying the native backend
+
+The VM stays the default. To try the native engine (`ediabasd`) from Claude, with the cable on
+the Mac (unticked in UTM's USB menu):
+
+1. Build it: `DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec /opt/homebrew/opt/dotnet@10/bin/dotnet build -c Release engine/ediabasd-net`,
+   and `cd mac-mcp && npm run build`.
+2. Give `ediabasd` a config (`~/.config/bimmer-bridge/config.json`, at least `"ecuPath"`; see
+   [api.md](api.md#ediabasd-stdio-native-engine)), and check it with `ediabasd health`.
+3. In `config.local.json`: `"backend": "native"` and `"dotnetRoot": "/opt/homebrew/opt/dotnet@10/libexec"`
+   (`ediabasd` exits at once without it), plus `ediabasdPath` / `ediabasdConfig` if they are not
+   the defaults. Or register a second MCP server with `EDIABAS_BACKEND=native` in its environment.
+4. Restart Claude. `bridge_health` replaces `vm_health`; there are no `vm_*` tools.
+
+The strict frame gate refuses 24 reads natively ([m1-results.md](native/m1-results.md),
+section 2), including `NVE_65 STATUS_BORDNETZSPANNUNG`; they stay on the VM backend.
+
 ## Policy fixtures: both sides must agree
 
 `policy/policy.json` is read by two parsers and two evaluators, one in C# and one in
