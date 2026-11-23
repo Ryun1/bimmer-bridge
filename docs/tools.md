@@ -53,6 +53,7 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   then `Without faults: ...`. Present or stored is inferred from the `F_ART` status byte
   (KWP2000), so the view says so; `raw: true` shows every field. A result with no `F_ANZ` field
   prints the generic view.
+- **`IDENT_FUNKTIONAL` (whole-car module list):** `ediabas_job` on `E60` prints `N modules answered, M did not.` and one line per module (address, SGBD, group, name, BMW number, date); `raw: true` shows every field.
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then

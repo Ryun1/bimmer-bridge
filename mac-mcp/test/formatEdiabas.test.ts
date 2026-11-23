@@ -449,4 +449,27 @@ describe("whole-car jobs", () => {
     const g = formatJobResult(JobResultSchema.parse(jobResult("E60", "FS_LESEN_FUNKTIONAL", [{ A: 1 }])));
     expect(g).toContain("Set 1:");
   });
+  describe("IDENT_FUNKTIONAL", () => {
+    const idSets = [
+      { ECU_ADR: "59", ECU_NAME: "Aktive Lehnenbreitenverstellung Fahrer", ECU_SGBD: "ALBV60F", ECU_GRUPPE: "D_ALBVF", ECU_GROBNAME: "ALBV_FA", ID_BMW_NR: "6938911", ID_DATUM: "09.06.2004", JOB_STATUS: "OKAY" },
+      { ECU_GROBNAME: "XYZ", ECU_ADR: "12", JOB_STATUS: "ERROR_ECU_NO_RESPONSE" },
+      { OTHER: 2 },
+    ];
+    const t = formatJobResult(JobResultSchema.parse(jobResult("E60", "IDENT_FUNKTIONAL", idSets)));
+    it("lists modules", () => {
+      expect(t).toContain("1 module answered, 1 did not.");
+      expect(t).toContain("ALBV_FA (address 0x59): ALBV60F, group D_ALBVF, Aktive Lehnenbreitenverstellung Fahrer, BMW no. 6938911, date 09.06.2004");
+      expect(t).toContain("XYZ (address 0x12): job status ERROR_ECU_NO_RESPONSE");
+      expect(t).toContain("(set 3) OTHER=2");
+      expect(t).toContain("raw: true shows every field (hardware and software numbers, coding index).");
+      expect(t).not.toContain("undefined");
+    });
+    it("leaves the unnamed trailing set out of the module count", () => {
+      const sets2 = [idSets[0]!, { JOB_STATUS: "OKAY", _TEL_ANTWORT: "AA" }];
+      const u = formatJobResult(JobResultSchema.parse(jobResult("E60", "IDENT_FUNKTIONAL", sets2)));
+      expect(u).toContain("1 module answered, 0 did not.");
+      expect(u).toContain("(set 2) JOB_STATUS=OKAY");
+      expect(u).not.toContain("_TEL_ANTWORT");
+    });
+  });
 });

@@ -271,6 +271,7 @@ function jobHeader(r: JobResult): string {
 }
 
 export function formatJobResult(r: JobResult): string {
+  if (r.job.toUpperCase() === "IDENT_FUNKTIONAL" && r.sets.some((s) => "ECU_SGBD" in s)) return formatFunctionalIdent(r);
   if (r.job.toUpperCase() === "FS_LESEN_FUNKTIONAL" && r.sets.some((s) => "F_ANZ" in s)) return formatFunctionalFaults(r);
   const out = [jobHeader(r)];
   if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
@@ -334,6 +335,35 @@ export function formatFunctionalFaults(r: JobResult): string {
   if (clean.length) out.push(`Without faults: ${clean.join(", ")}`);
   out.push(...other);
   out.push("Present/stored is inferred from the F_ART status byte (KWP2000); ediabas_read_faults on the module gives its own wording. raw: true shows every field.");
+  return out.join("\n");
+}
+
+export function formatFunctionalIdent(r: JobResult): string {
+  const modules: string[] = [];
+  const failed: string[] = [];
+  const other: string[] = [];
+  let answered = 0;
+  let did_not = 0;
+  r.sets.forEach((set, i) => {
+    const status = set.JOB_STATUS;
+    if (typeof status === "string" && status.toUpperCase() !== "OKAY") {
+      if ("ECU_GROBNAME" in set) did_not++;
+      failed.push(`  ${moduleLabel(set)}: ${jobStatusText(status)}`);
+    } else if ("ECU_SGBD" in set) {
+      answered++;
+      const f = (k: string, label: string) => (k in set && set[k] != null ? [`${label}${valueText(set[k], 80)}`] : []);
+      const parts = [...f("ECU_SGBD", ""), ...f("ECU_GRUPPE", "group "), ...f("ECU_NAME", ""), ...f("ID_BMW_NR", "BMW no. "), ...f("ID_DATUM", "date ")];
+      modules.push(`  ${moduleLabel(set)}: ${parts.join(", ")}`);
+    } else {
+      const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
+    }
+  });
+  const out = [jobHeader(r)];
+  if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
+  out.push(`${plural(answered, "module")} answered, ${did_not} did not.`);
+  out.push(...modules, ...failed, ...other);
+  out.push("raw: true shows every field (hardware and software numbers, coding index).");
   return out.join("\n");
 }
 

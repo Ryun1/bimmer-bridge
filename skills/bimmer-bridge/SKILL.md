@@ -72,6 +72,7 @@ turns it on.
 3. **Learn which modules the car has from the car, not by guessing names.** On an E60/E61
    (the `E60` group SGBD), run these first: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
+   `IDENT_FUNKTIONAL` prints one line per module (SGBD, group, name, BMW number); the SGBD is what to pass to `ediabas_read_faults`.
    `FS_LESEN_FUNKTIONAL` prints one line per module (address, codes, present or stored inferred
    from `F_ART`); `raw: true` shows every field.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
