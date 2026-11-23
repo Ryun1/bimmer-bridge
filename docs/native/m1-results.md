@@ -20,7 +20,7 @@ VM agent's service and policy, with a JSON-lines stdio front and a CLI. The acce
 and are desk sessions: Ryan unplugs the cable from the car first (it may stay in the VM) and
 starts each one. Claude never runs EDIABAS jobs, Tool32 or INPA over SSH.
 
-Status: sections 1–2 done (2026-11-22). Sections 3–4 wait for the desk sessions.
+Status: sections 1–2 done (2026-11-22); section 4 done (2026-11-23); section 3 running.
 
 ---
 
@@ -164,22 +164,57 @@ Expected differences: `TEST_IFACE_FLAGS` (the VM has a real interface, the Mac a
 replay); error codes EDIABAS 7.3 does not have (EdiabasLib emulates 7.7.3, so `SEC-xxxx` and
 `IFH-0069`/`IFH-0074` may come back differently).
 
+Run 2026-11-23: the VM side through EDIABAS 7.3's `api32.dll` (cable passed through to the VM,
+not in a car), the Mac side through `ediabasd`'s engine on an empty replay. `C:\bimmer-bridge-m1\`
+was deleted afterwards.
+
 | | Count |
 |---|---|
 | Jobs | 217 |
-| Matched | |
-| Differing | |
+| Matched exactly | 60 |
+| Matched except for EdiabasLib's extra `GRUPPE` and `FAMILIE` in set 0 | 89 |
+| Differing in substance | 68 |
 
-Every difference, explained or fixed:
+**`GRUPPE` and `FAMILIE` (95 jobs, 190 lines of the report).** EdiabasLib adds both system
+results to set 0 of every job; EDIABAS 7.3 has neither. Additions only: every other system
+result and value in those sets is the same.
 
-| Run#index | Job | What differs | Why / fix |
+Every other difference, explained. No engine fix is needed: none of them is a bug in
+libkline, the transport binding or `ediabasd`, and EdiabasLib stays unmodified.
+
+| Run#index | Job | What differs | Why |
 |---|---|---|---|
+| `runtimeerr_350`–`399` (50 jobs) | `TEST_RAISE_RUNTIMEERR#350`…`399` | VM `BIP-0001`, Mac `SEC-0000`…`SEC-0049` | Expected: the `SEC-xxxx` codes are newer than EDIABAS 7.3 |
+| `raise_error_28`, `_29` | `TEST_RAISE_ERROR#28`, `#29` | VM `BIP-0000`, Mac `IFH-0069`, `IFH-0074` | Expected: codes 7.3 does not have |
+| `raise_error_8` | `TEST_RAISE_ERROR#8` | VM `BIP-0000`, Mac `BIP-0011` | Same kind: 7.3 maps trap bit 8 to no specific code |
+| `results11#32` | `TEST_IFACE_FLAGS` | `XBATT` 12000 vs 0, `XSTATE` 0x20 vs 0x30 | Expected: a real interface on the VM, an empty replay on the Mac |
+| `results10#2` | `TEST_SREG` | `CFGSG_ECUPATH*` | Expected: different Ecu folders |
+| `results10#2` | `TEST_SREG` | `STRCAT2A_Y`, `STRCAT2B_Y` null on the VM | 2 KB binary results: 7.3's `apiResultBinary` refuses results that size; the text forms match |
+| `results10#10` | `TEST_FILES` | Mac `BIP-0006` | The job builds `EcuPath + "\\test_file1.txt"`, a Windows path, which `fopen` cannot open on macOS |
+| `results11#20`–`#23` | `TEST_FSUB/FADD/FMUL/FDIV_FLAGS` | Mac `BIP-0011` | The last case computes 1.2e308 + 1.3e308 (infinity). EdiabasLib emulates EDIABAS 7.7.3, which raises `REAL ERROR` there (trap bit 8 not masked); 7.3 carries on |
+| `results15#0` | `TEST_DIVS_ZERO` | Mac `BIP-0007` | Divide by zero with every trap masked: from 7.6 on (EdiabasLib's `IsMinVersion760`, a compile-time constant 7.7.3) it is raised regardless of the mask; 7.3 carries on |
+| `results11#29` | `TEST_TABLE_FLAGS` | `COLS_INIT`/`ROWS_INIT` 2/6 vs 0 | `tabcols`/`tabrows` before any `tabset`: 7.3 reports a table left from earlier, EdiabasLib none |
+| `results21#0`, `results23#0`, `#4` | `TEST_MULTIARG` | formats `D`, `X`, `08X` of negative values: 7.3 two's complement, EdiabasLib `0` | EdiabasLib's `FormatResult`. `NativeEdiabasApi` formats only with `""`, so this never reaches the API |
+| `results12#0`, `#1` | `TEST_SHMID#ARGS##STDARGS` on `cmd_ident.grp` | VM `SYS-0013` UNEXPECTED RESULT, Mac ok | Group resolution: 7.3 rejects the test group's `IDENTIFIKATION` results (it returns `FAMILIE` beside `VARIANTE`), EdiabasLib accepts them |
+| `results17_8#1` | `TEST_SHMID` on `cmd_test1` after `cmd_test2` | VM `SYS-0018` END JOB ERROR, Mac ok | `cmd_test2`'s exit job raises an error when the SGBD changes: 7.3 reports it on the next job, EdiabasLib ignores it |
+
+What this means for real reads:
+- **Divide by zero:** an SGBD computing a status value by integer division with every trap
+  masked fails natively where 7.3 would return a value. This fails safe (an error, never a
+  wrong value). Watch for `BIP-0007` in M2's comparisons.
+- **Float overflow to infinity:** the same, but no real status calculation reaches 1e308.
+- **Group resolution** accepting what 7.3 rejects: `.grp` names are `needs_car` natively until
+  a live request resolves them. M2 compares the resolved variant against the VM's.
 
 ## 5. For M2
 
 - **Gate and 0x30/0x31 reads: strict for now** (Ryan, 2026-11-22). 24 `STATUS_` reads on
   NVE_65, CAS and LM_60 are refused natively and stay on the VM; M2's comparisons skip them,
   and a `voltageSources` entry on one of them gives `frame_refused` natively.
+
+- **EdiabasLib emulates EDIABAS 7.7.3; the VM runs 7.3** (section 4). A divide by zero under a
+  full trap mask fails natively; M2's comparisons flag `BIP-0007` and `BIP-0011` as this
+  difference, not a transport fault.
 
 - The MCP server's native backend (`EDIABAS_BACKEND=native`) and `bridge_health`, with the
   cable's free/locked state.
