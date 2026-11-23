@@ -252,6 +252,9 @@ error with its trap mask and carry on as though it succeeded.
 - **Group files resolve at the car only in a live request** (`job`, `jobs`, `vehicle`); a
   describe with no cached variant gives `needs_car`.
 - `EdiabasAgent.Core` stays in `vm-agent/` until M4.
+- **Licence: the whole repo is GPL-3.0-only** (Ryan, 2026-11-23). Main was MIT up to 0.6.2;
+  when this branch goes into main, main becomes GPL-3.0 with it (README, `LICENSE`,
+  `mac-mcp/package.json`). Released MIT versions stay MIT.
 - **No `vehicle` method** (after merging main, 2026-11-23). Main removed the agent's
   `/ediabas/vehicle` (0.5.0, D10): the MCP server reads vehicle status as one `jobs` batch and
   keeps `voltageSources` in its own config. `ediabasd` follows: no `vehicle` method or command,
