@@ -48,6 +48,11 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   still print. An `IS_LESEN` that fails with `ediabas_error` after that ECU's `FS_LESEN` read shows "Info memory: not read (...). Many
   modules have no info memory (no IS_LESEN job); ediabas_describe <ECU> shows whether this one has it."
   Otherwise its error is shown like a fault memory error.
+- **`FS_LESEN_FUNKTIONAL` (whole-car faults):** `ediabas_job` on `E60` prints one line per module
+  with faults (address, each code in hex and its state), then the modules that could not be read,
+  then `Without faults: ...`. Present or stored is inferred from the `F_ART` status byte
+  (KWP2000), so the view says so; `raw: true` shows every field. A result with no `F_ANZ` field
+  prints the generic view.
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then

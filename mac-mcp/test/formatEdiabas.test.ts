@@ -14,6 +14,7 @@ import {
   isKmName,
   itemErrorText,
   jobStatusText,
+  storageState,
   vehicleBatch,
 } from "../src/formatEdiabas.js";
 import { faultSets, jobResult, phase2Health } from "./stubAgent.js";
@@ -414,5 +415,38 @@ describe("vehicle status", () => {
   it("formatVehicle says where voltage sources are configured when there are none", () => {
     const item = { ok: true, result: JobResultSchema.parse(jobResult("TMODE", "X", [])) };
     expect(formatVehicle({ items: [item, item, item, item] }, [])).toContain("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
+  });
+});
+
+describe("whole-car jobs", () => {
+  const sets = [
+    { ECU_GROBNAME: "ALBV_FA", ECU_ADR: "59", F_ANZ: 1, F_ORT1_NR: 42777, F_ART1_NR: 0x28, JOB_STATUS: "OKAY", _TEL_ANTWORT: "85F1595801A7192810" },
+    { ECU_GROBNAME: "ZGM", ECU_ADR: "00", F_ANZ: 2, F_ORT1_NR: 37836, F_ART1_NR: 0x61, F_ORT2_NR: 37810, F_ART2_NR: 0x21, JOB_STATUS: "OKAY" },
+    { ECU_GROBNAME: "SINE", ECU_ADR: "50", F_ANZ: 1, F_ORT1_NR: 0x9d12, F_ART1_NR: 0x01, JOB_STATUS: "OKAY" },
+    { ECU_GROBNAME: "CAS", ECU_ADR: "40", F_ANZ: 0, JOB_STATUS: "OKAY" },
+    { ECU_GROBNAME: "VVT", JOB_STATUS: "ERROR_ECU_SERVICE_NOT_SUPPORTED" },
+    { SOMETHING_ELSE: 1 },
+  ];
+  const t = formatJobResult(JobResultSchema.parse(jobResult("E60", "FS_LESEN_FUNKTIONAL", sets)));
+
+  it("summarises and lists one line per module", () => {
+    expect(t).toContain("3 modules with faults (4 codes), 1 without, 1 could not be read.");
+    expect(t).toContain("ZGM (address 0x00): 0x93CC present now (F_ART 0x61); 0x93B2 stored, not present (F_ART 0x21)");
+    expect(t).toContain("ALBV_FA (address 0x59): 0xA719 stored, not present (F_ART 0x28)");
+    expect(t).toContain("SINE (address 0x50): 0x9D12 status not decoded (F_ART 0x01)");
+    expect(t).toContain("Without faults: CAS");
+    expect(t).toContain("VVT (address unknown): job status ERROR_ECU_SERVICE_NOT_SUPPORTED (the module answered that it does not support this job");
+    expect(t).toContain("(set 6) SOMETHING_ELSE=1");
+    expect(t).toContain("Present/stored is inferred from the F_ART status byte (KWP2000); ediabas_read_faults on the module gives its own wording. raw: true shows every field.");
+    expect(t).not.toContain("_TEL_ANTWORT");
+    expect(t).toContain("E60 FS_LESEN_FUNKTIONAL: job status");
+  });
+  it("storageState", () => {
+    expect(storageState("x")).toBe("status not decoded (F_ART x)");
+    expect(storageState(undefined)).toBe("status not decoded (F_ART null)");
+  });
+  it("falls back to the generic view without F_ANZ", () => {
+    const g = formatJobResult(JobResultSchema.parse(jobResult("E60", "FS_LESEN_FUNKTIONAL", [{ A: 1 }])));
+    expect(g).toContain("Set 1:");
   });
 });

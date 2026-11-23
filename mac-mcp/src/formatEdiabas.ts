@@ -259,20 +259,81 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
 // Job results
 // ---------------------------------------------------------------------------
 
-export function formatJobResult(r: JobResult): string {
+/** First line of a job view: `ECU JOB: job status …, variant …, N ms, N result sets`. */
+function jobHeader(r: JobResult): string {
   const facts = [
     jobStatusText(r.jobStatus),
     r.variant ? `variant ${valueText(r.variant, 64)}` : null,
     typeof r.durationMs === "number" ? `${Math.round(r.durationMs)} ms` : null,
     plural(r.sets.length, "result set"),
   ].filter(Boolean);
-  const out = [`${cleanName(r.ecu)} ${cleanName(r.job)}: ${facts.join(", ")}`];
+  return `${cleanName(r.ecu)} ${cleanName(r.job)}: ${facts.join(", ")}`;
+}
+
+export function formatJobResult(r: JobResult): string {
+  if (r.job.toUpperCase() === "FS_LESEN_FUNKTIONAL" && r.sets.some((s) => "F_ANZ" in s)) return formatFunctionalFaults(r);
+  const out = [jobHeader(r)];
   if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
   r.sets.forEach((set, i) => {
     out.push(`Set ${i + 1}:`);
     const lines = fieldLines(set, "  ");
     out.push(...(lines.length ? lines : ["  (empty)"]));
   });
+  return out.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Whole-car jobs (E60 group SGBD: one result set per module)
+// ---------------------------------------------------------------------------
+
+/** KWP2000 storage-state bits of an F_ART byte; inferred, so the view says so. */
+export function storageState(fArt: unknown): string {
+  if (typeof fArt !== "number" || !Number.isInteger(fArt) || fArt < 0) return `status not decoded (F_ART ${valueText(fArt, 20)})`;
+  const state = (fArt & 0x60) === 0x60 ? "present now" : (fArt & 0x60) === 0x20 ? "stored, not present" : "status not decoded";
+  return `${state} (F_ART 0x${fArt.toString(16).toUpperCase().padStart(2, "0")})`;
+}
+
+function moduleLabel(set: ResultSet): string {
+  const name = typeof set.ECU_GROBNAME === "string" && set.ECU_GROBNAME ? cleanName(set.ECU_GROBNAME) : "(unnamed module)";
+  const adr = set.ECU_ADR;
+  return `${name} (${typeof adr === "string" || typeof adr === "number" ? `address 0x${valueText(adr, 8)}` : "address unknown"})`;
+}
+
+export function formatFunctionalFaults(r: JobResult): string {
+  const faulted: string[] = [];
+  const unread: string[] = [];
+  const clean: string[] = [];
+  const other: string[] = [];
+  let codes = 0;
+  r.sets.forEach((set, i) => {
+    const status = set.JOB_STATUS;
+    if (typeof status === "string" && status.toUpperCase() !== "OKAY") {
+      unread.push(`  ${moduleLabel(set)}: ${jobStatusText(status)}`);
+    } else if (typeof set.F_ANZ === "number" && Number.isInteger(set.F_ANZ) && set.F_ANZ >= 0) {
+      if (set.F_ANZ === 0) {
+        clean.push(typeof set.ECU_GROBNAME === "string" ? cleanName(set.ECU_GROBNAME) : moduleLabel(set));
+        return;
+      }
+      const n = Math.min(set.F_ANZ, 99);
+      const items: string[] = [];
+      for (let k = 1; k <= n; k++) {
+        if (!(`F_ORT${k}_NR` in set)) continue;
+        items.push(`${faultCode(set[`F_ORT${k}_NR`])} ${storageState(set[`F_ART${k}_NR`])}`);
+      }
+      codes += items.length;
+      faulted.push(`  ${moduleLabel(set)}: ${items.join("; ")}`);
+    } else {
+      const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
+    }
+  });
+  const out = [jobHeader(r)];
+  if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
+  out.push(`${plural(faulted.length, "module")} with faults (${plural(codes, "code")}), ${clean.length} without, ${unread.length} could not be read.`);
+  out.push(...faulted, ...unread);
+  if (clean.length) out.push(`Without faults: ${clean.join(", ")}`);
+  out.push(...other);
+  out.push("Present/stored is inferred from the F_ART status byte (KWP2000); ediabas_read_faults on the module gives its own wording. raw: true shows every field.");
   return out.join("\n");
 }
 
