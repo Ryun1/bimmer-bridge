@@ -242,13 +242,17 @@ What this means for real reads:
   full trap mask fails natively; M2's comparisons flag `BIP-0007` and `BIP-0011` as this
   difference, not a transport fault.
 
-- **Policy drift:** main has policy v4, this branch v3 (section 3). Merging main in, or taking
-  v4 over, makes the describe verdicts match.
+- **Policy drift: resolved.** Main (policy v4) was merged into this branch on 2026-11-23;
+  `ediabasd` describe now flags `NVE_65 STATUS_PAIRING`, `STATUS_LAMBDA_COUNTER`,
+  `STATUS_T_MV_OFF` and the other drift cases as the VM does.
 
 - **VM agent, not the native engine:** after the Mac slept mid-run the agent logged thread-pool
   starvation and then stopped accepting connections while its process stayed up; only a
-  restart of its scheduled task recovered it (section 3). Its describe also drops comments past
-  its 60 s limit on SGBDs whose INIT waits. Both belong to the agent's own work.
+  restart of its scheduled task recovered it (section 3,
+  [#15](https://github.com/Ryun1/bimmer-bridge/issues/15)). Its describe also drops comments
+  past its 60 s limit on SGBDs whose INIT waits
+  ([#16](https://github.com/Ryun1/bimmer-bridge/issues/16)); that limit is a constant
+  (`MaxJobTimeoutLimitSeconds`), so a config change cannot lift it.
 
 - The MCP server's native backend (`EDIABAS_BACKEND=native`) and `bridge_health`, with the
   cable's free/locked state.
