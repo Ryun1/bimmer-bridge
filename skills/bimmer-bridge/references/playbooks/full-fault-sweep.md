@@ -6,8 +6,8 @@
 Reading the fault memory of every module the user cares about, in as little ignition-on time as
 possible. The session routine in `../../SKILL.md` applies; this file adds only what is specific.
 
-**Status: procedure only.** No sweep has been run on the E61 yet, and no SGBD has answered
-from it. Once one has, the modules that answered go into `../ecu-map.md`.
+**Status:** run on the E61 on 2026-11-23: both functional jobs, about 4 s each. The modules that
+answered are in `../ecu-map.md`.
 
 ## Before the ignition goes on
 
@@ -22,7 +22,7 @@ from it. Once one has, the modules that answered go into `../ecu-map.md`.
 - Tell the user the number of calls: one `ediabas_read_faults` per 20 ECUs, and whether info memory
   is included (it doubles the reads).
 
-## With the ignition on (not yet run at the car)
+## With the ignition on
 
 1. On an E60/E61, `E60` `FS_LESEN_FUNKTIONAL` reads the faults of every module that answers
    in one job, and `IDENT_FUNKTIONAL` lists those modules. If that answers the question, stop
