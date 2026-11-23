@@ -522,9 +522,9 @@ describe("ediabas_vehicle_status", () => {
     const r = await call("ediabas_vehicle_status");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
-    expect(r.text).toContain("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
+    expect(r.text).toContain("Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading): job status OKAY; STAT_UBATT=12480");
     expect(r.text).toContain("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
-    expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
+    expect(r.text).toContain("Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading): job status OKAY; SPANNUNG_KL30=12510");
     expect(r.text).toMatch(/Cable KL15 .*error: \[ediabas_error\] EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
     const sent = toolRequests();
     expect(sent.map((q) => `${q.method} ${q.path}`)).toEqual(["POST /ediabas/jobs"]);

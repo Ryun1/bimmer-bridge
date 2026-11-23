@@ -86,6 +86,15 @@ function fieldsInline(set: ResultSet, keys: string[] = Object.keys(set)): string
   return keys.map((k) => `${cleanName(k)}=${km.has(k) && typeof set[k] === "number" ? formatKm(set[k] as number) : inlineValue(set[k])}`).join(" ");
 }
 
+const NOT_SUPPORTED_NOTE = "the module answered that it does not support this job: a negative response from the module, not a bridge, cable or policy fault";
+
+/** `job status X` (or `not reported`); a module's "not supported" answer gets a note saying what it is. */
+export function jobStatusText(status: string | null | undefined): string {
+  if (!status) return "job status not reported";
+  const text = valueText(status, 60);
+  return /^ERROR_ECU_.*NOT_SUPPORTED/i.test(text) ? `job status ${text} (${NOT_SUPPORTED_NOTE})` : `job status ${text}`;
+}
+
 function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
@@ -177,10 +186,11 @@ export function formatFaultTable(result: JobResult, label: string): string[] {
   const sets = result.sets;
   const faults = sets.filter(isFaultSet);
   const status = result.jobStatus ? valueText(result.jobStatus, 60) : null;
+  const statusText = jobStatusText(result.jobStatus);
   const ok = status === "OKAY";
   const lines: string[] = [];
   if (faults.length === 0) {
-    lines.push(ok ? `  ${label}: no faults stored.` : `  ${label}: no fault entries returned (job status ${status ?? "not reported"}).`);
+    lines.push(ok ? `  ${label}: no faults stored.` : `  ${label}: no fault entries returned (${statusText}).`);
   } else {
     lines.push(`  ${label}: ${plural(faults.length, "entry", "entries")}${ok ? "" : ` (job status ${status ?? "not reported"})`}`);
   }
@@ -251,7 +261,7 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
 
 export function formatJobResult(r: JobResult): string {
   const facts = [
-    `job status ${r.jobStatus ? valueText(r.jobStatus, 60) : "not reported"}`,
+    jobStatusText(r.jobStatus),
     r.variant ? `variant ${valueText(r.variant, 64)}` : null,
     typeof r.durationMs === "number" ? `${Math.round(r.durationMs)} ms` : null,
     plural(r.sets.length, "result set"),
@@ -372,7 +382,7 @@ export function formatDescribeJob(d: DescribeJob, mac: Verdict | null): string {
 function readingText(item: BatchItem): string {
   if (!item.ok || !item.result) return `error: ${itemErrorText(item.error)}`;
   const r = item.result;
-  const parts = [`job status ${r.jobStatus ? valueText(r.jobStatus, 60) : "not reported"}`];
+  const parts = [jobStatusText(r.jobStatus)];
   for (const set of r.sets) {
     const keys = Object.keys(set).filter((k) => k.toUpperCase() !== "JOB_STATUS");
     if (keys.length) parts.push(fieldsInline(set, keys));
@@ -394,25 +404,24 @@ export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: st
   ];
 }
 
-// Rehearsal, 2026-11-22, cable in the VM and not in the car: STAT_UBATT=1 and KL30 E02E0000.
-// EdiabasLib's serial driver likewise reports a fixed 12000 mV whenever the cable's DSR line is set.
-const VEHICLE_NOTE =
-  "Note: STAT_UBATT and the cable's KL30 come from the cable's own lines, not from the car: with no car connected (desk, 2026-11-22) " +
-  "they read STAT_UBATT=1 and KL30 E02E0000 (12000 read little-endian). They do not show that the car is awake or how charged " +
-  "the battery is; only a reading from a module (a voltage source) shows that.";
+const IGNITION_NOTE =
+  "Ignition: with the ignition on at the car (2026-11-23) STAT_ZUENDUNG was 1 and the cable's KL15 E02E0000; with no car connected (desk, 2026-11-22) 0 and 00000000. Ignition off with the cable in the car has not been recorded yet.";
+const CABLE_NOTE =
+  "Battery: STAT_UBATT and the cable's KL30 read the same with and without the car (STAT_UBATT=1, KL30 E02E0000), so they show only that the cable is powered. Only a module reading (a voltage source) shows the car's supply voltage.";
 
 /** `r` answers `vehicleBatch(sources)`, one item per item sent. */
 export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
   const it = r.items;
   const n = sources.length;
-  const out = ["Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):"];
+  const out = ["Vehicle status (result fields as returned):"];
   out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(it[0]!)}`);
-  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(it[1]!)}`);
+  out.push(`Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading): ${readingText(it[1]!)}`);
   sources.forEach((s, i) => out.push(`Voltage (${cleanName(s.ecu)} ${cleanName(s.job)}): ${readingText(it[2 + i]!)}`));
   if (n === 0) out.push("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
-  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(it[2 + n]!)}`);
+  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading): ${readingText(it[2 + n]!)}`);
   out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(it[3 + n]!)}`);
-  out.push(VEHICLE_NOTE);
+  out.push(IGNITION_NOTE);
+  out.push(CABLE_NOTE);
   return out.join("\n");
 }
 

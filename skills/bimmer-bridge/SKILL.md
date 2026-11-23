@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default). On the E61 (2026-11-23, ignition on) `STAT_ZUENDUNG` read 1 and the cable's KL15 `E02E0000`; with no car connected (2026-11-22) 0 and `00000000`. Ignition off at the car is not recorded yet. `STAT_UBATT` and KL30 come from the cable, so only a voltage source shows the car's supply voltage |
+| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), the cable's supply (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default). On the E61 (2026-11-23, ignition on) `STAT_ZUENDUNG` read 1 and the cable's KL15 `E02E0000`; with no car connected (2026-11-22) 0 and `00000000`. Ignition off at the car is not recorded yet. `STAT_UBATT` and KL30 come from the cable, so only a voltage source shows the car's supply voltage |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 

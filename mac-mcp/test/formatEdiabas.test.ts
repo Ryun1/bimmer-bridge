@@ -13,6 +13,7 @@ import {
   formatVehicle,
   isKmName,
   itemErrorText,
+  jobStatusText,
   vehicleBatch,
 } from "../src/formatEdiabas.js";
 import { faultSets, jobResult, phase2Health } from "./stubAgent.js";
@@ -187,6 +188,19 @@ describe("job results", () => {
     );
     expect(t).toContain("  STAT_ANZAHL_FAHRTEN_0_5_KM_1=4");
     expect(t).toContain("  STAT_GESAMTE_KM_WERT_1=213 mi (343 km)");
+  });
+
+  it("a module's 'not supported' job status carries a note; OKAY does not", () => {
+    const bad = formatJobResult(JobResultSchema.parse(jobResult("CAS", "STATUS_KL15_ABSCHALTUNG", [], { jobStatus: "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT" })));
+    expect(bad.split("\n")[0]).toContain("job status ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT (the module answered that it does not support this job");
+    expect(formatJobResult(result([{ A: 1 }]))).not.toContain("does not support");
+    expect(jobStatusText("OKAY")).toBe("job status OKAY");
+    expect(jobStatusText(null)).toBe("job status not reported");
+  });
+
+  it("the fault table notes a 'not supported' status", () => {
+    const t = formatFaultTable(result([], { jobStatus: "ERROR_ECU_SERVICE_NOT_SUPPORTED" }), "Fault memory").join("\n");
+    expect(t).toContain("does not support this job");
   });
 
   it("raw is the agent's JSON with strings cleaned", () => {
@@ -370,11 +384,10 @@ describe("vehicle status", () => {
     expect([b[0], b[1], b[3], b[4]]).toEqual(FIXED);
   });
 
-  // Rehearsal, 2026-11-22, cable in the VM and not in the car: STAT_UBATT=1 and KL30 E02E0000.
-  const VEHICLE_NOTE =
-    "Note: STAT_UBATT and the cable's KL30 come from the cable's own lines, not from the car: with no car connected (desk, 2026-11-22) " +
-    "they read STAT_UBATT=1 and KL30 E02E0000 (12000 read little-endian). They do not show that the car is awake or how charged " +
-    "the battery is; only a reading from a module (a voltage source) shows that.";
+  const IGNITION_NOTE =
+    "Ignition: with the ignition on at the car (2026-11-23) STAT_ZUENDUNG was 1 and the cable's KL15 E02E0000; with no car connected (desk, 2026-11-22) 0 and 00000000. Ignition off with the cable in the car has not been recorded yet.";
+  const CABLE_NOTE =
+    "Battery: STAT_UBATT and the cable's KL30 read the same with and without the car (STAT_UBATT=1, KL30 E02E0000), so they show only that the cable is powered. Only a module reading (a voltage source) shows the car's supply voltage.";
 
   it("formatVehicle reads the items in that order", () => {
     const ok = (ecu: string, job: string, set: Record<string, unknown>) => ({ ok: true, result: JobResultSchema.parse(jobResult(ecu, job, [set])) });
@@ -387,14 +400,15 @@ describe("vehicle status", () => {
       { ok: false, result: null, error: { code: "ediabas_error", message: "failed", details: { errorCode: 19, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } } },
     ];
     const t = formatVehicle({ items }, sources).split("\n");
-    expect(t[0]).toBe("Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):");
+    expect(t[0]).toBe("Vehicle status (result fields as returned):");
     expect(t[1]).toBe("Ignition (UTILITY STATUS_ZUENDUNG): job status OKAY; STAT_ZUENDUNG=1");
-    expect(t[2]).toBe("Battery (UTILITY STATUS_UBATT): job status OKAY; STAT_UBATT=12480");
+    expect(t[2]).toBe("Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading): job status OKAY; STAT_UBATT=12480");
     expect(t[3]).toBe("Voltage (NVE_65 STATUS_BORDNETZSPANNUNG): job status OKAY; STAT_SPANNUNG_WERT=12.4");
-    expect(t[4]).toBe("Cable KL30 (TMODE LESE_SPANNUNG_KL30): job status OKAY; SPANNUNG_KL30=12510");
+    expect(t[4]).toBe("Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading): job status OKAY; SPANNUNG_KL30=12510");
     expect(t[5]).toMatch(/^Cable KL15 \(TMODE LESE_SPANNUNG_KL15\): error: \[ediabas_error\] EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT/);
-    expect(t[6]).toBe(VEHICLE_NOTE);
-    expect(t).toHaveLength(7);
+    expect(t[6]).toBe(IGNITION_NOTE);
+    expect(t[7]).toBe(CABLE_NOTE);
+    expect(t).toHaveLength(8);
   });
 
   it("formatVehicle says where voltage sources are configured when there are none", () => {
