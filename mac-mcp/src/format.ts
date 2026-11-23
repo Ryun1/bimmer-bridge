@@ -26,7 +26,7 @@ export function formatDuration(totalSeconds: number): string {
 }
 
 /** The agent's policy version against the Mac's (null when the Mac's file did not load). */
-function policyLines(h: Health, macPolicyVersion: number | null): string[] {
+function policyLines(h: Health, macPolicyVersion: number | null, macSha256: string | null): string[] {
   const lines: string[] = [];
   const agentV = h.policyVersion ?? null;
   const caps = h.capabilities ?? null;
@@ -36,16 +36,34 @@ function policyLines(h: Health, macPolicyVersion: number | null): string[] {
     lines.push(`Agent features: ${caps.length ? caps.map((c) => clean(c)).join(", ") : "none"}`);
   }
   const mac = macPolicyVersion === null ? "could not be loaded, so every EDIABAS tool refuses" : `version ${macPolicyVersion}`;
-  lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}; Mac ${mac}.`);
-  if (h.approvals) {
-    lines.push(`Approved jobs: ${h.approvals.pinned} pinned, ${h.approvals.unpinned} unpinned.`);
-    if (h.approvals.unpinned > 0) {
-      lines.push("Unpinned approvals do not notice a changed description; ediabas_describe shows the hash to pin them with.");
+  const agentSha = h.policySha256 ? clean(h.policySha256) : null;
+  const sha = (s: string | null) => (s ? ` (sha256 ${s.slice(0, 12)})` : "");
+  lines.push(`Job policy: agent ${agentV === null ? "does not report one" : `version ${agentV}`}${sha(agentSha)}; Mac ${mac}${macPolicyVersion === null ? "" : sha(macSha256)}.`);
+  const a = h.approvals;
+  if (a && "ignored" in a) {
+    lines.push(`Approved jobs: ${a.pinned} pinned, ${a.ignored} ignored.`);
+    for (const e of a.entries ?? []) lines.push(`  ${clean(e)}`);
+    if (a.ignored > 0) {
+      const n = a.ignored === 1 ? "1 approval entry is" : `${a.ignored} approval entries are`;
+      lines.push(`${n} ignored (unpinned, malformed or not upper case); ediabas_describe prints the pinned entry for each.`);
+    }
+  } else if (a) {
+    // An agent before 0.5.0, which still approves unpinned entries by name.
+    lines.push(`Approved jobs: ${a.pinned} pinned, ${a.unpinned} unpinned.`);
+    if (a.unpinned > 0) {
+      lines.push(
+        `${a.unpinned} unpinned approvals skip the description screen on this older agent and approve nothing from 0.5.0; ediabas_describe prints the pinned entry for each.`,
+      );
     }
   }
   if (agentV !== null && macPolicyVersion !== null && agentV !== macPolicyVersion) {
     lines.push(
       `WARNING: the agent's job policy (version ${agentV}) differs from this Mac's (version ${macPolicyVersion}). Each side refuses what its own copy refuses. ${UPDATE_HINT}`,
+    );
+  }
+  if (agentSha !== null && macSha256 !== null && agentSha.toLowerCase() !== macSha256) {
+    lines.push(
+      `WARNING: the agent's policy file (sha256 ${agentSha.slice(0, 12)}) is not the same file as this Mac's (${macSha256.slice(0, 12)}), so every ediabas_* tool refuses with [policy_mismatch]. ${UPDATE_HINT}`,
     );
   }
   return lines;
@@ -62,7 +80,7 @@ export interface MacServerInfo {
   startedAt: Date;
 }
 
-export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo): string {
+export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo, macPolicySha256: string | null = null): string {
   const lines: string[] = [];
   if (mac) lines.push(`Mac server ${mac.version}, started ${localTime(mac.startedAt)}`);
   const since = h.startedAt ? ` (since ${clean(h.startedAt)})` : "";
@@ -98,13 +116,15 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null, 
       "EDIABAS: STUCK: a job did not stop after apiBreak, so the agent no longer touches EDIABAS and every EDIABAS call fails. " +
         "The user needs to restart the agent (restart Windows in the VM).",
     );
+  } else if (h.ediabas.heldOpen === true) {
+    lines.push("EDIABAS: held open after a failed apiEnd; the interface stays in use until the agent restarts (restart Windows or the scheduled task).");
   } else if (h.ediabas.loaded === true) {
     lines.push("EDIABAS: loaded now, so the next EDIABAS call starts straight away.");
   } else if (h.ediabas.loaded === false) {
     lines.push("EDIABAS: not loaded (released after idle); the next EDIABAS call loads it and takes about 10 s longer. That is normal, not a fault.");
   }
   lines.push(`Last cable use: ${h.lastCableUseAt ? clean(h.lastCableUseAt) : "never (since the agent started)"}`);
-  lines.push(...policyLines(h, macPolicyVersion));
+  lines.push(...policyLines(h, macPolicyVersion, macPolicySha256));
   return lines.join("\n");
 }
 

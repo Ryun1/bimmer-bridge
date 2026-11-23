@@ -1,4 +1,4 @@
-# mac-mcp — ediabas-bridge MCP server
+# mac-mcp — bimmer-bridge MCP server
 
 Local stdio MCP server for Claude Code and the Claude desktop app. It finds the Windows VM
 in UTM, calls the VM agent over authenticated HTTP (`docs/api.md`) and exposes read-only
@@ -11,31 +11,31 @@ All read-only (`readOnlyHint: true`). The contract is `docs/tools.md`.
 
 | Tool | What it does |
 |---|---|
-| `vm_health` | this server's version and start time, agent status (warns when the agent's version differs from this server's), BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's), approved jobs (pinned and unpinned) |
+| `vm_health` | this server's version and start time, agent status (warns when the agent's version differs from this server's), BMW tools holding the cable, EDIABAS DLL and whether EDIABAS is loaded now (when the agent reports it), last cable use, agent features, job policy version (warns when the agent's differs from the Mac's), approved jobs (pinned; unpinned entries are ignored), listed |
 | `vm_list_windows` | windows open in the VM |
 | `vm_screenshot` | an image of the desktop or one window (`window`, `maxEdge`), then a one-line caption |
 | `vm_logs_list` / `vm_logs_read` | log files under the agent's allowed folders; read a tail or a range, optionally grep |
 | `ediabas_list_ecus` | SGBD (`prg`) and group (`grp`) names |
 | `ediabas_describe` | an SGBD's jobs with whether each is runnable (`namesOnly` skips the descriptions), or one job's description, its hash, arguments and results |
-| `ediabas_vehicle_status` | ignition, battery and cable voltage readings, fields as returned |
+| `ediabas_vehicle_status` | ignition, battery and cable voltage readings, and voltages from `voltageSources` in `config.local.json` when configured; one `/ediabas/jobs` batch, fields as returned |
 | `ediabas_job` | one allowed job, result sets as text (or the agent's JSON with `raw: true`); `timeoutSeconds` 1–60 |
 | `ediabas_jobs` | 1–20 allowed jobs in one request, one block per job in request order |
 | `ediabas_read_faults` | `FS_LESEN` (and `IS_LESEN`) for 1–20 ECUs, one fault table per ECU, distances in miles first |
 
 **Job policy.** `src/policy.ts` loads `policy/policy.json` from the repo root (two levels above
 `src/` and `dist/`) once at start-up and evaluates it as `docs/api.md` "Job policy" says.
-`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults` and `ediabas_describe` (names only) are checked before
+`ediabas_job`, `ediabas_jobs`, `ediabas_read_faults`, `ediabas_vehicle_status` (every reading, including `voltageSources`) and `ediabas_describe` (names only) are checked before
 any request leaves the Mac, so a refused job never reaches the VM. If the file is missing or
 invalid, every `ediabas_*` tool refuses with `policy_unavailable` (fail closed); restore the
 file and restart Claude. `test/policy.test.ts` runs every case in `policy/policy-cases.json`
 and `policy/policy-parse-cases.json`, as the agent's tests do.
 
 **Older agent.** A tool whose endpoint the agent does not have (404 `not_found`) reports
-`agent_outdated`: install the current agent with the Update line (see "Updating" in the repo README).
+`agent_outdated`: install the current agent with the Update line (see [docs/install.md, Updating](../docs/install.md#updating)).
 
 **Errors and length.** Every error result starts with its code in brackets, e.g.
 `[cable_in_use] …`. No result is longer than 60 000 characters; a longer one is cut at a line
-end with a line saying how to narrow the call. `docs/tools.md` lists the codes.
+end with a line saying how to narrow the call. [docs/tools.md](../docs/tools.md#errors) lists the codes.
 
 **Timeouts.** 15 s per request, 75 s for `/ediabas/*`. EDIABAS calls are sent one at a time,
 in the order they were made, because the agent runs them one at a time; the 75 s starts when a
@@ -76,24 +76,27 @@ neither, the server still starts and each tool says how to store the token.
 read**, so the VM agent's token is never sent to an address set by hand (the replay agent in
 `dev/`, or a mistyped URL). Without `EDIABAS_AGENT_TOKEN` every tool then fails with
 `no_token`, saying why, and a 401 says the `EDIABAS_AGENT_TOKEN` value is wrong (not the
-Keychain's). After a 401 the
-token is re-read once, so a newly stored token is picked up without a restart.
+Keychain's). When the `/hello` proof does not match, the token is re-read once and the proof
+checked again; after a 401 it is re-read for the next call, which proves the address with it
+before sending it. Either way a newly stored token is picked up without a restart, and a token
+is only ever sent to an address that proved it holds that same token.
 
 ## Environment (all optional)
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/health` agent check still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
+| `EDIABAS_AGENT_URL` | — | full base URL; skips discovery (the `/hello` proof still applies). Requires `EDIABAS_AGENT_TOKEN`; the Keychain token is never sent to it |
 | `EDIABAS_AGENT_PORT` | `8765` | port used with a discovered address |
 | `EDIABAS_VM_MAC` | read from UTM | the VM's MAC address; when unset, read from UTM's config for the VM (see Finding the VM) |
-| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for `utmctl`, messages and finding the VM's MAC in UTM's config |
+| `EDIABAS_VM_NAME` | `Windows` | UTM VM name, for messages and finding the VM's MAC in UTM's config |
 | `EDIABAS_AGENT_TOKEN` | — | token fallback when the Keychain has none; the only token used with `EDIABAS_AGENT_URL` |
 | `EDIABAS_AUDIT_LOG` | `~/Library/Logs/ediabas-bridge/audit.log` | audit log path |
-| `EDIABAS_RECORD_DIR` | — | record every agent exchange into this folder (see Recording) |
 
 **`config.local.json`.** Settings for one machine can also go in `config.local.json` at the repo
 root (git-ignored; copy `config.local.example.json`). It is read once at start-up (restart Claude
-after changing it) and may set `vmName`, `vmMac` and `agentPort`; keys starting with `_` are
+after changing it) and may set `vmName`, `vmMac`, `agentPort` and `voltageSources` (extra
+voltage readings for `ediabas_vehicle_status`, see [docs/tools.md](../docs/tools.md#ediabas_vehicle_status));
+keys starting with `_` are
 comments. An environment variable wins over the file, and the file wins over the defaults. A file
 that is not valid JSON, an unknown key or a bad value is a warning on stderr and is ignored; the
 server still starts. `dev/serve.py` reads the same file for `vmName` and `vmMac`.
@@ -103,15 +106,12 @@ server still starts. `dev/serve.py` reads the same file for `vmName` and `vmMac`
 The VM's MAC is `EDIABAS_VM_MAC`, else `vmMac` in `config.local.json`, else the first network
 card's `MacAddress` in UTM's config for the VM,
 `~/Library/Containers/com.utmapp.UTM/Data/Documents/<EDIABAS_VM_NAME>.utm/config.plist` (read
-with `plutil` at each discovery). When none of these gives a MAC, the DHCP leases and ARP table
-are skipped and only `utmctl` is tried; if that finds nothing, `vm_not_running` says to set
+with `plutil` at each discovery). When none of these gives a MAC, `vm_not_running` says to set
 `EDIABAS_VM_MAC`, or `EDIABAS_VM_NAME` if the VM in UTM has another name.
 
-Candidates for the VM's MAC come from `/var/db/dhcpd_leases` (latest expiry first), then
-`arp -an`, then `utmctl ip-address <name>`. Only an address on the same subnet as a local
-`bridge*` interface is ever contacted, and it is accepted only if `GET /health` returns 200
-with `"agent": "ediabas-bridge-agent"`. The accepted URL is cached; on a connection failure
-the cache is cleared and discovery runs once more.
+The VM's address is the newest DHCP lease for its MAC, on a `bridge1NN` interface, and is
+accepted only if it proves it is the agent with `GET /hello` before the token is sent; the
+full description is in [docs/architecture.md](../docs/architecture.md#the-request-path).
 
 ## Troubleshooting: macOS Local Network permission
 
@@ -127,7 +127,7 @@ The permission is tied to the path of the node binary. Upgrading or reinstalling
 example a Homebrew upgrade that changes the path) can make macOS ask again.
 
 Every failed probe or request, and every accepted address with its source
-(leases / arp / utmctl / env), is logged to stderr, e.g.
+(leases / env), is logged to stderr, e.g.
 `probe 192.168.64.3:8765 failed: unreachable (EHOSTUNREACH)`. The token is never logged.
 
 ## Audit log
@@ -138,7 +138,9 @@ refusal, `rule=…`. A write failure is reported on stderr and does not fail the
 
 ## Recording
 
-With `EDIABAS_RECORD_DIR` set, every agent exchange (discovery probes included) is written to
+This server never records. For fixtures, the dev entry point `dev/record-server.ts` runs this
+same server with a recording `fetch` (how: [development.md](../docs/development.md#recording-and-scrubbing)):
+with `EDIABAS_RECORD_DIR` set, every agent exchange except the `/hello` probe is written to
 that folder as one JSON file named
 `<UTC time>-<sequence>-<METHOD>-<path>[-<ECU>-<JOB>].json`, e.g.
 `20261121T150405123Z-0003-POST-ediabas_job-NVE_65-IDENT.json`:
@@ -153,18 +155,18 @@ The response has `body` (JSON), `bodyText` (anything else) or, for a screenshot,
 the name of the `.jpg`/`.png` written next to it. Response headers kept are `content-type` and
 the agent's `x-*` headers. Request headers are not recorded, so the token and the
 Authorization header never are; any token value in a body is replaced with `[redacted]`.
-Recordings contain real vehicle data: scrub them before committing (`dev/`). Off by default;
-a recording failure is logged on stderr and never fails the tool call.
+Recordings contain real vehicle data: scrub them before committing (`dev/`). A recording
+failure is logged on stderr and never fails the tool call.
 
 ## Registering with Claude
 
 Use absolute paths, and a stable Node path (not an nvm version directory) so a Node upgrade
-does not break it. The full steps are in the repo README, "Register the MCP server".
+does not break it. The full steps are in [docs/install.md](../docs/install.md#4-register-the-mcp-server).
 
-- Claude Code: `claude mcp add --scope user ediabas-bridge -- <node> <repo>/mac-mcp/dist/index.js`
+- Claude Code: `claude mcp add --scope user bimmer-bridge -- <node> <repo>/mac-mcp/dist/index.js`
 - Claude desktop app: add to `mcpServers` in
   `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
   ```json
-  "ediabas-bridge": { "command": "<node>", "args": ["<repo>/mac-mcp/dist/index.js"] }
+  "bimmer-bridge": { "command": "<node>", "args": ["<repo>/mac-mcp/dist/index.js"] }
   ```

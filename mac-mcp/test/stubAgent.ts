@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { AGENT_TOKEN, healthBody, json, windowsBody, type Handler } from "./fixtures.js";
+import { AGENT_TOKEN, answerHello, healthBody, json, windowsBody, type Handler } from "./fixtures.js";
 
 /**
  * A stub of the VM agent for the Phase 2/4/5/6 endpoints, following docs/api.md. Every
@@ -26,7 +26,7 @@ export function agentErr(status: number, code: string, message: string, details?
 }
 
 export function phase2Health(o: Record<string, unknown> = {}): Record<string, unknown> {
-  return healthBody({ policyVersion: 3, capabilities: ["ediabas", "capture", "logs"], conflictingProcesses: [], ...o });
+  return healthBody({ policyVersion: 4, capabilities: ["ediabas", "capture", "logs"], conflictingProcesses: [], ...o });
 }
 
 export function jobResult(ecu: string, job: string, sets: Record<string, unknown>[], o: Record<string, unknown> = {}): Record<string, unknown> {
@@ -164,17 +164,6 @@ export function defaultResponders(): Record<string, Responder> {
         },
       };
     },
-    "GET /ediabas/vehicle": () => ({
-      status: 200,
-      body: {
-        ignition: { ok: true, result: jobResult("UTILITY", "STATUS_ZUENDUNG", [{ STAT_ZUENDUNG: 1, JOB_STATUS: "OKAY" }]), error: null },
-        ubatt: { ok: true, result: jobResult("UTILITY", "STATUS_UBATT", [{ STAT_UBATT: 12480 }]), error: null },
-        voltages: [{ ecu: "NVE_65", job: "STATUS_BORDNETZSPANNUNG", ok: true, result: jobResult("NVE_65", "STATUS_BORDNETZSPANNUNG", [{ STAT_SPANNUNG_WERT: 12.4 }]), error: null }],
-        cableKl30: { ok: true, result: jobResult("TMODE", "LESE_SPANNUNG_KL30", [{ SPANNUNG_KL30: 12510 }]), error: null },
-        cableKl15: { ok: false, result: null, error: { code: "ediabas_error", message: "failed", details: { errorCode: 159, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } } },
-        durationMs: 2100,
-      },
-    }),
     "POST /ediabas/job": (r) => {
       const b = r.body as { ecu: string; job: string };
       return { status: 200, body: jobResult(b.ecu, b.job, [{ ID_BMW_NR: "1234567", KM_STAND: 160935, JOB_STATUS: "OKAY" }]) };
@@ -184,11 +173,14 @@ export function defaultResponders(): Record<string, Responder> {
       return {
         status: 200,
         body: {
-          items: items.map((it) => ({
-            ok: true,
-            result: jobResult(it.ecu, it.job, it.job === "FS_LESEN" ? faultSets() : [{ JOB_STATUS: "OKAY" }]),
-            error: null,
-          })),
+          items: items.map(
+            (it) =>
+              VEHICLE_READINGS[`${it.ecu} ${it.job}`] ?? {
+                ok: true,
+                result: jobResult(it.ecu, it.job, it.job === "FS_LESEN" ? faultSets() : [{ JOB_STATUS: "OKAY" }]),
+                error: null,
+              },
+          ),
           durationMs: 1290,
         },
       };
@@ -196,12 +188,26 @@ export function defaultResponders(): Record<string, Responder> {
   };
 }
 
-const KNOWN_PATHS = ["/health", "/windows", "/screen/capture", "/logs", "/logs/read", "/ediabas/ecus", "/ediabas/describe", "/ediabas/vehicle", "/ediabas/job", "/ediabas/jobs"];
+/** What the stub's /ediabas/jobs answers for the items ediabas_vehicle_status sends. */
+const VEHICLE_READINGS: Record<string, unknown> = {
+  "UTILITY STATUS_ZUENDUNG": { ok: true, result: jobResult("UTILITY", "STATUS_ZUENDUNG", [{ STAT_ZUENDUNG: 1, JOB_STATUS: "OKAY" }]), error: null },
+  "UTILITY STATUS_UBATT": { ok: true, result: jobResult("UTILITY", "STATUS_UBATT", [{ STAT_UBATT: 12480 }]), error: null },
+  "NVE_65 STATUS_BORDNETZSPANNUNG": { ok: true, result: jobResult("NVE_65", "STATUS_BORDNETZSPANNUNG", [{ STAT_SPANNUNG_WERT: 12.4 }]), error: null },
+  "TMODE LESE_SPANNUNG_KL30": { ok: true, result: jobResult("TMODE", "LESE_SPANNUNG_KL30", [{ SPANNUNG_KL30: 12510 }]), error: null },
+  "TMODE LESE_SPANNUNG_KL15": {
+    ok: false,
+    result: null,
+    error: { code: "ediabas_error", message: "failed", details: { errorCode: 19, errorText: "IFH-0009: NO RESPONSE FROM CONTROLUNIT" } },
+  },
+};
 
-/** Routes like the agent: token (401), then path (404 not_found), then method (405). */
+const KNOWN_PATHS = ["/health", "/windows", "/screen/capture", "/logs", "/logs/read", "/ediabas/ecus", "/ediabas/describe", "/ediabas/job", "/ediabas/jobs"];
+
+/** Routes like the agent: GET /hello without a token, then token (401), path (404 not_found), method (405). */
 export function stubHandler(overrides: Record<string, Responder> = {}, token: string = AGENT_TOKEN): Handler {
   const responders = { ...defaultResponders(), ...overrides };
   return (req: IncomingMessage, res: ServerResponse) => {
+    if (answerHello(req, res, token)) return;
     if (req.headers.authorization !== `Bearer ${token}`) {
       json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token.", details: null } }, { "www-authenticate": "Bearer" });
       return;

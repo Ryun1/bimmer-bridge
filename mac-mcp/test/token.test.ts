@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
-import { TokenProvider } from "../src/token.js";
+import { TokenProvider, helloKey } from "../src/token.js";
 import { BridgeError } from "../src/errors.js";
 
 const KEYCHAIN_TOKEN = "kc_TOKEN_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -95,6 +96,11 @@ describe("TokenProvider", () => {
     expect(text).not.toContain(value);
     expect(text).not.toContain(ENV_TOKEN);
     expect(text).toContain("[redacted]");
+  });
+
+  it("helloKey is the SHA-256 of the token's UTF-8 bytes", () => {
+    expect(helloKey(KEYCHAIN_TOKEN).toString("hex")).toBe(createHash("sha256").update(KEYCHAIN_TOKEN, "utf8").digest("hex"));
+    expect(helloKey("ü").toString("hex")).toBe(createHash("sha256").update(Buffer.from([0xc3, 0xbc])).digest("hex"));
   });
 
   describe("with an overridden agent URL (envOnly)", () => {

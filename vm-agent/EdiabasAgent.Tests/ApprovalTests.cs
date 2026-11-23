@@ -78,11 +78,13 @@ public class ApprovalTests
     }
 
     [Fact]
-    public void Config_AcceptsBothForms()
+    public void Config_UnpinnedEntry_LoadsWithAWarning()
     {
+        // Not an error: an agent updated before its config must still start.
         var r = AgentConfig.Parse("""{ "reviewedJobs": ["NVE_65:STATUS_X", "NVE_65:STATUS_Y@b8ae0dd9d242"] }""");
         Assert.True(r.Ok, string.Join("; ", r.Errors));
         Assert.Equal(["NVE_65:STATUS_X", "NVE_65:STATUS_Y@b8ae0dd9d242"], r.Config!.ReviewedJobs);
+        Assert.StartsWith("reviewedJobs[0]:", Assert.Single(r.Warnings));
     }
 
     [Theory]
@@ -93,14 +95,14 @@ public class ApprovalTests
     public void Config_BadEntryIsAWarningAndApprovesNothing(string entry)
     {
         // Not an error: a typo in one approval must not stop the agent from starting.
-        var r = AgentConfig.Parse($$"""{ "reviewedJobs": ["NVE_65:STATUS_X", "{{entry}}"] }""");
+        var r = AgentConfig.Parse($$"""{ "reviewedJobs": ["NVE_65:STATUS_X@b8ae0dd9d242", "{{entry}}"] }""");
         Assert.True(r.Ok, string.Join("; ", r.Errors));
         var w = Assert.Single(r.Warnings);
         Assert.StartsWith("reviewedJobs[1]:", w);
 
         var list = new ApprovalList(r.Config!.ReviewedJobs);
-        Assert.Equal(0, list.PinnedCount);
-        Assert.Equal(1, list.UnpinnedCount);
+        Assert.Equal(1, list.PinnedCount);
+        Assert.Equal(1, list.IgnoredCount);
         Assert.Equal(ApprovalKind.None, list.Lookup("ECU", "JOB").Kind);
         Assert.Equal(ApprovalKind.None, list.Lookup("NVE_65", "").Kind);
     }
@@ -108,24 +110,57 @@ public class ApprovalTests
     [Fact]
     public void Counts()
     {
-        var list = new ApprovalList(["A:B", "A:B", "A:C@b8ae0dd9d242", "A:C@7b69322a754f", "A:B@b8ae0dd9d242"]);
+        var list = new ApprovalList(["A:B", "A:B", "A:C@b8ae0dd9d242", "A:C@7b69322a754f", "A:B@b8ae0dd9d242", "A:B@XYZ", "A:B@XYZ"]);
         Assert.Equal(3, list.PinnedCount);
-        Assert.Equal(1, list.UnpinnedCount);
+        Assert.Equal(2, list.IgnoredCount); // "A:B" and "A:B@XYZ", each once
+        Assert.Equal(["A:B@b8ae0dd9d242", "A:C@7b69322a754f", "A:C@b8ae0dd9d242"], list.Entries);
     }
 
     // ---- running a pinned job ----
 
     [Fact]
-    public void Pinned_Match_RunsJob_SkipsBothScreens()
+    public void RunJob_PinnedApproval_NoArgs_SkipsDescriptionScreen_Runs()
     {
-        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
-        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+        // "Startet B" fails the description screen; the pin skips it, and with no arguments
+        // there is nothing for the argument screen to read.
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Comments("Startet B"));
+        _api.On("NVE_65 STATUS_B", FakeJob.Ok());
 
-        var r = Service($"NVE_65:STATUS_X@{StatusLesenHash}").RunJob(new JobRequest("nve_65", "status_x", "1"), null, _audit, default);
+        var r = Service($"NVE_65:STATUS_B@{StartetBHash}").RunJob(new JobRequest("nve_65", "status_b"), null, _audit, default);
 
         Assert.True(r.Ok);
-        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_X] []", "Job NVE_65 STATUS_X [1] []"], _api.JobCalls);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_B] []", "Job NVE_65 STATUS_B [] []"], _api.JobCalls);
         Assert.Null(_audit.Rule);
+    }
+
+    [Fact]
+    public void RunJob_PinnedApproval_WithArgs_ArgumentScreenStillRuns()
+    {
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_X", new FakeJob { Sets = [[], [Text("ARG", "WERT"), Text("ARGCOMMENT0", "Wert setzen")]] });
+        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+
+        var r = Service($"NVE_65:STATUS_X@{StatusLesenHash}").RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default);
+
+        Assert.Equal("job_needs_review", r.Failure!.Error.Code);
+        Assert.StartsWith("The argument description of STATUS_X mentions: ", r.Failure.Error.Message);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_X] []", "Job NVE_65 _ARGUMENTS [STATUS_X] []"], _api.JobCalls);
+        Assert.Equal(RequestAudit.ScreenRule, _audit.Rule);
+    }
+
+    [Fact]
+    public void RunJob_PinnedApproval_WithDescribedArgs_Runs()
+    {
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Comments("Status lesen"));
+        _api.On("NVE_65 _ARGUMENTS STATUS_X", new FakeJob { Sets = [[], [Text("ARG", "KANAL"), Text("ARGCOMMENT0", "Kanalnummer 1-4")]] });
+        _api.On("NVE_65 STATUS_X", FakeJob.Ok());
+
+        var r = Service($"NVE_65:STATUS_X@{StatusLesenHash}").RunJob(new JobRequest("NVE_65", "STATUS_X", "1"), null, _audit, default);
+
+        Assert.True(r.Ok);
+        Assert.Equal(
+            ["Job NVE_65 _JOBCOMMENTS [STATUS_X] []", "Job NVE_65 _ARGUMENTS [STATUS_X] []", "Job NVE_65 STATUS_X [1] []"],
+            _api.JobCalls);
     }
 
     [Fact]
@@ -168,12 +203,15 @@ public class ApprovalTests
     }
 
     [Fact]
-    public void Pinned_UnreadableDescription_IsNeedsReview()
+    public void Pinned_UnreadableDescription_IsTheEdiabasError_JobNotRun()
     {
-        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Error(100, "SYS-0010"));
+        // A module that does not answer (asleep, not fitted) is an EDIABAS error, as for an
+        // unpinned job, not a changed approval. The job itself is still never run.
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_X", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
         var r = Service($"NVE_65:STATUS_X@{StatusLesenHash}").RunJob(new JobRequest("NVE_65", "STATUS_X"), null, _audit, default);
 
-        Assert.Equal("job_needs_review", r.Failure!.Error.Code);
+        Assert.Equal("ediabas_error", r.Failure!.Error.Code);
+        Assert.Equal(19, Assert.IsType<EdiabasErrorDetails>(r.Failure.Error.Details).ErrorCode);
         Assert.Single(_api.JobCalls);
     }
 
@@ -191,16 +229,75 @@ public class ApprovalTests
         Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_X] []"], _api.JobCalls);
     }
 
-    [Fact]
-    public void Unpinned_StillHonoured_NoDescriptionRead()
+    internal static void AssertCounts(int pinned, int ignored, ApprovalCounts counts)
     {
-        _api.On("NVE_65 STATUS_B", FakeJob.Ok());
-        Assert.True(Service("NVE_65:STATUS_B").RunJob(new JobRequest("NVE_65", "STATUS_B", "1"), null, _audit, default).Ok);
-        Assert.Equal(["Job NVE_65 STATUS_B [1] []"], _api.JobCalls);
+        Assert.Equal(pinned, counts.Pinned);
+        Assert.Equal(ignored, counts.Ignored);
     }
 
     [Fact]
-    public void Pinned_BeatsUnpinned()
+    public void Health_Approvals_HashIsStableForSameEntries_DiffersWhenOneAdded()
+    {
+        var a = new ApprovalList(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f"]).Counts;
+        var reordered = new ApprovalList(["NVE_65:STATUS_Y@7b69322a754f", "NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_X@b8ae0dd9d242"]).Counts;
+        var added = new ApprovalList(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f", "NVE_65:STATUS_Z@b8ae0dd9d242"]).Counts;
+        Assert.Equal(["NVE_65:STATUS_X@b8ae0dd9d242", "NVE_65:STATUS_Y@7b69322a754f"], a.Entries);
+        Assert.Matches("^[0-9a-f]{12}$", a.Hash);
+        Assert.Equal(a.Hash, reordered.Hash);
+        Assert.NotEqual(a.Hash, added.Hash);
+        // SHA-256("") starts e3b0c44298fc
+        Assert.Equal("e3b0c44298fc", ApprovalList.Empty.Counts.Hash);
+    }
+
+    [Fact]
+    public void ApprovalList_LowerCaseEcuOrJob_CountsIgnored_NotInEntries_WarningSaysUpperCase()
+    {
+        var list = new ApprovalList(["nve_65:STATUS_X@b8ae0dd9d242", "NVE_65:status_x@b8ae0dd9d242", "NVE_65:STATUS_X@b8ae0dd9d242"]);
+        Assert.Equal(1, list.PinnedCount);
+        Assert.Equal(2, list.IgnoredCount);
+        Assert.Equal(["NVE_65:STATUS_X@b8ae0dd9d242"], list.Entries);
+        var r = AgentConfig.Parse("{ \"reviewedJobs\": [\"nve_65:STATUS_X@b8ae0dd9d242\"] }");
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        Assert.Contains("upper case", Assert.Single(r.Warnings));
+    }
+
+    [Fact]
+    public void ApprovalList_UnpinnedEntry_ApprovesNothing_CountsIgnored()
+    {
+        var list = new ApprovalList(["NVE_65:STATUS_X"]);
+        Assert.Equal(ApprovalKind.None, list.Lookup("NVE_65", "STATUS_X").Kind);
+        Assert.Equal(0, list.PinnedCount);
+        Assert.Equal(1, list.IgnoredCount);
+        Assert.Empty(list.Entries);
+        AssertCounts(0, 1, list.Counts);
+    }
+
+    [Fact]
+    public void ApprovalList_UnpinnedEntry_LogsWarningNamingThePinnedForm()
+    {
+        var r = AgentConfig.Parse("""{ "reviewedJobs": ["NVE_65:STATUS_Y@b8ae0dd9d242", "NVE_65:STATUS_X"] }""");
+        Assert.True(r.Ok, string.Join("; ", r.Errors));
+        var w = Assert.Single(r.Warnings);
+        Assert.Equal(
+            "reviewedJobs[1]: \"NVE_65:STATUS_X\" is unpinned and approves nothing since 0.5.0; run ediabas_describe on the job and use the \"ECU:JOB@<hash>\" line it prints",
+            w);
+        Assert.Contains("ECU:JOB@<hash>", w);
+        Assert.Contains("ediabas_describe", w);
+    }
+
+    [Fact]
+    public void Unpinned_IsRefused_LikeAnUnapprovedJob()
+    {
+        _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Comments("Startet B"));
+        _api.On("NVE_65 STATUS_B", FakeJob.Ok());
+        var r = Service("NVE_65:STATUS_B").RunJob(new JobRequest("NVE_65", "STATUS_B"), null, _audit, default);
+
+        Assert.Equal("job_needs_review", r.Failure!.Error.Code);
+        Assert.Equal(["Job NVE_65 _JOBCOMMENTS [STATUS_B] []"], _api.JobCalls);
+    }
+
+    [Fact]
+    public void Unpinned_BesideAPin_ChangesNothing()
     {
         _api.On("NVE_65 _JOBCOMMENTS STATUS_B", FakeJob.Comments("Startet B"));
         var r = Service("NVE_65:STATUS_B", "NVE_65:STATUS_B@0123456789ab").RunJob(new JobRequest("NVE_65", "STATUS_B"), null, _audit, default);
@@ -244,7 +341,7 @@ public class ApprovalTests
 
     [Theory]
     [InlineData(new string[0], Review.NeedsReview)]
-    [InlineData(new[] { "NVE_65:STATUS_B" }, Review.Reviewed)]
+    [InlineData(new[] { "NVE_65:STATUS_B" }, Review.NeedsReview)]
     [InlineData(new[] { "NVE_65:STATUS_B@7b69322a754f" }, Review.Reviewed)]
     [InlineData(new[] { "NVE_65:STATUS_B@0123456789ab" }, Review.NeedsReview)]
     [InlineData(new[] { "NVE_65:STATUS_B", "NVE_65:STATUS_B@0123456789ab" }, Review.NeedsReview)]
@@ -278,12 +375,12 @@ public class ApprovalTests
         var withComments = svc.DescribeList("NVE_65", null, true, _audit, default).Value!.Jobs.ToDictionary(j => j.Name, j => j.Verdict.Review);
         Assert.Equal(Review.NeedsReview, withComments["STATUS_A"]);
         Assert.Equal(Review.Reviewed, withComments["STATUS_B"]);
-        Assert.Equal(Review.Reviewed, withComments["STATUS_C"]);
+        Assert.Equal(Review.NeedsReview, withComments["STATUS_C"]);
 
         var without = svc.DescribeList("NVE_65", null, false, new RequestAudit(), default).Value!.Jobs.ToDictionary(j => j.Name, j => j.Verdict.Review);
         Assert.Equal(Review.NotChecked, without["STATUS_A"]);
         Assert.Equal(Review.NotChecked, without["STATUS_B"]);
-        Assert.Equal(Review.Reviewed, without["STATUS_C"]);
+        Assert.Equal(Review.NotChecked, without["STATUS_C"]);
     }
 
     [Fact]
@@ -309,6 +406,16 @@ public class ApprovalTests
         var r = Service().DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!;
         Assert.Equal(StartetBHash, r.DescriptionHash);
         Assert.Equal(CommentScreen.DescriptionHash(r.Comment!), r.DescriptionHash);
+    }
+
+    [Fact]
+    public void DescribeJob_UnpinnedEntry_ShowsNeedsReviewAndHash()
+    {
+        // The owner's old unpinned entry: describe still prints the hash to pin it with.
+        ScriptDescribe("STATUS_B", "Startet B");
+        var r = Service("NVE_65:STATUS_B").DescribeJob("NVE_65", "STATUS_B", _audit, default).Value!;
+        Assert.Equal(Review.NeedsReview, r.Verdict.Review);
+        Assert.Equal(StartetBHash, r.DescriptionHash);
     }
 
     [Fact]

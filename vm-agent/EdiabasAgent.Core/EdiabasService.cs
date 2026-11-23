@@ -26,12 +26,13 @@ public sealed class RequestAudit
 /// <summary>
 /// Everything the EDIABAS endpoints do, against <see cref="IEdiabasApi"/>. The host calls these
 /// methods on its one EDIABAS thread, one request at a time.
-/// <para>Per request: re-read <c>reviewedJobs</c> if config.json changed → conflict check → (lazily, at the first job that will really run) apiInit
+/// <para>Per request: re-read <c>reviewedJobs</c> → conflict check → (lazily, at the first job that will really run) load the DLL, conflict check again, apiInit
 /// → per job: policy → Ecu file → description screen where required (and, for a call with
 /// arguments, the argument screen) → cancel, budget and conflict check again
 /// (before every apiJob, the screen's too; a check under <see cref="ConflictRecheckMs"/> old is
 /// reused) → apiJob → poll apiState
-/// every 50 ms until not busy or timeout (apiBreak on timeout) → read every result set →
+/// every 50 ms until not busy or timeout (apiBreak on timeout, or when the conflict check, run
+/// while the job is busy at the same rate, sees a BMW tool) → read every result set →
 /// apiEnd in <c>finally</c>. Nothing touches the API when the conflict check fails or when no
 /// job survives the policy.</para>
 /// <para>Every job the agent sends, including its own <c>_JOBS</c> / <c>_JOBCOMMENTS</c> /
@@ -44,12 +45,12 @@ public sealed class RequestAudit
 public sealed class EdiabasService
 {
     public const int PollIntervalMs = 50;
-    public const int BreakGraceMs = 2000;
+    public const int BreakGraceMs = 10000;
     public const int MaxBatchItems = 20;
 
-    /// <summary>Within a request the conflict check runs again before every EDIABAS job, but a
-    /// check younger than this is reused: the process scan costs tens of milliseconds, and a
-    /// describe of a large SGBD sends hundreds of short jobs.</summary>
+    /// <summary>Within a request the conflict check runs again before every EDIABAS job and while
+    /// it runs, but a check younger than this is reused: the process scan costs tens of
+    /// milliseconds, and a describe of a large SGBD sends hundreds of short jobs.</summary>
     public const int ConflictRecheckMs = 250;
 
     private readonly IEdiabasApi _api;
@@ -199,7 +200,7 @@ public sealed class EdiabasService
         }
 
         using var session = new Session(this, queuedMs);
-        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), recheckConflicts: false, ct);
+        var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
         audit.Rule = run.Rule;
@@ -245,46 +246,6 @@ public sealed class EdiabasService
         }
 
         return new BatchResponse(batch.Items, _clock.ElapsedMs - start);
-    }
-
-    // ---------------------------------------------------------------- /ediabas/vehicle
-
-    public Outcome<VehicleResponse> Vehicle(IReadOnlyList<VoltageSource> voltageSources, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
-    {
-        _approvals?.Refresh();
-        if (WaitedTooLong(queuedMs) is { } waited)
-        {
-            return waited;
-        }
-
-        if (ConflictFailure() is { } busy)
-        {
-            return busy;
-        }
-
-        var items = new List<JobRequest>
-        {
-            new("UTILITY", "STATUS_ZUENDUNG"),
-            new("UTILITY", "STATUS_UBATT"),
-        };
-        items.AddRange(voltageSources.Select(v => new JobRequest(v.Ecu, v.Job)));
-        items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL30"));
-        items.Add(new JobRequest("TMODE", "LESE_SPANNUNG_KL15"));
-
-        var start = _clock.ElapsedMs;
-        using var session = new Session(this, queuedMs);
-        var batch = RunBatch(session, items, _defaultTimeoutSeconds, audit, ct);
-        if (batch.WholeRequest is { } whole)
-        {
-            return whole;
-        }
-
-        var r = batch.Items;
-        var n = voltageSources.Count;
-        var voltages = voltageSources
-            .Select((v, i) => new VehicleVoltage(v.Ecu, v.Job, r[2 + i].Ok, r[2 + i].Result, r[2 + i].Error))
-            .ToList();
-        return new VehicleResponse(r[0], r[1], voltages, r[2 + n], r[3 + n], _clock.ElapsedMs - start);
     }
 
     // ---------------------------------------------------------------- /ediabas/describe
@@ -461,7 +422,7 @@ public sealed class EdiabasService
         for (var i = 0; i < items.Count; i++)
         {
             var itemStart = _clock.ElapsedMs;
-            var run = RunItem(session, items[i], timeout, recheckConflicts: i > 0, ct);
+            var run = RunItem(session, items[i], timeout, ct);
             if (run.WholeRequest is { } whole)
             {
                 audit.Items.Add(new ItemAudit(i, run.Ecu, run.Job, run.Rule, whole.Error.Code, _clock.ElapsedMs - itemStart));
@@ -475,7 +436,7 @@ public sealed class EdiabasService
         return new BatchRun(results, null);
     }
 
-    private ItemRun RunItem(Session session, JobRequest request, int timeout, bool recheckConflicts, CancellationToken ct)
+    private ItemRun RunItem(Session session, JobRequest request, int timeout, CancellationToken ct)
     {
         var itemStart = _clock.ElapsedMs;
         string? ecu = request.Ecu;
@@ -511,11 +472,11 @@ public sealed class EdiabasService
             return Fail(ApiFailure.Of(ApiErrors.EcuNotFound, $"There is no {verdict.Ecu}.prg or {verdict.Ecu}.grp in the Ecu folder.", new EcuDetails(verdict.Ecu!)));
         }
 
-        // A BMW tool started since the request began: start nothing more. Every batch item after
-        // the first scans again; Execute also checks before each job (the screen, then the job).
-        if (session.ToolStarted is not null || (recheckConflicts && ToolStartedSince(session, force: true) is not null))
+        // A BMW tool started since the request began: start nothing more. Execute checks again
+        // before each job (the screen, then the job) and while it runs; EnsureInit after the load.
+        if (session.ToolStarted is { } started)
         {
-            return Fail(ToolStartedNotRun(session.ToolStarted!));
+            return Fail(ToolStartedNotRun(started));
         }
 
         if (session.EnsureInit() is { } initFailure)
@@ -538,7 +499,7 @@ public sealed class EdiabasService
 
         if (!run.Ok)
         {
-            return Fail(NotInJobList(session, verdict.Ecu!, verdict.Job!, run.Failure!, ct) ?? run.Failure!);
+            return Fail(run.Failure!);
         }
 
         var read = run.Value!;
@@ -547,58 +508,61 @@ public sealed class EdiabasService
     }
 
     /// <summary>
-    /// The screen for a job allowed only by the name pattern. Null when the job may run. An
-    /// unpinned approval skips it without reading anything. Otherwise the description is read;
-    /// a pinned approval then runs the job only when the description still hashes to the pin,
-    /// and an unapproved job goes through the description and argument screens. A failure that
-    /// is about the request (time, cancel, a BMW tool) keeps its own code.
+    /// The screen for a job allowed only by the name pattern. Null when the job may run. The
+    /// description is always read. A pinned approval then stands in for the description screen
+    /// only while the description still hashes to the pin; an unapproved job goes through the
+    /// description screen. Either way a call with arguments then goes through the argument
+    /// screen. A failure that is about the request (time, cancel, a BMW tool) keeps its own code.
     /// </summary>
     private ApiFailure? ScreenJob(Session session, string ecu, string job, string? args, int timeout, CancellationToken ct)
     {
         var approval = _screen.Approval(ecu, job);
-        if (approval.Kind == ApprovalKind.Unpinned)
-        {
-            return null;
-        }
-
         var d = ReadDescription(session, ecu, job, timeout, ct);
         if (approval.Kind == ApprovalKind.Pinned)
         {
-            return CheckPin(approval, d, ecu, job);
+            if (CheckPin(approval, d, ecu, job) is { } pinFailure)
+            {
+                return pinFailure;
+            }
         }
-
-        if (!d.Ok)
+        else
         {
-            return d.Failure!;
-        }
+            if (!d.Ok)
+            {
+                return d.Failure!;
+            }
 
-        var description = NullIfBlank(d.Value!.Text);
-        var screened = _screen.Screen(description);
-        if (!screened.Passed)
-        {
-            return ApiFailure.Of(
-                ApiErrors.JobNeedsReview,
-                description is null
-                    ? $"{job} has no description, so it cannot be shown to be a read. The user can approve it in the agent config."
-                    : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config.",
-                new JobReviewDetails(ecu, job, description, screened.Matched));
+            var description = NullIfBlank(d.Value!.Text);
+            var screened = _screen.Screen(description);
+            if (!screened.Passed)
+            {
+                return ApiFailure.Of(
+                    ApiErrors.JobNeedsReview,
+                    description is null
+                        ? $"{job} has no description, so it cannot be shown to be a read. The user can approve it in the agent config."
+                        : $"The description of {job} mentions: {string.Join(", ", screened.Matched)}. The user can approve it in the agent config.",
+                    new JobReviewDetails(ecu, job, description, screened.Matched));
+            }
         }
 
         return string.IsNullOrEmpty(args) ? null : ScreenArguments(session, ecu, job, timeout, ct);
     }
 
     /// <summary>
-    /// A pinned approval holds only for the description the user read: one that changed, is empty or
-    /// cannot be read (EDIABAS error) is <c>job_needs_review</c>. A matching pin skips both screens.
+    /// A pinned approval holds only for the description the user read: one that changed or is
+    /// empty is <c>job_needs_review</c>. A description that cannot be read keeps its own failure,
+    /// as for an unpinned job: an EDIABAS error there is usually a module that does not answer,
+    /// not a changed approval, and the job is not run either way. A matching pin skips the
+    /// description screen only.
     /// </summary>
     private static ApiFailure? CheckPin(JobApproval approval, Outcome<TextList> read, string ecu, string job)
     {
-        if (!read.Ok && read.Failure!.Error.Code != ApiErrors.EdiabasError)
+        if (!read.Ok)
         {
             return read.Failure;
         }
 
-        var description = read.Ok ? NullIfBlank(read.Value!.Text) : null;
+        var description = NullIfBlank(read.Value!.Text);
         if (approval.Matches(description))
         {
             return null;
@@ -606,53 +570,8 @@ public sealed class EdiabasService
 
         var message = description is not null
             ? $"The description of {job} has changed since it was approved (now {CommentScreen.DescriptionHash(description)}). The user can approve it again in the agent config."
-            : read.Ok
-                ? $"{job} has no description now, so its approval cannot be checked. The user can approve it again in the agent config."
-                : $"The description of {job} could not be read, so its approval cannot be checked.";
+            : $"{job} has no description now, so its approval cannot be checked. The user can approve it again in the agent config.";
         return ApiFailure.Of(ApiErrors.JobNeedsReview, message, new JobReviewDetails(ecu, job, description, []));
-    }
-
-    /// <summary>
-    /// <c>job_not_found</c> when a client job failed with <c>ediabas_error</c> and the SGBD's own
-    /// <c>_JOBS</c> list does not have it; else null, and the caller keeps the first error. No
-    /// EDIABAS error number is assumed to mean "no such job": the list decides. Only for a
-    /// <c>.prg</c> file, whose list comes from the file; a group file would have to reach the car
-    /// again to pick its variant. Not for underscore info jobs, which the list may not show. The
-    /// <c>_JOBS</c> call goes through <see cref="Execute"/>, so cancel, budget and cable gates apply.
-    /// </summary>
-    private ApiFailure? NotInJobList(Session session, string ecu, string job, ApiFailure failure, CancellationToken ct)
-    {
-        if (failure.Error.Code != ApiErrors.EdiabasError || job.StartsWith('_') || session.Poisoned || !IsPrgFile(ecu))
-        {
-            return null;
-        }
-
-        var verdict = _policy.Evaluate(ecu, "_JOBS");
-        if (!verdict.Allowed)
-        {
-            return null;
-        }
-
-        var list = Execute(session, verdict.Ecu!, verdict.Job!, "", "", _defaultTimeoutSeconds, ct);
-        if (!list.Ok)
-        {
-            return null;
-        }
-
-        var listed = list.Value!.Sets.Any(s =>
-            s.TryGetValue("JOBNAME", out var v) && v is string name && string.Equals(name, job, StringComparison.OrdinalIgnoreCase));
-        return listed
-            ? null
-            : ApiFailure.Of(ApiErrors.JobNotFound, $"{ecu} has no job {job}.", new EcuJobDetails(ecu, job));
-    }
-
-    /// <summary>True when the name is a <c>.prg</c> file and not also a <c>.grp</c> file.</summary>
-    private bool IsPrgFile(string ecu)
-    {
-        var files = _ecus.List(ecu, EcuFolder.MaxEntries)?.Files
-            .Where(f => string.Equals(f.Name, ecu, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        return files is not null && files.Any(f => f.Type == "prg") && !files.Any(f => f.Type == "grp");
     }
 
     /// <summary>
@@ -856,6 +775,29 @@ public sealed class EdiabasService
                 return ApiFailure.Of(ApiErrors.JobTimeout, $"{job} was still running {why} and was stopped.", new TimeoutDetails(timeoutSeconds));
             }
 
+            // A BMW tool that starts while the job runs must not share the cable with it. A check
+            // that fails cannot say no tool started: fail closed, and never leave the job busy for
+            // apiEnd.
+            IReadOnlyList<ConflictingProcess>? tool;
+            try
+            {
+                tool = ToolStartedSince(session, force: false);
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"{ecu} {job}: the BMW tool check failed while it ran ({ex.GetType().Name}: {ex.Message}); calling apiBreak");
+                BreakAndSettle(session, ecu, job);
+                return NotRun($"A BMW tool check failed while {job} was running; the job was stopped with apiBreak.");
+            }
+
+            if (tool is not null)
+            {
+                _log.Warn($"{ecu} {job}: a BMW tool started while it ran; calling apiBreak");
+                session.ToolStoppedJob = true;
+                BreakAndSettle(session, ecu, job);
+                return ToolStartedNotRun(tool, stoppedJob: true);
+            }
+
             _clock.Sleep(PollIntervalMs);
         }
 
@@ -924,11 +866,6 @@ public sealed class EdiabasService
 
         // The same decision a run would make (ScreenJob).
         var approval = _screen.Approval(v.Ecu!, v.Job!);
-        if (approval.Kind == ApprovalKind.Unpinned)
-        {
-            return new JobVerdict(true, v.Rule, Review.Reviewed);
-        }
-
         if (approval.Kind == ApprovalKind.Pinned)
         {
             var pinned = fetch switch
@@ -986,8 +923,12 @@ public sealed class EdiabasService
         return running;
     }
 
-    private static ApiFailure ToolStartedNotRun(IReadOnlyList<ConflictingProcess> running) =>
-        NotRun($"A BMW tool started during the request ({Names(running)}); no further jobs are started.");
+    /// <param name="stoppedJob">True when the tool appeared while this job ran and the job was
+    /// stopped with apiBreak; false when the job never started.</param>
+    private static ApiFailure ToolStartedNotRun(IReadOnlyList<ConflictingProcess> running, bool stoppedJob = false) =>
+        NotRun(stoppedJob
+            ? $"A BMW tool started during the request ({Names(running)}); the running job was stopped with apiBreak and no further jobs are started."
+            : $"A BMW tool started during the request ({Names(running)}); no further jobs are started.");
 
     /// <summary><c>cable_in_use</c> for a request that cannot give a partial answer, when a BMW
     /// tool started during it; null when none did.</summary>
@@ -995,7 +936,9 @@ public sealed class EdiabasService
         session.ToolStarted is { } running
             ? ApiFailure.Of(
                 ApiErrors.CableInUse,
-                $"A BMW tool started during the request ({Names(running)}); no further EDIABAS job was started. Close it and try again.",
+                session.ToolStoppedJob
+                    ? $"A BMW tool started during the request ({Names(running)}); the running job was stopped with apiBreak and no further EDIABAS job was started. Close it and try again."
+                    : $"A BMW tool started during the request ({Names(running)}); no further EDIABAS job was started. Close it and try again.",
                 new ProcessesDetails(running))
             : null;
 
@@ -1060,6 +1003,10 @@ public sealed class EdiabasService
         /// <summary>BMW tools seen to start during the request; null while none has.</summary>
         public IReadOnlyList<ConflictingProcess>? ToolStarted { get; set; }
 
+        /// <summary>Whether a job was running when <see cref="ToolStarted"/> was seen, and was
+        /// stopped with apiBreak.</summary>
+        public bool ToolStoppedJob { get; set; }
+
         public ApiFailure? EnsureInit()
         {
             if (_initCalled || _initFailure is not null)
@@ -1085,6 +1032,14 @@ public sealed class EdiabasService
                 owner._loaded = true;
                 owner._dll.Loaded = true;
                 owner._log.Info("api32.dll loaded");
+            }
+
+            // Loading the DLL can take seconds: a BMW tool that started meanwhile gets the cable,
+            // and no apiInit happens (so Dispose calls no apiEnd).
+            if (owner.ToolStartedSince(this, force: true) is not null)
+            {
+                _initFailure = ToolStartedFailure(this);
+                return _initFailure;
             }
 
             owner._cableUse.Mark(owner._clock.UtcNow);
@@ -1127,6 +1082,7 @@ public sealed class EdiabasService
                     // A handle may still be open: the DLL must not be unloaded under it, ever. Not
                     // rethrown: the job's result was already read, and the client should get it.
                     owner._handleMayBeOpen = true;
+                    owner._dll.HeldOpen = true;
                     owner._log.Warn($"apiEnd threw {ex.GetType().Name}: {ex.Message}; api32.dll stays loaded until the agent restarts");
                 }
             }

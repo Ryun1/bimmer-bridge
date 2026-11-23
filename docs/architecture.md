@@ -24,24 +24,43 @@ their interactive session and can see the desktop for screenshots. A second copy
 1. Claude calls a tool, for example `ediabas_read_faults` with `NVE_65`.
 2. The MCP server checks the arguments and, for `ediabas_*` tools, the job policy
    (`mac-mcp/src/policy.ts`). A refusal ends here and never reaches the VM.
-3. It finds the agent: the VM's address from `/var/db/dhcpd_leases`, then `arp -an`, then
-   `utmctl ip-address`, for the VM's MAC. The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
+3. It finds the agent: the VM's address is the newest lease for the VM's MAC in
+   `/var/db/dhcpd_leases` that is on UTM's network (the largest expiry among those; a newer
+   lease off that network, from a former UTM subnet, is skipped, no other lease is tried, and
+   nothing else is asked: no ARP table, no `utmctl`). `dev/serve.py` reads the leases the same
+   way but takes the newest lease even when it is off UTM's network, and then refuses to start
+   (pass `--client`). The MAC is `EDIABAS_VM_MAC`, else `vmMac` in the
    git-ignored `config.local.json`, else read from UTM's `config.plist` for the VM named by
    `EDIABAS_VM_NAME` / `vmName` (default `Windows`). Only an address on the same subnet
-   as a local `bridge*` interface is contacted, and only one whose `GET /health` answers as
-   `ediabas-bridge-agent` is used. The URL is cached (`mac-mcp/src/vmAddress.ts`).
+   as a local `bridge1NN` interface (UTM's shared network: `bridge100`, `bridge101`, ...) is
+   contacted; `EDIABAS_AGENT_URL` replaces the lease. That one address gets `GET /hello` with a
+   fresh random nonce and no token ([api.md](api.md#get-hello)); it is used only if it answers as
+   `ediabas-bridge-agent` with a proof that matches this Mac's token, checked in constant time.
+   Nothing that has not proved it holds the token is ever sent the token. The URL is cached
+   (`mac-mcp/src/vmAddress.ts`, `mac-mcp/src/agentClient.ts`), and a cached URL is proved
+   again with `/hello` (a fresh nonce) at the start of every tool call; if that fails, the
+   cache is dropped and discovery runs, so the token never goes to the old address. For an
+   `/ediabas/*` call this happens in its turn in the queue, just before the job is sent. With
+   one address there is one answer: if it fails the check, that failure is the error
+   (`wrong_service`, `agent_outdated`, `agent_not_answering`, `local_network_blocked`), and with
+   no lease for the MAC, or none on UTM's network, it is `vm_not_running`.
 4. It sends the HTTP request with the token from the Keychain (`mac-mcp/src/agentClient.ts`).
-   Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
+   If the answer is not in the agent's format (an HTTP error without the agent's error shape:
+   `bad_response`, or `ediabas_request_lost` for a request that runs a job, with the status in
+   the message; a 200 that does not match the contract: `bad_response`), the cache is
+   dropped. Timeouts: 15 s, or 75 s for `/ediabas/*`. `/ediabas/*` requests are sent one at a time, and
    the 75 s starts when one is sent. A request that runs an EDIABAS job is never sent twice;
    only a connection that was never made (refused, or a connect timeout) is retried.
 5. In the agent, `vm-agent/EdiabasAgent/Middleware.cs` runs, in order: source address (only
-   the VM's default gateway, which is the Mac), token, path, method. Every request, refused or
-   not, gets an audit line.
+   the VM's default gateway, which is the Mac), token, path, method. Only `GET /hello` (the
+   identity proof, [api.md](api.md#get-hello)) skips the token step; the other three still
+   apply to it. Every request, refused or not, gets an audit line.
 6. An EDIABAS handler (`EdiabasEndpoints.cs`) queues the work on the EDIABAS thread and waits.
-7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; `apiInit`;
-   for each job the policy, the Ecu file, the description and argument screens where needed, the conflict
-   check again, `apiJob`, polling `apiState` every 50 ms until done or timed out (`apiBreak` on
-   timeout), reading the result sets; `apiEnd`.
+7. `vm-agent/EdiabasAgent.Core/EdiabasService.cs` does the work: conflict check; loading the
+   DLL, the conflict check again, `apiInit`; for each job the policy, the Ecu file, the
+   description and argument screens where needed, the conflict check again, `apiJob`, polling
+   `apiState` every 50 ms until done or timed out (`apiBreak` on timeout, or when the conflict
+   check, run every 250 ms while the job is busy, sees a BMW tool), reading the result sets; `apiEnd`.
 8. EDIABAS sends the telegrams over the K+DCAN cable (USB, passed through to the VM by UTM)
    to the car's diagnostic socket and the ECU.
 9. The agent returns JSON; the MCP server formats it (fault tables, miles first) and writes its
@@ -57,13 +76,18 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
   `apiInit` to `apiEnd` on that thread. A client that goes away only cancels the request: the
   service stops starting jobs, breaks a running one and still calls `apiEnd`. A request still
   queued when its client has gone is dropped.
+- **A BMW tool that starts during a request.** The same thread runs the conflict check again
+  after loading the DLL (a tool seen then means no `apiInit` at all), before every job, and
+  every 250 ms while a job is busy; a tool seen during a job stops it with `apiBreak`. No
+  further job starts in that request.
 - **Idle release.** `apiEnd` alone leaves EDIABAS's `ebas32.exe` running while the DLL is
   loaded, which would keep the interface open. So between requests the thread waits only until
   `ediabasIdleReleaseSeconds` (default 20) have passed since the last EDIABAS request, then
   unloads the DLL. The next request loads it again (about 10 s in this VM). The unload happens
   on the same thread, never during a request.
-- **A job that does not stop.** If a job is still busy 2 s after `apiBreak`, the agent starts
-  no further job and leaves EDIABAS alone until it restarts: no `apiEnd` on that handle, no
+- **A job that does not stop.** If a job is still busy 10 s after `apiBreak` (a job on the
+  car's line may act on it only between steps), the agent starts no further job and leaves
+  EDIABAS alone until it restarts: no `apiEnd` on that handle, no
   unload, and every later EDIABAS request is refused with `ediabas_unavailable`. `/health`
   reports `ediabas.stuck: true`. Restarting Windows restarts the agent.
 - **Everything else** (`/health`, `/windows`, capture, logs) runs on Kestrel's request threads.
@@ -77,9 +101,9 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
 | Step | Mac (`mac-mcp/src/policy.ts`) | Agent (`vm-agent/EdiabasAgent.Core/JobPolicy.cs`, `CommentScreen.cs`) |
 |---|---|---|
 | Loading | at start-up from `policy/policy.json` two folders above `dist/`; invalid file: every `ediabas_*` tool refuses with `policy_unavailable` | embedded at build time; invalid: every EDIABAS job refused |
-| Name rules | `ediabas_job`, every item of `ediabas_jobs` and every ECU of `ediabas_read_faults` (the whole call is refused if one is), shape only for `ediabas_describe` | every job, including the agent's own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS` and the `/ediabas/vehicle` jobs |
+| Name rules | `ediabas_job`, every item of `ediabas_jobs`, every ECU of `ediabas_read_faults` and every reading of `ediabas_vehicle_status` (the whole call is refused if one is), shape only for `ediabas_describe` | every job, including the agent's own `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`, `_RESULTS` |
 | Description screen | no | yes, for jobs allowed only by the `STATUS_` pattern; `reviewedJobs` in the VM's config skips it |
-| Conflict check | no | before the request opens EDIABAS and before every job |
+| Conflict check | no | before the request opens EDIABAS, after loading the DLL, before every job and every 250 ms while one runs |
 
 Both sides run the same test cases (`policy/policy-cases.json`, `policy/policy-parse-cases.json`),
 so they cannot drift apart. `vm_health` warns when the agent's policy version differs from the
@@ -92,12 +116,12 @@ Mac's. Plain-words rules: [safety.md](safety.md#the-job-policy-in-plain-words).
 | VM | `C:\ProgramData\EdiabasBridge\logs\agent.log` | `vm-agent/EdiabasAgent/Logging/AgentLog.cs` | start-up, bind decisions, config problems, errors with details |
 | VM | `C:\ProgramData\EdiabasBridge\logs\audit.log` | `vm-agent/EdiabasAgent/Audit/AuditLog.cs` | one tab-separated line per request: time, remote address, method, path, status, error code, duration, ECU, job, rule (refusals only), target (log path or window asked for). Query strings are reduced to their keys; control and Unicode format characters are replaced. Batches add one line per item |
 | VM | `C:\ProgramData\EdiabasBridge\logs\selftest.txt` | `--selftest` | the last self-test report |
-| Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=` |
-| Mac | stderr (in the desktop app: `~/Library/Logs/Claude/mcp-server-ediabas-bridge.log`) | the MCP server | discovery, failed probes, warnings |
-| Mac | a folder of your choice (`EDIABAS_RECORD_DIR`) | `mac-mcp/src/recorder.ts` | off by default; every agent exchange, for fixtures ([development.md](development.md#recording-and-scrubbing)) |
+| Mac | `~/Library/Logs/ediabas-bridge/audit.log` (`EDIABAS_AUDIT_LOG`) | `mac-mcp/src/audit.ts` | one tab-separated line per tool call: time, tool, outcome (`ok` or the error code), duration; `ecu=`, `job=` and, for a policy refusal, `rule=`, and `approvals_changed=1` when the approvals watch flagged a change |
+| Mac | stderr (in the desktop app: `~/Library/Logs/Claude/mcp-server-bimmer-bridge.log`) | the MCP server | discovery, failed probes, warnings |
+| Mac | a folder of your choice (`EDIABAS_RECORD_DIR`, read only by `dev/record-server.ts`) | `dev/recorder.ts` | only when the dev recording server is registered instead of the production one; every agent exchange, for fixtures ([development.md](development.md#recording-and-scrubbing)) |
 
 The two VM logs roll over to a `.1` file at 5 MB. The token is never logged on either side, and
-the recorder never records request headers.
+the dev recorder never records request headers.
 
 ## Trust boundaries
 
@@ -108,14 +132,18 @@ the recorder never records request headers.
   `agent`) through `serve.py --accept-token`, without anyone copying it. The agent keeps only
   its SHA-256 and compares in constant time. With `EDIABAS_AGENT_URL` set, the Mac server uses
   `EDIABAS_AGENT_TOKEN` only and never reads the Keychain, so the real token never goes to an
-  address set by hand.
+  address set by hand. Before the Mac sends the token to an address, that address must prove
+  it holds the token through `GET /hello`: an HMAC of a fresh nonce keyed with the token's
+  SHA-256, which the Mac checks in constant time. This holds for discovered addresses and for
+  `EDIABAS_AGENT_URL` alike. `/hello` exchanges are not recorded by the dev recording server.
 - **The bind address.** The agent listens on one literal IPv4 address on UTM's shared network
   (`bindAddress: "auto"` picks it; never a wildcard, loopback, link-local or public address),
   HTTP/1 only. The Windows firewall rule `ediabas-bridge agent` allows TCP 8765 from the VM's
   gateway only, and the agent itself answers 403 to any other source before looking at the
   token.
 - **The Mac side.** The MCP server contacts only on-link addresses on a `bridge*` interface and
-  checks `/health` before using one. `serve.py` binds the Mac's bridge address (never
+  checks the `/hello` proof before it sends the token to one, on every tool call, cached
+  address or not. A cached address that fails the proof is dropped and never sent the token. `serve.py` binds the Mac's bridge address (never
   `0.0.0.0`), serves only the VM's address, and each pasted line runs a script only if its
   SHA-256 matches the one printed on the Mac ([deploy.md](deploy.md)).
 - **The log roots.** `/logs` and `/logs/read` read only under `logRoots` in the VM's config
@@ -124,5 +152,5 @@ the recorder never records request headers.
   paths, alternate data streams, device names, links out of the roots, 8.3 short names that
   resolve elsewhere and files with more than one hard link are refused ([api.md](api.md#logs)).
 - **Elevation.** UAC is off in this VM, so the agent runs elevated whatever the task's run
-  level says, and folder permissions do not constrain it ([phase-results.md](phase-results.md)).
+  level says, and folder permissions do not constrain it ([history/phase-results.md](history/phase-results.md)).
   The limits above are in the agent's code, not in Windows permissions.

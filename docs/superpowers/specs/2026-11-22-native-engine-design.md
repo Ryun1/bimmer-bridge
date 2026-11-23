@@ -252,6 +252,13 @@ error with its trap mask and carry on as though it succeeded.
 - **Group files resolve at the car only in a live request** (`job`, `jobs`, `vehicle`); a
   describe with no cached variant gives `needs_car`.
 - `EdiabasAgent.Core` stays in `vm-agent/` until M4.
+- **No `vehicle` method** (after merging main, 2026-11-23). Main removed the agent's
+  `/ediabas/vehicle` (0.5.0, D10): the MCP server reads vehicle status as one `jobs` batch and
+  keeps `voltageSources` in its own config. `ediabasd` follows: no `vehicle` method or command,
+  no `voltageSources` key. Where this spec says `vehicle` below, read a `jobs` batch.
+- **Job descriptions in any case** (M1 describe desk session). EdiabasLib looks descriptions up
+  in upper case under the name as the SGBD spells it; `ediabasd` rekeys them case-insensitively
+  before every `_` job (`JobDescriptions.IgnoreCase`, by reflection; upstream unmodified).
 
 ### Service, stage 1: reuse `EdiabasAgent.Core`
 

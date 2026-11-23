@@ -37,7 +37,6 @@ public sealed class NativeConfigTests : IDisposable
         Assert.Equal(30, c!.JobTimeoutSeconds);
         Assert.Equal(60, c.MaxJobTimeoutSeconds);
         Assert.Null(c.Port);
-        Assert.Empty(c.VoltageSources);
         Assert.Empty(c.ReviewedJobs);
         Assert.Equal(Path.Combine(_home, ".local", "state", NativeConfig.AppDir, "audit.log"), c.AuditPath);
         Assert.Equal(Path.Combine(_home, ".local", "state", NativeConfig.AppDir, "variants.json"), c.VariantsPath);
@@ -112,24 +111,26 @@ public sealed class NativeConfigTests : IDisposable
     }
 
     [Fact]
-    public void VoltageSourcesAndReviewedJobs_Parse()
+    public void PortReviewedJobsAndDirs_Parse()
     {
-        WriteConfig(Json(", \"port\": \"/dev/cu.usbserial-X\", \"voltageSources\": [{\"ecu\": \"NVE_65\", \"job\": \"STATUS_SPANNUNG\"}], \"reviewedJobs\": [\"NVE_65.STATUS_X\"], \"traceDir\": \"/tmp/t\", \"recordDir\": \"/tmp/r\""));
+        WriteConfig(Json(", \"port\": \"/dev/cu.usbserial-X\", \"reviewedJobs\": [\"NVE_65.STATUS_X\"], \"traceDir\": \"/tmp/t\", \"recordDir\": \"/tmp/r\""));
         var (c, errors) = NativeConfig.Load(null, Env());
         Assert.Empty(errors);
         Assert.Equal("/dev/cu.usbserial-X", c!.Port);
-        Assert.Equal("NVE_65", Assert.Single(c.VoltageSources).Ecu);
         Assert.Equal("NVE_65.STATUS_X", Assert.Single(c.ReviewedJobs));
         Assert.Equal("/tmp/t", c.TraceDir);
         Assert.Equal("/tmp/r", c.RecordDir);
     }
 
     [Fact]
-    public void VoltageSourceWithoutJob_IsError()
+    public void VoltageSources_IsAnUnknownKey()
     {
-        WriteConfig(Json(", \"voltageSources\": [{\"ecu\": \"NVE_65\"}]"));
-        var (_, errors) = NativeConfig.Load(null, Env());
-        Assert.Contains(errors, e => e.Contains("voltageSources[0]"));
+        // Vehicle status is a job batch run by the MCP server; voltageSources lives in its
+        // config.local.json (main, 0.5.0: /ediabas/vehicle removed).
+        WriteConfig(Json(", \"voltageSources\": [{\"ecu\": \"NVE_65\", \"job\": \"STATUS_SPANNUNG\"}]"));
+        var (c, errors) = NativeConfig.Load(null, Env());
+        Assert.Null(c);
+        Assert.Contains(errors, e => e.Contains("unknown key \"voltageSources\""));
     }
 
     [Fact]

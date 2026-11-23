@@ -10,7 +10,6 @@ namespace Ediabasd;
 /// ediabasd ecus [FILTER]
 /// ediabasd describe ECU [JOB] [--filter X] [--no-comments]
 /// ediabasd job ECU JOB [--args A] [--results R] [--timeout N]
-/// ediabasd vehicle
 /// ediabasd health
 ///   --config PATH on any command (default $XDG_CONFIG_HOME/bimmer-bridge/config.json)
 /// </code>
@@ -26,7 +25,7 @@ public static class Cli
 
     const string UsageText =
         "usage: ediabasd serve | ecus [FILTER] | describe ECU [JOB] [--filter X] [--no-comments] |\n" +
-        "       job ECU JOB [--args A] [--results R] [--timeout N] | vehicle | health   [--config PATH]";
+        "       job ECU JOB [--args A] [--results R] [--timeout N] | health   [--config PATH]";
 
     static readonly JsonSerializerOptions Pretty = new(ApiJson.Options) { WriteIndented = true };
 
@@ -102,7 +101,7 @@ public static class Cli
                 }
 
                 break;
-            case "vehicle" or "health":
+            case "health":
                 if (rest.Count != 0) return UsageError(error, $"{command} takes no arguments");
                 method = command;
                 break;

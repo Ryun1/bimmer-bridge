@@ -85,7 +85,7 @@ public class ResultShapingTests
 
 public class CommentScreenTests
 {
-    private static readonly CommentScreen Screen = new(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, ["NVE_65:STATUS_X"]);
+    private static readonly CommentScreen Screen = new(JobPolicy.Embedded.ScreenTerms, JobPolicy.Embedded.ScreenIgnore, ["NVE_65:STATUS_X@b8ae0dd9d242"]);
 
     [Theory]
     [InlineData("Status Bordnetzspannung")]
@@ -207,9 +207,9 @@ public class CommentScreenTests
     [Fact]
     public void Reviewed_IsExact()
     {
-        Assert.Equal(ApprovalKind.Unpinned, Screen.Approval("NVE_65", "STATUS_X").Kind);
+        Assert.Equal(ApprovalKind.Pinned, Screen.Approval("NVE_65", "STATUS_X").Kind);
         Assert.Equal(ApprovalKind.None, Screen.Approval("NVE_65", "STATUS_XY").Kind);
-        Assert.Equal(ApprovalKind.None, new CommentScreen([], [], ["nve_65:status_x"]).Approval("NVE_65", "STATUS_X").Kind);
+        Assert.Equal(ApprovalKind.None, new CommentScreen([], [], ["nve_65:status_x@b8ae0dd9d242"]).Approval("NVE_65", "STATUS_X").Kind);
     }
 }
 

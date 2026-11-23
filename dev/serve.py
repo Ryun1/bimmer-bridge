@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mac-side deploy/discovery server for ediabas-bridge.
+"""Mac-side deploy/discovery server for bimmer-bridge.
 
 Implements the routes in docs/deploy.md and nothing else:
 
@@ -9,10 +9,9 @@ Implements the routes in docs/deploy.md and nothing else:
   PUT /token                                                      only with --accept-token
 
 Only the VM may talk to it: every request from any other address is refused (403). The VM's
-address is the latest DHCP lease for its MAC, or the one given with --client. The MAC is found
-as the MCP server finds it: EDIABAS_VM_MAC, else vmMac in config.local.json at the repo root,
-else the first network card in UTM's config.plist for the VM (EDIABAS_VM_NAME, else vmName in
-config.local.json, else "Windows").
+address is the newest DHCP lease for its MAC, or the one given with --client (the MCP server
+finds it the same way, but skips a lease that is off UTM's network: docs/architecture.md, "The
+request path").
 
 Standard library only. Run from anywhere:
   python3 dev/serve.py [--bind IP] [--client VM-IP] [--port N] [--accept-token]
@@ -61,9 +60,9 @@ VM_MAC_ENV = "EDIABAS_VM_MAC"
 VM_NAME_ENV = "EDIABAS_VM_NAME"
 VM_NAME_DEFAULT = "Windows"
 LOCAL_CONFIG_PATH = REPO_ROOT / "config.local.json"
-# Keys config.local.json may set (keys starting with "_" are comments). agentPort is for the
-# MCP server; serve.py accepts it without using it.
-LOCAL_KEYS = ("vmName", "vmMac", "agentPort")
+# Keys config.local.json may set (keys starting with "_" are comments). agentPort and
+# voltageSources are for the MCP server; serve.py accepts them without using them.
+LOCAL_KEYS = ("vmName", "vmMac", "agentPort", "voltageSources")
 UTM_DOCUMENTS = Path.home() / "Library" / "Containers" / "com.utmapp.UTM" / "Data" / "Documents"
 
 
@@ -230,6 +229,8 @@ def read_local_config(path):
         if key not in LOCAL_KEYS:
             warnings.append('%s: unknown key "%s" is ignored (known keys: %s).'
                             % (path, key, ", ".join(LOCAL_KEYS)))
+        elif key == "voltageSources":
+            continue  # the MCP server checks it
         elif key == "agentPort":
             if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 65535:
                 out[key] = value
@@ -363,7 +364,7 @@ def _printable(text, limit=200):
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    server_version = "ediabas-bridge-serve"
+    server_version = "bimmer-bridge-serve"
     sys_version = ""
     timeout = 60  # socket timeout, so a stalled client cannot hold a thread forever
 
@@ -619,7 +620,7 @@ def pinned_line(base, script, script_sha, zip_sha=None, prefix=""):
     if zip_sha:
         parts.append("$sha='%s'" % zip_sha)
     parts += [
-        '$ebFile="$env:TEMP\\ediabas-bridge-%s"' % script,
+        '$ebFile="$env:TEMP\\bimmer-bridge-%s"' % script,
         "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue",
         "$ebOk=$false",
         'try { iwr "$base/%s" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } '
@@ -649,7 +650,7 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
             return ["  (%s not found in vm-setup; no line)" % script]
         return ["  " + pinned_line(base, script, script_sha[script], zip_sha, prefix)]
 
-    lines = ["ediabas-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port)]
+    lines = ["bimmer-bridge serve.py listening on %s:%d (Ctrl-C to stop)" % (bind, port)]
     if client:
         lines.append("Serving the VM at %s only; every other address is refused." % client)
     lines += ["", "Each line below checks the script's SHA-256 before running it.",
@@ -675,7 +676,7 @@ def startup_lines(bind, port, release_dir, accept_token=False, setup_dir=None, c
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="ediabas-bridge deploy/discovery server")
+    parser = argparse.ArgumentParser(description="bimmer-bridge deploy/discovery server")
     parser.add_argument("--bind", help="IPv4 address to bind (default: UTM bridge1xx address)")
     parser.add_argument("--client", help="the VM's IPv4 address, the only one served (default: "
                         "the latest DHCP lease for the VM's MAC: %s, else vmMac in "

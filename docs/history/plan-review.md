@@ -1,8 +1,8 @@
 # Plan review — 2026-11-21
 
-> Historical record: the review of the original plan, 2026-11-21. For the current state, see the [README](../README.md).
+> Historical record: the review of the original plan, 2026-11-21. For the current state, see the [README's Status](../../README.md#status).
 
-> **Status:** adopted. [PLAN.md](../PLAN.md) v2 incorporates this review, with the
+> **Status:** adopted. [PLAN.md](PLAN.md) v2 incorporates this review, with the
 > recommended option taken for each decision at the end. See the addendum at the bottom for
 > what changed after the review was written. This review refers to the
 > [original plan](plan-v1-original.md).
@@ -24,7 +24,7 @@ Items marked **(verify)** are my belief, not confirmed on this VM.
 | UTM VM "Windows" | QEMU backend, aarch64, network mode Shared, MAC `<VM MAC>`, currently stopped | §4, §6 |
 | `utmctl` | Present at `/Applications/UTM.app/Contents/MacOS/utmctl`, not on PATH | §10 |
 
-Two of the four "ask Ryan" questions in §4 are now answered (network mode is Shared; the VM
+Two of the four "ask the owner" questions in §4 are now answered (network mode is Shared; the VM
 is Windows on ARM under QEMU).
 
 ## A. Corrections — the plan is wrong or will break
@@ -40,9 +40,9 @@ is Windows on ARM under QEMU).
      be tested faithfully on macOS. Run those through `IstaAgent.exe --selftest` in the VM,
      and optionally on a GitHub Actions `windows-latest` runner.
 3. **The sandbox premise in §0 doesn't apply to Claude Code.** I can run the `curl`
-   acceptance checks for Phases 1–4 myself and iterate without Ryan relaying output. The
+   acceptance checks for Phases 1–4 myself and iterate without the owner relaying output. The
    native MCP server is still needed for the desktop app, and it can also be registered in
-   Claude Code. §11 "Ryan runs everything inside the VM" still holds.
+   Claude Code. §11 "The owner runs everything inside the VM" still holds.
 4. **The VM's IP is a DHCP lease, but the plan hard-codes it** in `ISTA_AGENT_URL`,
    `bindAddress` and the firewall rule. Move IP discovery from v2 into v1:
    - Mac: resolve the IP from the VM's fixed MAC via `arp -an`, with `utmctl ip-address` as a
@@ -84,7 +84,7 @@ is Windows on ARM under QEMU).
    - the reader never calls a state-changing pattern (Scroll, Invoke, Realize, SetValue,
      SetFocus); enforce this by wrapping FlaUI behind a read-only interface;
    - return `rowCount` and `rowsReturned`, so Claude knows the table is partial and asks
-     Ryan to scroll.
+     the owner to scroll.
 10. **`grep=<regex>` runs in an elevated process.** Use `RegexOptions.NonBacktracking` and
     cap the pattern length.
 11. **The process check in rule 5 is only a proxy for "cable in use".** ISTA can leave
@@ -105,7 +105,7 @@ is Windows on ARM under QEMU).
     Phase 3 is text-first or screenshot-first, before any C# is written.
 15. **Give discovery a return channel.** A small receiver on the Mac, bound to the bridge
     address, so `discover.ps1` uploads its output, the `api32.dll` export list and `api.h`
-    as files instead of Ryan pasting text back. These stay local and are git-ignored.
+    as files instead of the owner pasting text back. These stay local and are git-ignored.
 16. **Reorder the phases:** 0 → 1 skeleton → 3 screen → 2 MCP → 4 logs → 5 EDIABAS. Seeing
     ISTA is the main value and can be tested with `curl` from here; the MCP layer is thin
     once the endpoints exist.
@@ -136,7 +136,7 @@ is Windows on ARM under QEMU).
 25. **Cloud sessions:** the claim that local MCP servers are proxied into linked cloud
     sessions is untested. If that matters, add it to the Phase 2 acceptance check.
 
-## Decisions for Ryan
+## Decisions for the owner
 
 1. **Fault clearing:** defer out of v1 (recommended), keep with Touch ID, or keep as planned.
 2. **Job policy:** token-based denylist as in item 6 (recommended), or keep the strict

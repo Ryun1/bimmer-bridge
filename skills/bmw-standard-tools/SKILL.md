@@ -7,7 +7,7 @@ description: Help the user drive BMW Standard Tools by hand in their Windows VM 
 
 The user's Windows VM in UTM runs BMW Standard Tools over EDIABAS and a cable (usually K+DCAN)
 to their BMW. This skill is for helping them use those tools by hand. Reading the car through
-the bridge's own tools is the `ediabas-bridge` skill.
+the bridge's own tools is the `bimmer-bridge` skill.
 
 This skill is guidance. The bridge's tools enforce their own limits (read-only, no input into
 the VM); nothing here is a way around them.

@@ -106,6 +106,19 @@ describe("loading scenarios", () => {
     const names = readdirSync(DEFAULT_FIXTURES, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
     for (const n of names) expect(() => loadScenario(DEFAULT_FIXTURES, n), n).not.toThrow();
   });
+
+  it("no committed recording asks for the removed GET /ediabas/vehicle; inpa-open has the vehicle batch as POST /ediabas/jobs", () => {
+    const names = readdirSync(DEFAULT_FIXTURES, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    for (const n of names) expect(loadScenario(DEFAULT_FIXTURES, n).recordings.filter((r) => r.path === "/ediabas/vehicle"), n).toEqual([]);
+    const items = ["UTILITY STATUS_ZUENDUNG", "UTILITY STATUS_UBATT", "TMODE LESE_SPANNUNG_KL30", "TMODE LESE_SPANNUNG_KL15"].map((x) => {
+      const [ecu, job] = x.split(" ");
+      return { ecu, job };
+    });
+    const m = findRecording(loadScenario(DEFAULT_FIXTURES, "inpa-open"), { method: "POST", path: "/ediabas/jobs", query: [], body: { items } });
+    expect(m?.how).toBe("exact");
+    expect(m?.recording.response.status).toBe(409);
+    expect((m?.recording.response.json as { error: { code: string } }).error.code).toBe("cable_in_use");
+  });
 });
 
 describe("matching", () => {
@@ -194,6 +207,30 @@ describe("auth and methods", () => {
         expect(r.json().error.code).toBe("unauthorized");
       }
     }
+  });
+
+  it("answers GET /hello without a token, computing the proof from its token (not from recordings)", async () => {
+    normalScenario();
+    agent = await startReplayAgent({ scenario: loadScenario(root, "normal"), token: "test-token", port: 0, log: (l) => logs.push(l) });
+    const r = await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: null });
+    expect(r.status).toBe(200);
+    // the documented vector (docs/api.md "GET /hello")
+    expect(r.json()).toEqual({ agent: "ediabas-bridge-agent", proof: "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd" });
+    // a token sent with it is ignored
+    expect((await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: "wrong-token" })).json().proof).toBe(r.json().proof);
+  });
+
+  it("GET /hello: a bad nonce is 400 bad_request; other paths and methods still need the token", async () => {
+    normalScenario();
+    await start("normal");
+    for (const q of ["", "?nonce=", "?nonce=0011223344556677889900aabbccddee0", "?nonce=00112233445566778899AABBCCDDEEFF", "?nonce=00112233445566778899aabbccddeeff&x=1", "?nonce=00112233445566778899aabbccddeeff&nonce=00112233445566778899aabbccddeeff"]) {
+      const r = await call(`/hello${q}`, { token: null });
+      expect(r.status).toBe(400);
+      expect(r.json().error).toMatchObject({ code: "bad_request", details: { parameter: "nonce" } });
+    }
+    expect((await call("/hello/?nonce=00112233445566778899aabbccddeeff", { token: null })).status).toBe(401);
+    expect((await call("/hellox?nonce=00112233445566778899aabbccddeeff", { token: null })).status).toBe(401);
+    expect((await call("/hello?nonce=00112233445566778899aabbccddeeff", { token: null, method: "POST", body: "{}" })).status).toBe(401);
   });
 
   it("serves GET and POST only", async () => {

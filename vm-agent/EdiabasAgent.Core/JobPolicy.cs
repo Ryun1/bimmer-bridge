@@ -46,6 +46,10 @@ public sealed class JobPolicy
         LoadError = error;
     }
 
+    /// <summary>Lower-case hex SHA-256 of the exact bytes of the embedded policy file; null for a policy
+    /// parsed from text, or when the policy did not load.</summary>
+    public string? Sha256 { get; private set; }
+
     private JobPolicy(int version, Regex namePattern, int maxArgLength)
     {
         Version = version;
@@ -120,8 +124,18 @@ public sealed class JobPolicy
                 return new JobPolicy("policy.json is not embedded in the agent");
             }
 
-            using var reader = new StreamReader(stream, new UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: false);
-            return Parse(reader.ReadToEnd());
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            var bytes = ms.ToArray();
+            var text = new UTF8Encoding(false, true).GetString(bytes);
+            var policy = Parse(text);
+            // Hashed over the bytes as embedded (a BOM, if any, included), as the Mac hashes its file.
+            if (policy.Loaded)
+            {
+                policy.Sha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+            }
+
+            return policy;
         }
         catch (Exception ex) when (ex is IOException or DecoderFallbackException)
         {

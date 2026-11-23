@@ -74,7 +74,44 @@ internal static partial class SelfTest
                 }
 
                 links.Add(link);
-                return ExpectRefused($"{name}: symlink escape", logs, link, PathRules.ResolvesOutsideRoots);
+                // A link is opened as itself and refused as not found, before its target is looked at.
+                return ExpectNotFound($"{name}: symlink escape", logs, link);
+            }));
+
+            checks.Add(Guard($"{name}: link to a device is refused without opening the device", () =>
+            {
+                const string label = "link to a device is refused without opening the device";
+                var link = Path.Combine(root, "devlink.trc");
+                var target = @"\\.\NUL";
+                var note = "";
+                try
+                {
+                    File.CreateSymbolicLink(link, target);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // Fall back to a link to a regular file outside the root: the same refusal path.
+                    try
+                    {
+                        File.CreateSymbolicLink(link, secret);
+                        note = " (device link could not be made; used a link to a file outside the root)";
+                    }
+                    catch (Exception ex2) when (ex2 is IOException or UnauthorizedAccessException)
+                    {
+                        return new Check($"{name}: {label}", Outcome.Skip, $"cannot create a symbolic link here ({ex2.Message})");
+                    }
+                }
+
+                links.Add(link);
+                var status = new LogAccess().OpenRead(link, out var opened);
+                opened?.Dispose();
+                if (status == LogOpenStatus.Opened)
+                {
+                    return new Check($"{name}: {label}", Outcome.Fail, "the link was opened as a file");
+                }
+
+                var check = ExpectNotFound($"{name}: {label}", logs, link);
+                return check.Outcome == Outcome.Pass ? check with { Detail = check.Detail + note } : check;
             }));
 
             checks.Add(Guard($"{name}: alternate data stream", () =>
@@ -96,11 +133,16 @@ internal static partial class SelfTest
 
             checks.Add(Guard($"{name}: 8.3 short names", () =>
             {
+                // GetShortPathName shortens every component, the temporary folder above the root
+                // included. Only the file name is used short below the root: a short spelling of
+                // the root itself is refused before anything is opened (the path must be spelt
+                // under a root; LogServiceTests.Read_ShortNameOfTheRoot_RefusedWithoutOpening).
                 var shortSecret = ShortName(secret);
-                var shortInside = ShortName(inside);
-                if (shortSecret is null || shortInside is null
+                var shortInsideFull = ShortName(inside);
+                var shortFile = shortInsideFull is null ? null : Path.GetFileName(shortInsideFull);
+                if (shortSecret is null || shortFile is null
                     || string.Equals(shortSecret, secret, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(shortInside, inside, StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(shortFile, Path.GetFileName(inside), StringComparison.OrdinalIgnoreCase))
                 {
                     return new Check($"{name}: 8.3 short names", Outcome.Skip, "this volume does not make 8.3 names");
                 }
@@ -111,10 +153,28 @@ internal static partial class SelfTest
                     return outsideCheck;
                 }
 
+                // A short file name below the root, spelt in full: read.
+                var shortInside = Path.Combine(root, shortFile);
                 var insideCheck = ExpectRead($"{name}: 8.3 short names", logs, shortInside);
-                return insideCheck.Outcome == Outcome.Pass
-                    ? new Check($"{name}: 8.3 short names", Outcome.Pass, $"{shortSecret} refused, {shortInside} read")
-                    : insideCheck;
+                if (insideCheck.Outcome != Outcome.Pass)
+                {
+                    return insideCheck;
+                }
+
+                var detail = $"{shortSecret} refused, {shortInside} read";
+                // The root spelt with a short name (when a folder on its path has one): refused.
+                if (!shortInsideFull!.StartsWith(root + @"\", StringComparison.OrdinalIgnoreCase))
+                {
+                    var rootCheck = ExpectRefused($"{name}: 8.3 short names", logs, shortInsideFull, PathRules.OutsideRoots);
+                    if (rootCheck.Outcome != Outcome.Pass)
+                    {
+                        return rootCheck;
+                    }
+
+                    detail += $", {shortInsideFull} refused (the root spelt short)";
+                }
+
+                return new Check($"{name}: 8.3 short names", Outcome.Pass, detail);
             }));
 
             checks.Add(Guard($"{name}: device names", () =>
@@ -189,6 +249,18 @@ internal static partial class SelfTest
 
         var got = r.Ok ? "the file's content" : $"{r.Failure!.Error.Code} ({refusal ?? "-"})";
         return new Check(name, Outcome.Fail, $"{path}: expected path_not_allowed ({string.Join(" or ", reasons)}), got {got}");
+    }
+
+    private static Check ExpectNotFound(string name, LogService logs, string path)
+    {
+        var r = logs.Read(new LogReadQuery(path, LogReadRange.Tail(4096), null), out var refusal);
+        if (!r.Ok && r.Failure!.Error.Code == ApiErrors.FileNotFound)
+        {
+            return new Check(name, Outcome.Pass, $"{path} refused (opened as a link, file_not_found)");
+        }
+
+        var got = r.Ok ? "the file's content" : $"{r.Failure!.Error.Code} ({refusal ?? "-"})";
+        return new Check(name, Outcome.Fail, $"{path}: expected file_not_found for a link, got {got}");
     }
 
     private static bool MakeJunction(string link, string target, out string why)

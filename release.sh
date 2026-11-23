@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# One command for a release (PLAN.md Phase 8): checks that the versions agree, runs every test
-# suite, builds the agent zip and the Mac server, then prints the zip's SHA-256 and the Update
-# line. Stops at the first failure. It does not push, tag or deploy anything.
+# One command for a release (docs/history/PLAN.md Phase 8): checks that the versions agree, runs every test
+# suite, builds the agent zip, the skill zips and the Mac server, then prints the SHA-256 of each
+# zip (the files to attach to the GitHub release) and the Update line. Stops at the first failure.
+# It does not push, tag or deploy anything.
 #
 #   ./release.sh                 everything
 #   ./release.sh --no-build      versions and tests only; no zip, no mac-mcp/dist
 #   ./release.sh --skip-dotnet   leave out the .NET tests and the agent build (not a release)
 #   ./release.sh --dry-run       check the versions and the git tree, print every step, run
 #                                nothing else
-#   ./release.sh --allow-dirty   build although the git tree has uncommitted changes (the zip's
-#                                commit.txt then ends in -dirty; not a release)
+#   ./release.sh --allow-dirty   build although the git tree has uncommitted changes, or untracked
+#                                files under a release input (the zip's commit.txt then ends in
+#                                -dirty; not a release)
 #
 # Versions that must agree: VERSION, vm-agent/Directory.Build.props <Version>,
 # mac-mcp/package.json and mac-mcp/package-lock.json.
@@ -28,7 +30,7 @@ for arg in "$@"; do
     --skip-dotnet) SKIP_DOTNET=1 ;;
     --dry-run) DRY_RUN=1 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
-    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "release.sh: unknown argument $arg (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -82,16 +84,35 @@ fi
 # ------------------------------------------------------------------------------ git tree
 step "Checking the git tree"
 DIRTY_STOP=0
-DIRTY="$(git status --porcelain)" || die "not a git checkout"
+# The tree is dirty if a tracked file anywhere has uncommitted changes, or if an untracked file
+# that .gitignore does not cover sits under a path the release reads: the .NET build compiles
+# every .cs under vm-agent/ and embeds policy/policy.json, the skill zips take whole skill
+# folders, and the tests, the .ps1 parse and the Update line read mac-mcp/, dev/ and vm-setup/.
+# Untracked scratch elsewhere (notes under docs/, say) does not count.
+# Keep RELEASE_INPUTS and this check the same as in vm-agent/build.sh.
+RELEASE_INPUTS=(VERSION global.json vm-agent policy mac-mcp vm-setup dev skills)
+CHANGED="$(git status --porcelain --untracked-files=no)" || die "not a git checkout"
+UNTRACKED="$(git status --porcelain --untracked-files=normal -- "${RELEASE_INPUTS[@]}" | sed -n 's/^?? //p')" \
+  || die "git status failed"
+DIRTY="$CHANGED$UNTRACKED"
+DIRTY_WHAT=""
+if [ -n "$CHANGED" ]; then DIRTY_WHAT="uncommitted changes (git status)"; fi
+if [ -n "$UNTRACKED" ]; then
+  if [ -n "$DIRTY_WHAT" ]; then DIRTY_WHAT="$DIRTY_WHAT, and "; fi
+  DIRTY_WHAT="${DIRTY_WHAT}untracked files under the release inputs, which the build would pick up: $(printf '%s\n' "$UNTRACKED" | head -n 5 | paste -sd ' ' -)"
+  if [ "$(printf '%s\n' "$UNTRACKED" | grep -c '')" -gt 5 ]; then DIRTY_WHAT="$DIRTY_WHAT ..."; fi
+fi
 if [ -z "$DIRTY" ]; then
   echo "  clean at $(git rev-parse --short HEAD)"
 elif [ "$ALLOW_DIRTY" -eq 1 ]; then
-  echo "  uncommitted changes (--allow-dirty): the zip's commit.txt will end in -dirty"
+  echo "  $DIRTY_WHAT"
+  echo "  --allow-dirty: the zip's commit.txt will end in -dirty"
 elif [ "$DRY_RUN" -eq 1 ]; then
-  echo "  uncommitted changes (dry run: a real run stops here; commit, or pass --allow-dirty)"
+  echo "  $DIRTY_WHAT"
+  echo "  (dry run: a real run stops here; commit or delete them, or pass --allow-dirty)"
   DIRTY_STOP=1
 else
-  die "the git tree has uncommitted changes (git status); commit them, or pass --allow-dirty for a build that is not a release"
+  die "the git tree is not clean: $DIRTY_WHAT; commit or delete them, or pass --allow-dirty for a build that is not a release"
 fi
 
 # ------------------------------------------------------------------------------ setup scripts
@@ -109,14 +130,17 @@ fi
 
 # ------------------------------------------------------------------------------ .NET
 if [ "$SKIP_DOTNET" -eq 0 ]; then
-  # Find the .NET 10 SDK the way vm-agent/build.sh does: PATH first, then the Homebrew keg.
-  if ! command -v dotnet >/dev/null 2>&1; then
-    if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
-      export DOTNET_ROOT="${DOTNET_ROOT:-/opt/homebrew/opt/dotnet@10/libexec}"
-      export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
-    elif [ "$DRY_RUN" -eq 0 ]; then
-      die "dotnet not found (need the .NET 10 SDK; or --skip-dotnet, which is not a release)"
-    fi
+  # The .NET 10 SDK, the way vm-agent/build.sh finds it: the Homebrew keg first (Homebrew's plain
+  # `dotnet` may be a newer major, which global.json refuses), then PATH.
+  if [ -x /opt/homebrew/opt/dotnet@10/bin/dotnet ]; then
+    export DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec
+    export PATH="/opt/homebrew/opt/dotnet@10/bin:$PATH"
+  elif ! command -v dotnet >/dev/null 2>&1 && [ "$DRY_RUN" -eq 0 ]; then
+    die "dotnet not found (need the .NET 10 SDK: brew install dotnet@10; or --skip-dotnet, which is not a release)"
+  fi
+  if [ "$DRY_RUN" -eq 0 ]; then
+    SDK="$(dotnet --version 2>/dev/null)" || die "no .NET SDK that global.json allows (10.0.x) is installed for $(command -v dotnet): brew install dotnet@10"
+    case "$SDK" in 10.*) echo "  .NET SDK $SDK" ;; *) die "dotnet $SDK is not a .NET 10 SDK (global.json pins 10.0.x)" ;; esac
   fi
   export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
   step "Agent tests (dotnet)"
@@ -142,6 +166,11 @@ if [ "$NO_BUILD" -eq 0 ]; then
     step "Building the agent zip"
     if [ "$ALLOW_DIRTY" -eq 1 ]; then run vm-agent/build.sh --allow-dirty; else run vm-agent/build.sh; fi
   fi
+  # --no-link: build skills/dist/*.skill only; never touch ~/.claude/skills.
+  step "Building the skill files (skills/dist)"
+  # install.sh never clears skills/dist/, so a file for a renamed or removed skill would be listed.
+  run rm -f skills/dist/*.skill skills/dist/*.zip
+  run skills/install.sh --no-link
   step "Building the MCP server (mac-mcp/dist)"
   run npm --prefix mac-mcp run build
 fi
@@ -153,6 +182,9 @@ if [ "$DRY_RUN" -eq 1 ]; then
   [ "$VERSIONS_OK" -eq 1 ] && [ "$DIRTY_STOP" -eq 0 ] || exit 1
   exit 0
 fi
+
+SKILL_FILES=()
+for z in skills/dist/*.skill; do [ -f "$z" ] && SKILL_FILES+=("$z"); done
 
 BUILT=$(( NO_BUILD == 0 && SKIP_DOTNET == 0 ))
 if [ -f "$ZIP" ]; then
@@ -182,10 +214,24 @@ else
   echo "Agent zip:  not built (no $ZIP)"
 fi
 
+echo
+if [ ${#SKILL_FILES[@]} -eq 0 ]; then
+  echo "Skill files: none (no skills/dist/*.skill)"
+else
+  if [ "$NO_BUILD" -eq 0 ]; then
+    echo "Skill files (attach to the GitHub release; upload to claude.ai):"
+  else
+    echo "Skill files from an earlier build, NOT rebuilt this run:"
+  fi
+  for z in "${SKILL_FILES[@]}"; do
+    printf '  %s  %s\n' "$(shasum -a 256 "$z" | awk '{print $1}')" "$z"
+  done
+fi
+
 if [ "$BUILT" -eq 1 ] && [ -z "$DIRTY" ]; then
   echo
   echo "Release $VERSION built and tested. Nothing was pushed, tagged or deployed."
 else
   echo
-  echo "Checks passed, but this is NOT a release:$([ "$NO_BUILD" -eq 1 ] && echo ' --no-build')$([ "$SKIP_DOTNET" -eq 1 ] && echo ' --skip-dotnet')$([ -n "$DIRTY" ] && echo ' uncommitted changes')."
+  echo "Checks passed, but this is NOT a release:$([ "$NO_BUILD" -eq 1 ] && echo ' --no-build')$([ "$SKIP_DOTNET" -eq 1 ] && echo ' --skip-dotnet')$([ -n "$DIRTY" ] && echo ' the git tree is not clean')."
 fi

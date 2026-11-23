@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -236,7 +237,7 @@ export function policyUnavailable(reason: string): BridgeError {
   return new BridgeError(
     "policy_unavailable",
     `The job policy file could not be loaded on this Mac (${cleanText(reason, 200)}), so every EDIABAS tool refuses and nothing was sent to the VM. ` +
-      "The user needs to restore a valid policy/policy.json in the ediabas-bridge repo and restart the MCP server (restart Claude).",
+      "The user needs to restore a valid policy/policy.json in the bimmer-bridge repo and restart the MCP server (restart Claude).",
   );
 }
 
@@ -270,14 +271,23 @@ export function jobNotAllowed(ecu: string, job: string, rule: string): BridgeErr
  * fails closed with `policy_unavailable` when loading failed.
  */
 export class PolicyGuard {
-  private constructor(
-    private readonly policy: Policy | null,
-    private readonly loadError: string | null,
-  ) {}
+  private readonly policy: Policy | null;
+  private readonly loadError: string | null;
+  /** SHA-256 (lower-case hex) of the exact bytes parsed; null when nothing loaded from a file. */
+  readonly sha256: string | null;
 
-  static load(path: string = DEFAULT_POLICY_PATH, read: (p: string) => string = (p) => readFileSync(p, "utf8")): PolicyGuard {
+  private constructor(policy: Policy | null, loadError: string | null, sha256: string | null = null) {
+    this.policy = policy;
+    this.loadError = loadError;
+    this.sha256 = sha256;
+  }
+
+  static load(path: string = DEFAULT_POLICY_PATH, read: (p: string) => string | Buffer = (p) => readFileSync(p)): PolicyGuard {
     try {
-      return new PolicyGuard(parsePolicy(read(path)), null);
+      // Hash the bytes that are parsed, so the hash is of what this Mac enforces.
+      const bytes = Buffer.from(read(path));
+      const policy = parsePolicy(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+      return new PolicyGuard(policy, null, createHash("sha256").update(bytes).digest("hex"));
     } catch (e) {
       const reason = e instanceof z.ZodError ? "it does not have the expected fields" : e instanceof Error ? e.message : String(e);
       return new PolicyGuard(null, `${path}: ${reason}`);

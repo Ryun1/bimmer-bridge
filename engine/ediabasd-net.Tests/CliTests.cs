@@ -46,6 +46,12 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Vehicle_IsAnUnknownCommand()
+    {
+        Assert.Equal(2, Run("vehicle", "--config", Config()).Exit);
+    }
+
+    [Fact]
     public void BadConfig_Is78()
     {
         var (exit, _, err) = Run("describe", "cmd_test2", "--config", Config(", \"maxJobTimeoutSeconds\": 99"));

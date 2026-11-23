@@ -1,11 +1,11 @@
 ---
-name: ediabas-bridge
-description: Operate the read-only ediabas-bridge tools (vm_* and ediabas_*) that look into the Windows VM in UTM on the user's Mac, where BMW Standard Tools and EDIABAS talk to the user's BMW over the cable. Use this skill whenever the user wants to read the faults, fault codes or live values from their BMW (night vision, engine, any module), asks about a battery drain, mentions EDIABAS, an SGBD or a .prg/.grp file, asks "is the VM up" or what is open in the VM, or wants a screenshot of the VM or an EDIABAS / NCS Expert trace file, even if they do not name the bridge. Covers the health check to run first, keeping ignition-on time short, finding ECUs and jobs with ediabas_list_ecus and ediabas_describe instead of guessing, what each error and refusal means and what to tell the user, and handing results to a car-specific skill if one is installed.
+name: bimmer-bridge
+description: Operate the read-only bimmer-bridge tools (vm_* and ediabas_*) that look into the Windows VM in UTM on the user's Mac, where BMW Standard Tools and EDIABAS talk to the user's BMW over the cable. Use this skill whenever the user wants to read the faults, fault codes or live values from their BMW (night vision, engine, any module), asks about a battery drain, mentions EDIABAS, an SGBD or a .prg/.grp file, asks "is the VM up" or what is open in the VM, or wants a screenshot of the VM or an EDIABAS / NCS Expert trace file, even if they do not name the bridge. Covers the health check to run first, keeping ignition-on time short, finding ECUs and jobs with ediabas_list_ecus and ediabas_describe instead of guessing, what each error and refusal means and what to tell the user, and handing results to a car-specific skill if one is installed.
 ---
 
-# ediabas-bridge
+# bimmer-bridge
 
-The `ediabas-bridge` MCP server lets you look into the Windows VM in UTM on the user's Mac. The
+The `bimmer-bridge` MCP server lets you look into the Windows VM in UTM on the user's Mac. The
 VM runs BMW Standard Tools (INPA, Tool32, NCS Expert, WinKFP) over EDIABAS and a cable (usually
 K+DCAN) to the user's BMW. Which car it is, and which modules it has, comes from the car and
 the VM (`ediabas_list_ecus`, `ediabas_describe`), not from this skill. The bridge was built on a
@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | ignition, battery and cable-side voltage readings |
+| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default) |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 
@@ -74,8 +74,12 @@ turns it on.
    on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
-   The job policy allows these whole-car jobs only on `E60`; on another chassis
-   `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
+   Run each functional job as its own `ediabas_job` with `timeoutSeconds: 60`, after an
+   earlier call has loaded EDIABAS (`ediabas_vehicle_status`): a request gets at most 60 s,
+   and how long these take on a car is not yet measured. Then name only the modules that
+   answered in `ediabas_read_faults`: one that does not answer can use its whole timeout.
+   The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
+   chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
    the policy (`policy/README.md` in the repo). Until then, find the car's modules with
    `ediabas_list_ecus` and read them one SGBD at a time.
 4. **State the plan:** which ECUs and jobs, in how many calls, and a rough time. Then ask the
@@ -91,8 +95,8 @@ turns it on.
 
 **The car-session clock.** Every result of `ediabas_job`, `ediabas_jobs`,
 `ediabas_read_faults` and `ediabas_vehicle_status` ends with "Car session: … since the first
-read from the car (aim to finish within 10 min)." It counts from the first read, not from the
-ignition. At about 8 minutes, wrap up: finish the call in hand, add no new reads, and report.
+read from the car (aim to finish within 10 min)." It counts from the first read from a module (not `TMODE` or `UTILITY`), not from the
+ignition, and the clock resets after 5 minutes without such a read. At about 8 minutes, wrap up: finish the call in hand, add no new reads, and report.
 At 10 minutes, stop and ask the user before any further read; offer to continue another time.
 Read only what the question needs; reading every job on every ECU drains the battery and
 buries the answer.
@@ -111,12 +115,17 @@ where the message is not enough. The ones that need judgement here:
 
 - **`[job_not_allowed]`** — refused by name. Say which job and rule; do not look for another
   job, tool or route that does the same thing.
-- **`[job_needs_review]`** — the job's own description (or its arguments' description)
-  suggests it may not be a pure read, has none, or has changed since the user approved it. Show
-  the user the quoted description, say what it seems to mean, and leave the decision to them.
-  The safe default is not to run it; never present approving it as a routine step. If they
-  decide to approve it, `ediabas_describe` on the job prints the exact line to add in the VM; no
-  restart is needed.
+- **`[job_needs_review]`, or a job `ediabas_describe` shows as "needs review"** — the job's
+  own description (or its arguments' description) suggests it may not be a pure read, has
+  none, or has changed since the user approved it. In your answer:
+  - quote the description as returned, and say in plain English what it seems to mean;
+  - say, in so many words, that the decision is the user's and **the safe default is not to
+    run it**;
+  - stop there. Do not give the `reviewedJobs` line, the hash or the steps to approve it, even
+    though `ediabas_describe` prints them, and do not end by offering to run it once approved.
+    Only if the user then says they want to approve it, give them the line `ediabas_describe`
+    printed (no restart is needed);
+  - do not point to INPA, Tool32 or another job or ECU as a way to get the same reading.
 - **`[cable_in_use]`** — a BMW tool is open; see step 1. **`[cable_not_found]`** — ask the
   user to tick the cable for the VM in UTM's USB menu (UTM does not hand back a replugged cable).
 - **`[ecu_not_found]`, `[job_not_found]`** — the name was wrong; go back to the lookup tools.

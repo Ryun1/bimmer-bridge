@@ -22,8 +22,6 @@ public sealed class NativeConfig
 
     public int MaxJobTimeoutSeconds { get; set; } = 60;
 
-    public List<VoltageSource> VoltageSources { get; set; } = [];
-
     public List<string> ReviewedJobs { get; set; } = [];
 
     /// EdiabasLib's IFH/API traces of the live instance go here when set.
@@ -44,7 +42,7 @@ public sealed class NativeConfig
 
     static readonly string[] Keys =
     [
-        "ecuPath", "port", "jobTimeoutSeconds", "maxJobTimeoutSeconds", "voltageSources", "reviewedJobs", "traceDir", "recordDir",
+        "ecuPath", "port", "jobTimeoutSeconds", "maxJobTimeoutSeconds", "reviewedJobs", "traceDir", "recordDir",
     ];
 
     static readonly JsonSerializerOptions Options = new()
@@ -60,7 +58,6 @@ public sealed class NativeConfig
         public string? Port { get; set; }
         public int? JobTimeoutSeconds { get; set; }
         public int? MaxJobTimeoutSeconds { get; set; }
-        public List<VoltageSource>? VoltageSources { get; set; }
         public List<string>? ReviewedJobs { get; set; }
         public string? TraceDir { get; set; }
         public string? RecordDir { get; set; }
@@ -144,7 +141,6 @@ public sealed class NativeConfig
             Port = string.IsNullOrWhiteSpace(dto.Port) ? null : dto.Port,
             JobTimeoutSeconds = dto.JobTimeoutSeconds ?? 30,
             MaxJobTimeoutSeconds = dto.MaxJobTimeoutSeconds ?? 60,
-            VoltageSources = dto.VoltageSources ?? [],
             ReviewedJobs = dto.ReviewedJobs ?? [],
             TraceDir = string.IsNullOrWhiteSpace(dto.TraceDir) ? null : dto.TraceDir,
             RecordDir = string.IsNullOrWhiteSpace(dto.RecordDir) ? null : dto.RecordDir,
@@ -175,15 +171,6 @@ public sealed class NativeConfig
         if (JobTimeoutSeconds < 1 || JobTimeoutSeconds > MaxJobTimeoutSeconds)
         {
             errors.Add($"jobTimeoutSeconds: must be 1 to maxJobTimeoutSeconds ({MaxJobTimeoutSeconds}) (got {JobTimeoutSeconds})");
-        }
-
-        for (var i = 0; i < VoltageSources.Count; i++)
-        {
-            var v = VoltageSources[i];
-            if (v is null || string.IsNullOrWhiteSpace(v.Ecu) || string.IsNullOrWhiteSpace(v.Job))
-            {
-                errors.Add($"voltageSources[{i}]: needs both \"ecu\" and \"job\"");
-            }
         }
 
         for (var i = 0; i < ReviewedJobs.Count; i++)

@@ -1,0 +1,33 @@
+{
+  "recordedAt": "2026-11-22T20:15:16.467Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/ecus",
+    "query": {
+      "filter": "nve"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecuPath": "C:\\EDIABAS\\ECU",
+      "count": 2,
+      "truncated": false,
+      "files": [
+        {
+          "name": "D_NVE",
+          "type": "grp"
+        },
+        {
+          "name": "NVE_65",
+          "type": "prg"
+        }
+      ]
+    }
+  }
+}

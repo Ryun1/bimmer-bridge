@@ -6,10 +6,11 @@ real session, scrubbed and reviewed.** Nothing is written by hand: no invented E
 responses, no edited values. If a scenario needs an answer nobody has recorded yet, the
 scenario waits for a session that records it.
 
-Two scenarios exist, recorded at the desk on 2026-11-21: `idle` and `inpa-open` (an overlay on
-`idle`, which also serves the screenshot of the INPA loader menu). `needs-review` can be
-recorded at the desk, with the cable in the VM and not in the car; `nve-faults` and `battery`
-wait for Phase 6, at the car ([docs/at-the-car.md](../../docs/at-the-car.md)).
+Three scenarios exist, recorded at the desk: `idle` and `inpa-open` (an overlay on `idle`,
+which also serves the screenshot of the INPA loader menu) on 2026-11-21, and `needs-review`
+(`NVE_65` `STATUS_PAIRING`, refused with `job_needs_review`; cable in the VM, not in the car)
+on 2026-11-22. `nve-faults` and `battery` wait for Phase 6, at the car
+([docs/at-the-car.md](../../docs/at-the-car.md)).
 
 ## Layout
 
@@ -17,7 +18,7 @@ One folder per scenario, named with letters, digits, `-` and `_`:
 
 ```
 dev/fixtures/<scenario>/
-  <time>-<seq>-<METHOD>-<path>[-<ECU>-<JOB>].json   one recorded exchange (mac-mcp/src/recorder.ts format)
+  <time>-<seq>-<METHOD>-<path>[-<ECU>-<JOB>].json   one recorded exchange (dev/recorder.ts format)
   <same base>.jpg | .png                            a screenshot, referenced by `imageFile`
   scenario.json                                     optional: description, base, routes
 ```
@@ -65,14 +66,23 @@ MCP server sends what Claude passed).
 | `battery` | the engine group and a few status jobs: `ediabas_list_ecus`, `ediabas_describe`, `ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_jobs` |
 | `unreachable` | no folder: start no replay agent, point `EDIABAS_AGENT_URL` at a closed port |
 
+`no-car` is used by no eval: the vehicle-status batch from the desk rehearsal of 2026-11-22 (cable
+in the VM, not in the car), the evidence for `job-cookbook.md`'s note that `STAT_UBATT` and the
+cable's KL30 do not come from the car.
+
 ## Recording a scenario
 
 1. Pick a raw folder **outside the repo** (it holds real vehicle data and is never committed),
-   for example `~/ediabas-recordings/nve-faults`.
-2. Run the MCP server with `EDIABAS_RECORD_DIR` set to it (in the MCP registration's `env`, or
-   for one Claude Code session), then use the tools as the scenario says. Every agent
-   exchange, discovery probes included, lands in the folder as one JSON file; screenshots as
-   a `.jpg`/`.png` beside it. The token is never recorded.
+   for example `~/ediabas-recordings/nve-faults`. One folder may serve several scenarios: at
+   the car, record the whole session into one folder (changing it means restarting Claude),
+   then run step 3 once per scenario name and prune each copy in step 4.
+2. Run the recording server `dev/record-server.ts` instead of the production MCP server, with
+   `EDIABAS_RECORD_DIR` set to it (the command is in
+   [docs/development.md](../../docs/development.md#recording-and-scrubbing)), then use the
+   tools as the scenario says. Every agent
+   exchange except the `/hello` probe lands in the folder as one JSON file; screenshots as
+   a `.jpg`/`.png` beside it. The token is never recorded, and neither is the `/hello` proof:
+   the replay agent computes it from its own token.
 3. Scrub into the fixtures folder (Node 24+, which runs the `.ts` file directly):
 
    ```sh
@@ -114,7 +124,7 @@ other address set by hand). Without `EDIABAS_AGENT_TOKEN` it refuses with `no_to
 registration for an eval session:
 
 ```sh
-claude mcp add ediabas-bridge-replay \
+claude mcp add bimmer-bridge-replay \
   -e EDIABAS_AGENT_URL=http://127.0.0.1:8765 -e EDIABAS_AGENT_TOKEN=replay-dev-token \
   -- <node> <repo>/mac-mcp/dist/index.js
 EDIABAS_AGENT_TOKEN=replay-dev-token node dev/replay-agent.ts --scenario nve-faults

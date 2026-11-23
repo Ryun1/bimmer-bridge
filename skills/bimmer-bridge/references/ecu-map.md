@@ -26,10 +26,10 @@ Entries are added in the same commit as the recorded session (fixtures) they cam
 
 | Module | Name (`prg` / `grp`) | Resolved variant | Covers | Confirmed (date, how) |
 |---|---|---|---|---|
-| Night vision | `NVE_65` (`prg`) | `NVE_65` | Night vision: its job list includes fault memory, info memory, ident and `STATUS_NIVI`, `STATUS_PAIRING` (see `job-cookbook.md`) | 2026-11-21: listed by `ediabas_list_ecus` with filter `nve`; `ediabas_describe` returned 59 jobs (cable in the VM, not in the car; verdicts under policy version 1). **Not yet read from the car.** |
+| Night vision | `NVE_65` (`prg`) | `NVE_65` | Night vision: its job list includes fault memory, info memory, ident and `STATUS_NIVI`, `STATUS_PAIRING` (see `job-cookbook.md`) | 2026-11-21: listed by `ediabas_list_ecus` with filter `nve`; `ediabas_describe` returned 59 jobs (cable in the VM, not in the car); verdicts recorded again under policy version 4 on 2026-11-22. **Not yet read from the car.** |
 | Night vision (group) | `D_NVE` (`grp`) | **not checked** | not checked | 2026-11-21: listed by `ediabas_list_ecus` with filter `nve`, nothing more. Which variant it resolves to on this car has NOT been checked; do not assume it is `NVE_65`. |
-| Diagnostic interface (the cable), not a car module | `TMODE` | `TMODE` | The interface itself: its runnable jobs read the interface type and version and the KL30 / KL15 voltages it sees (see `job-cookbook.md`) | 2026-11-21: `ediabas_describe` returned 25 jobs (policy version 1). Loads with no cable connected at all (seen at the desk the same day). |
-| Utility SGBD, not a car module | `UTILITY` | not recorded | not recorded: its job list has not been captured | 2026-11-21: loaded with no cable connected at all (seen at the desk). |
+| Diagnostic interface (the cable), not a car module | `TMODE` | `TMODE` | The interface itself: its runnable jobs read the interface type and version and the KL30 / KL15 voltages it sees (see `job-cookbook.md`) | 2026-11-21: `ediabas_describe` returned 25 jobs; the same five runnable under policy version 4 (2026-11-22). Loads with no cable connected at all (seen at the desk the same day). |
+| Utility SGBD, not a car module | `UTILITY` | not recorded | Supply voltage (`STATUS_UBATT`) and terminal 15 (`STATUS_ZUENDUNG`), the two reads `ediabas_vehicle_status` sends (see `job-cookbook.md`) | 2026-11-21: loaded with no cable connected at all (seen at the desk). 2026-11-22: `ediabas_describe` returned 10 jobs, 3 runnable (cable in the VM, not in the car). |
 
 `TMODE` and `UTILITY` are the only two names seen to load without the cable.
 
@@ -38,10 +38,10 @@ Entries are added in the same commit as the recorded session (fixtures) they cam
 `ediabas_describe` also returned the full job lists of `E60`, `CAS`, `MPM_60`, `KOMB60`,
 `KBM_60`, `LM_60`, `sgm_60_2` (variant `SGM_60_2`), `IHKA60`, `CCC_60`, `MASK60`, `DSC_60` and
 `EKPM60_2`, with the cable in the VM and **not in the car**. That shows only that the files are
-in the VM, not that any of them is fitted to this car. Their job counts and verdicts (recorded
-under policy version 1) are in `job-cookbook.md`. Under policy version 3, `E60` also allows the
-whole-car jobs `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL`; none of this has been read from the
-car.
+in the VM, not that any of them is fitted to this car. Their job counts and verdicts, recorded
+again under policy version 4 on 2026-11-22, are in `job-cookbook.md`. `E60` allows the whole-car
+jobs `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` (since version 3); none of this has been read
+from the car.
 
 ## Could not be described at the desk
 
@@ -54,6 +54,9 @@ described at the car:
 - `ME9N62_2`
 - `GS19D`
 - `SZL_60`
+- `D_MOTOR` (the engine group; 2026-11-22, `ediabas_describe` with `job` `IDENT`): a
+  different error, `ediabas_error` 13 `IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED`. A
+  group file picks its variant by asking the module.
 
 Which engine file (if either of `N62_TUE2` and `ME9N62_2`) fits this car is **not known**.
 

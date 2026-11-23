@@ -22,8 +22,8 @@ public sealed record NativeHealth(string Engine, string Version, string Kline, s
 
 /// <summary>
 /// Dispatches the stdio and CLI methods to EdiabasService: <c>ecus</c>, <c>describe</c>,
-/// <c>job</c>, <c>jobs</c>, <c>vehicle</c>, <c>health</c>. Sets the API's request mode first:
-/// only job, jobs and vehicle may reach the car. One audit line per request (and one per
+/// <c>job</c>, <c>jobs</c>, <c>health</c>. Sets the API's request mode first:
+/// only job and jobs may reach the car. One audit line per request (and one per
 /// batch item).
 /// </summary>
 public sealed class Front(EdiabasdHost host, AuditLog audit)
@@ -115,13 +115,6 @@ public sealed class Front(EdiabasdHost host, AuditLog audit)
                 return Answer(host.Service.RunJobs(parsed.Value!.Items, parsed.Value.TimeoutSeconds, a, ct));
             }
 
-            case "vehicle":
-            {
-                host.Api.Mode = RequestMode.Live;
-                if (!Params(p, NoKeys, out _, out var bad)) return bad!;
-                return Answer(host.Service.Vehicle(host.Config.VoltageSources, a, ct));
-            }
-
             case "health":
             {
                 if (!Params(p, NoKeys, out _, out var bad)) return bad!;
@@ -129,7 +122,7 @@ public sealed class Front(EdiabasdHost host, AuditLog audit)
             }
 
             default:
-                return Bad("method", $"unknown method \"{AuditLine.Neutralise(method ?? "")}\"; use ecus, describe, job, jobs, vehicle or health.");
+                return Bad("method", $"unknown method \"{AuditLine.Neutralise(method ?? "")}\"; use ecus, describe, job, jobs or health.");
         }
     }
 

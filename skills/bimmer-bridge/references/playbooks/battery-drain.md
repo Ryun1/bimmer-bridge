@@ -16,10 +16,10 @@ a meter or clamp with the car asleep, which is the user's to do.
 **Status: no battery-related job has been run on this car yet.** The jobs below were found at
 the desk on 2026-11-21/22 with `ediabas_describe` (cable in the VM, **not in the car**). They
 show what the files in the VM declare; none of these files is known to be fitted to this car.
-Descriptions and result names are in `../job-cookbook.md`. Verdicts were recorded under policy
-version 1 or 2; under version 3 check each again with `ediabas_describe` before relying on it.
+Descriptions and result names are in `../job-cookbook.md`. Every job below was described again
+under policy version 4 on 2026-11-22 and is runnable on the owner's VM.
 
-| File | Passed the description screen | Needed review; approved by the owner by name on 2026-11-22 (`reviewedJobs` in the VM's config, not in the repo) |
+| File | Passed the description screen | Flagged when first described; approved by the owner on 2026-11-22 and pinned (`reviewedJobs` in the VM's config, not in the repo) |
 |---|---|---|
 | `CAS` | `STATUS_PA_WUP` | `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP` |
 | `KOMB60` | `STATUS_KLEMMENSPANNUNG`, `STATUS_KLEMMEN`, `STATUS_KL30_H_ZAEHLER` | — |
@@ -28,7 +28,8 @@ version 1 or 2; under version 3 check each again with `ediabas_describe` before 
 | `MPM_60` | `STATUS_ECU_LESEN` | `STATUS_AD_WERTE_LESEN` |
 
 The approved jobs run while that config stands; after a fresh install of the agent they are
-refused again until the owner adds them back. What each job returns is whatever the car sends; do
+refused again until the owner adds them back. From 0.5.0 an approval by name (unpinned) approves
+nothing: each must be the pinned `ECU:JOB@<hash>` line `ediabas_describe` prints. What each job returns is whatever the car sends; do
 not describe it from the name.
 
 Which engine file fits the E61 is not known: `N62_TUE2` and `ME9N62_2` could not be described

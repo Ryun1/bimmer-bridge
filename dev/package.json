@@ -1,5 +1,5 @@
 {
-  "name": "ediabas-bridge-dev",
+  "name": "bimmer-bridge-dev",
   "private": true,
   "description": "Dev tools (replay agent, fixture scrubber). No dependencies: run with Node 24+ (type stripping); tests run from mac-mcp with `npm run test:dev`.",
   "type": "module"

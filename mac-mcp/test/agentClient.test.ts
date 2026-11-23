@@ -1,6 +1,7 @@
+import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentClient, type TokenSource } from "../src/agentClient.js";
-import { BridgeError, MESSAGES } from "../src/errors.js";
+import { AgentClient, helloProof as clientHelloProof, type TokenSource } from "../src/agentClient.js";
+import { BridgeError, MESSAGES, ediabasRequestLost, unexpectedStatus } from "../src/errors.js";
 import { loadConfig, type Config } from "../src/config.js";
 import type { ExecFileFn, ReadFileFn, NetworkInterfacesFn } from "../src/vmAddress.js";
 import {
@@ -9,9 +10,11 @@ import {
   NO_BRIDGE,
   TEST_VM_MAC,
   VM_BRIDGE,
+  answerHello,
   closedPort,
   contractHandler,
   healthBody,
+  helloProof,
   json,
   leaseFile,
   startFakeAgent,
@@ -30,12 +33,28 @@ async function fake(...args: Parameters<typeof startFakeAgent>): Promise<FakeAge
   return a;
 }
 
+function sha256(s: string): Buffer {
+  return createHash("sha256").update(s, "utf8").digest();
+}
+
 function staticTokens(token: string | null = AGENT_TOKEN): TokenSource & { refresh: ReturnType<typeof vi.fn> } {
   const read = async () => {
     if (token === null) throw new BridgeError("no_token", MESSAGES.noToken);
     return token;
   };
   return { get: vi.fn(read), refresh: vi.fn(read) };
+}
+
+/** A token source whose value can change (a token installed while the server runs). */
+function changingTokens(initial: string, next: string): TokenSource & { refresh: ReturnType<typeof vi.fn> } {
+  let current = initial;
+  return {
+    get: vi.fn(async () => current),
+    refresh: vi.fn(async () => {
+      current = next;
+      return current;
+    }),
+  };
 }
 
 function config(env: Record<string, string> = {}): Config {
@@ -48,8 +67,6 @@ interface Opts {
   tokens?: TokenSource;
   fetch?: typeof fetch;
   leases?: string | null;
-  arp?: string | null;
-  utm?: string | null;
   /** `plutil -convert json` output for UTM's config.plist; null: plutil fails (no such file). */
   plutil?: string | null;
   ifaces?: unknown;
@@ -65,16 +82,9 @@ function makeClient(o: Opts = {}) {
     return o.leases;
   });
   const execFile = vi.fn<ExecFileFn>(async (file) => {
-    if (file === "/usr/sbin/arp") {
-      if (o.arp == null) throw new Error("arp failed");
-      return o.arp;
-    }
-    if (file === "/usr/bin/plutil") {
-      if (o.plutil == null) throw new Error("plutil: file does not exist");
-      return o.plutil;
-    }
-    if (o.utm == null) throw new Error("utmctl: guest agent not running");
-    return o.utm;
+    if (file !== "/usr/bin/plutil") throw new Error(`unexpected program ${file}`);
+    if (o.plutil == null) throw new Error("plutil: file does not exist");
+    return o.plutil;
   });
   const networkInterfaces = vi.fn<NetworkInterfacesFn>(() => (o.ifaces ?? VM_BRIDGE) as never);
   const fetchFn = vi.fn<typeof fetch>(o.fetch ?? ((...a) => fetch(...a)));
@@ -104,16 +114,34 @@ async function errorOf(p: Promise<unknown>): Promise<BridgeError> {
   return e as BridgeError;
 }
 
+/** URLs fetched, with the random /hello nonce dropped. */
 function calledUrls(f: ReturnType<typeof vi.fn>): string[] {
-  return f.mock.calls.map((c) => String(c[0]));
+  return f.mock.calls.map((c) => String(c[0]).replace(/\/hello\?nonce=[0-9a-f]{32}$/, "/hello"));
+}
+
+/** The agent's answer at `url`: its /hello proof for `token`, else 200 with `body`. */
+function agentResponse(url: string, body: unknown = healthBody(), token = AGENT_TOKEN): Response {
+  const u = new URL(url);
+  if (u.pathname === "/hello") return okResponse({ agent: "ediabas-bridge-agent", proof: helloProof(token, u.searchParams.get("nonce") ?? "") });
+  return okResponse(body);
+}
+
+/** A fetch that answers GET /hello like the agent holding `token`, and passes the rest to `inner`. */
+function withHello(inner: (url: string, init?: RequestInit) => Promise<Response>, token = AGENT_TOKEN): typeof fetch {
+  return async (input, init) => (new URL(String(input)).pathname === "/hello" ? agentResponse(String(input), undefined, token) : inner(String(input), init));
+}
+
+/** The Authorization header of every fetch the client made, in order. */
+function authHeaders(f: ReturnType<typeof vi.fn>): (string | undefined)[] {
+  return f.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.headers as Record<string, string> | undefined).map((h) => h?.authorization);
 }
 
 function okResponse(body: unknown = healthBody()): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 }
 
-function connError(code: string): Error {
-  return Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code }) });
+function connError(code: string, syscall?: string): Error {
+  return Object.assign(new TypeError("fetch failed"), { cause: Object.assign(new Error(code), { code, ...(syscall ? { syscall } : {}) }) });
 }
 
 describe("AgentClient with EDIABAS_AGENT_URL", () => {
@@ -125,18 +153,20 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     expect(h.conflictingProcesses).toEqual([{ name: "INPALOAD", pid: 4312 }]);
     const w = await client.listWindows();
     expect(w.windows).toHaveLength(2);
-    expect(a.requests.every((r) => r.authorization === `Bearer ${AGENT_TOKEN}`)).toBe(true);
+    // /hello goes without the token; everything else carries it
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/health", "/hello", "/windows"]);
+    for (const r of a.requests) expect(r.authorization).toBe(r.path.startsWith("/hello?") ? undefined : `Bearer ${AGENT_TOKEN}`);
     // discovery skipped
     expect(readFile).not.toHaveBeenCalled();
     expect(execFile).not.toHaveBeenCalled();
   });
 
-  it("caches the accepted base URL", async () => {
+  it("caches the accepted base URL, and proves it again before each call", async () => {
     const a = await fake();
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
     await client.listWindows();
     await client.listWindows();
-    expect(a.requests.map((r) => r.path)).toEqual(["/health", "/windows", "/windows"]);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/windows", "/hello", "/windows"]);
   });
 
   it("still requires the exact agent value", async () => {
@@ -144,7 +174,7 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
     const e = await errorOf(client.listWindows());
     expect(e.code).toBe("wrong_service");
-    expect(a.requests.map((r) => r.path)).toEqual(["/health"]);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello"]);
   });
 
   it("rejects a 200 from some other service", async () => {
@@ -180,14 +210,15 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, requestTimeoutMs: 150 });
     await client.health();
     a.setHandler((req, res) => {
-      if (req.url === "/health") contractHandler()(req, res);
+      if (req.url === "/health" || req.url?.startsWith("/hello?")) contractHandler()(req, res);
       // /windows never answers
     });
     expect((await errorOf(client.listWindows())).code).toBe("agent_not_answering");
   });
 
   it("maps 401 to the token message and re-reads the token exactly once", async () => {
-    const a = await fake(contractHandler("the-vm-has-a-different-token"));
+    // Proved with this Mac's token at /hello, then the VM's token changed (re-installed).
+    const a = await fake((req, res) => (answerHello(req, res, AGENT_TOKEN) ? undefined : contractHandler("the-vm-has-a-different-token")(req, res)));
     const tokens = staticTokens();
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
     const e = await errorOf(client.health());
@@ -200,20 +231,54 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     expect(e.message).not.toContain(AGENT_TOKEN);
   });
 
-  it("retries with a freshly installed token after a 401", async () => {
-    const a = await fake(contractHandler("fresh-token"));
-    let current = "stale-token";
-    const tokens: TokenSource = {
-      get: vi.fn(async () => current),
-      refresh: vi.fn(async () => {
-        current = "fresh-token";
-        return current;
-      }),
-    };
+  it("after a 401 a newly read token is not sent to an address that proved only the old one", async () => {
+    // The agent proves stale-token at /hello, then its token changes before the Bearer request.
+    let agentToken = "stale-token";
+    const a = await fake((req, res) => {
+      if (answerHello(req, res, agentToken)) {
+        agentToken = "fresh-token";
+        return;
+      }
+      contractHandler(agentToken)(req, res);
+    });
+    const tokens = changingTokens("stale-token", "fresh-token");
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
-    const w = await client.listWindows();
-    expect(w.windows).toHaveLength(2);
+    expect((await errorOf(client.listWindows())).code).toBe("unauthorized");
+    // the provider was re-read, but nothing went out with the new token in this call
     expect(tokens.refresh).toHaveBeenCalledTimes(1);
+    expect(a.requests.map((r) => r.authorization)).toEqual([undefined, "Bearer stale-token"]);
+  });
+
+  it("the call after a 401 proves the address with the re-read token, then sends it", async () => {
+    let agentToken = "stale-token";
+    let rotate = true;
+    const a = await fake((req, res) => {
+      if (answerHello(req, res, agentToken)) {
+        if (rotate) agentToken = "fresh-token";
+        rotate = false;
+        return;
+      }
+      contractHandler(agentToken)(req, res);
+    });
+    const tokens = changingTokens("stale-token", "fresh-token");
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
+    expect((await errorOf(client.listWindows())).code).toBe("unauthorized");
+    expect((await client.listWindows()).windows).toHaveLength(2);
+    expect(a.requests.map((r) => `${r.path.split("?")[0]} ${r.authorization ?? "none"}`)).toEqual([
+      "/hello none",
+      "/windows Bearer stale-token",
+      "/hello none",
+      "/windows Bearer fresh-token",
+    ]);
+  });
+
+  it("each call proves the address itself, even when it joins another call's discovery", async () => {
+    const a = await fake();
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    const [w1, w2] = await Promise.all([client.listWindows(), client.listWindows()]);
+    expect(w1.windows).toHaveLength(2);
+    expect(w2.windows).toHaveLength(2);
+    expect(a.requests.filter((r) => r.path.startsWith("/hello?"))).toHaveLength(2);
   });
 
   it("maps 403 to the firewall message", async () => {
@@ -238,7 +303,7 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
     expect(e.message).toContain("Something failed; see the agent log.");
   });
 
-  it("handles a non-JSON error body", async () => {
+  it("a non-JSON error body after a proved /hello is bad_response naming the status", async () => {
     const a = await fake();
     const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
     await client.health();
@@ -249,11 +314,13 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
       } else contractHandler()(req, res);
     });
     const e = await errorOf(client.listWindows());
-    expect(e.code).toBe("http_502");
+    expect(e.code).toBe("bad_response");
+    expect(e.message).toContain("HTTP 502");
   });
 
   it("treats a malformed 200 body as an error, not a crash", async () => {
     const a = await fake((req, res) => {
+      if (answerHello(req, res, AGENT_TOKEN)) return;
       if (req.url === "/health") json(res, 200, { ...healthBody(), uptimeSeconds: "a while", os: null });
       else json(res, 200, { windows: [{ title: 5 }] });
     });
@@ -291,12 +358,242 @@ describe("AgentClient with EDIABAS_AGENT_URL", () => {
   });
 });
 
+describe("identity before token (D5)", () => {
+  it("the client's proof matches the documented vector", () => {
+    const vector = "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd";
+    expect(clientHelloProof(sha256("test-token"), "00112233445566778899aabbccddeeff")).toBe(vector);
+    expect(helloProof("test-token", "00112233445566778899aabbccddeeff")).toBe(vector);
+  });
+
+  it("probe: sends GET /hello with a fresh 32-hex nonce and no Authorization, then the authenticated request", async () => {
+    const a = await fake();
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.listWindows();
+    await errorOf(makeClient({ env: { EDIABAS_AGENT_URL: a.url } }).client.capture()); // a second probe: another nonce
+    const hellos = a.requests.filter((r) => r.path.startsWith("/hello"));
+    expect(hellos).toHaveLength(2);
+    for (const h of hellos) {
+      expect(h.method).toBe("GET");
+      expect(h.path).toMatch(/^\/hello\?nonce=[0-9a-f]{32}$/);
+      expect(h.authorization).toBeUndefined();
+    }
+    expect(hellos[0]!.path).not.toBe(hellos[1]!.path);
+    expect(a.requests[1]).toMatchObject({ path: "/windows", authorization: `Bearer ${AGENT_TOKEN}` });
+  });
+
+  it("probe: an impostor answering /hello with a wrong proof never receives an Authorization header", async () => {
+    const a = await fake((req, res) => {
+      if (req.url?.startsWith("/hello")) json(res, 200, { agent: "ediabas-bridge-agent", proof: "0".repeat(64) });
+      else json(res, 200, req.url === "/windows" ? windowsBody() : healthBody());
+    });
+    const tokens = staticTokens();
+    const { client, fetchFn, logs } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
+    const e = await errorOf(client.listWindows());
+    expect(e.code).toBe("wrong_service");
+    expect(e.message).toMatch(/could not prove it holds this Mac's token/);
+    expect(e.message).not.toContain(AGENT_TOKEN);
+    // the token is re-read once in case it was just installed, then the check fails again
+    expect(tokens.refresh).toHaveBeenCalledTimes(1);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello"]);
+    expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+    expect(authHeaders(fetchFn).every((h) => h === undefined)).toBe(true);
+    expect(logs).toContain(`probe 127.0.0.1:${a.port} failed: the proof does not match this Mac's token`);
+  });
+
+  it("probe: a proof in the wrong format (not 64 lowercase hex) is wrong_service", async () => {
+    for (const proof of ["", "0".repeat(63), "A".repeat(64), 42, null]) {
+      const a = await fake((req, res) => json(res, 200, { agent: "ediabas-bridge-agent", proof }));
+      const e = await errorOf(makeClient({ env: { EDIABAS_AGENT_URL: a.url } }).client.health());
+      expect(e.code).toBe("wrong_service");
+      expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+    }
+  });
+
+  it("probe: an agent with another token is wrong_service, and is never sent this Mac's token", async () => {
+    const a = await fake(contractHandler("the-vm-has-a-different-token"));
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    const e = await errorOf(client.health());
+    expect(e.code).toBe("wrong_service");
+    expect(e.message).toContain("EDIABAS_AGENT_TOKEN"); // the override's fix
+    expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+  });
+
+  it("probe: a token installed while the server runs is picked up by the proof check", async () => {
+    const a = await fake(contractHandler("fresh-token"));
+    const tokens = changingTokens("stale-token", "fresh-token");
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens });
+    expect((await client.listWindows()).windows).toHaveLength(2);
+    expect(tokens.refresh).toHaveBeenCalledTimes(1);
+    expect(a.requests.map((r) => r.authorization)).toEqual([undefined, "Bearer fresh-token"]);
+  });
+
+  it("probe: an impostor answering 404 to /hello -> wrong_service, no Authorization sent", async () => {
+    const a = await fake((_req, res) => {
+      res.writeHead(404, { "content-type": "text/html" });
+      res.end("<html>Not Found</html>");
+    });
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+    expect(a.requests).toHaveLength(1);
+    expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+  });
+
+  it("probe: an agent older than /hello (401 in the agent's shape) is agent_outdated, no Authorization sent", async () => {
+    const old = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => {
+      if (req.headers.authorization !== `Bearer ${AGENT_TOKEN}`) {
+        json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token." } }, { "www-authenticate": "Bearer" });
+      } else json(res, 200, healthBody());
+    };
+    const a = await fake(old);
+    const tokens = staticTokens();
+    const e = await errorOf(makeClient({ env: { EDIABAS_AGENT_URL: a.url }, tokens }).client.health());
+    expect(e.code).toBe("agent_outdated");
+    expect(e.message).toContain("/hello");
+    expect(a.requests).toHaveLength(1);
+    expect(a.requests[0]!.authorization).toBeUndefined();
+    expect(tokens.refresh).not.toHaveBeenCalled();
+  });
+
+  it("probe: the gateway's 403 at /hello is still forbidden", async () => {
+    const a = await fake((_req, res) => json(res, 403, { error: { code: "forbidden", message: "Caller is not the gateway." } }));
+    expect((await errorOf(makeClient({ env: { EDIABAS_AGENT_URL: a.url } }).client.health())).code).toBe("forbidden");
+  });
+
+  describe("a cached address that stops being the agent (F7)", () => {
+    type H = (req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) => void;
+    const LEASE = leaseFile({ ip: "127.0.0.1", lease: 0x6b01baf4 });
+
+    /** Discovery via a lease to a local fake agent, which then gets replaced by `next`. */
+    async function cachedThenReplaced(next: H, tokens?: TokenSource) {
+      const a = await fake(stubHandler());
+      const c = makeClient({ ifaces: LOOPBACK_BRIDGE, env: { EDIABAS_AGENT_PORT: String(a.port) }, leases: LEASE, tokens });
+      await c.client.listWindows();
+      expect(c.readFile).toHaveBeenCalledTimes(1);
+      a.setHandler(next);
+      a.requests.length = 0;
+      return { a, ...c };
+    }
+
+    const notFound: H = (_req, res) => {
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("not found");
+    };
+    const otherJson: H = (_req, res) => json(res, 200, { status: "ok", hello: "from another service" });
+
+    it("the cached address is proved with /hello (fresh nonce, no token) before every call", async () => {
+      const a = await fake(stubHandler());
+      const { client, readFile } = makeClient({ ifaces: LOOPBACK_BRIDGE, env: { EDIABAS_AGENT_PORT: String(a.port) }, leases: LEASE });
+      await client.listWindows();
+      await client.listWindows();
+      await client.runJob({ ecu: "NVE_65", job: "IDENT" });
+      expect(readFile).toHaveBeenCalledTimes(1); // still cached: no discovery
+      expect(a.requests.map((r) => `${r.path.split("?")[0]} ${r.authorization ? "token" : "none"}`)).toEqual([
+        "/hello none",
+        "/windows token",
+        "/hello none",
+        "/windows token",
+        "/hello none",
+        "/ediabas/job token",
+      ]);
+      const nonces = a.requests.filter((r) => r.path.startsWith("/hello")).map((r) => r.path);
+      expect(new Set(nonces).size).toBe(3);
+    });
+
+    for (const [name, impostor] of [
+      ["answers 404 without the agent's error shape", notFound],
+      ["answers 200 with other JSON", otherJson],
+    ] as const) {
+      it(`cached address now ${name}: no request to it ever carries Authorization, the cache is dropped and discovery runs`, async () => {
+        const { a, client, readFile } = await cachedThenReplaced(impostor);
+        const first = await errorOf(client.listWindows());
+        expect(first.code).toBe("wrong_service"); // the only candidate is not the agent: its own error
+        expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again on the first call
+        await errorOf(client.runJob({ ecu: "NVE_65", job: "IDENT" }));
+        await errorOf(client.health());
+        expect(a.requests.length).toBeGreaterThan(0);
+        // Review Focus 3: including the very first request after the swap
+        expect(a.requests.every((r) => r.authorization === undefined && r.path.startsWith("/hello?"))).toBe(true);
+      });
+    }
+
+    it("cached address now holds an agent with another token: never sent this Mac's token", async () => {
+      const { a, client, readFile } = await cachedThenReplaced(contractHandler("another-token"));
+      expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+      expect(readFile).toHaveBeenCalledTimes(2);
+      expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+    });
+
+    it("cached address now holds an agent older than /hello: agent_outdated, never sent the token", async () => {
+      const old: H = (_req, res) => json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token." } }, { "www-authenticate": "Bearer" });
+      const { a, client, readFile, logs } = await cachedThenReplaced(old);
+      expect((await errorOf(client.listWindows())).code).toBe("agent_outdated");
+      expect(readFile).toHaveBeenCalledTimes(2);
+      expect(a.requests.every((r) => r.authorization === undefined)).toBe(true);
+      expect(logs.some((l) => /cached address 127\.0\.0\.1:\d+ did not prove it is the agent \(agent_outdated\)/.test(l))).toBe(true);
+    });
+
+    it("a proven agent whose answer is a 404 without the agent's error shape -> bad_response, cache invalidated, next call rediscovers", async () => {
+      const { client, readFile } = await cachedThenReplaced((req, res) => (answerHello(req, res, AGENT_TOKEN) ? undefined : notFound(req, res)));
+      expect((await errorOf(client.listWindows())).code).toBe("bad_response");
+      await errorOf(client.listWindows());
+      expect(readFile).toHaveBeenCalledTimes(2); // discovery ran again
+    });
+
+    it("a proven agent whose 200 fails the schema -> bad_response, cache invalidated", async () => {
+      const { client, readFile } = await cachedThenReplaced((req, res) => (answerHello(req, res, AGENT_TOKEN) ? undefined : otherJson(req, res)));
+      expect((await errorOf(client.listWindows())).code).toBe("bad_response");
+      await errorOf(client.listWindows());
+      expect(readFile).toHaveBeenCalledTimes(2);
+    });
+
+    it("an agent error in its own shape keeps the cache", async () => {
+      const { client, readFile } = await cachedThenReplaced(
+        stubHandler({ "GET /windows": () => agentErr(500, "internal_error", "Something failed; see the agent log.") }),
+      );
+      expect((await errorOf(client.listWindows())).code).toBe("internal_error");
+      await errorOf(client.listWindows());
+      expect(readFile).toHaveBeenCalledTimes(1);
+    });
+
+    it("a 401 that is not in the agent's shape is not answered with a re-read token", async () => {
+      const tokens = staticTokens();
+      const { client } = await cachedThenReplaced((req, res) => {
+        if (answerHello(req, res, AGENT_TOKEN)) return;
+        res.writeHead(401);
+        res.end("who are you");
+      }, tokens);
+      expect((await errorOf(client.listWindows())).code).toBe("bad_response");
+      expect(tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it("an EDIABAS job whose cached address fails the re-proof on the connection is sent once, to the rediscovered agent", async () => {
+      // A reset at /hello: nothing was sent with the token, so the job never "may have run".
+      let vmIp = "192.168.64.3";
+      const fetchMock = vi.fn<typeof fetch>(async (url) => {
+        const u = String(url);
+        if (!u.includes(`${vmIp}:`)) throw connError("ECONNRESET");
+        if (u.endsWith("/ediabas/job")) return okResponse(jobResult("NVE_65", "IDENT", [{ A: 1 }]));
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
+      });
+      const c = makeClient({ fetch: fetchMock, leases: leaseFile({ ip: vmIp, lease: 0x6b01baf4 }) });
+      await c.client.listWindows();
+      vmIp = "192.168.64.4";
+      c.readFile.mockImplementation(async () => leaseFile({ ip: vmIp, lease: 0x6b01baf5 }));
+      expect((await c.client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
+      expect(calledUrls(c.fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello", // reset: the cache is dropped
+        "http://192.168.64.4:8765/hello",
+        "http://192.168.64.4:8765/ediabas/job",
+      ]);
+    });
+  });
+});
+
 describe("AgentClient discovery", () => {
   it("says the VM is not running and contacts nothing when no bridge interface is up", async () => {
     const { client, fetchFn } = makeClient({
       ifaces: NO_BRIDGE,
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
     });
     const e = await errorOf(client.health());
     expect(e.code).toBe("vm_not_running");
@@ -309,64 +606,76 @@ describe("AgentClient discovery", () => {
     expect((await errorOf(client.health())).message).toContain("Start the 'Win11' VM in UTM");
   });
 
-  it("never contacts a candidate outside every bridge subnet", async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => okResponse());
+  it("skips a newer lease that is off-link (a former UTM subnet) and contacts only the newest on-link one", async () => {
+    const fetchMock = vi.fn<typeof fetch>(withHello(async () => okResponse()));
     const { client, fetchFn } = makeClient({
       fetch: fetchMock,
-      // old lease (192.168.65.3) has the LATER expiry here, so it would be tried first if allowed
+      // the newest lease (192.168.65.3) is off-link and is never contacted; the on-link one is used
       leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
     await client.health();
-    const urls = calledUrls(fetchFn);
-    expect(urls.length).toBeGreaterThan(0);
-    expect(urls.some((u) => u.includes("192.168.65.3"))).toBe(false);
-    expect(urls[0]).toBe("http://192.168.64.3:8765/health");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello", "http://192.168.64.3:8765/health"]);
   });
 
-  it("says the VM is not running when the only candidates are off-link", async () => {
+  it("says the VM is not running, naming the newest lease, when every lease for the MAC is off-link", async () => {
     const { client, fetchFn } = makeClient({
-      fetch: vi.fn(async () => okResponse()),
-      leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }),
-      arp: "? (10.1.2.3) at 2:0:0:0:0:1 on en0 ifscope [ethernet]",
-      utm: "172.16.0.9\n",
+      fetch: vi.fn(withHello(async () => okResponse())),
+      leases: leaseFile({ ip: "192.168.66.3", lease: 0x6b01baf4 }, { ip: "192.168.65.3", lease: 0x7f000000 }),
     });
-    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+    const e = await errorOf(client.health());
+    expect(e.code).toBe("vm_not_running");
+    expect(e.message).toContain("192.168.65.3");
+    expect(e.message).toContain("none of its DHCP leases is on the UTM network (the newest is 192.168.65.3)");
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("tries leases by latest expiry first", async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => okResponse());
+  it("contacts only the newest of two on-link leases: exactly one probe", async () => {
+    const fetchMock = vi.fn<typeof fetch>(withHello(async () => okResponse()));
     const { client, fetchFn } = makeClient({
       fetch: fetchMock,
       leases: leaseFile({ ip: "192.168.64.9", lease: 0x60000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
     await client.health();
-    expect(calledUrls(fetchFn)[0]).toBe("http://192.168.64.3:8765/health");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello", "http://192.168.64.3:8765/health"]);
   });
 
-  it("accepts only the exact agent value and moves on to the next candidate", async () => {
+  it("when the newest on-link lease fails its probe, that is the answer: no older lease is tried", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) =>
+      String(url).includes("192.168.64.3") ? okResponse({ status: "ok", agent: "some-other-agent" }) : agentResponse(String(url)),
+    );
+    const { client, fetchFn } = makeClient({
+      fetch: fetchMock,
+      leases: leaseFile(
+        { ip: "192.168.65.3", lease: 0x7f000000 }, // off-link: skipped
+        { ip: "192.168.64.3", lease: 0x6b01baf4 }, // the one contacted
+        { ip: "192.168.64.4", lease: 0x6b01ba00 }, // older: never tried
+      ),
+    });
+    expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello"]);
+  });
+
+  it("accepts only the exact agent value: another service at the newest lease is wrong_service, no older lease is tried", async () => {
     const fetchMock = vi.fn<typeof fetch>(async (url) =>
       String(url).includes("192.168.64.3")
         ? okResponse({ status: "ok", agent: "some-other-agent" })
-        : okResponse(),
+        : agentResponse(String(url)),
     );
     const { client, fetchFn } = makeClient({
       fetch: fetchMock,
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 0x6b01ba00 }),
     });
-    await client.listWindows().catch(() => undefined);
-    const urls = calledUrls(fetchFn);
-    expect(urls[0]).toBe("http://192.168.64.3:8765/health");
-    expect(urls[1]).toBe("http://192.168.64.4:8765/health");
-    expect(urls[2]).toBe("http://192.168.64.4:8765/windows");
+    expect((await errorOf(client.listWindows())).code).toBe("wrong_service");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello"]);
+    expect(authHeaders(fetchFn)).toEqual([undefined]);
   });
 
-  it("says the VM is not running when something else answers at the only address", async () => {
+  it("says wrong_service when something else answers at the only address", async () => {
     const { client } = makeClient({
       fetch: vi.fn(async () => new Response("<html></html>", { status: 200 })),
       leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
-    expect((await errorOf(client.health())).code).toBe("vm_not_running");
+    expect((await errorOf(client.health())).code).toBe("wrong_service");
   });
 
   it("maps connection refused at an on-link address to 'agent not answering'", async () => {
@@ -384,7 +693,7 @@ describe("AgentClient discovery", () => {
     for (const code of ["EHOSTUNREACH", "EHOSTDOWN", "ENETUNREACH", "ENETDOWN", "EADDRNOTAVAIL"]) {
       const { client, logs } = makeClient({
         fetch: vi.fn(async () => {
-          throw connError(code);
+          throw connError(code, "connect");
         }),
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
       });
@@ -396,28 +705,40 @@ describe("AgentClient discovery", () => {
     }
   });
 
-  it("prefers the 401 message over other candidate failures", async () => {
-    const { client } = makeClient({
-      fetch: vi.fn(async (url) =>
-        String(url).includes(".3:")
-          ? new Response(JSON.stringify({ error: { code: "unauthorized", message: "Missing or invalid bearer token." } }), { status: 401 })
-          : Promise.reject(connError("ECONNREFUSED")),
-      ),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 0x6b01ba00 }),
+  it("says agent_outdated when the candidate is an agent without /hello (it answers 401)", async () => {
+    const { client, fetchFn } = makeClient({
+      fetch: vi.fn(async () => new Response(JSON.stringify({ error: { code: "unauthorized", message: "Missing or invalid bearer token." } }), { status: 401 })),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
     });
     const e = await errorOf(client.health());
-    expect(e.code).toBe("unauthorized");
-    // Discovered VM, no override: the token came from the Keychain (or its env fallback).
-    expect(e.message).toContain("The agent rejected the token. The Keychain token does not match the VM's.");
-    expect(e.message).not.toContain("EDIABAS_AGENT_URL");
+    expect(e.code).toBe("agent_outdated");
+    expect(authHeaders(fetchFn).every((h) => h === undefined)).toBe(true);
   });
 
-  it("re-reads the token at most once per call across candidates", async () => {
+  it("a wrong proof at the only candidate ends as wrong_service, with the token fix", async () => {
+    const { client } = makeClient({
+      fetch: vi.fn(async () => okResponse({ agent: "ediabas-bridge-agent", proof: "0".repeat(64) })),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
+    });
+    const e = await errorOf(client.health());
+    expect(e.code).toBe("wrong_service");
+    expect(e.message).toContain("could not prove it holds this Mac's token");
+  });
+
+  it("a pre-0.5.0 agent (401 on /hello) at the only candidate ends as agent_outdated, not vm_not_running", async () => {
+    const { client } = makeClient({
+      fetch: vi.fn(async () => new Response(JSON.stringify({ error: { code: "unauthorized", message: "Missing or invalid bearer token." } }), { status: 401 })),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }, { ip: "192.168.64.4", lease: 1 }),
+    });
+    expect((await errorOf(client.health())).code).toBe("agent_outdated");
+  });
+
+  it("re-reads the token at most once per call", async () => {
     const tokens = staticTokens();
     const { client } = makeClient({
       tokens,
-      fetch: vi.fn(async () => new Response(JSON.stringify({ error: { code: "unauthorized", message: "x" } }), { status: 401 })),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 3 }, { ip: "192.168.64.4", lease: 2 }, { ip: "192.168.64.5", lease: 1 }),
+      fetch: vi.fn(async () => okResponse({ agent: "ediabas-bridge-agent", proof: "0".repeat(64) })),
+      leases: leaseFile({ ip: "192.168.64.3", lease: 3 }),
     });
     await errorOf(client.health());
     expect(tokens.refresh).toHaveBeenCalledTimes(1);
@@ -425,39 +746,12 @@ describe("AgentClient discovery", () => {
     expect(tokens.refresh).toHaveBeenCalledTimes(2);
   });
 
-  it("falls back to arp, then utmctl, and ignores utmctl failure", async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => okResponse());
-    const viaArp = makeClient({
-      fetch: fetchMock,
-      leases: null,
-      arp: "? (192.168.64.7) at (incomplete) on bridge100 ifscope [bridge]\n? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]\n",
-    });
-    await viaArp.client.health();
-    expect(calledUrls(viaArp.fetchFn)[0]).toBe("http://192.168.64.5:8765/health");
-    expect(viaArp.execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/sbin/arp"]); // utmctl not needed
-
-    const viaUtm = makeClient({ fetch: vi.fn(async () => okResponse()), leases: null, arp: "", utm: "192.168.64.6\n" });
-    await viaUtm.client.health();
-    expect(calledUrls(viaUtm.fetchFn)[0]).toBe("http://192.168.64.6:8765/health");
-    expect(viaUtm.execFile).toHaveBeenCalledWith(
-      "/Applications/UTM.app/Contents/MacOS/utmctl",
-      ["ip-address", "Windows"],
-      expect.any(Object),
-    );
-
-    const nothing = makeClient({ fetch: vi.fn(async () => okResponse()), leases: null, arp: null, utm: null });
-    const e = await errorOf(nothing.client.health());
+  it("with no lease for the MAC nothing is contacted and no other program runs", async () => {
+    const { client, fetchFn, execFile } = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: null });
+    const e = await errorOf(client.health());
     expect(e.code).toBe("vm_not_running");
-    expect(nothing.fetchFn).not.toHaveBeenCalled();
-  });
-
-  it("does not run utmctl when a lease candidate is accepted", async () => {
-    const { client, execFile } = makeClient({
-      fetch: vi.fn(async () => okResponse()),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-    });
-    await client.health();
-    expect(execFile).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(execFile).not.toHaveBeenCalled(); // the MAC is configured: no plutil, no arp, no utmctl
   });
 
   describe("VM MAC from UTM's config", () => {
@@ -468,19 +762,19 @@ describe("AgentClient discovery", () => {
     it("reads the MAC from UTM's config.plist for the VM when EDIABAS_VM_MAC is not set", async () => {
       const { client, execFile, fetchFn } = makeClient({
         env: NO_MAC,
-        fetch: vi.fn(async () => okResponse()),
+        fetch: vi.fn(withHello(async () => okResponse())),
         plutil: UTM_CONFIG,
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
       });
       await client.health();
-      expect(calledUrls(fetchFn)[0]).toBe("http://192.168.64.3:8765/health");
+      expect(calledUrls(fetchFn)[0]).toBe("http://192.168.64.3:8765/hello");
       expect(execFile).toHaveBeenCalledWith("/usr/bin/plutil", ["-convert", "json", "-o", "-", PLIST], expect.any(Object));
     });
 
     it("looks in the config of the VM named by EDIABAS_VM_NAME", async () => {
       const { client, execFile } = makeClient({
         env: { ...NO_MAC, EDIABAS_VM_NAME: "Win11" },
-        fetch: vi.fn(async () => okResponse()),
+        fetch: vi.fn(withHello(async () => okResponse())),
         plutil: UTM_CONFIG,
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
       });
@@ -490,7 +784,7 @@ describe("AgentClient discovery", () => {
 
     it("EDIABAS_VM_MAC wins: UTM's config is not read", async () => {
       const { client, execFile } = makeClient({
-        fetch: vi.fn(async () => okResponse()),
+        fetch: vi.fn(withHello(async () => okResponse())),
         plutil: JSON.stringify({ Network: [{ MacAddress: "02:00:00:00:00:99" }] }),
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
       });
@@ -498,42 +792,27 @@ describe("AgentClient discovery", () => {
       expect(execFile).not.toHaveBeenCalled();
     });
 
-    it("without any MAC: skips leases and ARP, still tries utmctl, and says how to set it", async () => {
+    it("without any MAC: reads no leases and says how to set it", async () => {
       const { client, readFile, execFile } = makeClient({
         env: NO_MAC,
-        fetch: vi.fn(async () => okResponse()),
+        fetch: vi.fn(withHello(async () => okResponse())),
         plutil: null,
         leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-        arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
-        utm: null,
       });
       const e = await errorOf(client.health());
       expect(e.code).toBe("vm_not_running");
       expect(e.message).toContain(`its MAC address is not set and could not be read from ${PLIST}`);
       expect(e.message).toContain("set EDIABAS_VM_MAC to the VM's MAC address, or EDIABAS_VM_NAME if the VM in UTM is not called 'Windows'");
       expect(readFile).not.toHaveBeenCalled();
-      expect(execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/bin/plutil", "/Applications/UTM.app/Contents/MacOS/utmctl"]);
+      expect(execFile.mock.calls.map((c) => c[0])).toEqual(["/usr/bin/plutil"]);
     });
 
     it("a MAC with no lease names it and the settings to check", async () => {
-      const { client } = makeClient({ fetch: vi.fn(async () => okResponse()), leases: "", arp: "", utm: null });
+      const { client } = makeClient({ fetch: vi.fn(withHello(async () => okResponse())), leases: "" });
       const e = await errorOf(client.health());
       expect(e.code).toBe("vm_not_running");
-      expect(e.message).toContain("its MAC address 02:00:00:00:00:01 is not in the DHCP leases or ARP table; if that is not the VM's MAC, set EDIABAS_VM_MAC");
+      expect(e.message).toContain("its MAC address 02:00:00:00:00:01 is not in the DHCP leases; if that is not the VM's MAC, set EDIABAS_VM_MAC");
     });
-  });
-
-  it("de-duplicates candidates across sources", async () => {
-    const { client, fetchFn } = makeClient({
-      fetch: vi.fn(async () => {
-        throw connError("ECONNREFUSED");
-      }),
-      leases: leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 }),
-      arp: "? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]",
-      utm: "192.168.64.3\n",
-    });
-    await errorOf(client.health());
-    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/health"]);
   });
 
   it("on a connection failure clears the cache and resolves once more", async () => {
@@ -541,7 +820,7 @@ describe("AgentClient discovery", () => {
     let leases = leaseFile({ ip: vmIp, lease: 0x6b01baf4 });
     const fetchMock = vi.fn<typeof fetch>(async (url) => {
       if (!String(url).includes(`${vmIp}:`)) throw connError("ECONNREFUSED");
-      return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+      return String(url).endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(String(url));
     });
     const c = makeClient({ fetch: fetchMock, leases });
     await c.client.listWindows();
@@ -552,10 +831,10 @@ describe("AgentClient discovery", () => {
     const w = await c.client.listWindows();
     expect(w.windows).toHaveLength(2);
     expect(calledUrls(c.fetchFn)).toEqual([
-      "http://192.168.64.3:8765/health",
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
-      "http://192.168.64.3:8765/windows", // fails
-      "http://192.168.64.4:8765/health",
+      "http://192.168.64.3:8765/hello", // the re-proof fails: the cache is dropped
+      "http://192.168.64.4:8765/hello",
       "http://192.168.64.4:8765/windows",
     ]);
   });
@@ -587,22 +866,11 @@ describe("AgentClient discovery", () => {
 describe("local network blocked (macOS Local Network privacy)", () => {
   const LEASES = leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 });
 
-  it("never contacts an off-link candidate, and blames the local network for the on-link one", async () => {
-    const { client, fetchFn } = makeClient({
-      fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
-      }),
-      leases: leaseFile({ ip: "192.168.65.3", lease: 0x7f000000 }, { ip: "192.168.64.3", lease: 0x6b01baf4 }),
-    });
-    expect((await errorOf(client.health())).code).toBe("local_network_blocked");
-    expect(calledUrls(fetchFn).some((u) => u.includes("192.168.65.3"))).toBe(false);
-  });
-
   it("maps EHOSTUNREACH on a request right after discovery", async () => {
     const { client, logs } = makeClient({
       fetch: vi.fn(async (url) => {
-        if (String(url).endsWith("/health")) return okResponse();
-        throw connError("EHOSTUNREACH");
+        if (String(url).includes("/hello")) return agentResponse(String(url));
+        throw connError("EHOSTUNREACH", "connect");
       }),
       leases: LEASES,
     });
@@ -614,8 +882,8 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     let blocked = false;
     const { client, fetchFn } = makeClient({
       fetch: vi.fn(async (url) => {
-        if (blocked && String(url).endsWith("/windows")) throw connError("EHOSTUNREACH");
-        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        if (blocked && String(url).endsWith("/windows")) throw connError("EHOSTUNREACH", "connect");
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(String(url));
       }),
       leases: LEASES,
     });
@@ -623,10 +891,11 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     blocked = true;
     const e = await errorOf(client.listWindows());
     expect(e.code).toBe("local_network_blocked");
-    // cached request failed, cache cleared, re-resolved once, retried once
+    // re-proved, cached request failed, cache cleared, re-resolved once, retried once
     expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
-      "http://192.168.64.3:8765/health",
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/windows",
     ]);
   });
@@ -635,8 +904,8 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     let blocked = false;
     const { client } = makeClient({
       fetch: vi.fn(async (url) => {
-        if (blocked) throw connError("EHOSTUNREACH");
-        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        if (blocked) throw connError("EHOSTUNREACH", "connect");
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(String(url));
       }),
       leases: LEASES,
     });
@@ -655,7 +924,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const { client } = makeClient({
       env: { EDIABAS_AGENT_URL: "http://10.9.9.9:8765" },
       fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
     });
     expect((await errorOf(client.health())).code).toBe("vm_not_running");
@@ -665,7 +934,7 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     const { client } = makeClient({
       env: { EDIABAS_AGENT_URL: "http://192.168.64.3:8765" },
       fetch: vi.fn(async () => {
-        throw connError("EHOSTUNREACH");
+        throw connError("EHOSTUNREACH", "connect");
       }),
     });
     expect((await errorOf(client.health())).code).toBe("local_network_blocked");
@@ -681,30 +950,6 @@ describe("local network blocked (macOS Local Network privacy)", () => {
     expect((await errorOf(client.health())).code).toBe("agent_not_answering");
     expect(logs).toContain("probe 192.168.64.3:8765 failed: timeout (TimeoutError)");
   });
-
-  describe("ranking among candidates", () => {
-    const TWO = leaseFile({ ip: "192.168.64.3", lease: 2 }, { ip: "192.168.64.4", lease: 1 });
-    const by = (a: () => Promise<Response>, b: () => Promise<Response>) =>
-      vi.fn<typeof fetch>(async (url) => (String(url).includes(".3:") ? a() : b()));
-    const unreachable = async (): Promise<Response> => {
-      throw connError("EHOSTUNREACH");
-    };
-    const refused = async (): Promise<Response> => {
-      throw connError("ECONNREFUSED");
-    };
-    const status = (n: number) => async () =>
-      new Response(JSON.stringify({ error: { code: n === 401 ? "unauthorized" : "forbidden", message: "m" } }), { status: n });
-
-    it("local_network_blocked beats agent_not_answering, in either order", async () => {
-      expect((await errorOf(makeClient({ fetch: by(unreachable, refused), leases: TWO }).client.health())).code).toBe("local_network_blocked");
-      expect((await errorOf(makeClient({ fetch: by(refused, unreachable), leases: TWO }).client.health())).code).toBe("local_network_blocked");
-    });
-
-    it("forbidden and unauthorized beat local_network_blocked", async () => {
-      expect((await errorOf(makeClient({ fetch: by(unreachable, status(403)), leases: TWO }).client.health())).code).toBe("forbidden");
-      expect((await errorOf(makeClient({ fetch: by(status(401), unreachable), leases: TWO }).client.health())).code).toBe("unauthorized");
-    });
-  });
 });
 
 describe("a request that runs an EDIABAS job is never sent twice", () => {
@@ -716,7 +961,6 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
   const CALLS: Call[] = [
     { name: "POST /ediabas/job", run: (c) => c.runJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/job", ok: JOB },
     { name: "POST /ediabas/jobs", run: (c) => c.runJobs([{ ecu: "NVE_65", job: "IDENT" }]), path: "/ediabas/jobs", ok: JOBS },
-    { name: "GET /ediabas/vehicle", run: (c) => c.vehicle(), path: "/ediabas/vehicle", ok: {} },
     { name: "GET /ediabas/describe", run: (c) => c.describeJob({ ecu: "NVE_65", job: "IDENT" }), path: "/ediabas/describe", ok: {} },
   ];
 
@@ -730,7 +974,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
           state.sent++;
           if (state.failing) fail();
         }
-        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
       }),
       leases: LEASES,
     });
@@ -786,7 +1030,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
           throw connError("ECONNREFUSED");
         }
         if (u.endsWith("/ediabas/job")) return okResponse(JOB);
-        return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
       }),
       leases: LEASES,
     });
@@ -795,10 +1039,48 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
     const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
     expect(r.job).toBe("IDENT");
     expect(calledUrls(fetchFn).slice(2)).toEqual([
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/ediabas/job", // refused
-      "http://192.168.64.3:8765/health",
+      "http://192.168.64.3:8765/hello",
       "http://192.168.64.3:8765/ediabas/job",
     ]);
+  });
+
+  it("runJob: EHOSTUNREACH with syscall 'write' is not re-sent and says it may have run", async () => {
+    let fail = false;
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.endsWith("/ediabas/job") && fail) throw connError("EHOSTUNREACH", "write");
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
+      }),
+      leases: LEASES,
+    });
+    await c.listWindows();
+    fail = true;
+    const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
+    expect(e.code).toBe("ediabas_request_lost");
+    expect(calledUrls(fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toHaveLength(1);
+  });
+
+  it("runJob: EHOSTUNREACH with syscall 'connect' rediscovers and sends once more", async () => {
+    let fail = false;
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (u.endsWith("/ediabas/job") && fail) {
+          fail = false;
+          throw connError("EHOSTUNREACH", "connect");
+        }
+        if (u.endsWith("/ediabas/job")) return okResponse(JOB);
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
+      }),
+      leases: LEASES,
+    });
+    await c.listWindows();
+    fail = true;
+    expect((await c.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
+    expect(calledUrls(fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toHaveLength(2);
   });
 
   describe("connect timeout (the TCP handshake never completed) against ETIMEDOUT", () => {
@@ -813,7 +1095,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
             throw connError(code);
           }
           if (u.endsWith(path)) return okResponse(body);
-          return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+          return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
         }),
         leases: LEASES,
       });
@@ -827,8 +1109,9 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       const r = await c.runJob({ ecu: "NVE_65", job: "IDENT" });
       expect(r.job).toBe("IDENT");
       expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/ediabas/job", // never connected
-        "http://192.168.64.3:8765/health",
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/ediabas/job",
       ]);
     });
@@ -839,7 +1122,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       arm();
       const e = await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }));
       expect(e.code).toBe("ediabas_request_lost");
-      expect(calledUrls(fetchFn).slice(2)).toEqual(["http://192.168.64.3:8765/ediabas/job"]);
+      expect(calledUrls(fetchFn).slice(2)).toEqual(["http://192.168.64.3:8765/hello", "http://192.168.64.3:8765/ediabas/job"]);
     });
 
     it("a connect timeout right after discovery is not reported as possibly run", async () => {
@@ -856,8 +1139,9 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       arm();
       expect((await c.listWindows()).windows).toHaveLength(2);
       expect(calledUrls(fetchFn).slice(2)).toEqual([
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/windows",
-        "http://192.168.64.3:8765/health",
+        "http://192.168.64.3:8765/hello",
         "http://192.168.64.3:8765/windows",
       ]);
     });
@@ -867,17 +1151,15 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       const fetchMock = vi.fn<typeof fetch>(async (url) => {
         if (!String(url).includes(`${vmIp}:`)) throw connError("UND_ERR_CONNECT_TIMEOUT");
         if (String(url).endsWith("/ediabas/job")) return okResponse(JOB);
-        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+        return String(url).endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(String(url));
       });
       const c = makeClient({ fetch: fetchMock, leases: LEASES });
       await c.client.listWindows();
       vmIp = "192.168.64.4";
       c.readFile.mockImplementation(async () => leaseFile({ ip: vmIp, lease: 0x6b01baf5 }));
       expect((await c.client.runJob({ ecu: "NVE_65", job: "IDENT" })).job).toBe("IDENT");
-      expect(calledUrls(c.fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toEqual([
-        "http://192.168.64.3:8765/ediabas/job",
-        "http://192.168.64.4:8765/ediabas/job",
-      ]);
+      // the re-proof at the old address fails first, so the job goes only to the new one
+      expect(calledUrls(c.fetchFn).filter((u) => u.endsWith("/ediabas/job"))).toEqual(["http://192.168.64.4:8765/ediabas/job"]);
     });
   });
 
@@ -896,7 +1178,7 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
             throw connError("ECONNRESET");
           }
           if (u.endsWith("/logs")) return okResponse({ roots: [], files: [], truncated: false });
-          return u.endsWith("/windows") ? okResponse(windowsBody()) : okResponse();
+          return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
         }),
         leases: LEASES,
       });
@@ -905,6 +1187,115 @@ describe("a request that runs an EDIABAS job is never sent twice", () => {
       await run(c).catch(() => undefined); // body shape is not the point here
       expect(calledUrls(fetchFn).slice(2).filter((u) => u.endsWith(path) || u.endsWith("/health")).length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe("a proved address answering a non-200 without the agent's error shape", () => {
+  // The address proved it holds the token in this call, so the likeliest sender is the agent's
+  // own web server (Kestrel) refusing the request before the agent's code ran.
+  const LEASES = leaseFile({ ip: "192.168.64.3", lease: 0x6b01baf4 });
+  const JOB = jobResult("NVE_65", "IDENT", [{ A: 1 }]);
+
+  function shapeless(status: number, body = ""): Response {
+    return new Response(body, { status, headers: body ? { "content-type": "text/html" } : {} });
+  }
+
+  /** `path` answers `fail()` while `failing` is set; /hello and everything else answer as the agent. */
+  function client(path: string, fail: () => Response) {
+    const state = { failing: true, sent: 0 };
+    const c = makeClient({
+      fetch: vi.fn(async (url) => {
+        const u = String(url);
+        if (new URL(u).pathname === path) {
+          state.sent++;
+          if (state.failing) return fail();
+        }
+        if (u.endsWith("/ediabas/job")) return okResponse(JOB);
+        return u.endsWith("/windows") ? okResponse(windowsBody()) : agentResponse(u);
+      }),
+      leases: LEASES,
+    });
+    return { ...c, state };
+  }
+
+  it("a shapeless 503 on GET /windows is bad_response naming the status, not wrong_service", async () => {
+    const { client: c } = client("/windows", () => shapeless(503));
+    const e = await errorOf(c.listWindows());
+    expect(e.code).toBe("bad_response");
+    expect(e.message).toContain("HTTP 503");
+    expect(e.message).toContain("without the agent's error format");
+    expect(e.message).toContain("192.168.64.3:8765");
+    expect(e.message).not.toContain("EDIABAS_AGENT_URL");
+  });
+
+  for (const [status, body] of [
+    [400, "<html><body>Bad Request</body></html>"],
+    [503, ""],
+  ] as const) {
+    for (const [name, path, run] of [
+      ["POST /ediabas/job", "/ediabas/job", (c: AgentClient) => c.runJob({ ecu: "NVE_65", job: "IDENT" })],
+      ["POST /ediabas/jobs", "/ediabas/jobs", (c: AgentClient) => c.runJobs([{ ecu: "NVE_65", job: "IDENT" }])],
+    ] as const) {
+      it(`a shapeless ${status} on ${name} is ediabas_request_lost naming the status, and is not re-sent`, async () => {
+        const { client: c, state } = client(path, () => shapeless(status, body));
+        const e = await errorOf(run(c));
+        expect(e.code).toBe("ediabas_request_lost");
+        expect(e.message).toContain(`HTTP ${status}`);
+        expect(e.message).toContain("the job may have run");
+        expect(e.message).not.toContain("EDIABAS_AGENT_URL");
+        expect(state.sent).toBe(1);
+      });
+    }
+  }
+
+  for (const [name, path, run] of [
+    ["GET /windows", "/windows", (c: AgentClient) => c.listWindows()],
+    ["POST /ediabas/job", "/ediabas/job", (c: AgentClient) => c.runJob({ ecu: "NVE_65", job: "IDENT" })],
+  ] as const) {
+    it(`${name}: the cached address is dropped, so the next call runs discovery again`, async () => {
+      const { client: c, state, readFile } = client(path, () => shapeless(503));
+      state.failing = false;
+      await run(c); // discovered and cached
+      await run(c); // from the cache
+      expect(readFile).toHaveBeenCalledTimes(1);
+      state.failing = true;
+      await errorOf(run(c));
+      state.failing = false;
+      await run(c);
+      expect(readFile).toHaveBeenCalledTimes(2);
+    });
+  }
+
+  it("the token never appears in the message, even when the body carries it", async () => {
+    const a = await fake((req, res) => {
+      if (answerHello(req, res, AGENT_TOKEN)) return;
+      res.writeHead(503);
+      res.end(`${AGENT_TOKEN}`);
+    });
+    const { client: c } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    for (const run of [() => c.runJob({ ecu: "NVE_65", job: "IDENT" }), () => c.listWindows()]) {
+      const e = await errorOf(run());
+      expect(["ediabas_request_lost", "bad_response"]).toContain(e.code);
+      expect(e.message).toContain("HTTP 503");
+      expect(e.message).not.toContain(AGENT_TOKEN);
+    }
+  });
+
+  it("the messages name host and port only, never URL credentials", () => {
+    for (const e of [ediabasRequestLost({ baseUrl: "http://u:p@1.2.3.4:8765", status: 413 }), unexpectedStatus("GET /windows", "http://u:p@1.2.3.4:8765", 431)]) {
+      expect(e.message).toContain("1.2.3.4:8765");
+      expect(e.message).not.toContain("u:p");
+    }
+  });
+
+  it("the /hello probe still says wrong_service for a shapeless non-200", async () => {
+    const { client: c, fetchFn } = makeClient({
+      fetch: vi.fn(async () => shapeless(503, "<html>Service Unavailable</html>")),
+      leases: LEASES,
+    });
+    expect((await errorOf(c.runJob({ ecu: "NVE_65", job: "IDENT" }))).code).toBe("wrong_service");
+    expect(calledUrls(fetchFn)).toEqual(["http://192.168.64.3:8765/hello"]);
+    expect(authHeaders(fetchFn)).toEqual([undefined]);
   });
 });
 
@@ -959,14 +1350,21 @@ describe("one EDIABAS request at a time", () => {
       client.runJob({ ecu: "A", job: "IDENT" }),
       client.describeJob({ ecu: "B", job: "IDENT" }),
       client.listEcus("C"),
-      client.vehicle(),
     ]);
     expect(a.requests.filter((r) => r.path.startsWith("/ediabas/")).map((r) => r.path.split("?")[0])).toEqual([
       "/ediabas/job",
       "/ediabas/describe",
       "/ediabas/ecus",
-      "/ediabas/vehicle",
     ]);
+  });
+
+  it("a queued call proves the address in its own turn, after the job before it", async () => {
+    const { a } = await oneAtATime(50);
+    const { client } = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
+    await client.health();
+    a.requests.length = 0;
+    await Promise.all([client.runJob({ ecu: "NVE_65", job: "IDENT" }), client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }])]);
+    expect(a.requests.map((r) => r.path.split("?")[0])).toEqual(["/hello", "/ediabas/job", "/hello", "/ediabas/jobs"]);
   });
 
   it("answers ediabas_busy without sending when the wait passes the limit", async () => {
@@ -1013,18 +1411,10 @@ describe("one EDIABAS request at a time", () => {
 
 describe("stderr diagnostics", () => {
   it("logs the accepted address and its source", async () => {
-    const ok = vi.fn(async () => okResponse());
+    const ok = vi.fn(withHello(async () => okResponse()));
     const viaLeases = makeClient({ fetch: ok, leases: leaseFile({ ip: "192.168.64.3", lease: 1 }) });
     await viaLeases.client.health();
     expect(viaLeases.logs).toContain("discovery accepted 192.168.64.3:8765 (source: leases)");
-
-    const viaArp = makeClient({ fetch: ok, leases: null, arp: "? (192.168.64.5) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]" });
-    await viaArp.client.health();
-    expect(viaArp.logs).toContain("discovery accepted 192.168.64.5:8765 (source: arp)");
-
-    const viaUtm = makeClient({ fetch: ok, leases: null, arp: "", utm: "192.168.64.6\n" });
-    await viaUtm.client.health();
-    expect(viaUtm.logs).toContain("discovery accepted 192.168.64.6:8765 (source: utmctl)");
 
     const viaEnv = makeClient({ fetch: ok, env: { EDIABAS_AGENT_URL: "http://127.0.0.1:4567" } });
     await viaEnv.client.health();
@@ -1032,10 +1422,10 @@ describe("stderr diagnostics", () => {
   });
 
   it("logs refused connections and HTTP statuses, never the token", async () => {
-    const a = await fake(contractHandler("a-different-token"));
+    const a = await fake((_req, res) => json(res, 403, { error: { code: "forbidden", message: "Caller is not the gateway." } }));
     const http = makeClient({ env: { EDIABAS_AGENT_URL: a.url } });
     await errorOf(http.client.health());
-    expect(http.logs).toContain(`probe 127.0.0.1:${a.port} failed: HTTP 401`);
+    expect(http.logs).toContain(`probe 127.0.0.1:${a.port} failed: HTTP 403`);
 
     const port = await closedPort();
     const refused = makeClient({ env: { EDIABAS_AGENT_URL: `http://127.0.0.1:${port}` } });
@@ -1075,10 +1465,9 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     await client.listEcus("nve");
     await client.describeJobs({ ecu: "NVE_65", filter: "LESEN" });
     await client.describeJob({ ecu: "NVE_65", job: "FS_LESEN" });
-    await client.vehicle();
     await client.runJob({ ecu: "NVE_65", job: "IDENT", args: "1;2" });
     await client.runJobs([{ ecu: "NVE_65", job: "FS_LESEN" }]);
-    const seen = a.requests.filter((r) => r.path !== "/health").map((r) => `${r.method} ${r.path}${r.body ? ` ${r.body}` : ""}`);
+    const seen = a.requests.filter((r) => !r.path.startsWith("/hello")).map((r) => `${r.method} ${r.path}${r.body ? ` ${r.body}` : ""}`);
     expect(seen).toEqual([
       "GET /screen/capture?window=INPA+-+BMW&maxEdge=800",
       "GET /logs?root=1&glob=*.trc",
@@ -1086,11 +1475,10 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
       "GET /ediabas/ecus?filter=nve",
       "GET /ediabas/describe?ecu=NVE_65&filter=LESEN",
       "GET /ediabas/describe?ecu=NVE_65&job=FS_LESEN",
-      "GET /ediabas/vehicle",
       'POST /ediabas/job {"ecu":"NVE_65","job":"IDENT","args":"1;2"}',
       'POST /ediabas/jobs {"items":[{"ecu":"NVE_65","job":"FS_LESEN"}]}',
     ]);
-    expect(a.requests.every((r) => r.authorization === `Bearer ${AGENT_TOKEN}`)).toBe(true);
+    expect(a.requests.filter((r) => !r.path.startsWith("/hello")).every((r) => r.authorization === `Bearer ${AGENT_TOKEN}`)).toBe(true);
   });
 
   it("returns capture bytes and decoded headers", async () => {
@@ -1109,13 +1497,13 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     await client.listWindows();
     await client.capture();
     await client.listLogs();
-    expect(spy.mock.calls.map((c) => c[0])).toEqual([15_000, 15_000, 15_000]);
+    // each call: the 3 s /hello re-proof, then the request
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([3_000, 15_000, 3_000, 15_000, 3_000, 15_000]);
     spy.mockClear();
     await client.listEcus();
-    await client.vehicle();
     await client.runJob({ ecu: "NVE_65", job: "IDENT" });
     await client.runJobs([{ ecu: "NVE_65", job: "IDENT" }]);
-    expect(spy.mock.calls.map((c) => c[0])).toEqual([75_000, 75_000, 75_000, 75_000]);
+    expect(spy.mock.calls.map((c) => c[0])).toEqual([3_000, 75_000, 3_000, 75_000, 3_000, 75_000]);
   });
 
   it("tolerates unknown extra fields everywhere", async () => {
@@ -1169,7 +1557,7 @@ describe("AgentClient, Phase 2/4/5/6 endpoints", () => {
     const old = await errorOf(c2.capture());
     expect(old.code).toBe("agent_outdated");
     expect(old.message).toMatch(/does not know \/screen\/capture.*Update line/);
-    for (const p of [() => c2.listEcus(), () => c2.vehicle(), () => c2.runJobs([{ ecu: "A", job: "IDENT" }]), () => c2.listLogs(), () => c2.readLog({ path: "C:\\a" })]) {
+    for (const p of [() => c2.listEcus(), () => c2.runJobs([{ ecu: "A", job: "IDENT" }]), () => c2.listLogs(), () => c2.readLog({ path: "C:\\a" })]) {
       expect((await errorOf(p())).code).toBe("agent_outdated");
     }
     expect((await errorOf(client.describeJobs({ ecu: "NOPE" }))).code).toBe("ecu_not_found");

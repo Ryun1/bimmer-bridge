@@ -3,13 +3,14 @@
 The contract between `vm-agent` (server) and `mac-mcp` (client). Both sides are built against
 this file. Change it here first.
 
-The first part covers `/health` and `/windows` (Phases 1 and 3). The part from "Phases 2, 4, 5
-and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
+The first part covers `/health` and `/windows` (Phases 1 and 3) and `/hello` (added in 0.5.0). The part from
+"Phases 2, 4, 5 and 6" on adds the error details, the `/health` additions, the job policy and the EDIABAS,
 screenshot and log endpoints.
 
 ## Transport
 - Plain HTTP, port **8765**, on the VM's shared-network IPv4 address only.
-- Every request, including `/health`, needs `Authorization: Bearer <token>`.
+- Every request, including `/health`, needs `Authorization: Bearer <token>`, except
+  [`GET /hello`](#get-hello), the one unauthenticated route.
 - The token is 32 random bytes, base64url without padding (43 characters).
 - Responses are `application/json; charset=utf-8`. Property names are camelCase.
   Absent values are `null`, never omitted.
@@ -24,16 +25,42 @@ Any non-2xx response has this body:
 | Status | `code` | When |
 |---|---|---|
 | 403 | `forbidden` | the request did not come from the VM's network gateway (the Mac). Checked first, before the token is looked at |
-| 401 | `unauthorized` | header missing, malformed, or token wrong. Sent before any routing, so an unauthenticated caller cannot tell which paths exist |
+| 401 | `unauthorized` | header missing, malformed, or token wrong. Sent before any routing, so an unauthenticated caller cannot tell which paths exist (apart from `GET /hello`) |
 | 404 | `not_found` | unknown path (authenticated callers only) |
 | 405 | `method_not_allowed` | known path, wrong method |
 | 500 | `internal_error` | unhandled failure; the message is generic, details go to the agent log |
 
 A 401 also carries `WWW-Authenticate: Bearer`.
 
-Order of checks: source address (403), token (401), path (404), method (405). Requests that
+Order of checks: source address (403), token (401), path (404), method (405). `GET /hello`
+skips the token step only, and only for that exact path and method: `/hello/`, `/hellox` and
+`POST /hello` still need the token. Requests that
 Kestrel rejects itself (malformed HTTP, oversized headers, HTTP/2) never reach these checks
 and get Kestrel's own response.
+
+## `GET /hello`
+`GET /hello?nonce=<32 lowercase hex>` proves the agent holds the token without the caller
+sending it (decision D5). It needs no token; an `Authorization` header sent with it is ignored.
+The source-address check (403) still comes first, and the request is audited like any other.
+
+```json
+{ "agent": "ediabas-bridge-agent", "proof": "496e963110d8963be46b16878c70fbd5003960c525362880c4f7514a06a608bd" }
+```
+
+- `proof` is lowercase hex
+  `HMAC-SHA256(key = SHA-256(UTF-8 token), message = UTF-8 "ediabas-bridge-hello-v1:" + nonce)`.
+  The example is for token `test-token` and nonce `00112233445566778899aabbccddeeff`.
+- `nonce` is required, given once, exactly 32 characters of `[0-9a-f]`; anything else
+  (missing, 31 or 33 characters, upper case, another parameter) is 400 `bad_request` with
+  `details.parameter`.
+- A client checks the proof (in constant time, with a fresh nonce) before it sends the token to
+  an address, so the token never goes to something that is not this agent.
+- Why it is safe without a token: only the VM's gateway (the Mac) reaches it (firewall and
+  source check), it touches neither the cable nor EDIABAS, and the proof reveals nothing usable
+  about the token. It is an HMAC keyed with the token's SHA-256, bound to a fixed context string
+  and to the caller's nonce; it cannot be turned back into the token or its hash, cannot be
+  presented as a Bearer token, and a proof for one nonce says nothing about another. The token
+  is 32 random bytes, so it cannot be guessed offline from a proof either.
 
 ## `GET /health`
 Never touches the cable and never loads the EDIABAS DLL.
@@ -41,7 +68,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 ```json
 {
   "agent": "ediabas-bridge-agent",
-  "version": "0.4.0",
+  "version": "0.6.2",
   "startedAt": "2026-11-21T15:04:05Z",
   "uptimeSeconds": 512,
   "os": {
@@ -58,7 +85,7 @@ Never touches the cable and never loads the EDIABAS DLL.
   "conflictingProcesses": [ { "name": "INPALOAD", "pid": 4312 } ],
   "ediabas": { "dllPath": "C:\\EDIABAS\\BIN\\api32.dll", "dllFound": true },
   "lastCableUseAt": null,
-  "approvals": { "pinned": 1, "unpinned": 0 }
+  "approvals": { "pinned": 1, "ignored": 0, "entries": ["NVE_65:STATUS_EXAMPLE@3f1c0a9b2d4e"], "hash": "0123456789ab" }
 }
 ```
 
@@ -69,7 +96,7 @@ Never touches the cable and never loads the EDIABAS DLL.
 - `sessionId` is the Windows session the agent runs in. `0` means it is not in an
   interactive session and screenshots will not work.
 - `ediabas.dllFound` is a file-existence check only.
-- `lastCableUseAt`, `policyVersion`, `capabilities`, `ediabas.loaded`, `ediabas.stuck` and
+- `lastCableUseAt`, `policyVersion`, `policySha256`, `capabilities`, `ediabas.loaded`, `ediabas.stuck`, `ediabas.heldOpen` and
   `approvals` are described under "`GET /health` additions" below.
 
 ## `GET /windows`
@@ -113,18 +140,18 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 403 | `job_needs_review` | a job allowed by the `STATUS_` pattern has a description that fails the screen, or has no description; or it is called with `args` and the description of its arguments fails the screen or is missing; or it has a pinned approval and its description has changed, is empty or could not be read (see "Approvals") | `{ ecu, job, description, matched: ["start"] }` (`matched` is `[]` when the description is empty or only labels, and for a pinned approval that no longer holds; see "Description screen"). For the argument screen `description` holds the argument text |
 | 403 | `path_not_allowed` | log path outside the configured roots, or an escape attempt | `{ reason }` |
 | 404 | `ecu_not_found` | no `.prg` or `.grp` of that name in the Ecu folder | `{ ecu }` |
-| 404 | `job_not_found` | `describe` was asked for a job the SGBD does not have; or, from `/ediabas/job`, a `/ediabas/jobs` item or a `/ediabas/vehicle` item, the job failed with `ediabas_error` and the SGBD's own `_JOBS` list does not have it (see "Job not in the SGBD"). Message: "{ECU} has no job {JOB}." | `{ ecu, job }` |
+| 404 | `job_not_found` | `describe` was asked for a job the SGBD does not have. A run of a job the SGBD lacks gives `ediabas_error`. Message: "{ECU} has no job {JOB}." | `{ ecu, job }` |
 | 404 | `window_not_found` | no visible window matches | `null` |
 | 404 | `file_not_found` | log file does not exist | `null` |
 | 409 | `cable_in_use` | a BMW tool or another `api32.dll` user is running. No override | `{ processes: [ { name, pid } ] }` |
 | 409 | `window_minimized` | the window is minimised; the agent never restores it | `{ handle, title }` |
 | 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
-| 502 | `ediabas_error` | EDIABAS reported an error for the job; or the job finished but its results could not be read (message "The job finished but its results could not be read.", with whatever EDIABAS reported in `details` and `resultsUnread: true` there) | `{ errorCode: 159, errorText: "IFH-0009: …" }`; plus `resultsUnread: true` only in the unread-results case |
+| 502 | `ediabas_error` | EDIABAS reported an error for the job; or the job finished but its results could not be read (message "The job finished but its results could not be read.", with whatever EDIABAS reported in `details` and `resultsUnread: true` there) | `{ errorCode: 19, errorText: "IFH-0009: …" }`; plus `resultsUnread: true` only in the unread-results case |
 | 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted) | `{ reason }` |
 | 500 | `capture_failed` | the desktop was available but the copy failed or the screen size could not be read | `null` |
 | 503 | `desktop_unavailable` | only a locked screen, the secure desktop, or session 0 | `null` |
 | 503 | `capture_busy` | another capture is still running; nothing was captured. Try again | `null` |
-| 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which, e.g. "The request was abandoned before {JOB} started." A request that spent the whole budget queued behind another EDIABAS request gets "The request waited behind another EDIABAS request for the whole {max} s limit; nothing was started." on `/ediabas/job`, `/ediabas/jobs`, `/ediabas/vehicle` and both describe modes, and EDIABAS is not loaded for it. Also a per-item code in `/ediabas/jobs` and `/ediabas/vehicle` (see there) | `null` |
+| 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which, e.g. "The request was abandoned before {JOB} started." A request that spent the whole budget queued behind another EDIABAS request gets "The request waited behind another EDIABAS request for the whole {max} s limit; nothing was started." on `/ediabas/job`, `/ediabas/jobs` and both describe modes, and EDIABAS is not loaded for it. Also a per-item code in `/ediabas/jobs` (see there) | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
 
 
@@ -138,13 +165,26 @@ caught by the conflict check before EDIABAS is called.
 ## `GET /health` additions
 - `lastCableUseAt`: UTC time the runner last called `apiInit`, else `null`.
 - `policyVersion`: the `version` of the policy file built into the agent (integer).
+- `policySha256`: lower-case hex SHA-256 (64 characters) of the exact bytes of the policy file
+  built into the agent; `null` only if the policy did not load. A 0.4.x agent omits it. Before
+  every `ediabas_*` call the Mac compares it with the SHA-256 of the file it loaded; if both are
+  present and differ, it refuses with `policy_mismatch` and sends no `/ediabas/*` request.
 - `capabilities`: array of strings, the endpoint groups this build has:
   `"ediabas"`, `"capture"`, `"logs"`.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
 - `ediabas.stuck`: boolean, true once a job did not stop after `apiBreak` (see "A job that
   does not stop"). Stays true until the agent restarts.
-- `approvals`: `{ "pinned": n, "unpinned": m }`, the number of distinct `reviewedJobs` entries
-  of each form in force now (see "Approvals"). Entries of the wrong shape are not counted.
+- `ediabas.heldOpen`: boolean, true once `apiEnd` threw: EDIABAS stays loaded and the interface
+  stays in use until the agent restarts. (`vm_health` says so.)
+- `approvals`: `{ "pinned": n, "ignored": m, "entries": [...], "hash": "..." }`: the distinct
+  `reviewedJobs` entries in force now: `/health` re-reads `config.json` before it answers, as
+  every EDIABAS request does (see "Approvals"). `pinned` counts the pinned ones;
+  `ignored` counts those that approve nothing (unpinned, of the wrong shape, or with an ECU or
+  JOB that is not upper case). `entries` lists the pinned ones as written, sorted by ordinal
+  string comparison; `hash` is the first 12 lower-case hex digits of the SHA-256 of the entries
+  joined by `\n` (UTF-8; of the empty string when there are none). The Mac server remembers
+  the hash and flags a change (docs/tools.md). An agent before 0.5.0 sends neither field. A 0.4.0 agent sent `{ "pinned": n, "unpinned": m }`; the Mac server
+  still reads that.
 
 ## Job policy
 `policy/policy.json` is the single source. The agent embeds it at build time; the Mac server
@@ -176,8 +216,12 @@ Evaluation, in this order. The first rule that decides wins; `rule` is the strin
    `screen: true`.
 7. Otherwise `default_deny`.
 
-The file is at `version` 3. Version 2 added `descriptionScreen.ignore`, which a version 1 file
-does not have (so this build refuses it). Version 3:
+The file is at `version` 4. Version 2 added `descriptionScreen.ignore`, which a version 1 file
+does not have (so this build refuses it). Version 4 makes `E65`, `E70`, `E89X`, `F01` and `R56`
+(the chassis SGBDs present in the VM's Ecu folder) restricted ECUs with the same list as `E60`,
+and adds the screen terms `schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`,
+`trigger`, `oeffnen` and `öffnen`; a job whose description now matches becomes `job_needs_review`
+(none of the recorded describe fixtures changes verdict). Version 3:
 - makes `E60` a restricted ECU like `TMODE` and `UTILITY`: only `INFO`, `IDENT_FUNKTIONAL`,
   `FS_LESEN_FUNKTIONAL` (whole-car ident and fault reads, KWP $1A and $18) and the `_` info jobs;
 - allows `C_FA_LESEN` (vehicle order, KWP $22) by name on every ECU that is not restricted;
@@ -203,12 +247,13 @@ The ignore entries are labels seen in real descriptions that only look like a te
 `beschreibung` (from `Jobbeschreibung:`, which starts every CAS description and contains
 `schreib`) and `umsetzer` (`AD-Umsetzers`, an A/D converter, contains `setz`). Nothing broader
 is ignored: `EEPROM beschreiben` still fails on `schreib`, `Zaehler zuruecksetzen` on `setz`, and
-`Beschreibungschreiben` on `schreib`. A job approved in the agent config's `reviewedJobs` skips
-the screen, never the name rules (see "Approvals").
+`Beschreibungschreiben` on `schreib`. A job pinned in the agent config's `reviewedJobs` skips
+this screen while its description is unchanged, never the name rules or the argument screen
+(see "Approvals").
 
-**Argument screen (agent only).** A job allowed only by the pattern, not approved in
-`reviewedJobs`, and called with non-empty `args` gets one more call after its description
-passed: `_ARGUMENTS` for that job. Every `ARG` name and `ARGCOMMENT` goes through the same
+**Argument screen (agent only).** A job allowed only by the pattern and called with non-empty
+`args` gets one more call after its description passed (or its pin matched): `_ARGUMENTS` for
+that job. An approval does not skip it. Every `ARG` name and `ARGCOMMENT` goes through the same
 screen. It fails with `job_needs_review` and one of these messages:
 - "The argument description of {JOB} mentions: {terms}. The user can approve it in the agent config."
 - "{JOB} takes arguments but they are not described, so the call cannot be shown to be a read.
@@ -219,32 +264,39 @@ the job.
 
 ## Approvals (`reviewedJobs`)
 `reviewedJobs` in the agent config holds the owner's approvals of single jobs that the description
-screen refuses. Two entry forms:
-- `"ECU:JOB"` approves the job by name, whatever its description says.
-- `"ECU:JOB@hhhhhhhhhhhh"` (12 lower-case hex digits) approves it only while its description
-  is unchanged. This pinned form is the recommended one.
+screen refuses. One entry form: `"ECU:JOB@hhhhhhhhhhhh"` (12 lower-case hex digits) approves
+the job only while its description is unchanged.
 
-ECU and JOB are matched exactly, upper case, with the ECU name as it is asked for. With both
-forms for one job the pinned one wins; with several pins any matching one approves. An entry of
-any other shape is a warning in `agent.log` and approves nothing; it does not stop the agent.
+ECU and JOB are matched exactly, upper case, with the ECU name as it is asked for. With several
+pins for one job any matching one approves. An unpinned `"ECU:JOB"` entry (0.4.0 and before)
+approves nothing since 0.5.0: it is a warning in `agent.log` naming the pinned form
+(`reviewedJobs[i]: "ECU:JOB" is unpinned and approves nothing since 0.5.0; run ediabas_describe
+on the job and use the "ECU:JOB@<hash>" line it prints`). An entry of any other shape is also a
+warning and approves nothing. So does an entry whose ECU or JOB is not upper case (it can never
+match; the warning says it must be upper case). None of these stops the agent; all count as `ignored` in `/health`.
 An approval only ever applies to a job the policy allows by the `STATUS_` pattern.
 
 The hash is the first 12 hex digits (lower case) of the SHA-256 of the UTF-8 bytes of the
 description, trimmed: every value of the `_JOBCOMMENTS` sets, one per line, joined by `\n`.
 `describe` with `job` returns it as `descriptionHash`.
 
-For a pinned job the agent reads `_JOBCOMMENTS`, then runs the job; there is no `_ARGUMENTS`
-call. An unpinned approval reads nothing. A pin that no longer holds is `job_needs_review`:
+For a pinned job the agent reads `_JOBCOMMENTS`; a matching pin takes the place of the
+description screen only. A call with arguments then goes through the argument screen as for any
+screened job (`_ARGUMENTS`, then the job); a call without arguments runs the job. A pin that no
+longer holds is `job_needs_review`:
 - "The description of {JOB} has changed since it was approved (now {hash}). The user can approve
   it again in the agent config."
 - "{JOB} has no description now, so its approval cannot be checked. The user can approve it again
   in the agent config."
-- "The description of {JOB} could not be read, so its approval cannot be checked."
 
-**No restart.** At the start of every EDIABAS request the agent checks config.json's last-write
-time. When it has changed, it re-reads `reviewedJobs` and nothing else. A file that is missing,
-unreadable or not a valid config keeps the previous list and logs one warning per change; a
-later good save is picked up.
+A description that cannot be read keeps its own failure, as for an unpinned job: an EDIABAS error
+there (often a module that does not answer, e.g. IFH-0009) is `ediabas_error`, and the job is not
+run.
+
+**No restart.** At the start of every EDIABAS request, and before it answers `/health`, the
+agent re-reads `reviewedJobs`, and nothing else, from config.json. A file that is missing,
+unreadable or not a valid config keeps the previous list and logs one warning per distinct
+problem; a later good read is picked up.
 
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
@@ -256,24 +308,25 @@ so time spent waiting behind another EDIABAS request counts against it. `duratio
 covers only the run. A request that waited the whole budget gets `not_run` and EDIABAS is not
 loaded for it.
 
-**Job not in the SGBD.** When a job from `/ediabas/job`, a `/ediabas/jobs` item or a
-`/ediabas/vehicle` item fails with `ediabas_error`, the agent runs `_JOBS` on that SGBD. If the
-list does not have the job, the answer is `job_not_found` instead. Only for a `.prg` file: for a
-`.grp` name, a job starting with `_`, or a failed `_JOBS`, the original error stays.
+**Job not in the SGBD.** A job the SGBD does not have fails with `ediabas_error` like any other
+failed job; the agent does not run `_JOBS` to check. Only `describe` answers `job_not_found`.
 
 **apiEnd failure.** If `apiEnd` fails after a job ran, the client still gets the result. The
 agent logs it and does not release `api32.dll` again until it is restarted.
 
-**Conflict check during a request.** The check runs again before every EDIABAS job the agent
-sends within a request: each batch item, the description screen's `_JOBCOMMENTS`, the argument
-screen's `_ARGUMENTS`, the job itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and `_RESULTS`. A check
-less than 250 ms old is reused (the process scan is not free, and describe on a large SGBD sends
-hundreds of short jobs); each batch item after the first always scans afresh. Once a BMW tool is
-seen, no further job starts in that request:
-- `/ediabas/jobs` and `/ediabas/vehicle`: the item and every later item get `not_run`; items
+**Conflict check during a request.** The check runs again after loading `api32.dll` (a tool
+seen then means no `apiInit`), before every EDIABAS job the agent sends within a request (each
+batch item, the description screen's `_JOBCOMMENTS`, the argument screen's `_ARGUMENTS`, the job
+itself and a follow-up `_JOBS`, and each of describe's `_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS` and
+`_RESULTS`), and every 250 ms while a job runs. A check less than 250 ms old is reused (the
+process scan is not free, and describe on a large SGBD sends hundreds of short jobs). A job
+running when a BMW tool is seen is stopped with `apiBreak` and counts as not run. A check that
+fails while a job runs (the process scan threw) counts the same way: the job is stopped with
+`apiBreak` and is `not_run`. Once a BMW tool is seen, no further job starts in that request:
+- `/ediabas/jobs`: the item and every later item get `not_run`; items
   already done are kept.
 - describe without `job`: the job list is kept, comments already read are kept, and the rest are
-  `not_checked`. If the tool appears before `_JOBS` runs, the request is `cable_in_use`.
+  `not_checked`. If the tool appears before or while `_JOBS` runs, the request is `cable_in_use`.
 - `/ediabas/job` and describe with `job`: the whole request is `cable_in_use`, with the tools in
   `details.processes`.
 
@@ -285,7 +338,7 @@ EDIABAS request has arrived for `ediabasIdleReleaseSeconds` (agent config, defau
 loaded right now.
 
 **A job that does not stop.** A job still busy at its timeout (or when the client gives up) is
-stopped with `apiBreak`. If `apiState` still says busy 2 s later, the agent starts no further
+stopped with `apiBreak`. If `apiState` still says busy 10 s later, the agent starts no further
 job in that request and from then on leaves EDIABAS alone until it is restarted: no `apiEnd` on
 that handle (it could block for good), no idle release of `api32.dll` (it could unload code
 under the running job), and every later request that would use EDIABAS gets 503
@@ -316,8 +369,8 @@ Without `job` — the job list. `comments` defaults to `true`; `filter` narrows 
       "verdict": { "allowed": false, "rule": "deny.substring:STEUER", "review": "not_required" } } ],
   "durationMs": 412 }
 ```
-`review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (an
-unpinned `reviewedJobs` entry, or a pinned one that matches the description), or `not_checked`
+`review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (a pinned
+`reviewedJobs` entry that matches the description), or `not_checked`
 (`comments=false`, or the comment was not fetched because the
 request's time budget ran out, an earlier job did not stop after `apiBreak`, or a BMW tool
 started during the request). A pin that does not match gives `needs_review`; a pin with
@@ -340,8 +393,9 @@ description is empty or could not be read.
 ### `POST /ediabas/job`
 Body `{ "ecu": "NVE_65", "job": "FS_LESEN", "args": "", "results": "", "timeoutSeconds": 30 }`.
 `args`, `results` and `timeoutSeconds` are optional. `timeoutSeconds` defaults to the config's
-`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. The agent refuses to start with a
-`maxJobTimeoutSeconds` above 60: a request can last that long plus the 2 s `apiBreak` grace, and
+`jobTimeoutSeconds` and is clamped to `maxJobTimeoutSeconds`. With a `maxJobTimeoutSeconds`
+above 60 the agent does not start serving (it keeps running, logs why and re-reads the config
+every 30 s): a request can last that long plus the 10 s `apiBreak` grace, and
 the Mac stops waiting for an EDIABAS call after 75 s.
 
 200:
@@ -365,7 +419,8 @@ Body `{ "items": [ { "ecu", "job", "args"?, "results"? } ], "timeoutSeconds"?: 3
 items. `timeoutSeconds` is per item. An item gets `not_run` (with `details: null` and a message
 saying why) when it was not started, or was stopped, because:
 - the request's `maxJobTimeoutSeconds` budget ran out;
-- a BMW tool started during the request (see "Conflict check during a request");
+- a BMW tool started during the request, or the check for one failed while the item's job ran
+  (see "Conflict check during a request");
 - an earlier item's job did not stop after `apiBreak` (see "A job that does not stop");
 - the client gave up on the request (a running job is stopped with `apiBreak`).
 
@@ -381,22 +436,11 @@ failure does not stop the rest. Per-item error codes: `job_not_allowed`, `job_ne
 `ecu_not_found`, `job_not_found`, `cable_not_found`, `ediabas_error`, `job_timeout`, `not_run`. Whole-request failures
 (`bad_request`, `cable_in_use`, `ediabas_unavailable`) are HTTP errors as above.
 
-### `GET /ediabas/vehicle`
-Runs, in one cycle and through the same policy as any other job: `UTILITY STATUS_ZUENDUNG`,
-`UTILITY STATUS_UBATT`, every `voltageSources` entry, `TMODE LESE_SPANNUNG_KL30` and
-`TMODE LESE_SPANNUNG_KL15`. Returns each as an item of the `/ediabas/jobs` shape; the agent
-does not interpret result names (they are confirmed at the car in Phase 6). `voltageSources`
-in the agent config is empty by default, so `voltages` is `[]`; the example below shows one
-entry an E60/E61 owner might add (the night-vision module's supply voltage).
-
-```json
-{ "ignition": { "ok": true, "result": { }, "error": null },
-  "ubatt": { "ok": true, "result": { }, "error": null },
-  "voltages": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG", "ok": true, "result": { }, "error": null } ],
-  "cableKl30": { "ok": false, "result": null, "error": { } },
-  "cableKl15": { "ok": false, "result": null, "error": { } },
-  "durationMs": 2100 }
-```
+The Mac's `ediabas_vehicle_status` is one `/ediabas/jobs` request: `UTILITY STATUS_ZUENDUNG`,
+`UTILITY STATUS_UBATT`, each `voltageSources` entry from the Mac's `config.local.json`, then
+`TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15` ([tools.md](tools.md)). The agent has
+no vehicle-status endpoint of its own (`/ediabas/vehicle` was removed in 0.5.0), and an old
+`voltageSources` key in its `config.json` is a start-up warning, not an error.
 
 ## `GET /screen/capture?window=<handle|title-substring|desktop>&maxEdge=1600&format=jpeg|png`
 - `window` defaults to `desktop` (the primary screen). A value of the form `0x` + hex digits
@@ -452,7 +496,10 @@ Newest first.
   disk (network, removable, optical) grants nothing and is never opened (`/logs` shows it with
   `exists: false`). Refused with `path_not_allowed`: `..` segments, relative paths, UNC and
   device paths (`\\?\`, `\\.\`), alternate data streams, DOS device names (`CON`, `NUL`,
-  `COM1`, …), junction or symlink escapes, and 8.3 short names that resolve outside the roots.
+  `COM1`, …), junction escapes, and 8.3 short names that resolve outside the roots. A log file
+  that is itself a symbolic link is opened as the link and refused (`file_not_found`), whatever
+  it points at; before, it was followed and checked by final path. A link is never followed, so
+  one planted in a root that points at a device is never opened.
 
 ```json
 { "path": "C:\\EDIABAS\\TRACE\\api.trc", "sizeBytes": 20480, "modifiedAt": "2026-11-21T16:40:02Z",
@@ -488,10 +535,11 @@ request object gets `bad_request` with `"id": null`; the server carries on.
 | `describe` | `{ "ecu", "job"?, "filter"?, "comments"?: bool }` | as `GET /ediabas/describe` |
 | `job` | the body of `POST /ediabas/job` | as `POST /ediabas/job` |
 | `jobs` | the body of `POST /ediabas/jobs` | as `POST /ediabas/jobs` |
-| `vehicle` | `{}` | as `GET /ediabas/vehicle` |
 | `health` | `{}` | `{ "engine": "ediabasd-net", "version", "kline", "ecuPath", "cable": { "state": "absent" \| "present" \| "several" \| "unknown", "port" }, "policyVersion" }` |
 
 Unknown params are `bad_request`. `health` never opens the cable: it reads USB identities only.
+There is no `vehicle` method, as the agent has no vehicle endpoint: the MCP server reads vehicle
+status as one `jobs` batch on either backend.
 
 **What differs from the VM.**
 - **Describe never touches the cable.** `_` jobs (`_JOBS`, `_JOBCOMMENTS`, `_ARGUMENTS`,
@@ -500,7 +548,7 @@ Unknown params are `bad_request`. `health` never opens the cable: it reads USB i
   native describe therefore works without the car where the VM's does not. Deliberate.
 - **Group files** (`.grp`): describe uses the variant the group last resolved to at the car,
   cached in `$XDG_STATE_HOME/bimmer-bridge/variants.json` and keyed by the `.grp` file's hash.
-  With no entry it fails with `needs_car`. A `job`, `jobs` or `vehicle` request on a group
+  With no entry it fails with `needs_car`. A `job` or `jobs` request on a group
   resolves it at the car (EdiabasLib runs its `IDENTIFIKATION`, as EDIABAS does) and stores it.
 - No process conflict check: the cable's lock (`flock` and exclusive open) does that job, and a
   cable held by another program is `cable_in_use`.
@@ -524,12 +572,12 @@ writes that request's response and exits with code 3; the next request starts a 
 
 **Config** (`$XDG_CONFIG_HOME/bimmer-bridge/config.json`, default `~/.config/…`): `ecuPath`
 (required), `port` (optional when exactly one cable is present), `jobTimeoutSeconds` (30),
-`maxJobTimeoutSeconds` (60, at most 60), `voltageSources`, `reviewedJobs` (read at start),
+`maxJobTimeoutSeconds` (60, at most 60), `reviewedJobs` (read at start),
 `traceDir`, `recordDir`. Unknown keys are errors. The audit log is
 `$XDG_STATE_HOME/bimmer-bridge/audit.log` (default `~/.local/state/…`), in the format below,
 with `stdio` or `cli` as the remote address and the method as the request.
 
 The same methods run from a shell: `ediabasd ecus [FILTER]`, `ediabasd describe ECU [JOB]
 [--filter X] [--no-comments]`, `ediabasd job ECU JOB [--args A] [--results R] [--timeout N]`,
-`ediabasd vehicle`, `ediabasd health`, each with `--config PATH`. Exit 0 ok, 1 error response,
+`ediabasd health`, each with `--config PATH`. Exit 0 ok, 1 error response,
 2 usage, 3 stuck, 78 config error.

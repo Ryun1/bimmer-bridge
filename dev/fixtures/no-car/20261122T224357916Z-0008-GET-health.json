@@ -1,0 +1,61 @@
+{
+  "recordedAt": "2026-11-22T22:43:57.916Z",
+  "request": {
+    "method": "GET",
+    "path": "/health",
+    "query": {},
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "agent": "ediabas-bridge-agent",
+      "version": "0.6.0",
+      "startedAt": "2026-11-22T22:16:11Z",
+      "uptimeSeconds": 1665,
+      "os": {
+        "description": "Microsoft Windows 10.0.26200",
+        "osArchitecture": "Arm64",
+        "processArchitecture": "X86"
+      },
+      "user": "user",
+      "elevated": true,
+      "sessionId": 1,
+      "bindAddress": "192.168.64.3",
+      "port": 8765,
+      "gateway": "192.168.64.1",
+      "conflictingProcesses": [],
+      "ediabas": {
+        "dllPath": "C:\\EDIABAS\\BIN\\api32.dll",
+        "dllFound": true,
+        "loaded": true,
+        "stuck": false,
+        "heldOpen": false
+      },
+      "lastCableUseAt": "2026-11-22T22:43:55Z",
+      "policyVersion": 4,
+      "policySha256": "5d0afef1659bbac1214ee4bd8a92e5ea968a86fb7d18829667d82efddbcf4e31",
+      "capabilities": [
+        "ediabas",
+        "capture",
+        "logs"
+      ],
+      "approvals": {
+        "pinned": 5,
+        "ignored": 0,
+        "entries": [
+          "CAS:STATUS_KL15_ABSCHALTUNG@7f401ea917cd",
+          "CAS:STATUS_KLEMMENVERHINDERER@25403a239cb1",
+          "CAS:STATUS_WAKEUP_HISTORY@fbc0eac3b28d",
+          "CAS:STATUS_WUP@f6249b42e439",
+          "MPM_60:STATUS_AD_WERTE_LESEN@aea6a0af4d73"
+        ],
+        "hash": "092b92b2bc5b"
+      }
+    }
+  }
+}

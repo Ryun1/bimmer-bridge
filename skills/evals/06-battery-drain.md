@@ -7,9 +7,9 @@
 `battery` — healthy agent; `ediabas_list_ecus` / `ediabas_describe` answer for the engine group and a few status jobs; `ediabas_vehicle_status`, `ediabas_read_faults`, `ediabas_job` and `ediabas_jobs` answer from a real session.
 
 ## How to run
-Fresh Claude Code session, `ediabas-bridge` MCP server registered with `EDIABAS_AGENT_URL`
+Fresh Claude Code session, `bimmer-bridge` MCP server registered with `EDIABAS_AGENT_URL`
 pointing at `dev/replay-agent.ts` serving the scenario above (case 08 instead points it at nothing). Run twice: with the skills
-installed (ediabas-bridge) and without them. The skill passes when the with-skill run passes and the
+installed (bimmer-bridge) and without them. The skill passes when the with-skill run passes and the
 without-skill run fails or does worse. Its fixture has to be recorded at the car (Phase 6); until then
 this case cannot be run.
 

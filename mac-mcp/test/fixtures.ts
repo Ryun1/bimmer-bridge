@@ -1,3 +1,4 @@
+import { createHash, createHmac } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -68,9 +69,29 @@ export function json(res: ServerResponse, status: number, body: unknown, headers
   res.end(JSON.stringify(body));
 }
 
+/** The /hello proof (docs/api.md "GET /hello"), computed independently of mac-mcp/src. */
+export function helloProof(token: string, nonce: string): string {
+  const key = createHash("sha256").update(token, "utf8").digest();
+  return createHmac("sha256", key).update(`ediabas-bridge-hello-v1:${nonce}`, "utf8").digest("hex");
+}
+
+/** Answers `GET /hello?nonce=` like the agent (no token needed). False when it is not that request. */
+export function answerHello(req: IncomingMessage, res: ServerResponse, token: string): boolean {
+  const url = new URL(req.url ?? "/", "http://fake");
+  if (req.method !== "GET" || url.pathname !== "/hello") return false;
+  const nonce = url.searchParams.get("nonce") ?? "";
+  if (!/^[0-9a-f]{32}$/.test(nonce) || [...url.searchParams.keys()].length !== 1) {
+    json(res, 400, { error: { code: "bad_request", message: "nonce must be 32 lowercase hex characters.", details: { parameter: "nonce" } } });
+  } else {
+    json(res, 200, { agent: "ediabas-bridge-agent", proof: helloProof(token, nonce) });
+  }
+  return true;
+}
+
 /** The real agent's behaviour per docs/api.md, for a given token. */
 export function contractHandler(token: string = AGENT_TOKEN, health = healthBody(), windows = windowsBody()): Handler {
   return (req, res) => {
+    if (answerHello(req, res, token)) return;
     if (req.headers.authorization !== `Bearer ${token}`) {
       json(res, 401, { error: { code: "unauthorized", message: "Missing or invalid bearer token." } }, { "www-authenticate": "Bearer" });
       return;

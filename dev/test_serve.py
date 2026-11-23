@@ -9,6 +9,7 @@ import plistlib
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -130,6 +131,10 @@ class GetRoutes(ServerTestCase):
 
     def test_request_logged(self):
         self.request("GET", "/discover.ps1")
+        # A file is logged after its body is sent, so the client can finish first: wait for it.
+        deadline = time.monotonic() + 2
+        while not self.log.getvalue().strip() and time.monotonic() < deadline:
+            time.sleep(0.01)
         line = self.log.getvalue().strip().splitlines()[-1]
         size = (self.setup_dir / "discover.ps1").stat().st_size
         self.assertRegex(line, r"^\S+Z 127\.0\.0\.1 GET /discover\.ps1 200 %d$" % size)
@@ -535,7 +540,8 @@ class BindAndClients(unittest.TestCase):
             path = Path(d) / "config.local.json"
             self.assertEqual(serve.read_local_config(path), ({}, []))
             path.write_text(json.dumps({"_comment": "x", "vmName": " Win11 ", "vmMac": "02:00:00:00:00:01",
-                                        "agentPort": 9000}), encoding="utf-8")
+                                        "agentPort": 9000, "voltageSources": [{"ecu": "A", "job": "B"}]}),
+                            encoding="utf-8")
             self.assertEqual(serve.read_local_config(path),
                              ({"vmName": "Win11", "vmMac": "02:00:00:00:00:01", "agentPort": 9000}, []))
             path.write_text(json.dumps({"vmname": "x", "vmMac": 5, "agentPort": True}), encoding="utf-8")
@@ -685,7 +691,7 @@ class Startup(unittest.TestCase):
         for script in ("install.ps1", "update.ps1"):
             expected = (
                 "  $base='http://192.168.64.1:8000'; $sha='%s'; "
-                "$ebFile=\"$env:TEMP\\ediabas-bridge-%s\"; "
+                "$ebFile=\"$env:TEMP\\bimmer-bridge-%s\"; "
                 "Remove-Item -LiteralPath $ebFile -Force -ErrorAction SilentlyContinue; "
                 "$ebOk=$false; "
                 "try { iwr \"$base/%s\" -UseBasicParsing -OutFile $ebFile -ErrorAction Stop; $ebOk=$true } "
@@ -765,10 +771,102 @@ class Startup(unittest.TestCase):
             self.assertEqual(text.count("    # shared:end\n"), 1, script)
             block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
             for name in ("New-AdminOnlyDirectory", "Remove-StaleStaging", "Copy-VerifiedExe",
-                         "Stop-Agent"):
+                         "Stop-Agent", "Set-FirewallRule", "Get-DefaultRoute", "Invoke-Http",
+                         "Wait-AgentAnswer"):
                 self.assertIn("function %s" % name, block, script)
             blocks.append(block)
         self.assertEqual(blocks[0], blocks[1])
+
+    def test_firewall_rule_is_made_in_the_shared_block_only(self):
+        # Install and Update both pin the rule to the current gateway (F10).
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            block = text.split("    # shared:begin\n", 1)[1].split("    # shared:end\n", 1)[0]
+            rest = text.replace(block, "")
+            self.assertIn("function Set-FirewallRule([int]$Port)", block, script)
+            self.assertIn("-RemoteAddress $gateway", block, script)
+            self.assertNotIn("New-NetFirewallRule", rest, script)
+            self.assertIn("        Set-FirewallRule $port\n", rest, script)
+
+    def test_a_bad_copy_is_not_deleted_by_the_copy(self):
+        # Copy-VerifiedExe reports a hash mismatch with $false; the caller restores the backup.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        copy = text.split("function Copy-VerifiedExe", 1)[1].split("\n    }\n", 1)[0]
+        self.assertNotIn("Remove-Item", copy)
+        self.assertNotIn("throw", copy)
+
+    def test_update_backs_up_rolls_back_and_merges(self):
+        # F10, F13: the update order, the backup, the rollback and the conflict-name merge.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        body = text[text.index("    $tmp = $null\n"):]
+        order = ["Disable-ScheduledTask", "        Stop-Agent\n", "$BackupPath $oldHash",
+                 "Copy-VerifiedExe $newExe $ExePath $exeHash", "Merge-ConflictDefaults\n",
+                 "Set-FirewallRule $port", "Enable-ScheduledTask", "Start-ScheduledTask",
+                 "Wait-AgentAnswer"]
+        at = [body.index(step) for step in order]
+        self.assertEqual(at, sorted(at))
+        self.assertIn("'EdiabasAgent.exe.bak'", text)
+        self.assertIn("Copy-VerifiedExe $BackupPath $ExePath $OldHash", text)
+        self.assertIn("'Rolled back to ' + $oldVersion", text)
+        self.assertIn("Wait-AgentAnswer $url $token 60", body)
+        finally_part = body[body.rindex("    } finally {\n"):]
+        self.assertIn("Enable-ScheduledTask", finally_part)
+        for name in ("'INPALOAD'", "'TOOL32'", "'NCSEXPER'", "'WINKFPT'", "'BMW Coding Tool'",
+                     "'WINKFP'", "'ISTAGUI'"):
+            self.assertIn(name, text)
+        self.assertIn("ConvertTo-Json -Depth 10", text)
+        self.assertIn("New-Object System.Text.UTF8Encoding($false)", text)
+
+    def test_update_keeps_and_restores_the_config_backup(self):
+        # Review fix: a merge keeps config.json.bak, checks the new text before the swap, and a
+        # rollback puts config.json back when the merge wrote it.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        self.assertIn("$ConfigBackupPath = Join-Path $Root 'config.json.bak'", text)
+        self.assertIn("[System.IO.File]::Replace($newPath, $ConfigPath, $ConfigBackupPath)", text)
+        self.assertNotIn("Replace($newPath, $ConfigPath, $null)", text)
+        self.assertNotIn("Add-Member", text)
+        merge = text.split("function Merge-ConflictDefaults", 1)[1].split("\n    }\n", 1)[0]
+        self.assertLess(merge.index("'reviewedJobs has '"), merge.index("WriteAllText"))
+        self.assertLess(merge.index("'the key '"), merge.index("WriteAllText"))
+        self.assertLess(merge.index("'conflictProcesses is not an array'"), merge.index("WriteAllText"))
+        self.assertIn("$configMerged = Merge-ConflictDefaults", text)
+        rollback = text[text.index("Rolling back."):text.index("'Rolled back to '")]
+        self.assertIn("if ($configMerged)", rollback)
+        self.assertIn("[System.IO.File]::Copy($ConfigBackupPath, $ConfigPath, $true)", rollback)
+        self.assertIn("'Rolled back to ' + $oldVersion + $configNote", text)
+
+    def test_update_rechecks_the_restored_agent_and_survives_a_failed_merge(self):
+        # Final review: after a rollback /health is asked once more, and a restored agent that
+        # does not answer either is named; an exception in the merge never stops the update.
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        after = text[text.index("'Rolled back to ' + $oldVersion"):]
+        after = after[:after.index("Write-Step ('Updated to bimmer-bridge agent '")]
+        self.assertIn("$restored = Wait-AgentAnswer $url $token 60", after)
+        self.assertIn("if (Test-AgentAnswered $restored) {", after)
+        self.assertIn("does not answer at ' + $url + ' either", after)
+        self.assertIn("does not answer either. Check ' + $ConfigPath", after)
+        helper = text.split("function Test-AgentAnswered($result)", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("$result.Status -eq 200", helper)
+        merge_call = text[text.index("Write-Step 'Checking conflictProcesses in config.json'"):text.index("Set-FirewallRule $port")]
+        self.assertLess(merge_call.index("try {"), merge_call.index("$configMerged = Merge-ConflictDefaults"))
+        catch = merge_call[merge_call.index("} catch {"):]
+        self.assertIn("$configMerged = $false", catch)
+        self.assertIn("config.json left untouched", catch)
+        self.assertNotIn("throw", catch)
+
+    def test_a_403_counts_as_up_only_with_the_forbidden_body(self):
+        for script in ("install.ps1", "update.ps1"):
+            text = (serve.REPO_ROOT / "vm-setup" / script).read_text(encoding="ascii")
+            for line in text.splitlines():
+                if "Status -eq 403" in line:
+                    self.assertIn("[string]$result.Body -like '*forbidden*'", line, script)
+
+    def test_update_warns_about_a_task_it_enabled_and_a_missing_rule(self):
+        text = (serve.REPO_ROOT / "vm-setup" / "update.ps1").read_text(encoding="ascii")
+        self.assertIn("$wasDisabled = ([string]$task.State -eq 'Disabled')", text)
+        self.assertEqual(text.count("if ($wasDisabled) {"), 2)
+        self.assertIn("is in place, but the firewall rule", text)
+        self.assertIn("Run the Install line again.", text)
 
     def test_says_which_address_it_accepts(self):
         self.assertTrue(any("192.168.64.3" in l and "only" in l for l in self.lines()))

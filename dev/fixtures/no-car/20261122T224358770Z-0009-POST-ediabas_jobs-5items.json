@@ -1,0 +1,166 @@
+{
+  "recordedAt": "2026-11-22T22:43:58.770Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_ZUENDUNG"
+        },
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_UBATT"
+        },
+        {
+          "ecu": "NVE_65",
+          "job": "STATUS_BORDNETZSPANNUNG"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL30"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL15"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "UTILITY",
+            "job": "STATUS_ZUENDUNG",
+            "variant": "UTILITY",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "utility",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_ZUENDUNG",
+              "VARIANTE": "UTILITY",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "STAT_ZUENDUNG": 0
+              }
+            ],
+            "durationMs": 121
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "UTILITY",
+            "job": "STATUS_UBATT",
+            "variant": "UTILITY",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "utility",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_UBATT",
+              "VARIANTE": "UTILITY",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "STAT_UBATT": 1
+              }
+            ],
+            "durationMs": 1
+          },
+          "error": null
+        },
+        {
+          "ok": false,
+          "result": null,
+          "error": {
+            "code": "ediabas_error",
+            "message": "EDIABAS reported error 13: IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED",
+            "details": {
+              "errorCode": 13,
+              "errorText": "IFH-0003: DATATRANSMISSION TO INTERFACE DISTURBED"
+            }
+          }
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "TMODE",
+            "job": "LESE_SPANNUNG_KL30",
+            "variant": "TMODE",
+            "jobStatus": null,
+            "systemResults": {
+              "OBJECT": "tmode",
+              "SAETZE": 1,
+              "JOBNAME": "LESE_SPANNUNG_KL30",
+              "VARIANTE": "TMODE",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "SPANNUNG": "E02E0000"
+              }
+            ],
+            "durationMs": 4
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "TMODE",
+            "job": "LESE_SPANNUNG_KL15",
+            "variant": "TMODE",
+            "jobStatus": null,
+            "systemResults": {
+              "OBJECT": "tmode",
+              "SAETZE": 1,
+              "JOBNAME": "LESE_SPANNUNG_KL15",
+              "VARIANTE": "TMODE",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "SPANNUNG": "00000000"
+              }
+            ],
+            "durationMs": 1
+          },
+          "error": null
+        }
+      ],
+      "durationMs": 680
+    }
+  }
+}

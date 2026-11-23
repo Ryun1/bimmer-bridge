@@ -5,7 +5,7 @@ using EdiabasLib.Native;
 
 namespace Ediabasd;
 
-/// Whether the current request may reach the car (job, jobs, vehicle) or must not (ecus,
+/// Whether the current request may reach the car (job, jobs) or must not (ecus,
 /// describe). Only a live request may resolve a group file at the car.
 public enum RequestMode
 {

@@ -1,6 +1,6 @@
 import type { NetworkInterfaceInfo } from "node:os";
 import type { Config } from "./config.js";
-import { BridgeError, configError, vmNotRunning } from "./errors.js";
+import { configError, vmNotRunning } from "./errors.js";
 import { isHttpUrl } from "./config.js";
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,6 @@ export interface DiscoverySources {
 }
 
 export const LEASES_PATH = "/var/db/dhcpd_leases";
-export const ARP_PATH = "/usr/sbin/arp";
 export const PLUTIL_PATH = "/usr/bin/plutil";
 const COMMAND_TIMEOUT_MS = 5_000;
 
@@ -107,12 +106,8 @@ export function isIPv4(ip: string): boolean {
   return ipv4ToInt(ip) !== null;
 }
 
-function dedupe(list: string[]): string[] {
-  return [...new Set(list)];
-}
-
 // ---------------------------------------------------------------------------
-// Source 1: /var/db/dhcpd_leases
+// The VM's address: the newest on-link lease in /var/db/dhcpd_leases
 // ---------------------------------------------------------------------------
 
 export interface Lease {
@@ -140,51 +135,22 @@ export function parseLeases(text: string): Lease[] {
     const comma = hw.indexOf(",");
     const hwAddress = comma >= 0 ? hw.slice(comma + 1) : hw;
     const expiry = /^0x[0-9a-fA-F]+$/.test(lease) ? parseInt(lease.slice(2), 16) : Number(lease);
-    out.push({ ipAddress: ip, hwAddress, lease: Number.isFinite(expiry) ? expiry : 0 });
+    if (!Number.isFinite(expiry)) continue; // dev/serve.py skips a lease whose expiry is not a number
+    out.push({ ipAddress: ip, hwAddress, lease: expiry });
   }
   return out;
 }
 
-/** Addresses leased to `mac`, latest expiry first, de-duplicated. */
+/**
+ * The addresses of every lease for `mac`, newest first: the largest `lease` (expiry) first, and
+ * on a tie the earlier entry in the file first, as in `vm_lease_address` in dev/serve.py. The
+ * caller contacts only one of them: the first that is on-link (`VmLocator.discover`).
+ */
 export function leaseCandidates(text: string, mac: string): string[] {
-  const mine = parseLeases(text).filter((l) => macEquals(l.hwAddress, mac));
-  mine.sort((a, b) => b.lease - a.lease);
-  return dedupe(mine.map((l) => l.ipAddress));
-}
-
-// ---------------------------------------------------------------------------
-// Source 2: arp -an
-// ---------------------------------------------------------------------------
-
-export interface ArpEntry {
-  ipAddress: string;
-  macAddress: string;
-  iface: string;
-}
-
-/** Parse `arp -an` lines: `? (192.168.64.3) at 2:0:0:0:0:1 on bridge100 ifscope [bridge]`. */
-export function parseArp(text: string): ArpEntry[] {
-  const out: ArpEntry[] = [];
-  for (const line of text.split("\n")) {
-    const m = /^\S+ \(([\d.]+)\) at (\S+) on (\S+)/.exec(line.trim());
-    if (!m) continue;
-    const [, ip, macAddress, iface] = m;
-    if (!ip || !macAddress || !iface || !isIPv4(ip) || parseMac(macAddress) === null) continue; // skips "(incomplete)"
-    out.push({ ipAddress: ip, macAddress, iface });
-  }
-  return out;
-}
-
-export function arpCandidates(text: string, mac: string): string[] {
-  return dedupe(parseArp(text).filter((e) => macEquals(e.macAddress, mac)).map((e) => e.ipAddress));
-}
-
-// ---------------------------------------------------------------------------
-// Source 3: utmctl ip-address <name>
-// ---------------------------------------------------------------------------
-
-export function parseUtmctl(text: string): string[] {
-  return dedupe(text.split("\n").map((l) => l.trim()).filter(isIPv4));
+  return parseLeases(text)
+    .filter((l) => macEquals(l.hwAddress, mac))
+    .sort((a, b) => b.lease - a.lease) // stable: ties keep file order
+    .map((l) => l.ipAddress);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,11 +163,11 @@ export interface Subnet {
   netmask: string;
 }
 
-/** IPv4 subnets of local `bridge*` interfaces (UTM's shared network is one of these). */
+/** IPv4 subnets of local `bridge1NN` interfaces (UTM's shared network is `bridge100`, `bridge101`, ...). */
 export function bridgeSubnets(ifaces: Partial<Record<string, NetworkInterfaceInfo[]>>): Subnet[] {
   const out: Subnet[] = [];
   for (const [name, infos] of Object.entries(ifaces)) {
-    if (!name.startsWith("bridge") || !infos) continue;
+    if (!/^bridge1\d\d$/.test(name) || !infos) continue;
     for (const info of infos) {
       const family = info.family as unknown;
       if ((family === "IPv4" || family === 4) && !info.internal) {
@@ -241,43 +207,35 @@ export function hostPort(baseUrl: string): string {
 /** Per-tool-call state shared between discovery and the request (one token re-read per call). */
 export interface CallContext {
   tokenRefreshed: boolean;
+  /**
+   * The address that proved itself in this call, and the exact token whose key its `/hello`
+   * proof matched: the only token this call sends, and only to that address.
+   */
+  proven?: { baseUrl: string; token: string } | undefined;
 }
 
 /**
- * Checks one candidate: resolves when `GET /health` there returns 200 with the right `agent`
- * value; otherwise rejects with a classified BridgeError.
+ * Checks one candidate: resolves when `GET /hello` there (fresh nonce, no token) returns 200
+ * with the right `agent` value and a proof that matches this Mac's token, and records the
+ * address and token in `ctx.proven`; otherwise rejects with a classified BridgeError.
  */
 export type ProbeFn = (baseUrl: string, ctx: CallContext) => Promise<void>;
-
-/** Which failure best explains why no candidate was accepted (higher wins). */
-function rank(code: string): number {
-  switch (code) {
-    case "unauthorized":
-      return 7;
-    case "forbidden":
-      return 6;
-    case "local_network_blocked":
-      return 5;
-    case "agent_not_answering":
-      return 4;
-    case "vm_not_running":
-    case "wrong_service":
-      return 1;
-    default:
-      return 3; // agent errors, malformed responses
-  }
-}
 
 export class VmLocator {
   private cached: string | undefined;
   private inflight: Promise<string> | undefined;
 
-  constructor(
-    private readonly config: Config,
-    private readonly sources: DiscoverySources,
-    private readonly probe: ProbeFn,
-    private readonly log: (message: string) => void = () => {},
-  ) {}
+  private readonly config: Config;
+  private readonly sources: DiscoverySources;
+  private readonly probe: ProbeFn;
+  private readonly log: (message: string) => void;
+
+  constructor(config: Config, sources: DiscoverySources, probe: ProbeFn, log: (message: string) => void = () => {}) {
+    this.config = config;
+    this.sources = sources;
+    this.probe = probe;
+    this.log = log;
+  }
 
   /** The accepted base URL, from cache or by discovery. */
   async resolve(ctx: CallContext): Promise<{ baseUrl: string; fromCache: boolean }> {
@@ -311,55 +269,27 @@ export class VmLocator {
     }
 
     const mac = await resolveVmMac(this.config, this.sources.execFile);
-    const tried = new Set<string>();
-    let sawCandidate = false;
-    let best: BridgeError | undefined;
-
-    for (const [sourceName, source] of this.candidateSources(mac)) {
-      const candidates = await source();
-      for (const ip of candidates) {
-        if (tried.has(ip)) continue;
-        tried.add(ip);
-        sawCandidate = true;
-        if (!isOnLink(ip, subnets)) continue; // never send the token off-link
-        const baseUrl = `http://${ip}:${this.config.agentPort}`;
-        try {
-          await this.probe(baseUrl, ctx);
-          this.log(`discovery accepted ${ip}:${this.config.agentPort} (source: ${sourceName})`);
-          return baseUrl;
-        } catch (e) {
-          if (!(e instanceof BridgeError) || e.code === "no_token") throw e;
-          if (!best || rank(e.code) > rank(best.code)) best = e;
-        }
-      }
+    if (mac === undefined) {
+      throw vmNotRunning(
+        this.config.vmName,
+        `its MAC address is not set and could not be read from ${this.config.utmConfigPath}: ${vmMacHint(this.config)}`,
+      );
     }
-
-    if (best && rank(best.code) > 1) throw best;
-    let detail: string;
-    if (sawCandidate) detail = "no address for it answered as the agent on the UTM network";
-    else if (mac === undefined) detail = `its MAC address is not set and could not be read from ${this.config.utmConfigPath}: ${vmMacHint(this.config)}`;
-    else detail = `its MAC address ${mac} is not in the DHCP leases or ARP table; if that is not the VM's MAC, ${vmMacHint(this.config)}`;
-    throw vmNotRunning(this.config.vmName, detail);
-  }
-
-  /** Lazy sources in priority order; a later source only runs if earlier ones found nothing usable. */
-  private candidateSources(mac: string | undefined): [string, () => Promise<string[]>][] {
-    const { readFile, execFile } = this.sources;
-    // Without a MAC the leases and ARP table cannot say which address is the VM's.
-    const byMac: [string, () => Promise<string[]>][] =
-      mac === undefined
-        ? []
-        : [
-            ["leases", async () => leaseCandidates(await readFile(LEASES_PATH).catch(() => ""), mac)],
-            ["arp", async () => arpCandidates(await execFile(ARP_PATH, ["-an"], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""), mac)],
-          ];
-    return [
-      ...byMac,
-      ["utmctl", async () =>
-        parseUtmctl(
-          // Fails when the guest agent is absent, which is normal.
-          await execFile(this.config.utmctlPath, ["ip-address", this.config.vmName], { timeoutMs: COMMAND_TIMEOUT_MS }).catch(() => ""),
-        )],
-    ];
+    const leases = leaseCandidates(await this.sources.readFile(LEASES_PATH).catch(() => ""), mac);
+    if (leases.length === 0) {
+      throw vmNotRunning(this.config.vmName, `its MAC address ${mac} is not in the DHCP leases; if that is not the VM's MAC, ${vmMacHint(this.config)}`);
+    }
+    // The newest lease on UTM's network. A newer one off-link (from a former UTM subnet) can
+    // never be contacted, so skipping it adds no source; only this one address is probed, and
+    // if it fails no older lease is tried.
+    const ip = leases.find((l) => isOnLink(l, subnets));
+    if (ip === undefined) {
+      // never send anything off-link
+      throw vmNotRunning(this.config.vmName, `none of its DHCP leases is on the UTM network (the newest is ${leases[0]})`);
+    }
+    const baseUrl = `http://${ip}:${this.config.agentPort}`;
+    await this.probe(baseUrl, ctx); // its own error is the answer
+    this.log(`discovery accepted ${ip}:${this.config.agentPort} (source: leases)`);
+    return baseUrl;
   }
 }

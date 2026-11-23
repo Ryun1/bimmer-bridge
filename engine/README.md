@@ -22,5 +22,5 @@ $DOTNET run --project engine/ediabasd-net -- describe NVE_65
 
 Tests use upstream's test SGBDs in place (`cmd_test1`, `cmd_test2`, `base1`, `base2`,
 `cmd_ident` only) and never open a real cable: they use replay recordings, fakes, or a device
-path that does not exist. Never run `ediabasd job`, `jobs` or `vehicle` with the cable in a car
+path that does not exist. Never run `ediabasd job` or `jobs` with the cable in a car
 unless you mean to read that car.

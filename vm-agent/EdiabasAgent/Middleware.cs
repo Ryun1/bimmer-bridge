@@ -12,7 +12,8 @@ namespace EdiabasAgent;
 /// <item>audit (outermost, in <c>finally</c>): one line for every request, rejected ones included;</item>
 /// <item>error shaping: unhandled exception becomes 500 <c>internal_error</c>; details go to agent.log only;</item>
 /// <item>remote-address check: only the selected gateway (the Mac) may talk to us, else 403 <c>forbidden</c>;</item>
-/// <item>auth: Bearer token, 401 <c>unauthorized</c> before any routing;</item>
+/// <item>auth: Bearer token, 401 <c>unauthorized</c> before any routing; only <c>GET /hello</c> skips
+/// this step (<see cref="TokenAuth.NeedsToken"/>), and any Authorization header on it is ignored;</item>
 /// <item>routing: unknown path 404 <c>not_found</c>, wrong method 405 <c>method_not_allowed</c>.</item>
 /// </list>
 /// </summary>
@@ -96,9 +97,11 @@ internal sealed class RequestPipeline
         }
 
         // Auth before routing: exactly one Authorization header, well-formed, correct token.
+        // GET /hello alone skips it (exact path); a header sent with it is not looked at.
+        var path = http.Request.Path.Value ?? "";
         var authValues = http.Request.Headers.Authorization;
         var header = authValues.Count == 1 ? authValues[0] : null;
-        if (!_ctx.Auth.IsAuthorized(header))
+        if (TokenAuth.NeedsToken(http.Request.Method, path) && !_ctx.Auth.IsAuthorized(header))
         {
             http.Response.Headers.WWWAuthenticate = "Bearer";
             await Responses.WriteError(http, StatusCodes.Status401Unauthorized, ApiErrors.Unauthorized,
@@ -106,7 +109,6 @@ internal sealed class RequestPipeline
             return ApiErrors.Unauthorized;
         }
 
-        var path = http.Request.Path.Value ?? "";
         var forPath = _routes.Where(r => string.Equals(r.Path, path, StringComparison.OrdinalIgnoreCase)).ToList();
         if (forPath.Count == 0)
         {

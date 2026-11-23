@@ -65,7 +65,7 @@ internal sealed class LogAccess : ILogFileSystem
     {
         file = null;
         var h = LogNative.CreateFileW(path, LogNative.GENERIC_READ, LogNative.FILE_SHARE_ALL, IntPtr.Zero,
-            LogNative.OPEN_EXISTING, LogNative.FILE_ATTRIBUTE_NORMAL, IntPtr.Zero);
+            LogNative.OPEN_EXISTING, LogNative.FILE_ATTRIBUTE_NORMAL | LogNative.FILE_FLAG_OPEN_REPARSE_POINT, IntPtr.Zero);
         if (h.IsInvalid)
         {
             var error = Marshal.GetLastPInvokeError();
@@ -79,6 +79,21 @@ internal sealed class LogAccess : ILogFileSystem
                 LogNative.ERROR_ACCESS_DENIED when IsDirectory(path) => LogOpenStatus.NotFound,
                 _ => LogOpenStatus.Unreadable,
             };
+        }
+
+        // The flag above opens a link as the link itself, so a link planted in a log root that
+        // points at a device is never opened. A link is refused, whatever it points at; so is a
+        // file whose attributes cannot be read, since it cannot be shown not to be a link.
+        if (!LogNative.GetFileInformationByHandle(h, out var info))
+        {
+            h.Dispose();
+            return LogOpenStatus.Unreadable;
+        }
+
+        if ((info.FileAttributes & LogNative.FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        {
+            h.Dispose();
+            return LogOpenStatus.NotFound;
         }
 
         file = new OpenedFile(h);
@@ -170,6 +185,8 @@ internal static class LogNative
     internal const uint OPEN_EXISTING = 3;
     internal const uint FILE_ATTRIBUTE_NORMAL = 0x80;
     internal const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+    internal const uint FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
+    internal const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
     internal const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
     internal const uint INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF;
     internal const uint FILE_TYPE_DISK = 1;

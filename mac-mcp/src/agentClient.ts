@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { Config } from "./config.js";
 import {
@@ -11,10 +12,12 @@ import {
   forbidden,
   localNetworkBlocked,
   unauthorized,
+  unexpectedStatus,
+  unprovenAgent,
   vmNotRunning,
   wrongService,
 } from "./errors.js";
-import type { ExchangeRecorder } from "./recorder.js";
+import { helloKey } from "./token.js";
 import { VmLocator, bridgeSubnets, hostPort, isOnLink, type CallContext, type DiscoverySources } from "./vmAddress.js";
 
 export const AGENT_ID = "ediabas-bridge-agent";
@@ -43,18 +46,36 @@ export const HealthSchema = z.object({
   conflictingProcesses: z.array(z.object({ name: z.string(), pid: z.number().int() })),
   // `loaded`: whether the agent has the DLL loaded right now (idle release); older agents omit it.
   // `stuck`: a job did not stop after apiBreak and the agent must be restarted; older agents omit it.
+  // `heldOpen`: apiEnd threw, so EDIABAS stays loaded until the agent restarts; older agents omit it.
   ediabas: z.object({
     dllPath: z.string().nullable(),
     dllFound: z.boolean(),
     loaded: z.boolean().nullable().optional(),
     stuck: z.boolean().nullable().optional(),
+    heldOpen: z.boolean().nullable().optional(),
   }),
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.
   policyVersion: z.number().int().nullable().optional(),
+  // SHA-256 (hex) of the agent's embedded policy.json; absent from an older agent.
+  policySha256: z.string().nullable().optional(),
   capabilities: z.array(z.string()).nullable().optional(),
-  // reviewedJobs entries pinned to a description and approving by name only; older agents omit it.
-  approvals: z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }).nullable().optional(),
+  // Distinct reviewedJobs entries: pinned ones, and ignored ones (unpinned or malformed; they
+  // approve nothing). A 0.4.0 agent sends `unpinned` instead, which it still honours; older
+  // agents omit the field.
+  approvals: z
+    .union([
+      z.object({
+        pinned: z.number().int().nonnegative(),
+        ignored: z.number().int().nonnegative(),
+        // Absent from an agent that predates the Mac's change watch.
+        entries: z.array(z.string()).optional(),
+        hash: z.string().optional(),
+      }),
+      z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }),
+    ])
+    .nullable()
+    .optional(),
 });
 export type Health = z.infer<typeof HealthSchema>;
 
@@ -97,16 +118,6 @@ export type BatchItem = z.infer<typeof BatchItemSchema>;
 
 export const JobsResponseSchema = z.object({ items: z.array(BatchItemSchema), durationMs: z.number().nullable().optional() });
 export type JobsResponse = z.infer<typeof JobsResponseSchema>;
-
-export const VehicleSchema = z.object({
-  ignition: BatchItemSchema,
-  ubatt: BatchItemSchema,
-  voltages: z.array(BatchItemSchema.extend({ ecu: z.string().nullable().optional(), job: z.string().nullable().optional() })),
-  cableKl30: BatchItemSchema,
-  cableKl15: BatchItemSchema,
-  durationMs: z.number().nullable().optional(),
-});
-export type Vehicle = z.infer<typeof VehicleSchema>;
 
 export const EcusSchema = z.object({
   ecuPath: z.string().nullable(),
@@ -175,7 +186,21 @@ export interface Capture {
   width: number | null;
   height: number | null;
 }
-const AgentIdSchema = z.object({ agent: z.string() });
+const HelloSchema = z.object({ agent: z.string(), proof: z.unknown() });
+
+/**
+ * The agent's `/hello` proof for `nonce` (docs/api.md): lowercase hex
+ * HMAC-SHA256(key = SHA-256(token), "ediabas-bridge-hello-v1:" + nonce).
+ */
+export function helloProof(key: Buffer, nonce: string): string {
+  return createHmac("sha256", key).update(`ediabas-bridge-hello-v1:${nonce}`, "utf8").digest("hex");
+}
+
+/** Constant-time check of a `/hello` proof; anything but 64 lowercase hex characters fails. */
+function proofMatches(proof: unknown, key: Buffer, nonce: string): boolean {
+  if (typeof proof !== "string" || !/^[0-9a-f]{64}$/.test(proof)) return false;
+  return timingSafeEqual(Buffer.from(proof, "hex"), Buffer.from(helloProof(key, nonce), "hex"));
+}
 
 function isAgentErrorBody(body: string): boolean {
   try {
@@ -210,29 +235,30 @@ export interface AgentClientOptions {
   probeTimeoutMs?: number | undefined;
   /** Diagnostics (stderr). Never receives the token. */
   log?: ((message: string) => void) | undefined;
-  /** Recording mode (EDIABAS_RECORD_DIR). */
-  recorder?: ExchangeRecorder | undefined;
 }
 
 type FailureKind = "unreachable" | "refused" | "timeout";
 
 /** A transport-level failure (no HTTP response). */
 class ConnectionFailure extends Error {
-  constructor(
-    readonly kind: FailureKind,
-    /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
-    readonly detail: string,
-    /** The connection was never made, so the request cannot have reached the agent. */
-    readonly neverSent = false,
-  ) {
+  readonly kind: FailureKind;
+  /** Underlying error code or name, e.g. EHOSTUNREACH, TimeoutError. */
+  readonly detail: string;
+  /** The connection was never made, so the request cannot have reached the agent. */
+  readonly neverSent: boolean;
+
+  constructor(kind: FailureKind, detail: string, neverSent = false) {
     super(`connection failure: ${kind}`);
+    this.kind = kind;
+    this.detail = detail;
+    this.neverSent = neverSent;
   }
 }
 
 const UNREACHABLE = new Set(["EHOSTDOWN", "EHOSTUNREACH", "ENETUNREACH", "ENETDOWN", "EADDRNOTAVAIL"]);
 
 function classify(e: unknown): ConnectionFailure {
-  const err = e as { name?: string; code?: string; cause?: { code?: string; name?: string } } | undefined;
+  const err = e as { name?: string; code?: string; cause?: { code?: string; name?: string; syscall?: string } } | undefined;
   const name = err?.name ?? "";
   if (name === "TimeoutError" || name === "AbortError") return new ConnectionFailure("timeout", name);
   if (err?.cause?.name === "TimeoutError") return new ConnectionFailure("timeout", "TimeoutError");
@@ -242,7 +268,9 @@ function classify(e: unknown): ConnectionFailure {
   // be on another address now. ETIMEDOUT can also come after the request was written.
   if (code === "UND_ERR_CONNECT_TIMEOUT") return new ConnectionFailure("unreachable", detail, true);
   if (code === "ETIMEDOUT") return new ConnectionFailure("timeout", detail);
-  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, true);
+  // EHOSTUNREACH and friends can also come after the body was written (syscall "write"), so
+  // they prove nothing was sent only when the connect itself failed.
+  if (UNREACHABLE.has(code)) return new ConnectionFailure("unreachable", detail, err?.cause?.syscall === "connect");
   // Only ECONNREFUSED proves nothing was sent. A reset or "other side closed" (ECONNRESET,
   // UND_ERR_SOCKET, EPIPE) can come after the agent received the request.
   return new ConnectionFailure("refused", detail, code === "ECONNREFUSED");
@@ -263,10 +291,12 @@ interface RequestSpec {
    */
   ediabas?: boolean;
   /**
-   * Runs an EDIABAS job in the VM (job, jobs, vehicle, describe): re-sent only when the
+   * Runs an EDIABAS job in the VM (job, jobs, describe): re-sent only when the
    * connection was never made, never after a failure that may have followed delivery.
    */
   runsJob?: boolean;
+  /** Sent without the token (`GET /hello` only). */
+  anonymous?: boolean;
 }
 
 interface RawResponse {
@@ -277,6 +307,9 @@ interface RawResponse {
 }
 
 const HEALTH: RequestSpec = { method: "GET", path: "/health" };
+
+/** Codes that say the address does not hold the agent this Mac knows: its cached address is dropped. */
+const NOT_THE_AGENT = new Set(["wrong_service", "bad_response"]);
 
 /** 403 codes that are agent decisions, not the gateway check. */
 const AGENT_403_CODES = new Set(["job_not_allowed", "job_needs_review", "path_not_allowed"]);
@@ -317,7 +350,10 @@ export class AgentClient {
   /** Settles when the last queued /ediabas/* call has finished. */
   private ediabasTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly opts: AgentClientOptions) {
+  private readonly opts: AgentClientOptions;
+
+  constructor(opts: AgentClientOptions) {
+    this.opts = opts;
     this.fetchFn = opts.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 15_000;
     this.ediabasTimeoutMs = opts.ediabasTimeoutMs ?? 75_000;
@@ -380,10 +416,6 @@ export class AgentClient {
 
   describeJob(q: { ecu: string; job: string }): Promise<DescribeJob> {
     return this.json({ method: "GET", path: "/ediabas/describe", query: q, ediabas: true, runsJob: true }, DescribeJobSchema);
-  }
-
-  vehicle(): Promise<Vehicle> {
-    return this.json({ method: "GET", path: "/ediabas/vehicle", ediabas: true, runsJob: true }, VehicleSchema);
   }
 
   runJob(body: {
@@ -457,10 +489,11 @@ export class AgentClient {
 
   private async callNow<T>(spec: RequestSpec, parse: (res: RawResponse) => T): Promise<T> {
     const ctx: CallContext = { tokenRefreshed: false };
-    const first = await this.locator.resolve(ctx);
+    const first = await this.resolveProven(ctx);
     try {
       return await this.request(first.baseUrl, spec, ctx, parse);
     } catch (e) {
+      this.dropIfNotTheAgent(e);
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
       // A job request that may have reached the agent may have run: never send it twice.
@@ -468,16 +501,56 @@ export class AgentClient {
       // An EDIABAS call that timed out may still be running in the VM: never send it twice.
       if (!first.fromCache || (spec.ediabas && e.kind === "timeout")) throw this.connectionError(e, first.baseUrl);
     }
-    // The cached address stopped answering: resolve once more, then give up.
-    const second = await this.locator.resolve(ctx);
+    // The cached address stopped answering: find and prove it once more, then give up.
+    ctx.proven = undefined;
+    const second = await this.resolveProven(ctx);
     try {
       return await this.request(second.baseUrl, spec, ctx, parse);
     } catch (e) {
+      this.dropIfNotTheAgent(e);
       if (!(e instanceof ConnectionFailure)) throw e;
       this.locator.invalidate();
       if (spec.runsJob && !e.neverSent) throw ediabasRequestLost();
       throw this.connectionError(e, second.baseUrl);
     }
+  }
+
+  /**
+   * The address for this call, proved with `/hello` in this call before any Bearer request
+   * (decision D5). Discovery run by this call proves each candidate itself. Anything else (the
+   * cache, or a discovery another call ran) is proved here, as another service may hold that
+   * address now. If that fails, the cache is dropped and the address found and proved again,
+   * so the token never goes to the old address. Nothing was sent with the token here, so a
+   * failure at this step never makes a job request "may have run".
+   */
+  private async resolveProven(ctx: CallContext): Promise<{ baseUrl: string; fromCache: boolean }> {
+    const target = await this.locator.resolve(ctx);
+    if (ctx.proven?.baseUrl === target.baseUrl) return target;
+    try {
+      await this.probe(target.baseUrl, ctx);
+      return target;
+    } catch (e) {
+      if (!(e instanceof BridgeError) || e.code === "no_token") throw e;
+      this.log(`${target.fromCache ? "cached address" : "address"} ${hostPort(target.baseUrl)} did not prove it is the agent (${e.code}); finding the agent again`);
+      this.locator.invalidate();
+    }
+    const again = await this.locator.resolve(ctx);
+    if (ctx.proven?.baseUrl === again.baseUrl) return again;
+    try {
+      await this.probe(again.baseUrl, ctx);
+    } catch (e) {
+      if (e instanceof BridgeError && e.code !== "no_token") this.locator.invalidate();
+      throw e;
+    }
+    return again;
+  }
+
+  /**
+   * Something that is not the agent answered at the cached address (another service took it
+   * over): forget the address, so the next call proves identity again before sending the token.
+   */
+  private dropIfNotTheAgent(e: unknown): void {
+    if (e instanceof BridgeError && NOT_THE_AGENT.has(e.code)) this.locator.invalidate();
   }
 
   /**
@@ -502,34 +575,61 @@ export class AgentClient {
     return onLink ? localNetworkBlocked() : vmNotRunning(this.opts.config.vmName);
   }
 
-  /** Discovery check: 200 from /health with exactly the agent's id. */
+  /**
+   * Discovery check (decision D5): `GET /hello` with a fresh nonce and no token. The address is
+   * accepted only when it answers as the agent with a proof that matches this Mac's token, so
+   * the token is never sent to anything that has not proved it already holds it.
+   */
   private async probe(baseUrl: string, ctx: CallContext): Promise<void> {
+    const where = hostPort(baseUrl);
+    // Read first: without a token there is nothing to check the proof against (no_token).
+    let token = await this.opts.tokens.get();
+    const nonce = randomBytes(16).toString("hex");
+    const spec: RequestSpec = { method: "GET", path: "/hello", query: { nonce }, anonymous: true };
     let res: RawResponse;
     try {
-      res = await this.send(baseUrl, HEALTH, ctx, this.probeTimeoutMs, "probe");
+      res = await this.send(baseUrl, spec, ctx, this.probeTimeoutMs, "probe");
     } catch (e) {
       if (e instanceof ConnectionFailure) throw this.connectionError(e, baseUrl);
       throw e;
     }
     const body = Buffer.from(res.bytes).toString("utf8");
     if (res.status !== 200) {
-      this.log(`probe ${hostPort(baseUrl)} failed: HTTP ${res.status}`);
+      this.log(`probe ${where} failed: HTTP ${res.status}`);
       // A non-2xx without the agent's error shape came from some other service.
-      if (res.status !== 401 && res.status !== 403 && !isAgentErrorBody(body)) throw wrongService(baseUrl);
-      throw this.httpError(res.status, body, res.token, HEALTH);
+      if (!isAgentErrorBody(body)) throw wrongService(baseUrl);
+      // An agent older than /hello checks the token before the path, so it answers 401.
+      if (res.status === 401) throw agentOutdated(spec.path);
+      // Nothing was sent with the token, but the message is still redacted like any other.
+      throw this.httpError(res.status, body, token, spec);
     }
     let parsed: unknown;
     try {
       parsed = JSON.parse(body);
     } catch {
-      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (200 without JSON)`);
+      this.log(`probe ${where} failed: not the agent (200 without JSON)`);
       throw wrongService(baseUrl);
     }
-    const id = AgentIdSchema.safeParse(parsed);
-    if (!id.success || id.data.agent !== AGENT_ID) {
-      this.log(`probe ${hostPort(baseUrl)} failed: not the agent (wrong or missing "agent" field)`);
+    const hello = HelloSchema.safeParse(parsed);
+    if (!hello.success || hello.data.agent !== AGENT_ID) {
+      this.log(`probe ${where} failed: not the agent (wrong or missing "agent" field)`);
       throw wrongService(baseUrl);
     }
+    const proof = hello.data.proof;
+    let matched = proofMatches(proof, helloKey(token), nonce);
+    // The token may have just been installed: re-read it once per tool call and check again.
+    if (!matched && !ctx.tokenRefreshed) {
+      ctx.tokenRefreshed = true;
+      token = await this.opts.tokens.refresh();
+      matched = proofMatches(proof, helloKey(token), nonce);
+    }
+    if (matched) {
+      // This exact token, and only to this address, is what the call may now send.
+      ctx.proven = { baseUrl, token };
+      return;
+    }
+    this.log(`probe ${where} failed: the proof does not match this Mac's token`);
+    throw unprovenAgent(where, this.opts.config.agentUrl !== undefined);
   }
 
   private async request<T>(baseUrl: string, spec: RequestSpec, ctx: CallContext, parse: (res: RawResponse) => T): Promise<T> {
@@ -537,17 +637,32 @@ export class AgentClient {
     const res = await this.send(baseUrl, spec, ctx, timeout, "request");
     if (res.status !== 200) {
       this.log(`request ${hostPort(baseUrl)} ${describeRequest(spec)} failed: HTTP ${res.status}`);
-      throw this.httpError(res.status, Buffer.from(res.bytes).toString("utf8"), res.token, spec);
+      const body = Buffer.from(res.bytes).toString("utf8");
+      if (!isAgentErrorBody(body)) {
+        // A non-200 without the agent's error shape from an address that proved it is the agent
+        // in this call: most likely the agent's web server (Kestrel) refusing the request (400,
+        // 413, 431, 503) before the agent's code ran, but possibly another service now. Drop the
+        // cached address either way (decision D5). A job request may still have run.
+        this.locator.invalidate();
+        throw spec.runsJob ? ediabasRequestLost({ baseUrl, status: res.status }) : unexpectedStatus(describeRequest(spec), baseUrl, res.status);
+      }
+      throw this.httpError(res.status, body, res.token, spec);
     }
     return parse(res);
   }
 
   /**
-   * One authenticated request. After a 401 the token is re-read (it may have just been
-   * installed) and the request repeated, at most once per tool call.
+   * One request, unauthenticated if `spec.anonymous`, else with the token this call proved at
+   * this address (`ctx.proven`), never another. After the agent's 401 the token is re-read for
+   * the next call (it may have just been installed; that call proves the address with it
+   * first), but nothing is re-sent with it now: the address proved only the old one.
    */
   private async send(baseUrl: string, spec: RequestSpec, ctx: CallContext, timeoutMs: number, label: "probe" | "request"): Promise<RawResponse> {
-    let token = await this.opts.tokens.get();
+    let token = "";
+    if (!spec.anonymous) {
+      if (ctx.proven?.baseUrl !== baseUrl) throw new BridgeError("internal_error", "Internal error: a request was about to go to an address that did not prove it is the agent. Nothing was sent.");
+      token = ctx.proven.token;
+    }
     const attempt = async (t: string) => {
       try {
         return await this.fetchOnce(baseUrl, spec, t, timeoutMs);
@@ -559,14 +674,11 @@ export class AgentClient {
         throw e;
       }
     };
-    let res = await attempt(token);
-    if (res.status === 401 && !ctx.tokenRefreshed) {
+    const res = await attempt(token);
+    if (res.status === 401 && !spec.anonymous && !ctx.tokenRefreshed && isAgentErrorBody(Buffer.from(res.bytes).toString("utf8"))) {
       ctx.tokenRefreshed = true;
-      const fresh = await this.opts.tokens.refresh();
-      if (fresh !== token) {
-        token = fresh;
-        res = await attempt(token);
-      }
+      // For the next call only. A missing token then shows up there as no_token.
+      await this.opts.tokens.refresh().catch(() => undefined);
     }
     return { ...res, token };
   }
@@ -580,7 +692,8 @@ export class AgentClient {
     const query = definedQuery(spec.query);
     const qs = new URLSearchParams(query).toString();
     const url = baseUrl + spec.path + (qs ? `?${qs}` : "");
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "application/json" };
+    const headers: Record<string, string> = { accept: "application/json" };
+    if (!spec.anonymous) headers.authorization = `Bearer ${token}`;
     let body: string | undefined;
     if (spec.body !== undefined) {
       headers["content-type"] = "application/json; charset=utf-8";
@@ -605,19 +718,6 @@ export class AgentClient {
     } catch (e) {
       throw classify(e);
     }
-    if (this.opts.recorder) {
-      // The token is not part of the exchange: no request headers are recorded.
-      await this.opts.recorder.record({
-        time: new Date(),
-        method: spec.method,
-        path: spec.path,
-        query,
-        requestBody: spec.body ?? null,
-        status: out.status,
-        responseHeaders: out.headers,
-        body: out.bytes,
-      });
-    }
     return out;
   }
 
@@ -634,6 +734,6 @@ export class AgentClient {
     // The agent knows nothing at this path: it is an older build than this server.
     if (status === 404 && info?.code === "not_found") return agentOutdated(spec.path);
     const redact = (s: string | undefined) => (s && token ? s.split(token).join("[redacted]") : s);
-    return agentError(status, redact(info?.code), redact(info?.message), info?.details);
+    return agentError(status, redact(info?.code), redact(info?.message), info?.details, spec.path !== "/ediabas/describe");
   }
 }

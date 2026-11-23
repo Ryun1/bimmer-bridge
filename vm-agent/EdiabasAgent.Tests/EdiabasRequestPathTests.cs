@@ -93,7 +93,7 @@ public class EdiabasRequestPathTests
         Assert.Equal(10_000, r.Value.DurationMs);
     }
 
-    public static TheoryData<string> Requests => ["job", "jobs", "vehicle", "describe-list", "describe-job"];
+    public static TheoryData<string> Requests => ["job", "jobs", "describe-list", "describe-job"];
 
     [Theory]
     [MemberData(nameof(Requests))]
@@ -107,7 +107,6 @@ public class EdiabasRequestPathTests
         {
             "job" => svc.RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queued).Failure,
             "jobs" => svc.RunJobs([new("NVE_65", "IDENT")], null, _audit, default, queued).Failure,
-            "vehicle" => svc.Vehicle([], _audit, default, queued).Failure,
             "describe-list" => svc.DescribeList("NVE_65", null, true, _audit, default, queued).Failure,
             _ => svc.DescribeJob("NVE_65", "IDENT", _audit, default, queued).Failure,
         };
@@ -120,11 +119,12 @@ public class EdiabasRequestPathTests
     [Fact]
     public void QueueTime_DoesNotMakeTheConflictCheckStale()
     {
-        // The request's own conflict check just ran; the first job reuses it however long the wait.
+        // The request's own conflict check just ran, and another after the DLL loads; the first
+        // job reuses them however long the wait.
         _api.On("NVE_65 IDENT", FakeJob.Ok());
 
         Assert.True(Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default, queuedMs: 5_000).Ok);
-        Assert.Equal(1, _conflicts.Calls);
+        Assert.Equal(2, _conflicts.Calls);
     }
 
     // ---------------------------------------------------------------- A3: a failed apiEnd keeps the result
@@ -261,87 +261,33 @@ public class EdiabasRequestPathTests
     }
 
     [Fact]
-    public void ArgumentScreen_NotForCallsWithoutArgs_ReviewedOrUnscreenedJobs()
+    public void ArgumentScreen_NotForCallsWithoutArgs_OrUnscreenedJobs()
     {
+        // A pinned approval does not skip it: ApprovalTests.RunJob_PinnedApproval_WithArgs_ArgumentScreenStillRuns.
         ScriptStatusX(ArgRows());
-        _api.On("NVE_65 STATUS_Y", FakeJob.Ok());
         _api.On("NVE_65 FS_LESEN_DETAIL", FakeJob.Ok());
-        var svc = Service(reviewed: ["NVE_65:STATUS_Y"]);
+        var svc = Service();
 
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X"), null, new RequestAudit(), default).Ok);
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_X", ""), null, new RequestAudit(), default).Ok);
-        Assert.True(svc.RunJob(new JobRequest("NVE_65", "STATUS_Y", "1"), null, new RequestAudit(), default).Ok);
         Assert.True(svc.RunJob(new JobRequest("NVE_65", "FS_LESEN_DETAIL", "0x4711"), null, new RequestAudit(), default).Ok);
 
         Assert.DoesNotContain(_api.JobCalls, c => c.Contains("_ARGUMENTS", StringComparison.Ordinal));
     }
 
-    // ---------------------------------------------------------------- A6: a job the SGBD does not have
+    // ---------------------------------------------------------------- D11: a job the SGBD does not have is ediabas_error
 
     [Fact]
-    public void MissingJob_SingleRun_IsJobNotFound()
+    public void RunJob_EdiabasError_NoExtraJobsCall()
     {
         _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008: JOB NOT FOUND"));
-        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT", "FS_LESEN"));
-
-        var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
-
-        Assert.Equal(404, f.Status);
-        Assert.Equal("job_not_found", f.Error.Code);
-        Assert.Equal("NVE_65 has no job IS_LESEN.", f.Error.Message);
-        Assert.Equal(new EcuJobDetails("NVE_65", "IS_LESEN"), f.Error.Details);
-        Assert.Equal(["Job NVE_65 IS_LESEN [] []", "Job NVE_65 _JOBS [] []"], _api.JobCalls);
-        Assert.Equal(1, _api.Count("End"));
-    }
-
-    [Fact]
-    public void MissingJob_AsABatchItem_IsJobNotFound()
-    {
-        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
-        _api.On("NVE_65 _JOBS", FakeJob.Jobs("IDENT"));
-        _api.On("NVE_65 IDENT", FakeJob.Ok());
-
-        var r = Service().RunJobs([new("NVE_65", "IS_LESEN"), new("NVE_65", "IDENT")], null, _audit, default).Value!;
-
-        Assert.Equal("job_not_found", r.Items[0].Error!.Code);
-        Assert.True(r.Items[1].Ok);
-        Assert.Equal("job_not_found", _audit.Items[0].ErrorCode);
-    }
-
-    [Fact]
-    public void MissingJob_JobListFails_KeepsTheFirstError()
-    {
-        _api.On("NVE_65 IS_LESEN", FakeJob.Error(19, "SYS-0008"));
-        _api.On("NVE_65 _JOBS", FakeJob.Error(20, "OTHER"));
 
         var f = Service().RunJob(new JobRequest("NVE_65", "IS_LESEN"), null, _audit, default).Failure!;
 
         Assert.Equal("ediabas_error", f.Error.Code);
-        Assert.Equal(new EdiabasErrorDetails(19, "SYS-0008"), f.Error.Details);
-    }
-
-    [Fact]
-    public void JobThatExists_KeepsItsError()
-    {
-        _api.On("NVE_65 IDENT", FakeJob.Error(19, "IFH-0009: NO RESPONSE FROM CONTROLUNIT"));
-        _api.On("NVE_65 _JOBS", FakeJob.Jobs("ident"));
-
-        var f = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default).Failure!;
-
-        Assert.Equal("ediabas_error", f.Error.Code);
-        Assert.Equal(19, ((EdiabasErrorDetails)f.Error.Details!).ErrorCode);
-    }
-
-    [Fact]
-    public void GroupFile_StartsNoJobList()
-    {
-        // Listing a group file's jobs would reach the car again to pick the variant.
-        _api.On("D_MOTOR IS_LESEN", FakeJob.Error(19, "SYS-0008"));
-
-        var f = Service(ecus: ["D_MOTOR.grp", "NVE_65"]).RunJob(new JobRequest("D_MOTOR", "IS_LESEN"), null, _audit, default).Failure!;
-
-        Assert.Equal("ediabas_error", f.Error.Code);
-        Assert.Equal(["Job D_MOTOR IS_LESEN [] []"], _api.JobCalls);
+        Assert.Equal(new EdiabasErrorDetails(19, "SYS-0008: JOB NOT FOUND"), f.Error.Details);
+        Assert.DoesNotContain(_api.Calls, c => c.StartsWith("Job NVE_65 _JOBS", StringComparison.Ordinal));
+        Assert.Equal(["Job NVE_65 IS_LESEN [] []"], _api.JobCalls);
     }
 
     [Fact]

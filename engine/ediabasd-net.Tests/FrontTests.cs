@@ -114,6 +114,15 @@ public sealed class FrontTests : IDisposable
     }
 
     [Fact]
+    public void Vehicle_IsAnUnknownMethod()
+    {
+        // Vehicle status is a jobs batch from the MCP server (main, 0.5.0).
+        var r = Call("vehicle", "{}");
+        Assert.Equal(ApiErrors.BadRequest, r.Error!.Code);
+        Assert.DoesNotContain("vehicle", r.Error.Message.Split("use ")[^1]);
+    }
+
+    [Fact]
     public void Health_SaysEngineAndEcuPath()
     {
         var r = Call("health");

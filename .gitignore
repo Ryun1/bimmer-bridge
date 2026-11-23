@@ -34,10 +34,11 @@ ista-bridge-discovery*.txt
 
 .DS_Store
 
-# subagent workspace
-.superpowers/
 __pycache__/
 
 # local worktrees and agent scratch
 .worktrees/
 .superpowers/
+
+# scratch output
+reports/

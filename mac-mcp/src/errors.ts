@@ -3,6 +3,8 @@
  * user (through Claude) as the text of a failed tool call, so each says what to do.
  */
 
+import { hostPort } from "./vmAddress.js";
+
 export const TOKEN_FIX =
   "Hand the VM's token to this Mac again: in the repo run python3 dev/serve.py --accept-token and paste the Install line it prints " +
   "into an Administrator Windows PowerShell in the VM (the installer never shows the token). Or set EDIABAS_AGENT_TOKEN in the server's environment.";
@@ -28,24 +30,31 @@ export const MESSAGES = {
     "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
 
-/** Codes this server produces itself. Agent errors use the agent's own `error.code`. */
-export type LocalErrorCode =
-  | "vm_not_running"
-  | "agent_not_answering"
-  | "ediabas_request_lost"
-  | "ediabas_busy"
-  | "local_network_blocked"
-  | "unauthorized"
-  | "forbidden"
-  | "no_token"
-  | "wrong_service"
-  | "bad_response"
-  | "config_error"
-  | "invalid_arguments"
-  | "agent_outdated"
-  | "policy_unavailable"
-  | "job_not_allowed"
-  | "internal_error";
+/**
+ * Codes this server produces itself. Agent errors use the agent's own `error.code`. Each is
+ * listed in docs/tools.md "Errors" (test/errorCodesDoc.test.ts checks).
+ */
+export const LOCAL_ERROR_CODES = [
+  "vm_not_running",
+  "agent_not_answering",
+  "ediabas_request_lost",
+  "ediabas_busy",
+  "local_network_blocked",
+  "unauthorized",
+  "forbidden",
+  "no_token",
+  "wrong_service",
+  "bad_response",
+  "config_error",
+  "invalid_arguments",
+  "agent_outdated",
+  "policy_unavailable",
+  "policy_mismatch",
+  "job_not_allowed",
+  "internal_error",
+] as const;
+
+export type LocalErrorCode = (typeof LOCAL_ERROR_CODES)[number];
 
 export class BridgeError extends Error {
   override readonly name = "BridgeError";
@@ -68,9 +77,28 @@ export function agentNotAnswering(): BridgeError {
   return new BridgeError("agent_not_answering", MESSAGES.agentNotAnswering);
 }
 
-/** A request that runs an EDIABAS job failed after it may have reached the agent. */
-export function ediabasRequestLost(): BridgeError {
-  return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+/** The agent's job policy file differs byte for byte from this Mac's. Nothing was sent to /ediabas/*. */
+export function policyMismatch(agentSha256: string, macSha256: string): BridgeError {
+  return new BridgeError(
+    "policy_mismatch",
+    `The agent's job policy (sha256 ${cleanText(agentSha256.slice(0, 12), 40)}) differs from this Mac's (${macSha256.slice(0, 12)}). ` +
+      "Update the agent or the Mac server so both carry the same policy/policy.json.",
+  );
+}
+
+/**
+ * A request that runs an EDIABAS job failed after it may have reached the agent. With `http`:
+ * the address (which proved it is the agent in this call) answered a non-200 without the
+ * agent's error shape, so whether the job ran is unknown.
+ */
+export function ediabasRequestLost(http?: { baseUrl: string; status: number }): BridgeError {
+  if (http === undefined) return new BridgeError("ediabas_request_lost", MESSAGES.ediabasRequestLost);
+  return new BridgeError(
+    "ediabas_request_lost",
+    `The agent's address (${hostPort(http.baseUrl)}) answered this EDIABAS request with HTTP ${http.status} but without the agent's error format, ` +
+      "so it is not known whether the agent handled it: the job may have run in the VM. It was not sent again. " +
+      "Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  );
 }
 
 /** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
@@ -95,15 +123,40 @@ export function noToken(): BridgeError {
   return new BridgeError("no_token", MESSAGES.noToken);
 }
 
-export function wrongService(where: string): BridgeError {
+export function wrongService(baseUrl: string): BridgeError {
   return new BridgeError(
     "wrong_service",
-    `Something answered at ${where}, but it is not the ediabas-bridge agent. Check EDIABAS_AGENT_URL.`,
+    `Something answered at ${hostPort(baseUrl)}, but it is not the bimmer-bridge agent. Check EDIABAS_AGENT_URL.`,
   );
+}
+
+/**
+ * An address answered `/hello` as the agent but its proof did not match this Mac's token, so the
+ * token was not sent there. `agentUrlOverride`: the token came from EDIABAS_AGENT_TOKEN.
+ */
+export function unprovenAgent(where: string, agentUrlOverride = false): BridgeError {
+  const fix = agentUrlOverride
+    ? "Either EDIABAS_AGENT_TOKEN is not the token of the agent at EDIABAS_AGENT_URL, or something else answers there. Set the right token, or unset EDIABAS_AGENT_URL to use the VM."
+    : `Either the VM's token no longer matches the one on this Mac, or something else answers there. ${TOKEN_FIX}`;
+  return new BridgeError("wrong_service", `The address ${where} answered as the bimmer-bridge agent but could not prove it holds this Mac's token, so the token was not sent there. ${fix}`);
 }
 
 export function badResponse(what: string): BridgeError {
   return new BridgeError("bad_response", `The agent's response to ${what} did not match the expected format. The agent and this server may be different versions.`);
+}
+
+/**
+ * The address, which proved it is the agent in this call, answered `what` with a non-200 that
+ * is not in the agent's error shape: most likely the agent's web server refused the request
+ * before the agent's code ran. For a request that runs no EDIABAS job.
+ */
+export function unexpectedStatus(what: string, baseUrl: string, status: number): BridgeError {
+  return new BridgeError(
+    "bad_response",
+    `The agent's address (${hostPort(baseUrl)}) answered ${what} with HTTP ${status} but without the agent's error format: ` +
+      "the agent's web server may have refused the request before the agent handled it, or another service may answer there now. " +
+      "Run vm_health to check the agent; ask again once if the result is still needed.",
+  );
 }
 
 export function configError(message: string): BridgeError {
@@ -122,9 +175,10 @@ export function agentError(
   code: string | undefined,
   message: string | undefined,
   details?: unknown,
+  run = false,
 ): BridgeError {
   const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || `http_${status}`;
-  const known = describeAgentError(safeCode, message, details);
+  const known = describeAgentError(safeCode, message, details, run);
   if (known) {
     const e = new BridgeError(safeCode, known);
     const rule = detailString(details, "rule");
@@ -136,7 +190,7 @@ export function agentError(
 }
 
 export const UPDATE_HINT =
-  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the ediabas-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see README.md).";
+  "The user needs to install the current agent build in the VM: run the Update line (start `python3 dev/serve.py` in the bimmer-bridge repo on the Mac and paste the Update line it prints into Windows PowerShell run as administrator in the VM; see docs/install.md).";
 
 /** The agent has no such endpoint: it is an older build. */
 export function agentOutdated(path: string): BridgeError {
@@ -185,10 +239,94 @@ function processList(details: unknown): string | null {
 }
 
 /**
+ * EDIABAS's own name for an error ("IFH-0009"): from the text when it carries one, else from
+ * the number. Numbering from EdiabasLib's ErrorCodes (IFH from 10, BIP 60, SYS 90, API 120,
+ * NET 150), which matches every code seen at the desk (16 IFH-0006, 28 IFH-0018, 48 IFH-0038,
+ * 13 IFH-0003, 100 SYS-0010).
+ */
+export function ediabasErrorId(n: number | null, text: string | null | undefined): string | null {
+  const m = text ? /\b(IFH|BIP|SYS|API|NET)-(\d{4})\b/.exec(text) : null;
+  if (m) return `${m[1]}-${m[2]}`;
+  if (n === null) return null;
+  // Each family runs up to the next one's base; IFH is 50 codes wide (IFH-0000 to IFH-0049).
+  const families: [string, number, number][] = [["IFH", 10, 60], ["BIP", 60, 90], ["SYS", 90, 120], ["API", 120, 150], ["NET", 150, 250]];
+  for (const [name, from, to] of families) {
+    if (n >= from && n < to) return `${name}-${String(n - from).padStart(4, "0")}`;
+  }
+  return null;
+}
+
+/** What ediabas_vehicle_status can and cannot show about the car (rehearsal, 2026-11-22). */
+const IGNITION_CHECK =
+  "Ask the user whether the ignition is on: ediabas_vehicle_status shows the car is awake only through a configured voltage source " +
+  "(its battery and KL30 readings come from the cable).";
+
+/** Codes about the cable, the supply or the ignition rather than one ECU's answer. */
+const CABLE_SIDE_CODES = new Set(["IFH-0002", "IFH-0003", "IFH-0006", "IFH-0038", "IFH-0007", "IFH-0015", "IFH-0037", "IFH-0016", "IFH-0032"]);
+
+const ECU_OR_CAR = "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+
+/**
+ * Why an EDIABAS error happened and what to check, by EDIABAS's name for it. Codes marked
+ * "desk" were seen on this setup; the others take EDIABAS's own meaning of the code, so the
+ * advice stays with what the code says.
+ */
+function ediabasErrorAdvice(id: string | null): string {
+  switch (id) {
+    // Desk, 2026-11-21/22: every real SGBD after the cable was replugged into the Mac.
+    case "IFH-0006":
+      return (
+        "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself " +
+        "(the user ticks it in UTM's USB menu). " + ECU_OR_CAR
+      );
+    // Desk, 2026-11-22: after the Mac slept, which hands USB devices back to the Mac.
+    case "IFH-0038":
+      return "The cable may not be attached to the VM: after the Mac sleeps, UTM hands it back to the Mac (the user ticks it in UTM's USB menu). " + ECU_OR_CAR;
+    case "IFH-0002":
+      return (
+        "The cable itself did not answer, so nothing reached the car: check that it is firmly in the car's OBD port (it is powered from there) " +
+        "and still ticked for the VM in UTM's USB menu. "
+      );
+    // Rehearsal, 2026-11-22: every job on E60, CAS, NVE_65 and D_MOTOR, cable in the VM, not in the car.
+    case "IFH-0003":
+      return (
+        "The exchange with the cable failed, which points at the cable before the ECU: at the desk every job on a real SGBD or group file " +
+        "gave this with the cable in the VM but not plugged into the car. Check that it is firmly in the car's OBD port and still ticked " +
+        "for the VM in UTM's USB menu. If both are fine and the ignition is on, this module may not have answered; say so rather than retrying. "
+      );
+    case "IFH-0007":
+    case "IFH-0015":
+    case "IFH-0037":
+      return (
+        "The cable reports the battery voltage at the OBD port as wrong or low. Ask the user to check that a charger or support unit is on " +
+        "and connected; reads on a low battery are unreliable, so stop reading the car until it is. "
+      );
+    case "IFH-0009":
+      return (
+        "The cable works but this ECU did not answer: the ignition is off, the module is not fitted or is asleep, or this SGBD does not match " +
+        "the module fitted. Do not try other SGBDs at random; find the right one with ediabas_list_ecus. "
+      );
+    case "IFH-0010":
+      return "The ECU's answer was disturbed: low battery voltage, a loose cable at the OBD port, or another tester on the bus. ";
+    case "IFH-0016":
+    case "IFH-0032":
+      return "The cable sees the ignition (KL15) as off. Ask the user whether the ignition is on; every minute with it on counts toward the car session. ";
+    // Desk, 2026-11-21: N62_TUE2, ME9N62_2, GS19D and SZL_60 with the ignition off.
+    case "SYS-0010":
+      return (
+        "The SGBD could not start. Some files need the module to answer even to load or describe (seen at the desk with the ignition off); " +
+        "with the ignition on, the module may not be fitted or may not match this file. "
+      );
+    default:
+      return "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
+  }
+}
+
+/**
  * The user-facing message for a known agent error code, or null for codes without one. None
  * suggests a way around a refusal.
  */
-export function describeAgentError(code: string, message: string | undefined, details: unknown): string | null {
+export function describeAgentError(code: string, message: string | undefined, details: unknown, run = false): string | null {
   const agentSaid = message ? ` The agent said: "${cleanText(message, 200)}".` : "";
   switch (code) {
     case "job_not_allowed": {
@@ -239,14 +377,14 @@ export function describeAgentError(code: string, message: string | undefined, de
         return `The job finished but its results could not be read${said ? ` (EDIABAS ${said})` : ""}. Ask the user before trying again.`;
       }
       const what = n !== null || text ? said : cleanText(message ?? "no details", 200);
-      // Error 16 (IFH-0006) on every real SGBD, seen on 2026-11-22 after the cable was replugged
-      // into the Mac: it was no longer attached to the VM until ticked again in UTM.
-      const why =
-        n === 16
-          ? "The cable may not be attached to the VM: after it is unplugged and plugged back in, UTM does not hand it back by itself (the user ticks it in UTM's USB menu). " +
-            "Otherwise the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). "
-          : "This often means the ECU did not answer (ignition off, cable not plugged into the car, or that ECU is not fitted). ";
-      return `EDIABAS reported ${what}. ${why}Check ediabas_vehicle_status, and ask the user before trying again.`;
+      const id = ediabasErrorId(n, text);
+      // The cable, voltage and ignition codes are not settled by ediabas_vehicle_status: its battery
+      // and KL30 readings come from the cable's own lines (rehearsal, 2026-11-22).
+      const checkStatus = !(id !== null && CABLE_SIDE_CODES.has(id));
+      // No IFH code comes from a wrong job name (EDIABAS gives SYS-0008 for that).
+      const hint = run && !id?.startsWith("IFH-") ? " If the job name may be wrong, check it with ediabas_describe." : "";
+      const next = checkStatus ? `${IGNITION_CHECK} Ask the user before trying again.` : "Ask the user before trying again.";
+      return `EDIABAS reported ${what}. ${ediabasErrorAdvice(id)}${next}${hint}`;
     }
     case "cable_not_found": {
       // EDIABAS error 28 (IFH-0018): seen at the desk on 2026-11-21 with the cable unplugged.
@@ -266,7 +404,7 @@ export function describeAgentError(code: string, message: string | undefined, de
     }
     case "job_timeout": {
       const s = detailNumber(details, "timeoutSeconds");
-      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering; check ediabas_vehicle_status and ask the user before trying again.`;
+      return `The job did not finish${s !== null ? ` within ${s} s` : " in time"} and was stopped. The ECU may not be answering. ${IGNITION_CHECK} Ask the user before trying again.`;
     }
     case "window_not_found":
       return "No visible window in the VM matches that. Use vm_list_windows to see the window titles and handles, or ask for the desktop.";
@@ -313,5 +451,5 @@ export function errorText(code: string, message: string): string {
 export function toBridgeError(e: unknown): BridgeError {
   if (e instanceof BridgeError) return e;
   const msg = e instanceof Error ? e.message : String(e);
-  return new BridgeError("internal_error", `Internal error in the ediabas-bridge MCP server: ${cleanText(msg)}`);
+  return new BridgeError("internal_error", `Internal error in the bimmer-bridge MCP server: ${cleanText(msg)}`);
 }

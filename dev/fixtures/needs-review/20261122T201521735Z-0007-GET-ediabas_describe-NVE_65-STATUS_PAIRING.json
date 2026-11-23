@@ -1,0 +1,55 @@
+{
+  "recordedAt": "2026-11-22T20:15:21.735Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/describe",
+    "query": {
+      "ecu": "NVE_65",
+      "job": "STATUS_PAIRING"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "NVE_65",
+      "variant": "NVE_65",
+      "job": "STATUS_PAIRING",
+      "comment": "Gibt den Pairing-Status aus zwischen ECU und CAM\n00  (0x00) -> Pairing erfolgreich (NIVI Kamera ist freigeschaltet für dieses Fahrzeug)\n254 (0xFE) -> Pairing nicht erfolgt (NIVI Kamera ist NICHT freigeschaltet für dieses Fahrzeug)",
+      "descriptionHash": "f62e5f225aaf",
+      "verdict": {
+        "allowed": true,
+        "rule": "allow.pattern",
+        "review": "needs_review"
+      },
+      "arguments": [],
+      "results": [
+        {
+          "name": "JOB_STATUS",
+          "type": "string",
+          "comment": "OKAY, wenn fehlerfrei\ntable JobResult STATUS_TEXT"
+        },
+        {
+          "name": "STAT_PAIRING_WERT",
+          "type": "int",
+          "comment": "00: Pairing erfolgreich\nFE: Pairing nicht erfolgt"
+        },
+        {
+          "name": "STAT_PAIRING_TEXT",
+          "type": "string",
+          "comment": "00: Pairing erfolgreich\nFE: Pairing nicht erfolgt"
+        },
+        {
+          "name": "_TEL_ANTWORT",
+          "type": "binary",
+          "comment": "Hex-Antwort von SG"
+        }
+      ],
+      "durationMs": 1382
+    }
+  }
+}
