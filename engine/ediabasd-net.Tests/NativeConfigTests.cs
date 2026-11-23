@@ -43,6 +43,33 @@ public sealed class NativeConfigTests : IDisposable
     }
 
     [Fact]
+    public void LatencyMs_DefaultsTo1()
+    {
+        WriteConfig(Json());
+        var (c, errors) = NativeConfig.Load(null, Env());
+        Assert.Empty(errors);
+        Assert.Equal(1, c!.LatencyMs);
+    }
+
+    [Fact]
+    public void LatencyMs_16_Parses()
+    {
+        WriteConfig(Json(", \"latencyMs\": 16"));
+        var (c, errors) = NativeConfig.Load(null, Env());
+        Assert.Empty(errors);
+        Assert.Equal(16, c!.LatencyMs);
+    }
+
+    [Fact]
+    public void LatencyMs_Other_IsError()
+    {
+        WriteConfig(Json(", \"latencyMs\": 5"));
+        var (c, errors) = NativeConfig.Load(null, Env());
+        Assert.Null(c);
+        Assert.Contains(errors, e => e.Contains("latencyMs: must be 1 or 16"));
+    }
+
+    [Fact]
     public void MaxJobTimeoutAbove60_IsError()
     {
         WriteConfig(Json(", \"maxJobTimeoutSeconds\": 61"));

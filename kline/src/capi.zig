@@ -15,12 +15,29 @@ fn r(x: Reason) c_int {
 }
 
 export fn kline_open(path: ?[*:0]const u8, record_dir: ?[*:0]const u8, out: ?*?*Session) c_int {
+    return kline_open_ex(path, record_dir, 1, out);
+}
+
+/// kline_open with the FTDI latency timer chosen: 1 or 16 ms, otherwise KLINE_UNSUPPORTED
+/// before anything is opened.
+export fn kline_open_ex(path: ?[*:0]const u8, record_dir: ?[*:0]const u8, latency_ms: c_uint, out: ?*?*Session) c_int {
     const o = out orelse return io;
     o.* = null;
+    if (latency_ms != 1 and latency_ms != 16) return r(.unsupported);
     const p = path orelse return io;
     const dir: ?[]const u8 = if (record_dir) |d| std.mem.span(d) else null;
-    o.* = Session.openDevice(alloc, std.mem.span(p), dir, null) catch |e| return r(kline.session.reasonOf(e));
+    o.* = Session.openDevice(alloc, std.mem.span(p), dir, null, @intCast(latency_ms)) catch |e| return r(kline.session.reasonOf(e));
     return 0;
+}
+
+/// The latency label the open recorded ("1ms", "16ms", "unsupported"); "" for a replay or null.
+export fn kline_latency(k: ?*const Session) [*:0]const u8 {
+    const s = k orelse return "";
+    const l = s.latencyLabel();
+    if (std.mem.eql(u8, l, "1ms")) return "1ms";
+    if (std.mem.eql(u8, l, "16ms")) return "16ms";
+    if (std.mem.eql(u8, l, "unsupported")) return "unsupported";
+    return "";
 }
 
 export fn kline_open_replay(recording_path: ?[*:0]const u8, out: ?*?*Session) c_int {
@@ -180,6 +197,24 @@ test "open of a missing device is no_device and leaves the handle null" {
     try std.testing.expect(k == null);
 }
 
+test "kline_open_ex refuses a latency other than 1 or 16" {
+    for ([_]c_uint{ 0, 2, 255 }) |ms| {
+        var k: ?*Session = @ptrFromInt(0x10);
+        try std.testing.expectEqual(@as(c_int, 10), kline_open_ex("/dev/does-not-exist", null, ms, &k));
+        try std.testing.expect(k == null);
+    }
+}
+
+test "kline_open_ex with latency 16 still opens nothing on a missing device" {
+    var k: ?*Session = null;
+    try std.testing.expectEqual(@as(c_int, 1), kline_open_ex("/dev/does-not-exist", null, 16, &k));
+    try std.testing.expect(k == null);
+}
+
+test "kline_latency of a null handle is empty" {
+    try std.testing.expectEqualStrings("", std.mem.span(kline_latency(null)));
+}
+
 test "null handle is io, never a crash" {
     var b: [1]u8 = undefined;
     var dsr: c_int = 0;
@@ -198,7 +233,7 @@ test "bad parity value is unsupported" {
     // Through Session directly: kline_open requires an FTDI cable, a pty is not one.
     var lock = try kline.testing.TmpDir.create();
     defer lock.cleanup();
-    const s = try Session.openDeviceOpts(std.heap.c_allocator, pty.slave_path, null, lock.path, false);
+    const s = try Session.openDeviceOpts(std.heap.c_allocator, pty.slave_path, null, lock.path, false, 1);
     defer kline_close(s);
     try std.testing.expectEqual(@as(c_int, 10), kline_set_line(s, 9600, 8, 7));
     try std.testing.expectEqual(@as(c_int, 0), kline_set_line(s, 9600, 8, 1));

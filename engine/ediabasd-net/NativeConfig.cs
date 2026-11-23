@@ -30,6 +30,9 @@ public sealed class NativeConfig
     /// libkline recordings of every live session go here when set.
     public string? RecordDir { get; set; }
 
+    /// The FTDI latency timer set at open, 1 or 16 ms (M2's echo measurement; default 1).
+    public int LatencyMs { get; set; } = 1;
+
     /// Where this config was read from (not a key).
     public string? ConfigPath { get; set; }
 
@@ -42,7 +45,7 @@ public sealed class NativeConfig
 
     static readonly string[] Keys =
     [
-        "ecuPath", "port", "jobTimeoutSeconds", "maxJobTimeoutSeconds", "reviewedJobs", "traceDir", "recordDir",
+        "ecuPath", "port", "jobTimeoutSeconds", "maxJobTimeoutSeconds", "reviewedJobs", "traceDir", "recordDir", "latencyMs",
     ];
 
     static readonly JsonSerializerOptions Options = new()
@@ -61,6 +64,7 @@ public sealed class NativeConfig
         public List<string>? ReviewedJobs { get; set; }
         public string? TraceDir { get; set; }
         public string? RecordDir { get; set; }
+        public int? LatencyMs { get; set; }
     }
 
     /// The default config path for this environment.
@@ -144,6 +148,7 @@ public sealed class NativeConfig
             ReviewedJobs = dto.ReviewedJobs ?? [],
             TraceDir = string.IsNullOrWhiteSpace(dto.TraceDir) ? null : dto.TraceDir,
             RecordDir = string.IsNullOrWhiteSpace(dto.RecordDir) ? null : dto.RecordDir,
+            LatencyMs = dto.LatencyMs ?? 1,
             ConfigPath = path,
             StateDir = Path.Combine(XdgDir(env, "XDG_STATE_HOME", Path.Combine(".local", "state")), AppDir),
         };
@@ -171,6 +176,11 @@ public sealed class NativeConfig
         if (JobTimeoutSeconds < 1 || JobTimeoutSeconds > MaxJobTimeoutSeconds)
         {
             errors.Add($"jobTimeoutSeconds: must be 1 to maxJobTimeoutSeconds ({MaxJobTimeoutSeconds}) (got {JobTimeoutSeconds})");
+        }
+
+        if (LatencyMs is not (1 or 16))
+        {
+            errors.Add($"latencyMs: must be 1 or 16 (got {LatencyMs})");
         }
 
         for (var i = 0; i < ReviewedJobs.Count; i++)

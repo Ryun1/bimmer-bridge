@@ -44,6 +44,8 @@ namespace EdiabasLib.Native
         }
 
         [DllImport(Lib)] public static extern int kline_open(string path, string recordDir, out IntPtr k);
+        [DllImport(Lib)] public static extern int kline_open_ex(string path, string recordDir, uint latencyMs, out IntPtr k);
+        [DllImport(Lib)] public static extern IntPtr kline_latency(IntPtr k);
         [DllImport(Lib)] public static extern int kline_open_replay(string recordingPath, out IntPtr k);
         [DllImport(Lib)] public static extern void kline_close(IntPtr k);
         [DllImport(Lib)] public static extern int kline_set_line(IntPtr k, uint baud, byte dataBits, byte parity);

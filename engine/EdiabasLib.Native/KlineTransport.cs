@@ -1,6 +1,7 @@
 // Not upstream code. Binds EdInterfaceObd's public transport delegates to libkline.
 
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace EdiabasLib.Native
@@ -12,23 +13,34 @@ namespace EdiabasLib.Native
     {
         readonly string _recordDir;
         readonly string _replayPath;
+        readonly int _latencyMs;
+        static volatile string _lastOpenLatency;
         readonly object _handleLock = new object();
         IntPtr _handle;
         uint[] _concept;
         KlineReason _first = KlineReason.Ok;
         bool _latched;
 
-        KlineTransport(string recordDir, string replayPath)
+        KlineTransport(string recordDir, string replayPath, int latencyMs)
         {
             _recordDir = recordDir;
             _replayPath = replayPath;
+            _latencyMs = latencyMs;
         }
 
-        /// The cable at EdInterfaceObd's ComPort (ObdComPort), recorded to recordDir if set.
-        public static KlineTransport Device(string recordDir) => new KlineTransport(recordDir, null);
+        /// The cable at EdInterfaceObd's ComPort (ObdComPort), recorded to recordDir if set, with
+        /// the FTDI latency timer at latencyMs (1 or 16; libkline refuses anything else).
+        public static KlineTransport Device(string recordDir, int latencyMs = 1) => new KlineTransport(recordDir, null, latencyMs);
 
         /// A recording in place of the cable; the port name is ignored.
-        public static KlineTransport Replay(string recordingPath) => new KlineTransport(null, recordingPath);
+        public static KlineTransport Replay(string recordingPath) => new KlineTransport(null, recordingPath, 1);
+
+        /// The latency label ("1ms", "16ms", "unsupported") of the most recent device open in
+        /// this process; null before any.
+        public static string LastOpenLatency => _lastOpenLatency;
+
+        /// For tests: forget the last open's latency.
+        internal static void ResetLastOpenLatency() => _lastOpenLatency = null;
 
         public bool IsOpen => _handle != IntPtr.Zero;
 
@@ -104,8 +116,9 @@ namespace EdiabasLib.Native
             IntPtr h;
             var rc = _replayPath != null
                 ? KlineNative.kline_open_replay(_replayPath, out h)
-                : KlineNative.kline_open(port ?? "", _recordDir, out h);
+                : KlineNative.kline_open_ex(port ?? "", _recordDir, _latencyMs < 0 ? 0u : (uint)_latencyMs, out h);
             if (!Check(rc)) return false;
+            if (_replayPath == null) _lastOpenLatency = Marshal.PtrToStringUTF8(KlineNative.kline_latency(h));
             lock (_handleLock) _handle = h;
             if (_concept != null) Declare();
             return true;

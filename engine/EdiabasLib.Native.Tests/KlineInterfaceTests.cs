@@ -88,6 +88,34 @@ public class KlineInterfaceTests : IDisposable
     }
 
     [Fact]
+    public void LastOpenLatency_IsNullBeforeAnyOpen()
+    {
+        KlineTransport.ResetLastOpenLatency();
+        Assert.Null(KlineTransport.LastOpenLatency);
+        var (ed, iface) = Create(KlineTransport.Device(null, 16), "/dev/does-not-exist");
+        using (ed)
+        {
+            try { iface.InterfaceConnect(); }
+            catch (EdiabasNet.EdiabasNetException) { }
+            Assert.Null(KlineTransport.LastOpenLatency);
+        }
+    }
+
+    [Fact]
+    public void Connect_LatencyOtherThan1Or16_ReasonUnsupported()
+    {
+        var (ed, iface) = Create(KlineTransport.Device(null, 5), "/dev/does-not-exist");
+        using (ed)
+        {
+            bool connected;
+            try { connected = iface.InterfaceConnect(); }
+            catch (EdiabasNet.EdiabasNetException) { connected = false; }
+            Assert.False(connected);
+            Assert.Equal(KlineReason.Unsupported, iface.Transport.LastReason);
+        }
+    }
+
+    [Fact]
     public void Connect_MissingDevice_ReasonNoDevice()
     {
         var (ed, iface) = Create(KlineTransport.Device(null), "/dev/does-not-exist");

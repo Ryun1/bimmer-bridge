@@ -101,6 +101,10 @@ failure's reason, and `ediabasd` turns it into a bridge error (`cable_not_found`
   sees whole telegrams.
 - **Cancel.** `kline_cancel(k, 1)` makes a blocked send or receive return `KLINE_CANCELLED`
   within about 10 ms; `kline_cancel(k, 0)` clears it.
+- **Latency.** `kline_open` sets the FTDI latency timer to 1 ms; `kline_open_ex` takes 1 or
+  16 (anything else is `KLINE_UNSUPPORTED` before anything opens), for M2's echo measurement.
+  `kline_latency` returns what the open applied (`"1ms"`, `"16ms"`, or `"unsupported"` when
+  the driver refused), which is also the recording's `open` event `latency`.
 - **Recorder.** With a record directory, every line setting, modem-line and break edge,
   concept, byte sent or received, purge and refusal goes to a JSON-lines file
   (`src/recording.zig` lists the events). Recordings can hold a VIN and other identifiers;

@@ -573,7 +573,8 @@ writes that request's response and exits with code 3; the next request starts a 
 **Config** (`$XDG_CONFIG_HOME/bimmer-bridge/config.json`, default `~/.config/…`): `ecuPath`
 (required), `port` (optional when exactly one cable is present), `jobTimeoutSeconds` (30),
 `maxJobTimeoutSeconds` (60, at most 60), `reviewedJobs` (read at start),
-`traceDir`, `recordDir`. Unknown keys are errors. The audit log is
+`traceDir`, `recordDir`, `latencyMs` (1 or 16, default 1: the FTDI latency timer set when the
+cable opens; 16 is for M2's echo measurement). Unknown keys are errors. The audit log is
 `$XDG_STATE_HOME/bimmer-bridge/audit.log` (default `~/.local/state/…`), in the format below,
 with `stdio` or `cli` as the remote address and the method as the request.
 

@@ -92,28 +92,35 @@ pub const Session = struct {
     line: LineSettings = .{ .baud = 9600, .data_bits = 8, .parity = .none },
     cancelled: std.atomic.Value(bool) = .init(false),
     rec: ?recording.Writer = null,
+    latency_label: []const u8 = "",
 
-    /// Opens the cable (FTDI 0403:6001 only) with its lock, exclusive access and 1 ms latency.
-    pub fn openDevice(alloc: std.mem.Allocator, path: []const u8, record_dir: ?[]const u8, lock_dir: ?[]const u8) OpenError!*Session {
-        return openDeviceOpts(alloc, path, record_dir, lock_dir, true);
+    /// Opens the cable (FTDI 0403:6001 only) with its lock, exclusive access and the latency
+    /// asked for (1 or 16 ms; the caller checks the value).
+    pub fn openDevice(alloc: std.mem.Allocator, path: []const u8, record_dir: ?[]const u8, lock_dir: ?[]const u8, latency_ms: u8) OpenError!*Session {
+        return openDeviceOpts(alloc, path, record_dir, lock_dir, true, latency_ms);
     }
 
     /// openDevice, with the FTDI check optional (tests open ptys).
-    pub fn openDeviceOpts(alloc: std.mem.Allocator, path: []const u8, record_dir: ?[]const u8, lock_dir: ?[]const u8, require_ftdi: bool) OpenError!*Session {
+    pub fn openDeviceOpts(alloc: std.mem.Allocator, path: []const u8, record_dir: ?[]const u8, lock_dir: ?[]const u8, require_ftdi: bool, latency_ms: u8) OpenError!*Session {
         var p = try Port.open(path, .{ .require_ftdi = require_ftdi, .lock_dir = lock_dir });
         errdefer p.close();
-        const latency_ok = if (p.setLowLatency()) |_| true else |_| false;
+        const latency_ok = if (p.setLatency(latency_ms)) |_| true else |_| false;
         const s = try alloc.create(Session);
         s.* = .{ .alloc = alloc, .device = .{ .port = p } };
+        s.latency_label = if (!latency_ok) "unsupported" else if (latency_ms == 1) "1ms" else if (latency_ms == 16) "16ms" else "unsupported";
         if (record_dir) |d| {
             if (recording.Writer.create(d)) |w| s.rec = w else |_| {}
         }
         if (s.rec) |*w| {
             var buf: [std.fs.max_path_bytes * 2]u8 = undefined;
-            const latency = if (latency_ok) "1ms" else "unsupported";
-            w.event(.open, ",\"path\":{s},\"latency\":\"{s}\"", .{ recording.jsonString(&buf, path), latency });
+            w.event(.open, ",\"path\":{s},\"latency\":\"{s}\"", .{ recording.jsonString(&buf, path), s.latency_label });
         }
         return s;
+    }
+
+    /// The latency the open applied ("1ms", "16ms" or "unsupported"); "" for a replay.
+    pub fn latencyLabel(self: *const Session) []const u8 {
+        return self.latency_label;
     }
 
     /// Opens a recording in place of the cable. A missing file is NoDevice.
@@ -311,7 +318,7 @@ const ident = [_]u8{ 0x82, 0x12, 0xF1, 0x1A, 0x80, 0x9F };
 const clear_faults = [_]u8{ 0x83, 0x12, 0xF1, 0x14, 0xFF, 0xFF };
 
 fn openPty(pty: *Pty, lock: *TmpDir, record_dir: ?[]const u8) !*Session {
-    return Session.openDeviceOpts(testing.allocator, pty.slave_path, record_dir, lock.path, false);
+    return Session.openDeviceOpts(testing.allocator, pty.slave_path, record_dir, lock.path, false, 1);
 }
 
 /// Reads up to n bytes from the pty master within timeout_ms.
@@ -467,6 +474,38 @@ test "recorder writes every event" {
     try testing.expectEqualStrings("open,line,concept,send,recv,close", ops.items);
     try testing.expectEqualSlices(u8, &ident, r.events[3].bytes);
     try testing.expectEqualSlices(u8, &.{ 0x82, 0xF1, 0x12, 0x5A, 0x80, 0x5F }, r.events[4].bytes);
+}
+
+test "open records the latency asked for, or unsupported" {
+    var pty = try Pty.open();
+    defer pty.close();
+    var lock = try TmpDir.create();
+    defer lock.cleanup();
+    var rec = try TmpDir.create();
+    defer rec.cleanup();
+    {
+        const s = try Session.openDeviceOpts(testing.allocator, pty.slave_path, rec.path, lock.path, false, 16);
+        defer s.close();
+        try testing.expectEqualStrings("unsupported", s.latencyLabel());
+    }
+    const path = (try onlyFile(rec.path)).?;
+    defer testing.allocator.free(path);
+    var buf: [4096]u8 = undefined;
+    const fd = std.c.open(path, .{ .ACCMODE = .RDONLY }, @as(std.c.mode_t, 0));
+    defer _ = std.c.close(fd);
+    const n = std.c.read(fd, &buf, buf.len);
+    try testing.expect(n > 0);
+    try testing.expect(std.mem.indexOf(u8, buf[0..@intCast(n)], "\"latency\":\"unsupported\"") != null);
+}
+
+test "a replay has no latency label" {
+    var tmp = try TmpDir.create();
+    defer tmp.cleanup();
+    const path = try writeFile(tmp.path, "r.jsonl", exchange);
+    defer testing.allocator.free(path);
+    const s = try Session.openReplay(testing.allocator, path);
+    defer s.close();
+    try testing.expectEqualStrings("", s.latencyLabel());
 }
 
 test "recorder keeps the bytes of a receive that times out" {

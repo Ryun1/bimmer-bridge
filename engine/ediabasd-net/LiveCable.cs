@@ -25,7 +25,7 @@ public sealed class LiveCable : ILiveCable
         _iface = new KlineInterface(transport) { ComPort = port };
     }
 
-    public static LiveCable Device(string port, string? recordDir) => new(KlineTransport.Device(recordDir), port);
+    public static LiveCable Device(string port, string? recordDir, int latencyMs = 1) => new(KlineTransport.Device(recordDir, latencyMs), port);
 
     public static LiveCable Replay(string recordingPath) => new(KlineTransport.Replay(recordingPath), "replay");
 

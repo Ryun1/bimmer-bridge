@@ -32,6 +32,11 @@ enum kline_reason {
 /* Opens the cable with its lock, exclusive access and 1 ms latency. record_dir may be NULL;
  * otherwise every event goes to <record_dir>/kline-<UTC time>-<pid>.jsonl. */
 int  kline_open(const char *path, const char *record_dir, kline_t **out);
+/* kline_open with the latency timer chosen: latency_ms must be 1 or 16, otherwise
+ * KLINE_UNSUPPORTED and nothing is opened. kline_open means latency 1. */
+int  kline_open_ex(const char *path, const char *record_dir, unsigned latency_ms, kline_t **out);
+/* The latency the open applied: "1ms", "16ms" or "unsupported"; "" for a replay or NULL. */
+const char *kline_latency(const kline_t *k);
 /* Opens a recording in place of the cable. */
 int  kline_open_replay(const char *recording_path, kline_t **out);
 void kline_close(kline_t *k);

@@ -14,7 +14,7 @@ public sealed class EdiabasdHost : IDisposable
         Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
         Api = new NativeEdiabasApi(
             config.EcuPath,
-            liveCable ?? (() => LiveCable.Device(ResolvePort() ?? "", config.RecordDir)),
+            liveCable ?? (() => LiveCable.Device(ResolvePort() ?? "", config.RecordDir, config.LatencyMs)),
             new VariantCache(config.VariantsPath),
             config.TraceDir);
         Service = new EdiabasService(
