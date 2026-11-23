@@ -50,8 +50,10 @@ On the E61, in this order (2026-11-23):
 
 1. `E60` `IDENT_FUNKTIONAL`: the modules that answer.
 2. `E60` `FS_LESEN_FUNKTIONAL`: the faults of all of them.
-3. `KGM_60` history blocks 1 to 3 in one `ediabas_jobs` call. Block 1 names the module that
-   kept the car awake; block 3 lists each waking module by address. Pass `results` to trim them.
+3. `KGM_60` history blocks 1 to 3 in one `ediabas_jobs` call. Block 1 gives a `STAT_VERURSACHER`
+   address per record, block 3 `STAT_WECKER_SG_ID` addresses (2026-11-23, recording 0016; 0x27
+   is PGS by `IDENT_FUNKTIONAL`). What they mean for the drain is the user's call. Pass
+   `results` to trim them.
 4. `ediabas_read_faults` on the modules the history and the functional read name.
 5. Fault detail (`FS_LESEN_DETAIL`) for a quiescent-current code such as `2DED`, once
    `ediabas_describe` has shown it.

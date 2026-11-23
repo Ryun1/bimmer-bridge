@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default). On the E61 (2026-11-23) the ignition reading and the cable's KL15 followed the ignition; `STAT_UBATT` and KL30 come from the cable, so only a voltage source shows the car's supply voltage |
+| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default). On the E61 (2026-11-23, ignition on) `STAT_ZUENDUNG` read 1 and the cable's KL15 `E02E0000`; with no car connected (2026-11-22) 0 and `00000000`. Ignition off at the car is not recorded yet. `STAT_UBATT` and KL30 come from the cable, so only a voltage source shows the car's supply voltage |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 
@@ -75,7 +75,7 @@ turns it on.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
    Run each functional job as its own `ediabas_job` with `timeoutSeconds: 60`, after an
    earlier call has loaded EDIABAS (`ediabas_vehicle_status`): a request gets at most 60 s,
-   and each took about 4 s on the E61 (2026-11-23). Then name only the modules that
+   and on the E61 (2026-11-23) `IDENT_FUNKTIONAL` took 3,925 ms and `FS_LESEN_FUNKTIONAL` 3,964 ms (recordings 0029, 0031), about 4 s each. Then name only the modules that
    answered in `ediabas_read_faults`: one that does not answer can use its whole timeout.
    The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
    chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
@@ -85,8 +85,9 @@ turns it on.
    user to switch the ignition on and say when it is. Suggest a battery charger or support unit on
    the car for the session (general knowledge, not from this car): it takes away most of the
    time pressure and avoids communication errors from low voltage.
-5. **`ediabas_vehicle_status`** (on the E61, 2026-11-23, the ignition reading and the cable's KL15
-   followed the ignition; `STAT_UBATT` and KL30 come from the cable, and only a voltage source
+5. **`ediabas_vehicle_status`** (on the E61, 2026-11-23, ignition on: `STAT_ZUENDUNG` 1, the cable's
+   KL15 `E02E0000`; with no car connected, 2026-11-22: 0 and `00000000`; ignition off at the car
+   is not recorded yet. `STAT_UBATT` and KL30 come from the cable, and only a voltage source
    shows the car's supply voltage), then the reads, batched: one `ediabas_read_faults` for all
    the ECUs wanted (up to 20), and the status jobs in one `ediabas_jobs` call rather than one
    `ediabas_job` each.
