@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import type { EdiabasBackend } from "./backend.js";
 import type { Config } from "./config.js";
 import {
   BridgeError,
@@ -339,7 +340,8 @@ function decodeTitle(v: string | undefined): string | null {
 }
 
 /** HTTP client for the VM agent. Every method throws BridgeError with an actionable message. */
-export class AgentClient {
+export class AgentClient implements EdiabasBackend {
+  readonly kind = "vm" as const;
   private readonly locator: VmLocator;
   private readonly fetchFn: typeof fetch;
   private readonly requestTimeoutMs: number;

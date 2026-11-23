@@ -26,6 +26,9 @@ export const MESSAGES = {
   ediabasRequestLost:
     "The connection to the VM agent broke or timed out after this EDIABAS request may already have reached it, so the job may have run in the VM. " +
     "It was not sent again. Run vm_health to see whether the agent is still up; ask again only if the result is still needed.",
+  engineRequestLost:
+    "The native engine (ediabasd) exited or stopped answering after this request reached it, so the job may have run on the car. " +
+    "It was not sent again. Run bridge_health to see the engine and cable; ask again only if the result is still needed.",
   ediabasBusy:
     "Another EDIABAS request is still running; this one was not sent. Wait for the other call's answer, then ask again once if the result is still needed.",
 } as const;
@@ -39,6 +42,7 @@ export const LOCAL_ERROR_CODES = [
   "agent_not_answering",
   "ediabas_request_lost",
   "ediabas_busy",
+  "engine_unavailable",
   "local_network_blocked",
   "unauthorized",
   "forbidden",
@@ -102,6 +106,57 @@ export function ediabasRequestLost(http?: { baseUrl: string; status: number }): 
 }
 
 /** An EDIABAS request waited too long behind another one on this Mac and was never sent. */
+/** The native engine exited or stopped answering during a request that runs a job. */
+export function engineRequestLost(): BridgeError {
+  return new BridgeError("ediabas_request_lost", MESSAGES.engineRequestLost);
+}
+
+/** The native engine could not be started, or failed a request that cannot reach the car. */
+export function engineUnavailable(binary: string, detail?: string): BridgeError {
+  return new BridgeError(
+    "engine_unavailable",
+    `The native engine (ediabasd at ${cleanText(binary, 200)}) is not available${detail ? `: ${cleanText(detail, 300)}` : ""}. ` +
+      "Nothing reached the car. Check ediabasdPath and dotnetRoot in config.local.json (or EDIABASD_PATH), and that ediabasd is built; " +
+      "run bridge_health. Do not retry in a loop.",
+  );
+}
+
+/** ediabasd answered in a shape this server does not expect. */
+export function engineBadResponse(what: string): BridgeError {
+  return new BridgeError("bad_response", `The native engine's response to ${what} did not match the expected format. ediabasd and this server may be different versions.`);
+}
+
+/**
+ * An error ediabasd answered. The cable codes get native advice (the cable is on the Mac, not
+ * in the VM); every other code is worded as for the VM agent.
+ */
+export function engineError(code: string | undefined, message: string | undefined, details?: unknown, run = false): BridgeError {
+  const safeCode = (code ? cleanText(code, 64).replace(/[^A-Za-z0-9_.-]/g, "_") : "") || "engine_error";
+  const known = describeEngineError(safeCode, message, details) ?? describeAgentError(safeCode, message, details, run);
+  if (known) {
+    const e = new BridgeError(safeCode, known.replace(/\bThe agent said\b/, "The engine said").replace(/\bThe agent refused\b/, "The engine refused"));
+    const rule = detailString(details, "rule");
+    if (rule) e.rule = cleanText(rule, 80);
+    return e;
+  }
+  return new BridgeError(safeCode, `The native engine reported an error: ${safeCode} — ${message ? cleanText(message) : "(no message)"}.`);
+}
+
+function describeEngineError(code: string, message: string | undefined, details: unknown): string | null {
+  const said = message ? ` The engine said: "${cleanText(message, 200)}".` : "";
+  switch (code) {
+    case "cable_not_found":
+      return (
+        "No K+DCAN cable is attached to this Mac. If the Windows VM has it, the user unticks it in UTM's USB menu so the Mac gets it back; " +
+        "otherwise they plug it in. Run bridge_health to check (it says absent until then). Do not retry until the user says it is connected."
+      );
+    case "cable_in_use":
+      return `Another program on this Mac holds the cable (another ediabasd or kline session).${said} Ask the user to close it, then ask again once. Do not retry in a loop.`;
+    default:
+      return null;
+  }
+}
+
 export function ediabasBusy(): BridgeError {
   return new BridgeError("ediabas_busy", MESSAGES.ediabasBusy);
 }
@@ -398,6 +453,17 @@ export function describeAgentError(code: string, message: string | undefined, de
         "Windows VM in UTM. Do not retry until the user says it is connected."
       );
     }
+    case "cable_unsupported":
+      return "The serial device is not an FTDI FT232R K+DCAN cable (USB 0403:6001); only that cable is supported. Tell the user; do not retry.";
+    case "cable_permission":
+      return "No permission to open the cable. On Linux the user installs the udev rule from kline/README.md and replugs the cable. Do not retry until that is done.";
+    case "frame_refused":
+      return (
+        "The cable layer's frame gate refused a telegram that could write to the car or reconfigure the cable, so the whole request failed and nothing more was sent. " +
+        "The bridge is read-only; do not look for another job, ECU or tool to get the same reading. Tell the user it was refused."
+      );
+    case "needs_car":
+      return "This is a group file: which variant it means is found only by asking the car. Run a job on it first (with the ignition on), then describe it. Ask the user before doing so.";
     case "ediabas_unavailable": {
       const reason = detailString(details, "reason");
       return `EDIABAS could not be started in the VM${reason ? ` (${cleanText(reason, 200)})` : ""}. Check vm_health (EDIABAS DLL); the user may need to check the EDIABAS installation in the VM.`;
