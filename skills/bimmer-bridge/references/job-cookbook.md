@@ -117,7 +117,7 @@ first line is quoted and the KWP2000 service line, if any, follows after " — "
 (`durationMs` 14745). Cable in the VM, not in the car. Under policy version 4 (2026-11-22,
 `durationMs` 16545): 22 allowed, 21 runnable; the one change is `STATUS_PAIRING`, below.
 
-**Allowed by the policy** (all runnable under version 4 except `STATUS_PAIRING`, which now needs review):
+**Allowed by the policy** (all runnable under version 4; `STATUS_PAIRING` is flagged for review and runs because the owner approved it on 2026-11-23):
 
 | Job | Rule (review) | Description as returned | *(gloss)* |
 |---|---|---|---|
@@ -140,7 +140,7 @@ first line is quoted and the KWP2000 service line, if any, follows after " — "
 | `STATUS_KLEMMEN` | `allow.pattern` (review passed) | `read clamp status` | (already English) |
 | `STATUS_BORDNETZSPANNUNG` | `allow.pattern` (review passed) | `Bordnetzspannung in Volt` | on-board supply voltage in volts |
 | `STATUS_ENERGIESPARMODUS` | `allow.pattern` (review passed) | `read out status of energy saving mode` | (already English) |
-| `STATUS_PAIRING` | `allow.pattern` (**needs review** under version 4: `schaltet`, in `freigeschaltet`, matches the screen; refused with `job_needs_review` unless the owner approves it) | `Gibt den Pairing-Status aus zwischen ECU und CAM` (more lines below) | gives the pairing status between the ECU and the camera |
+| `STATUS_PAIRING` | `allow.pattern` (**reviewed**: approved 2026-11-23 as `NVE_65:STATUS_PAIRING@f62e5f225aaf`; flagged under version 4 because `schaltet`, in `freigeschaltet`, matches the screen) | `Gibt den Pairing-Status aus zwischen ECU und CAM` (more lines below) | gives the pairing status between the ECU and the camera |
 | `STATUS_NIVI` | `allow.pattern` (review passed) | `Liest den Status von NIVI` | reads the night-vision status |
 | `STATUS_FSC_LESEN` | `allow.pattern` (review passed) | `gibt den detaillierten Status des Freischaltcodes aus` | gives the detailed status of the enabling code (FSC) |
 
@@ -313,7 +313,7 @@ combine the full list (4) and the `STATUS` filter (6): `STATUS_RDL`, `STATUS_RDU
 
 | File | Job | Matched |
 |---|---|---|
-| `NVE_65` | `STATUS_PAIRING` | `schaltet` (in `freigeschaltet`) |
+| `NVE_65` | `STATUS_PAIRING` | `schaltet` (in `freigeschaltet`); approved by the owner on 2026-11-23 |
 | `CAS` | `STATUS_CC_DATEN_ARG`, `STATUS_FNDCOM_FUNKTION`, `STATUS_RDL`, `STATUS_RDU` | `start` |
 | `CAS` | `STATUS_ELV_HISTORY_AUS_BUFFER` | `write` |
 | `CAS` | `STATUS_MECHANISCHER_SCHLUESSELCODE`, `STATUS_THS_HANDSENDER1` | no description |
@@ -574,7 +574,8 @@ review (`$21 StartRoutineByLocalIdentifier`, as the SGBD writes it).
 
 Described again: unchanged from the tables above. `KOMB60` `STATUS_KLEMMENSPANNUNG` is runnable
 (hash `375f3b2189d0`), no arguments, `STAT_KLEMMENSPANNUNG_WERT` (int) and
-`STAT_KLEMMENSPANNUNG_EINH` (`normalerweise mV`). `NVE_65` `STATUS_PAIRING` still needs review
+`STAT_KLEMMENSPANNUNG_EINH` (`normalerweise mV`). `NVE_65` `STATUS_PAIRING` is flagged by the screen
 (hash `f62e5f225aaf`): no arguments, results `STAT_PAIRING_WERT` (int) and `STAT_PAIRING_TEXT`
-(`00: Pairing erfolgreich FE: Pairing nicht erfolgt`); approving it is the owner's choice
-(`NVE_65:STATUS_PAIRING@f62e5f225aaf`).
+(`00: Pairing erfolgreich FE: Pairing nicht erfolgt`). The owner approved it on 2026-11-23
+(`NVE_65:STATUS_PAIRING@f62e5f225aaf` in the VM's `reviewedJobs`); `ediabas_describe` then
+showed it as runnable. Not yet run on the car.
