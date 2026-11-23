@@ -1,0 +1,240 @@
+{
+  "recordedAt": "2026-11-23T19:47:16.349Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "D_PGS",
+          "job": "FS_LESEN"
+        },
+        {
+          "ecu": "CAS",
+          "job": "FS_LESEN"
+        },
+        {
+          "ecu": "KGM_60",
+          "job": "FS_LESEN"
+        },
+        {
+          "ecu": "D_KBM",
+          "job": "FS_LESEN"
+        },
+        {
+          "ecu": "d_0012",
+          "job": "FS_LESEN"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "D_PGS",
+            "job": "FS_LESEN",
+            "variant": "PGS_65_2",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "pgs_65_2",
+              "SAETZE": 4,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "PGS_65_2",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_ORT_NR": 41143,
+                "F_VERSION": 2,
+                "F_HEX_CODE": "A0B760",
+                "F_ORT_TEXT": "TAGE_HILI_WUP_keine_Antwort",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 0,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "kein passendes Fehlersymptom",
+                "F_VORHANDEN_NR": 35,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan vorhanden und bereits gespeichert"
+              },
+              {
+                "F_ORT_NR": 41159,
+                "F_HEX_CODE": "A0C720",
+                "F_ORT_TEXT": "TAGE_HIRE_WUP_keine_Antwort",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 0,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "kein passendes Fehlersymptom",
+                "F_VORHANDEN_NR": 33,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan nicht vorhanden, aber bereits gespeichert"
+              },
+              {
+                "F_ORT_NR": 41111,
+                "F_HEX_CODE": "A09720",
+                "F_ORT_TEXT": "TAGE_FAT_WUP_keine_Antwort",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 0,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "kein passendes Fehlersymptom",
+                "F_VORHANDEN_NR": 33,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan nicht vorhanden, aber bereits gespeichert"
+              },
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "8BF1275803A0B760A0C720A0972093",
+                "_TEL_AUFTRAG": "8427F11802FFFF"
+              }
+            ],
+            "durationMs": 163
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "FS_LESEN",
+            "variant": "CAS",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_VERSION": 2,
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "82F14058000B",
+                "_TEL_AUFTRAG": "8440F11802FFFF"
+              }
+            ],
+            "durationMs": 18
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "KGM_60",
+            "job": "FS_LESEN",
+            "variant": "KGM_60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "kgm_60",
+              "SAETZE": 3,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "KGM_60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_ORT_NR": 37836,
+                "F_VERSION": 2,
+                "F_HEX_CODE": "93CC61",
+                "F_ORT_TEXT": "keine LIN-Kommunikation zum LCPA",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 1,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "Signal oder Wert oberhalb Schwelle",
+                "F_VORHANDEN_NR": 35,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan vorhanden und bereits gespeichert"
+              },
+              {
+                "F_ORT_NR": 37810,
+                "F_HEX_CODE": "93B221",
+                "F_ORT_TEXT": "Spiegelheizung Fahrerseite defekt",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 1,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "Signal oder Wert oberhalb Schwelle",
+                "F_VORHANDEN_NR": 33,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan nicht vorhanden, aber bereits gespeichert"
+              },
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "88F100580293CC6193B221F9",
+                "_TEL_AUFTRAG": "8400F11802FFFF"
+              }
+            ],
+            "durationMs": 31
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "D_KBM",
+            "job": "FS_LESEN",
+            "variant": "KBM_60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "kbm_60",
+              "SAETZE": 1,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "KBM_60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_VERSION": 2,
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "82F17258003D"
+              }
+            ],
+            "durationMs": 126
+          },
+          "error": null
+        },
+        {
+          "ok": false,
+          "result": null,
+          "error": {
+            "code": "ediabas_error",
+            "message": "EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT",
+            "details": {
+              "errorCode": 19,
+              "errorText": "IFH-0009: NO RESPONSE FROM CONTROLUNIT"
+            }
+          }
+        }
+      ],
+      "durationMs": 6551
+    }
+  }
+}

@@ -1,0 +1,433 @@
+{
+  "recordedAt": "2026-11-23T19:42:57.253Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/ecus",
+    "query": {
+      "filter": "60"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecuPath": "C:\\EDIABAS\\ECU",
+      "count": 102,
+      "truncated": false,
+      "files": [
+        {
+          "name": "08DDE606",
+          "type": "prg"
+        },
+        {
+          "name": "09DDE603",
+          "type": "prg"
+        },
+        {
+          "name": "09DDE604",
+          "type": "prg"
+        },
+        {
+          "name": "10GD8600",
+          "type": "prg"
+        },
+        {
+          "name": "10GD8602",
+          "type": "prg"
+        },
+        {
+          "name": "10GD8603",
+          "type": "prg"
+        },
+        {
+          "name": "10GD8604",
+          "type": "prg"
+        },
+        {
+          "name": "11DDE606",
+          "type": "prg"
+        },
+        {
+          "name": "47CC3F60",
+          "type": "prg"
+        },
+        {
+          "name": "47CC4760",
+          "type": "prg"
+        },
+        {
+          "name": "47CC6260",
+          "type": "prg"
+        },
+        {
+          "name": "48CC6360",
+          "type": "prg"
+        },
+        {
+          "name": "49CCA060",
+          "type": "prg"
+        },
+        {
+          "name": "ACSM60",
+          "type": "prg"
+        },
+        {
+          "name": "afs_60",
+          "type": "prg"
+        },
+        {
+          "name": "ALBV60B",
+          "type": "prg"
+        },
+        {
+          "name": "ALBV60F",
+          "type": "prg"
+        },
+        {
+          "name": "ALC_60",
+          "type": "prg"
+        },
+        {
+          "name": "AMP_60",
+          "type": "prg"
+        },
+        {
+          "name": "ANT_60",
+          "type": "prg"
+        },
+        {
+          "name": "ars_60",
+          "type": "prg"
+        },
+        {
+          "name": "ASK_60",
+          "type": "prg"
+        },
+        {
+          "name": "BEHO60",
+          "type": "prg"
+        },
+        {
+          "name": "CAN_60",
+          "type": "prg"
+        },
+        {
+          "name": "CAN_60_2",
+          "type": "prg"
+        },
+        {
+          "name": "CCCA60",
+          "type": "prg"
+        },
+        {
+          "name": "CCCG60",
+          "type": "prg"
+        },
+        {
+          "name": "CCC_60",
+          "type": "prg"
+        },
+        {
+          "name": "cid_60",
+          "type": "prg"
+        },
+        {
+          "name": "CNAV60",
+          "type": "prg"
+        },
+        {
+          "name": "D60M47A0",
+          "type": "prg"
+        },
+        {
+          "name": "D60M57A0",
+          "type": "prg"
+        },
+        {
+          "name": "D60M57D0",
+          "type": "prg"
+        },
+        {
+          "name": "D60PSA0",
+          "type": "prg"
+        },
+        {
+          "name": "D60TMCA",
+          "type": "prg"
+        },
+        {
+          "name": "DAB_60",
+          "type": "prg"
+        },
+        {
+          "name": "DSC_60",
+          "type": "prg"
+        },
+        {
+          "name": "DSC_60PP",
+          "type": "prg"
+        },
+        {
+          "name": "DSC_MK60",
+          "type": "prg"
+        },
+        {
+          "name": "d_0060",
+          "type": "grp"
+        },
+        {
+          "name": "D_CAN_60",
+          "type": "grp"
+        },
+        {
+          "name": "D_FDM60",
+          "type": "grp"
+        },
+        {
+          "name": "d_m60_10",
+          "type": "grp"
+        },
+        {
+          "name": "d_m60_12",
+          "type": "grp"
+        },
+        {
+          "name": "d_most60",
+          "type": "grp"
+        },
+        {
+          "name": "E60",
+          "type": "prg"
+        },
+        {
+          "name": "ech60",
+          "type": "prg"
+        },
+        {
+          "name": "ecl60",
+          "type": "prg"
+        },
+        {
+          "name": "EKP360",
+          "type": "prg"
+        },
+        {
+          "name": "EKPM60_2",
+          "type": "prg"
+        },
+        {
+          "name": "EKPM60_3",
+          "type": "prg"
+        },
+        {
+          "name": "EKP_60",
+          "type": "prg"
+        },
+        {
+          "name": "fdm_60",
+          "type": "prg"
+        },
+        {
+          "name": "fdm_60_k",
+          "type": "prg"
+        },
+        {
+          "name": "FDM_VS60",
+          "type": "prg"
+        },
+        {
+          "name": "GS8600",
+          "type": "prg"
+        },
+        {
+          "name": "GS8602",
+          "type": "prg"
+        },
+        {
+          "name": "GS8603",
+          "type": "prg"
+        },
+        {
+          "name": "GS8604",
+          "type": "prg"
+        },
+        {
+          "name": "GWS_60",
+          "type": "prg"
+        },
+        {
+          "name": "gws_60_2",
+          "type": "prg"
+        },
+        {
+          "name": "HUD_60",
+          "type": "prg"
+        },
+        {
+          "name": "IBOC60",
+          "type": "prg"
+        },
+        {
+          "name": "IHKA60",
+          "type": "prg"
+        },
+        {
+          "name": "IHKA60_2",
+          "type": "prg"
+        },
+        {
+          "name": "jnav60",
+          "type": "prg"
+        },
+        {
+          "name": "JNAV60_2",
+          "type": "prg"
+        },
+        {
+          "name": "jnav60_3",
+          "type": "prg"
+        },
+        {
+          "name": "KBM_60",
+          "type": "prg"
+        },
+        {
+          "name": "KGM_60",
+          "type": "prg"
+        },
+        {
+          "name": "knav60",
+          "type": "prg"
+        },
+        {
+          "name": "KOMB60",
+          "type": "prg"
+        },
+        {
+          "name": "ldm_60",
+          "type": "prg"
+        },
+        {
+          "name": "LM_60",
+          "type": "prg"
+        },
+        {
+          "name": "LRR_60",
+          "type": "prg"
+        },
+        {
+          "name": "M60_338D",
+          "type": "prg"
+        },
+        {
+          "name": "M60_338K",
+          "type": "prg"
+        },
+        {
+          "name": "MASK60",
+          "type": "prg"
+        },
+        {
+          "name": "mcgw60",
+          "type": "prg"
+        },
+        {
+          "name": "most_60",
+          "type": "prg"
+        },
+        {
+          "name": "mpm_60",
+          "type": "prg"
+        },
+        {
+          "name": "MSS60",
+          "type": "prg"
+        },
+        {
+          "name": "navl60",
+          "type": "prg"
+        },
+        {
+          "name": "rdc_60",
+          "type": "prg"
+        },
+        {
+          "name": "SAT_60",
+          "type": "prg"
+        },
+        {
+          "name": "SFZ60",
+          "type": "prg"
+        },
+        {
+          "name": "sgm_60_2",
+          "type": "prg"
+        },
+        {
+          "name": "SMG_60",
+          "type": "prg"
+        },
+        {
+          "name": "ssg_60",
+          "type": "prg"
+        },
+        {
+          "name": "SZL_60",
+          "type": "prg"
+        },
+        {
+          "name": "SZM_60",
+          "type": "prg"
+        },
+        {
+          "name": "TEBF60",
+          "type": "prg"
+        },
+        {
+          "name": "TEFA60",
+          "type": "prg"
+        },
+        {
+          "name": "TELE60",
+          "type": "prg"
+        },
+        {
+          "name": "TELE60_2",
+          "type": "prg"
+        },
+        {
+          "name": "TELE60_3",
+          "type": "prg"
+        },
+        {
+          "name": "tlc_60",
+          "type": "prg"
+        },
+        {
+          "name": "ulf2_60",
+          "type": "prg"
+        },
+        {
+          "name": "ulf_60",
+          "type": "prg"
+        },
+        {
+          "name": "ulf_60pb",
+          "type": "prg"
+        },
+        {
+          "name": "zbeh60",
+          "type": "prg"
+        },
+        {
+          "name": "zbe_60_2",
+          "type": "prg"
+        }
+      ]
+    }
+  }
+}

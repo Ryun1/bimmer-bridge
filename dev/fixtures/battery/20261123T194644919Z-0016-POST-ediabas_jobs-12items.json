@@ -1,0 +1,709 @@
+{
+  "recordedAt": "2026-11-23T19:46:44.919Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "KGM_60",
+          "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1"
+        },
+        {
+          "ecu": "KGM_60",
+          "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2"
+        },
+        {
+          "ecu": "KGM_60",
+          "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_3"
+        },
+        {
+          "ecu": "CAS",
+          "job": "STATUS_WAKEUP_HISTORY"
+        },
+        {
+          "ecu": "CAS",
+          "job": "STATUS_WUP"
+        },
+        {
+          "ecu": "CAS",
+          "job": "STATUS_PA_WUP"
+        },
+        {
+          "ecu": "CAS",
+          "job": "STATUS_KLEMMENVERHINDERER"
+        },
+        {
+          "ecu": "CAS",
+          "job": "STATUS_KL15_ABSCHALTUNG"
+        },
+        {
+          "ecu": "IHKA60",
+          "job": "STATUS_VERBRAUCHERREDUZIERUNG"
+        },
+        {
+          "ecu": "KOMB60",
+          "job": "STATUS_KL30_H_ZAEHLER"
+        },
+        {
+          "ecu": "MPM_60",
+          "job": "STATUS_ECU_LESEN"
+        },
+        {
+          "ecu": "MPM_60",
+          "job": "STATUS_AD_WERTE_LESEN"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "KGM_60",
+            "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1",
+            "variant": "KGM_60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "kgm_60",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1",
+              "VARIANTE": "KGM_60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "ABF10062EFE0A71E000314580000270E000382320000270C00038E2B000027E0FF026A8C020027DFFF0294770200F0",
+                "_TEL_AUFTRAG": "8300F122EFE0",
+                "STAT_DATENSATZ_1": "DATENSATZ",
+                "STAT_DATENSATZ_2": "DATENSATZ",
+                "STAT_DATENSATZ_3": "DATENSATZ",
+                "STAT_DATENSATZ_4": "DATENSATZ",
+                "STAT_DATENSATZ_5": "DATENSATZ",
+                "STAT_VERURSACHER_1": 39,
+                "STAT_VERURSACHER_2": 39,
+                "STAT_VERURSACHER_3": 39,
+                "STAT_VERURSACHER_4": 39,
+                "STAT_VERURSACHER_5": 39,
+                "STAT_KM_STAND_EINH_1": "KM",
+                "STAT_KM_STAND_EINH_2": "KM",
+                "STAT_KM_STAND_EINH_3": "KM",
+                "STAT_KM_STAND_EINH_4": "KM",
+                "STAT_KM_STAND_EINH_5": "KM",
+                "STAT_KM_STAND_WERT_1": 196638,
+                "STAT_KM_STAND_WERT_2": 196622,
+                "STAT_KM_STAND_WERT_3": 196620,
+                "STAT_KM_STAND_WERT_4": 196576,
+                "STAT_KM_STAND_WERT_5": 196575,
+                "STAT_VERURSACHER_HEX_1": "0x0027",
+                "STAT_VERURSACHER_HEX_2": "0x0027",
+                "STAT_VERURSACHER_HEX_3": "0x0027",
+                "STAT_VERURSACHER_HEX_4": "0x0027",
+                "STAT_VERURSACHER_HEX_5": "0x0027",
+                "STAT_RELATIVZEIT_EINH_1": "SEKUNDEN",
+                "STAT_RELATIVZEIT_EINH_2": "SEKUNDEN",
+                "STAT_RELATIVZEIT_EINH_3": "SEKUNDEN",
+                "STAT_RELATIVZEIT_EINH_4": "SEKUNDEN",
+                "STAT_RELATIVZEIT_EINH_5": "SEKUNDEN",
+                "STAT_RELATIVZEIT_WERT_1": 22548,
+                "STAT_RELATIVZEIT_WERT_2": 12930,
+                "STAT_RELATIVZEIT_WERT_3": 11150,
+                "STAT_RELATIVZEIT_WERT_4": 167018,
+                "STAT_RELATIVZEIT_WERT_5": 161684
+              }
+            ],
+            "durationMs": 829
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "KGM_60",
+            "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2",
+            "variant": "KGM_60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "kgm_60",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2",
+              "VARIANTE": "KGM_60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "80F1005C62EFE10901110100030201C7E3271F0D00570104070400CEA81E1F0D000A0000020000907E111FFFFEFFFFFFFFFFFFFFFFFFFF0D00FC01040304023907031F0B0014000004000035A6F81E553D010000D894261F4265080015FA2E1F5E",
+                "_TEL_AUFTRAG": "8300F122EFE1",
+                "STAT_DATENSATZ_0": "DATENSATZ",
+                "STAT_DATENSATZ_1": "DATENSATZ",
+                "STAT_DATENSATZ_2": "DATENSATZ",
+                "STAT_DATENSATZ_3": "DATENSATZ",
+                "STAT_DATENSATZ_4": "DATENSATZ",
+                "STAT_DATENSATZ_5": "DATENSATZ",
+                "STAT_GESAMTE_KM_EINH_0": "KM",
+                "STAT_GESAMTE_KM_EINH_1": "KM",
+                "STAT_GESAMTE_KM_EINH_2": "KM",
+                "STAT_GESAMTE_KM_EINH_3": "KM",
+                "STAT_GESAMTE_KM_EINH_4": "KM",
+                "STAT_GESAMTE_KM_EINH_5": "KM",
+                "STAT_GESAMTE_KM_WERT_0": 273,
+                "STAT_GESAMTE_KM_WERT_1": 343,
+                "STAT_GESAMTE_KM_WERT_2": 10,
+                "STAT_GESAMTE_KM_WERT_3": 0,
+                "STAT_GESAMTE_KM_WERT_4": 508,
+                "STAT_GESAMTE_KM_WERT_5": 20,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_0": 0,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_1": 4,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_2": 0,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_3": 255,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_4": 4,
+                "STAT_ANZAHL_FAHRTEN_0_5_KM_5": 0,
+                "STAT_ANZAHL_FAHRTEN_WECKER_0": 9,
+                "STAT_ANZAHL_FAHRTEN_WECKER_1": 13,
+                "STAT_ANZAHL_FAHRTEN_WECKER_2": 13,
+                "STAT_ANZAHL_FAHRTEN_WECKER_3": 255,
+                "STAT_ANZAHL_FAHRTEN_WECKER_4": 13,
+                "STAT_ANZAHL_FAHRTEN_WECKER_5": 11,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_0": 3,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_1": 7,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_2": 2,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_3": 255,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_4": 3,
+                "STAT_ANZAHL_FAHRTEN_5_20_KM_5": 4,
+                "STAT_RELATIVZEIT_BEGINN_EINH_0": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_EINH_1": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_EINH_2": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_EINH_3": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_EINH_4": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_EINH_5": "SEKUNDEN",
+                "STAT_RELATIVZEIT_BEGINN_WERT_0": 522707911,
+                "STAT_RELATIVZEIT_BEGINN_WERT_1": 522102990,
+                "STAT_RELATIVZEIT_BEGINN_WERT_2": 521240208,
+                "STAT_RELATIVZEIT_BEGINN_WERT_3": 0,
+                "STAT_RELATIVZEIT_BEGINN_WERT_4": 520292153,
+                "STAT_RELATIVZEIT_BEGINN_WERT_5": 519611957,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_0": 2,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_1": 4,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_2": 0,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_3": 255,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_4": 4,
+                "STAT_ANZAHL_FAHRTEN_20_100_KM_5": 0,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_0": 1,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_1": 0,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_2": 0,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_3": 255,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_4": 2,
+                "STAT_ANZAHL_FAHRTEN_UEBER_100_KM_5": 0
+              }
+            ],
+            "durationMs": 883
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "KGM_60",
+            "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_3",
+            "variant": "KGM_60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "kgm_60",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_3",
+              "VARIANTE": "KGM_60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "80F100D362EFE2076408008084256066F0060058022560DEEE06005802256000C5060058022560B5A0060058022560A38406005802256041790600580225601DD20500FD0025606CCA0500800425601CC60500FD002560B5BC050080042360A4B90500BD03236092B70500800423604FB4050080042360458E050058022360FA7D050058022360A37004005802236021210400580223609E1F040058022360AB410300580223609613030058022360A0E50200580223607E920200FD0023604A900200800423609789020058022360F1C801008004236048",
+                "_TEL_AUFTRAG": "8300F122EFE2",
+                "STAT_WECKER_SG_ID": 0,
+                "STAT_KM_STAND_EINH": "KM",
+                "STAT_KM_STAND_WERT": 0,
+                "STAT_WECKER_CAN_ID": 0,
+                "STAT_WECKER_SG_ID_1": "0",
+                "STAT_WECKER_SG_ID_2": "39",
+                "STAT_WECKER_SG_ID_3": "39",
+                "STAT_WECKER_SG_ID_4": "39",
+                "STAT_WECKER_SG_ID_5": "39",
+                "STAT_WECKER_SG_ID_6": "39",
+                "STAT_WECKER_SG_ID_7": "39",
+                "STAT_WECKER_SG_ID_8": "114",
+                "STAT_WECKER_SG_ID_9": "0",
+                "STAT_WECKER_SG_NAME": "Sendername",
+                "STAT_KM_STAND_WERT_1": 196904,
+                "STAT_KM_STAND_WERT_2": 196904,
+                "STAT_KM_STAND_WERT_3": 196904,
+                "STAT_KM_STAND_WERT_4": 196904,
+                "STAT_KM_STAND_WERT_5": 196904,
+                "STAT_KM_STAND_WERT_6": 196904,
+                "STAT_KM_STAND_WERT_7": 196904,
+                "STAT_KM_STAND_WERT_8": 196904,
+                "STAT_KM_STAND_WERT_9": 196904,
+                "STAT_WECKER_CAN_ID_1": 1152,
+                "STAT_WECKER_CAN_ID_2": 600,
+                "STAT_WECKER_CAN_ID_3": 600,
+                "STAT_WECKER_CAN_ID_4": 600,
+                "STAT_WECKER_CAN_ID_5": 600,
+                "STAT_WECKER_CAN_ID_6": 600,
+                "STAT_WECKER_CAN_ID_7": 600,
+                "STAT_WECKER_CAN_ID_8": 253,
+                "STAT_WECKER_CAN_ID_9": 1152,
+                "STAT_WECKER_SG_ID_10": "114",
+                "STAT_WECKER_SG_ID_11": "0",
+                "STAT_WECKER_SG_ID_12": "114",
+                "STAT_WECKER_SG_ID_13": "0",
+                "STAT_WECKER_SG_ID_14": "0",
+                "STAT_WECKER_SG_ID_15": "39",
+                "STAT_WECKER_SG_ID_16": "39",
+                "STAT_WECKER_SG_ID_17": "39",
+                "STAT_WECKER_SG_ID_18": "39",
+                "STAT_WECKER_SG_ID_19": "39",
+                "STAT_WECKER_SG_ID_20": "39",
+                "STAT_WECKER_SG_ID_21": "39",
+                "STAT_WECKER_SG_ID_22": "39",
+                "STAT_WECKER_SG_ID_23": "114",
+                "STAT_WECKER_SG_ID_24": "0",
+                "STAT_WECKER_SG_ID_25": "39",
+                "STAT_WECKER_SG_ID_26": "0",
+                "STAT_KM_STAND_WERT_10": 196904,
+                "STAT_KM_STAND_WERT_11": 196888,
+                "STAT_KM_STAND_WERT_12": 196888,
+                "STAT_KM_STAND_WERT_13": 196888,
+                "STAT_KM_STAND_WERT_14": 196888,
+                "STAT_KM_STAND_WERT_15": 196888,
+                "STAT_KM_STAND_WERT_16": 196888,
+                "STAT_KM_STAND_WERT_17": 196888,
+                "STAT_KM_STAND_WERT_18": 196888,
+                "STAT_KM_STAND_WERT_19": 196888,
+                "STAT_KM_STAND_WERT_20": 196888,
+                "STAT_KM_STAND_WERT_21": 196888,
+                "STAT_KM_STAND_WERT_22": 196888,
+                "STAT_KM_STAND_WERT_23": 196888,
+                "STAT_KM_STAND_WERT_24": 196888,
+                "STAT_KM_STAND_WERT_25": 196888,
+                "STAT_KM_STAND_WERT_26": 196888,
+                "STAT_RELATIVZEIT_EINH": "SEKUNDEN",
+                "STAT_WECKER_CAN_ID_10": 253,
+                "STAT_WECKER_CAN_ID_11": 1152,
+                "STAT_WECKER_CAN_ID_12": 957,
+                "STAT_WECKER_CAN_ID_13": 1152,
+                "STAT_WECKER_CAN_ID_14": 1152,
+                "STAT_WECKER_CAN_ID_15": 600,
+                "STAT_WECKER_CAN_ID_16": 600,
+                "STAT_WECKER_CAN_ID_17": 600,
+                "STAT_WECKER_CAN_ID_18": 600,
+                "STAT_WECKER_CAN_ID_19": 600,
+                "STAT_WECKER_CAN_ID_20": 600,
+                "STAT_WECKER_CAN_ID_21": 600,
+                "STAT_WECKER_CAN_ID_22": 600,
+                "STAT_WECKER_CAN_ID_23": 253,
+                "STAT_WECKER_CAN_ID_24": 1152,
+                "STAT_WECKER_CAN_ID_25": 600,
+                "STAT_WECKER_CAN_ID_26": 1152,
+                "STAT_WECKER_SG_ANZAHL": 0,
+                "STAT_WECKER_SG_ID_HEX": "0x00",
+                "STAT_WECKER_SG_NAME_1": "KGM",
+                "STAT_WECKER_SG_NAME_2": "PGS",
+                "STAT_WECKER_SG_NAME_3": "PGS",
+                "STAT_WECKER_SG_NAME_4": "PGS",
+                "STAT_WECKER_SG_NAME_5": "PGS",
+                "STAT_WECKER_SG_NAME_6": "PGS",
+                "STAT_WECKER_SG_NAME_7": "PGS",
+                "STAT_WECKER_SG_NAME_8": "KBM",
+                "STAT_WECKER_SG_NAME_9": "KGM",
+                "STAT_WECKER_CAN_ID_HEX": "0x00",
+                "STAT_WECKER_SG_NAME_10": "KBM",
+                "STAT_WECKER_SG_NAME_11": "KGM",
+                "STAT_WECKER_SG_NAME_12": "KBM",
+                "STAT_WECKER_SG_NAME_13": "KGM",
+                "STAT_WECKER_SG_NAME_14": "KGM",
+                "STAT_WECKER_SG_NAME_15": "PGS",
+                "STAT_WECKER_SG_NAME_16": "PGS",
+                "STAT_WECKER_SG_NAME_17": "PGS",
+                "STAT_WECKER_SG_NAME_18": "PGS",
+                "STAT_WECKER_SG_NAME_19": "PGS",
+                "STAT_WECKER_SG_NAME_20": "PGS",
+                "STAT_WECKER_SG_NAME_21": "PGS",
+                "STAT_WECKER_SG_NAME_22": "PGS",
+                "STAT_WECKER_SG_NAME_23": "KBM",
+                "STAT_WECKER_SG_NAME_24": "KGM",
+                "STAT_WECKER_SG_NAME_25": "PGS",
+                "STAT_WECKER_SG_NAME_26": "KGM",
+                "STAT_WECKER_SG_ANZAHL_1": 1,
+                "STAT_WECKER_SG_ANZAHL_2": 1,
+                "STAT_WECKER_SG_ANZAHL_3": 1,
+                "STAT_WECKER_SG_ANZAHL_4": 1,
+                "STAT_WECKER_SG_ANZAHL_5": 1,
+                "STAT_WECKER_SG_ANZAHL_6": 1,
+                "STAT_WECKER_SG_ANZAHL_7": 1,
+                "STAT_WECKER_SG_ANZAHL_8": 1,
+                "STAT_WECKER_SG_ANZAHL_9": 1,
+                "STAT_WECKER_SG_ID_HEX_1": "0x0",
+                "STAT_WECKER_SG_ID_HEX_2": "0x27",
+                "STAT_WECKER_SG_ID_HEX_3": "0x27",
+                "STAT_WECKER_SG_ID_HEX_4": "0x27",
+                "STAT_WECKER_SG_ID_HEX_5": "0x27",
+                "STAT_WECKER_SG_ID_HEX_6": "0x27",
+                "STAT_WECKER_SG_ID_HEX_7": "0x27",
+                "STAT_WECKER_SG_ID_HEX_8": "0x72",
+                "STAT_WECKER_SG_ID_HEX_9": "0x0",
+                "STAT_WECKER_CAN_ID_HEX_1": "0x0480",
+                "STAT_WECKER_CAN_ID_HEX_2": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_3": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_4": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_5": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_6": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_7": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_8": "0x00fd",
+                "STAT_WECKER_CAN_ID_HEX_9": "0x0480",
+                "STAT_WECKER_SG_ANZAHL_10": 1,
+                "STAT_WECKER_SG_ANZAHL_11": 1,
+                "STAT_WECKER_SG_ANZAHL_12": 1,
+                "STAT_WECKER_SG_ANZAHL_13": 1,
+                "STAT_WECKER_SG_ANZAHL_14": 1,
+                "STAT_WECKER_SG_ANZAHL_15": 1,
+                "STAT_WECKER_SG_ANZAHL_16": 1,
+                "STAT_WECKER_SG_ANZAHL_17": 1,
+                "STAT_WECKER_SG_ANZAHL_18": 1,
+                "STAT_WECKER_SG_ANZAHL_19": 1,
+                "STAT_WECKER_SG_ANZAHL_20": 1,
+                "STAT_WECKER_SG_ANZAHL_21": 1,
+                "STAT_WECKER_SG_ANZAHL_22": 1,
+                "STAT_WECKER_SG_ANZAHL_23": 1,
+                "STAT_WECKER_SG_ANZAHL_24": 1,
+                "STAT_WECKER_SG_ANZAHL_25": 1,
+                "STAT_WECKER_SG_ANZAHL_26": 1,
+                "STAT_WECKER_SG_ID_HEX_10": "0x72",
+                "STAT_WECKER_SG_ID_HEX_11": "0x0",
+                "STAT_WECKER_SG_ID_HEX_12": "0x72",
+                "STAT_WECKER_SG_ID_HEX_13": "0x0",
+                "STAT_WECKER_SG_ID_HEX_14": "0x0",
+                "STAT_WECKER_SG_ID_HEX_15": "0x27",
+                "STAT_WECKER_SG_ID_HEX_16": "0x27",
+                "STAT_WECKER_SG_ID_HEX_17": "0x27",
+                "STAT_WECKER_SG_ID_HEX_18": "0x27",
+                "STAT_WECKER_SG_ID_HEX_19": "0x27",
+                "STAT_WECKER_SG_ID_HEX_20": "0x27",
+                "STAT_WECKER_SG_ID_HEX_21": "0x27",
+                "STAT_WECKER_SG_ID_HEX_22": "0x27",
+                "STAT_WECKER_SG_ID_HEX_23": "0x72",
+                "STAT_WECKER_SG_ID_HEX_24": "0x0",
+                "STAT_WECKER_SG_ID_HEX_25": "0x27",
+                "STAT_WECKER_SG_ID_HEX_26": "0x0",
+                "STAT_WECKER_CAN_ID_HEX_10": "0x00fd",
+                "STAT_WECKER_CAN_ID_HEX_11": "0x0480",
+                "STAT_WECKER_CAN_ID_HEX_12": "0x03bd",
+                "STAT_WECKER_CAN_ID_HEX_13": "0x0480",
+                "STAT_WECKER_CAN_ID_HEX_14": "0x0480",
+                "STAT_WECKER_CAN_ID_HEX_15": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_16": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_17": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_18": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_19": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_20": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_21": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_22": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_23": "0x00fd",
+                "STAT_WECKER_CAN_ID_HEX_24": "0x0480",
+                "STAT_WECKER_CAN_ID_HEX_25": "0x0258",
+                "STAT_WECKER_CAN_ID_HEX_26": "0x0480",
+                "STAT_RELATIVZEIT_BEGINN_WERT": 0,
+                "STAT_RELATIVZEIT_BEGINN_WERT_1": 549895,
+                "STAT_RELATIVZEIT_BEGINN_WERT_2": 454758,
+                "STAT_RELATIVZEIT_BEGINN_WERT_3": 454366,
+                "STAT_RELATIVZEIT_BEGINN_WERT_4": 443648,
+                "STAT_RELATIVZEIT_BEGINN_WERT_5": 434357,
+                "STAT_RELATIVZEIT_BEGINN_WERT_6": 427171,
+                "STAT_RELATIVZEIT_BEGINN_WERT_7": 424257,
+                "STAT_RELATIVZEIT_BEGINN_WERT_8": 381469,
+                "STAT_RELATIVZEIT_BEGINN_WERT_9": 379500,
+                "STAT_RELATIVZEIT_BEGINN_WERT_10": 378396,
+                "STAT_RELATIVZEIT_BEGINN_WERT_11": 375989,
+                "STAT_RELATIVZEIT_BEGINN_WERT_12": 375204,
+                "STAT_RELATIVZEIT_BEGINN_WERT_13": 374674,
+                "STAT_RELATIVZEIT_BEGINN_WERT_14": 373839,
+                "STAT_RELATIVZEIT_BEGINN_WERT_15": 364101,
+                "STAT_RELATIVZEIT_BEGINN_WERT_16": 359930,
+                "STAT_RELATIVZEIT_BEGINN_WERT_17": 290979,
+                "STAT_RELATIVZEIT_BEGINN_WERT_18": 270625,
+                "STAT_RELATIVZEIT_BEGINN_WERT_19": 270238,
+                "STAT_RELATIVZEIT_BEGINN_WERT_20": 213419,
+                "STAT_RELATIVZEIT_BEGINN_WERT_21": 201622,
+                "STAT_RELATIVZEIT_BEGINN_WERT_22": 189856,
+                "STAT_RELATIVZEIT_BEGINN_WERT_23": 168574,
+                "STAT_RELATIVZEIT_BEGINN_WERT_24": 168010,
+                "STAT_RELATIVZEIT_BEGINN_WERT_25": 166295,
+                "STAT_RELATIVZEIT_BEGINN_WERT_26": 116977
+              }
+            ],
+            "durationMs": 1501
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "STATUS_WAKEUP_HISTORY",
+            "variant": "CAS",
+            "jobStatus": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_WAKEUP_HISTORY",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+                "_TEL_ANTWORT": "83F1407F311276"
+              }
+            ],
+            "durationMs": 1766
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "STATUS_WUP",
+            "variant": "CAS",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_WUP",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "WUP": "4EF823",
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "85F140615F4EF823DF"
+              }
+            ],
+            "durationMs": 1864
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "STATUS_PA_WUP",
+            "variant": "CAS",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_PA_WUP",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "WAKEUP_PATTERN": "262950"
+              }
+            ],
+            "durationMs": 2171
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "STATUS_KLEMMENVERHINDERER",
+            "variant": "CAS",
+            "jobStatus": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_KLEMMENVERHINDERER",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+                "_TEL_ANTWORT": "83F1407F211266"
+              }
+            ],
+            "durationMs": 1529
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "CAS",
+            "job": "STATUS_KL15_ABSCHALTUNG",
+            "variant": "CAS",
+            "jobStatus": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+            "systemResults": {
+              "OBJECT": "cas",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_KL15_ABSCHALTUNG",
+              "VARIANTE": "CAS",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT",
+                "_TEL_ANTWORT": "83F1407F311276"
+              }
+            ],
+            "durationMs": 1550
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "IHKA60",
+            "job": "STATUS_VERBRAUCHERREDUZIERUNG",
+            "variant": "IHKA60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "ihka60",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_VERBRAUCHERREDUZIERUNG",
+              "VARIANTE": "IHKA60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "91F17870450106C806C606E406D506AA00000011D0",
+                "STAT_ZAEHLER_HHS_AUS_EINH": "min",
+                "STAT_ZAEHLER_HHS_AUS_WERT": 17340,
+                "STAT_ZAEHLER_GEBL_AUS_EINH": "min",
+                "STAT_ZAEHLER_GEBL_AUS_WERT": 17060,
+                "STAT_ZAEHLER_HHS_TAKTUNG_EINH": "min",
+                "STAT_ZAEHLER_HHS_TAKTUNG_WERT": 17360,
+                "STAT_ZAEHLER_GEBL_50_PROZ_EINH": "min",
+                "STAT_ZAEHLER_GEBL_50_PROZ_WERT": 17490,
+                "STAT_ZAEHLER_GEBL_75_PROZ_EINH": "min",
+                "STAT_ZAEHLER_GEBL_75_PROZ_WERT": 17640,
+                "STAT_ZAEHLER_SH_AUS_BEI_KL15_EINH": "min",
+                "STAT_ZAEHLER_SH_AUS_BEI_KL15_WERT": 0,
+                "STAT_ZAEHLER_STANDVERBRAUCHER_EINH": "min",
+                "STAT_ZAEHLER_STANDVERBRAUCHER_WERT": 170
+              }
+            ],
+            "durationMs": 661
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "KOMB60",
+            "job": "STATUS_KL30_H_ZAEHLER",
+            "variant": "KOMB60",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "komb60",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_KL30_H_ZAEHLER",
+              "VARIANTE": "KOMB60",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "85F160610D02AE8B7F",
+                "STAT_KL30_H_ZAEHLER_EINH": "h",
+                "STAT_KL30_H_ZAEHLER_WERT": 175755
+              }
+            ],
+            "durationMs": 589
+          },
+          "error": null
+        },
+        {
+          "ok": false,
+          "result": null,
+          "error": {
+            "code": "ediabas_error",
+            "message": "EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT",
+            "details": {
+              "errorCode": 19,
+              "errorText": "IFH-0009: NO RESPONSE FROM CONTROLUNIT"
+            }
+          }
+        },
+        {
+          "ok": false,
+          "result": null,
+          "error": {
+            "code": "ediabas_error",
+            "message": "EDIABAS reported error 19: IFH-0009: NO RESPONSE FROM CONTROLUNIT",
+            "details": {
+              "errorCode": 19,
+              "errorText": "IFH-0009: NO RESPONSE FROM CONTROLUNIT"
+            }
+          }
+        }
+      ],
+      "durationMs": 19154
+    }
+  }
+}

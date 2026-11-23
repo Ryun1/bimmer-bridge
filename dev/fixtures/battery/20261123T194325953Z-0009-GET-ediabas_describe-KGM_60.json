@@ -1,0 +1,343 @@
+{
+  "recordedAt": "2026-11-23T19:43:25.953Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/describe",
+    "query": {
+      "ecu": "KGM_60",
+      "filter": "LESEN"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "KGM_60",
+      "variant": "KGM_60",
+      "jobCount": 35,
+      "jobs": [
+        {
+          "name": "DIAGNOSEPROTOKOLL_LESEN",
+          "comment": "Gibt die möglichen Diagnoseprotokolle\nfür eine Auswahl an den Aufrufer zurück",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "FS_LESEN",
+          "comment": "Fehlerspeicher lesen (alle Fehler / Ort und Art)\nKWP2000: $18 ReadDiagnosticTroubleCodesByStatus\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "FS_LESEN_DETAIL",
+          "comment": "Fehlerspeicher lesen (ein Fehler / alle Details)\nKWP2000: $17 ReadStatusOfDiagnosticTroubleCodes\nModus: Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "PRUEFSTEMPEL_LESEN",
+          "comment": "Auslesen des Pruefstempels\nKWP2000: $22 ReadDataByCommonIdentifier\n$1000 TestStamp\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "IS_LESEN",
+          "comment": "Infospeicher lesen (alle Info-Meldungen / Ort und Art)\nKWP2000: $22 ReadDataByCommonIdentifier\n$2000 dtcShadowMemory",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "IS_LESEN_DETAIL",
+          "comment": "Infospeicher lesen (alle Info-Meldungen / Ort und Art)\nKWP2000: $22 ReadDataByCommonIdentifier\n$2001 - $20FF dtcShadowMemoryEntry\nModus: Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SPEICHER_LESEN",
+          "comment": "Auslesen des Steuergeraete-Speichers\nAls Argumente werden uebergeben:\nSpeichersegment, Start-Adresse und Anzahl der Datenbytes\nKWP 2000: $23 ReadMemoryByAddress\nModus   : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.token:SPEICHER",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "PRUEFCODE_LESEN",
+          "comment": "Standard Pruefcode lesen fuer Kundendienst\nKWP2000: $1A ReadECUIdentification\nKWP2000: $18 ReadDiagnosticTroubleCodesByStatus\nKWP2000: $17 ReadStatusOfDiagnosticTroubleCodes\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_CI_LESEN",
+          "comment": "Codierindex lesen\nStandard Codierjob\nKWP2000: $1A ReadECUIdentification\n$9B Vehicle Manufacturer Coding Index\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_FG_LESEN",
+          "comment": "Fahrgestellnummer lesen\nStandard Codierjob\nKWP2000: $1A ReadECUIdentification\n$90 Vehicle Identification Number\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_AEI_LESEN",
+          "comment": "Aenderungsindex der Codierdaten lesen\nStandard Codierjob\nKWP2000: $22   ReadDataByCommonIdentifier\n$3FFF ChangeIndexOfCodingData\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_C_LESEN",
+          "comment": "Codierdaten lesen\nStandard Codierjob\nKWP2000: $22   ReadDataByCommonIdentifier\n$3000 - $3EFF CodingDataSet\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "SERIENNUMMER_LESEN",
+          "comment": "Hersteller Seriennummer lesen\nKWP2000: $1A ReadECUIdentification\n$89 SystemSupplierECUSerialNumber\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "ZIF_LESEN",
+          "comment": "Auslesen des Zulieferinfofeldes\nKWP2000: $22   ReadDataByCommonIdentifier\n$2503 ProgrammReferenz\nund\nKWP2000: $1A   ReadECUIdentification\n$91   VehicleManufacturerECUHardware*Number\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "ZIF_BACKUP_LESEN",
+          "comment": "Auslesen des Backups des Zulieferinfofeldes\nProgrammReferenzBackup         PRGREFB\nvehicleManufECUHW*NumberBackup VMECUH*NB\nKWP2000: $22   ReadDataByCommonIdentifier\n$2500 PRBHW*B\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "PHYSIKALISCHE_HW_NR_LESEN",
+          "comment": "Auslesen der physikalischen Hardwarenummer\nKWP2000: $1A ReadECUIdentification\n$87 physicalECUHardwareNumber (PECUHN)\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "HARDWARE_REFERENZ_LESEN",
+          "comment": "Auslesen der Hardware Referenz\nKWP2000: $22   ReadDataByCommonIdentifier\n$2502 HWREF\noder alternativ\nKWP2000: $1A ReadECUIdentification\n$80 ECUIdentificationDataTable\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "DATEN_REFERENZ_LESEN",
+          "comment": "Auslesen der Daten Referenz\nKWP2000: $22   ReadDataByCommonIdentifier\n$2504 DREF\nModus  : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "FLASH_ZEITEN_LESEN",
+          "comment": "Auslesen der Flash Loeschzeit, Signaturtestzeit,\nAuthentisierberechnungszeit und Resetzeit\nKWP2000: $22   ReadDataByCommonIdentifier\n$2501 Zeiten\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:FLASH",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "FLASH_BLOCKLAENGE_LESEN",
+          "comment": "Auslesen des maximalen Blocklaenge beim Flashen\nKWP2000: $22   ReadDataByCommonIdentifier\n$2506 MaximaleBlockLaenge\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:FLASH",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "AUTHENTISIERUNG_ZUFALLSZAHL_LESEN",
+          "comment": "Authentisierung Zufallszahl des SG lesen\nKWP2000: $31 StartRoutineByLocalIdentifier\n$07 RequestForAuthentication\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:AUTHENT",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "FLASH_PROGRAMMIER_STATUS_LESEN",
+          "comment": "Programmierstatus des SG lesen\nKWP2000: $31 StartRoutineByLocalIdentifier\n$0A CheckProgrammingStatus\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:FLASH",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "AIF_LESEN",
+          "comment": "Auslesen des Anwender Informations Feldes\nStandard Flashjob\nKWP 2000: $23 ReadMemoryByAddress\nModus   : Default",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.global",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_CODIERDATEN_BLOCK_LESEN_LEAR",
+          "comment": "KWP2000: $22 ReadDataByCommonIdentifier\n$xxxx Codierdaten je nach Block\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:CODIER",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_CODIERDATEN_3900_LESEN_KOMPLETT_LEAR",
+          "comment": "Auslesen der kompletten Codierdaten im 3900-Bereich\nAuslesen der KGM-Codierdaten\nKWP 2000: $22 ReadDataByCommonIdentifier\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:CODIER",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_CODIERDATEN_3800_LESEN_KOMPLETT_LEAR",
+          "comment": "Auslesen der kompletten Codierdaten im 3800-Bereich\nAuslesen der KGM-Codierdaten\nKWP 2000: $22 ReadDataByCommonIdentifier\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "deny.substring:CODIER",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1",
+          "comment": "EnergieDatenSpeicher Teil 1 -Einschlafverhinderer- auslesen\nKWP 2000: $22   ReadDataByCommonIdentifier\nKWP 2000: $EFE0 commonProjectSpecific",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2",
+          "comment": "EnergieDatenSpeicher Teil 2 -Wecker- aus lesen\nKWP 2000: $22   ReadDataByCommonIdentifier\nKWP 2000: $EFE1 commonProjectSpecific",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_3",
+          "comment": "EnergieDatenSpeicher Teil 3 - Wecker-ID - auslesen\nKWP 2000: $22   ReadDataByCommonIdentifier\nKWP 2000: $EFE2 commonProjectSpecific",
+          "verdict": {
+            "allowed": true,
+            "rule": "allow.pattern",
+            "review": "passed"
+          }
+        },
+        {
+          "name": "_HERSTELLERDATEN_LESEN",
+          "comment": "Auslesen der Herstellerdaten\nKWP2000: $21 ReadDataByLocalIdentifier\n$72 Herstellerdaten\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_LINKINFO_GWVERSION_LESEN",
+          "comment": "Auslesen der Herstellerdaten\nKWP2000: $21 ReadDataByLocalIdentifier\n$73 LinkInfo\nModus  : Default",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_STATUS_FH_DENORMIERUNGS_LOGGER_LESEN",
+          "comment": "Fensterheber Denorierungslogger auslesen\nKWP2000: $30 InputOutputControlByLocalIdentifier\n$25 FH__VAR_READ\n$01 ReadCurrentState\n$14 SUBSWITCH",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "_STATUS_FH_REVERSIERUNGS_LOGGER_LESEN",
+          "comment": "Fensterheber Reversierlogger auslesen\nKWP2000: $30 InputOutputControlByLocalIdentifier\n$25 FH__VAR_READ\n$01 ReadCurrentState\n$16 SUBSWITCH",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_FG_LESEN_LCPA",
+          "comment": "Lesen der FG-Nr. aus dem LCPA\nKWP2000: $A6 LINGateway\n$22 ReadDataByCommonIdentifier",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        },
+        {
+          "name": "C_AEI_LESEN_LCPA",
+          "comment": "Lesen des Aenderungsindex aus dem LCPA\nKWP2000: $A6 LINGateway\n$22 ReadDataByCommonIdentifier",
+          "verdict": {
+            "allowed": false,
+            "rule": "default_deny",
+            "review": "not_required"
+          }
+        }
+      ],
+      "durationMs": 22147,
+      "commentsCutOff": null
+    }
+  }
+}

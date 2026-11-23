@@ -6,11 +6,14 @@ real session, scrubbed and reviewed.** Nothing is written by hand: no invented E
 responses, no edited values. If a scenario needs an answer nobody has recorded yet, the
 scenario waits for a session that records it.
 
-Three scenarios exist, recorded at the desk: `idle` and `inpa-open` (an overlay on `idle`,
+Five scenarios exist. Recorded at the desk: `idle` and `inpa-open` (an overlay on `idle`,
 which also serves the screenshot of the INPA loader menu) on 2026-11-21, and `needs-review`
 (`NVE_65` `STATUS_PAIRING`, refused with `job_needs_review`; cable in the VM, not in the car)
-on 2026-11-22. `nve-faults` and `battery` wait for Phase 6, at the car
-([docs/at-the-car.md](../../docs/at-the-car.md)).
+on 2026-11-22. Recorded at the car on 2026-11-23: `nve-faults` (an overlay on `needs-review`,
+which supplies the list and describe answers) and `battery`. Their `ediabas_vehicle_status`
+recordings were made with `voltageSources` = `NVE_65` `STATUS_BORDNETZSPANNUNG` only, so an
+eval run needs exactly that in `config.local.json`: another list sends another batch body,
+which the replay agent answers `no_recording`.
 
 ## Layout
 

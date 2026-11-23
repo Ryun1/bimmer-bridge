@@ -1,0 +1,225 @@
+{
+  "recordedAt": "2026-11-23T19:43:50.522Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/describe",
+    "query": {
+      "ecu": "KGM_60",
+      "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "KGM_60",
+      "variant": "KGM_60",
+      "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1",
+      "comment": "EnergieDatenSpeicher Teil 1 -Einschlafverhinderer- auslesen\nKWP 2000: $22   ReadDataByCommonIdentifier\nKWP 2000: $EFE0 commonProjectSpecific",
+      "descriptionHash": "671ac653f9b2",
+      "verdict": {
+        "allowed": true,
+        "rule": "allow.pattern",
+        "review": "passed"
+      },
+      "arguments": [],
+      "results": [
+        {
+          "name": "STAT_DATENSATZ_1",
+          "type": "string",
+          "comment": "\"DATENSATZ\""
+        },
+        {
+          "name": "STAT_VERURSACHER_1",
+          "type": "int",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_VERURSACHER_HEX_1",
+          "type": "string",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_WERT_1",
+          "type": "unsigned long",
+          "comment": "Kombi Relativzeit bei Abspeicherung\n[s]"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_EINH_1",
+          "type": "string",
+          "comment": "Einheit fuer RELATIVZEIT: SEKUNDEN"
+        },
+        {
+          "name": "STAT_KM_STAND_WERT_1",
+          "type": "unsigned long",
+          "comment": "Der aktuelle km_Stand\n[Km]"
+        },
+        {
+          "name": "STAT_KM_STAND_EINH_1",
+          "type": "string",
+          "comment": "Einheit fuer KM_STAND: KM"
+        },
+        {
+          "name": "STAT_DATENSATZ_2",
+          "type": "string",
+          "comment": "\"DATENSATZ\""
+        },
+        {
+          "name": "STAT_VERURSACHER_2",
+          "type": "int",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_VERURSACHER_HEX_2",
+          "type": "string",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_WERT_2",
+          "type": "unsigned long",
+          "comment": "Kombi Relativzeit bei Abspeicherung\n[s]"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_EINH_2",
+          "type": "string",
+          "comment": "Einheit fuer RELATIVZEIT: SEKUNDEN"
+        },
+        {
+          "name": "STAT_KM_STAND_WERT_2",
+          "type": "unsigned long",
+          "comment": "Der aktuelle km_Stand\n[Km]"
+        },
+        {
+          "name": "STAT_KM_STAND_EINH_2",
+          "type": "string",
+          "comment": "Einheit fuer KM_STAND: KM"
+        },
+        {
+          "name": "STAT_DATENSATZ_3",
+          "type": "string",
+          "comment": "\"DATENSATZ\""
+        },
+        {
+          "name": "STAT_VERURSACHER_3",
+          "type": "int",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_VERURSACHER_HEX_3",
+          "type": "string",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_WERT_3",
+          "type": "unsigned long",
+          "comment": "Kombi Relativzeit bei Abspeicherung\n[s]"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_EINH_3",
+          "type": "string",
+          "comment": "Einheit fuer RELATIVZEIT: SEKUNDEN"
+        },
+        {
+          "name": "STAT_KM_STAND_WERT_3",
+          "type": "unsigned long",
+          "comment": "Der aktuelle km_Stand\n[Km]"
+        },
+        {
+          "name": "STAT_KM_STAND_EINH_3",
+          "type": "string",
+          "comment": "Einheit fuer KM_STAND: KM"
+        },
+        {
+          "name": "STAT_DATENSATZ_4",
+          "type": "string",
+          "comment": "\"DATENSATZ\""
+        },
+        {
+          "name": "STAT_VERURSACHER_4",
+          "type": "int",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_VERURSACHER_HEX_4",
+          "type": "string",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_WERT_4",
+          "type": "unsigned long",
+          "comment": "Kombi Relativzeit bei Abspeicherung\n[s]"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_EINH_4",
+          "type": "string",
+          "comment": "Einheit fuer RELATIVZEIT: SEKUNDEN"
+        },
+        {
+          "name": "STAT_KM_STAND_WERT_4",
+          "type": "unsigned long",
+          "comment": "Der aktuelle km_Stand\n[Km]"
+        },
+        {
+          "name": "STAT_KM_STAND_EINH_4",
+          "type": "string",
+          "comment": "Einheit fuer KM_STAND: KM"
+        },
+        {
+          "name": "STAT_DATENSATZ_5",
+          "type": "string",
+          "comment": "\"DATENSATZ\""
+        },
+        {
+          "name": "STAT_VERURSACHER_5",
+          "type": "int",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_VERURSACHER_HEX_5",
+          "type": "string",
+          "comment": "Des verursachenden Steuergerätes"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_WERT_5",
+          "type": "unsigned long",
+          "comment": "Kombi Relativzeit bei Abspeicherung\n[s]"
+        },
+        {
+          "name": "STAT_RELATIVZEIT_EINH_5",
+          "type": "string",
+          "comment": "Einheit fuer RELATIVZEIT: SEKUNDEN"
+        },
+        {
+          "name": "STAT_KM_STAND_WERT_5",
+          "type": "unsigned long",
+          "comment": "Der aktuelle km_Stand\n[Km]"
+        },
+        {
+          "name": "STAT_KM_STAND_EINH_5",
+          "type": "string",
+          "comment": "Einheit fuer KM_STAND: KM"
+        },
+        {
+          "name": "JOB_STATUS",
+          "type": "string",
+          "comment": "OKAY, wenn fehlerfrei\ntable JobResult STATUS_TEXT"
+        },
+        {
+          "name": "_TEL_AUFTRAG",
+          "type": "binary",
+          "comment": "Hex-Auftrag an SG"
+        },
+        {
+          "name": "_TEL_ANTWORT",
+          "type": "binary",
+          "comment": "Hex-Antwort von SG"
+        }
+      ],
+      "durationMs": 1505
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "recordedAt": "2026-11-23T19:42:57.704Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/ecus",
+    "query": {
+      "filter": "ulf"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecuPath": "C:\\EDIABAS\\ECU",
+      "count": 6,
+      "truncated": false,
+      "files": [
+        {
+          "name": "11FL_ULF",
+          "type": "prg"
+        },
+        {
+          "name": "ULF",
+          "type": "prg"
+        },
+        {
+          "name": "ulf2_60",
+          "type": "prg"
+        },
+        {
+          "name": "ulf2_hi",
+          "type": "prg"
+        },
+        {
+          "name": "ulf_60",
+          "type": "prg"
+        },
+        {
+          "name": "ulf_60pb",
+          "type": "prg"
+        }
+      ]
+    }
+  }
+}

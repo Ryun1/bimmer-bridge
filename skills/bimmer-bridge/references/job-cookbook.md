@@ -3,13 +3,15 @@
 *Recorded on a 2005 E61 550i: other cars' ECUs and jobs differ, so check yours with
 `ediabas_list_ecus` and `ediabas_describe`.*
 
-**Status: NO job has been run against the car yet.** The lists below are what
-`ediabas_describe` returned at the desk on 2026-11-21, with the cable in the VM and not in the
-car: job names, their descriptions from the SGBD, and the bridge's policy verdict. They say
-which jobs exist and which the bridge will run. Where a job was also described on its own
-(`ediabas_describe` with `job`, 2026-11-22), its arguments and result names are listed as the
-SGBD declares them; none of these jobs has been run, so no value or meaning of a result is
-recorded. Those come from Phase 6. Do not fill them in from the name or the description.
+**Status: jobs were first run on the car on 2026-11-23** (Phase 6, ignition on; fixtures
+`dev/fixtures/nve-faults` and `dev/fixtures/battery`). Those are under "Entries (jobs run on the
+car)" below, with the values and `durationMs` the agent returned. The lists after them are what
+`ediabas_describe` returned at the desk on 2026-11-21/22, with the cable in the VM and not in
+the car: job names, descriptions from the SGBD, and the bridge's policy verdict; they say which
+jobs exist and which the bridge will run. Where a job was also described on its own, its
+arguments and result names are listed as the SGBD declares them; no value or meaning of a result
+is recorded unless a run on the car (the entries section) shows it. Do not fill them in from the
+name or the description.
 
 **Policy versions.** The job lists were first recorded under policy version 1 (2026-11-21/22).
 Every verdict and count in this file was recorded again under **policy version 4** (agent and
@@ -39,7 +41,68 @@ Entries are added in the same commit as the recorded session (fixtures) they cam
 
 ## Entries (jobs run on the car)
 
-None yet.
+All 2026-11-23, ignition on, cable in the car. Durations are the agent's `durationMs`.
+
+### `E60` `IDENT_FUNKTIONAL`
+- **Purpose:** identifies every module that answers on the diagnostic bus, in one call.
+- **Arguments:** none (`FUNKTIONALE_ADRESSE` defaults to `ALL`). The whole-car jobs can run long: pass `timeoutSeconds` 60 (as the session did).
+- **Result fields seen:** 44 sets: 43 modules, each with `ECU_ADR`, `ECU_GROBNAME`, `ECU_NAME`, `ECU_SGBD`, `ECU_GRUPPE`, `ID_SG_ADR`, `ID_BMW_NR`, `ID_HW_NR`, `ID_SW_NR_*`, `ID_DATUM*`, `ID_LIEF_*`, `SERIENNUMMER` and `JOB_STATUS`; plus one set with only `JOB_STATUS` and no module. The module list is in `ecu-map.md`. Not in the result: `MPM_60`, SINE (0x50).
+- **Policy verdict:** allowed (see the `E60` row in the tables below).
+- **Typical duration:** 3925 ms.
+- **Confirmed:** 2026-11-23, recording `0029`, `dev/fixtures/battery`.
+
+### `E60` `FS_LESEN_FUNKTIONAL`
+- **Purpose:** fault codes from every module in one call, numbers only.
+- **Arguments:** none (`FEHLER_GRUPPE` defaults to `AG`); `timeoutSeconds` 60 was passed.
+- **Result fields seen:** 45 sets; 15 modules reported faults (`F_ANZ` above 0), 24 codes in all, as `F_ORTi_NR` / `F_ARTi_NR`. `VVT` (0x1B) and `VVT2` (0x1E) answered `ERROR_ECU_SERVICE_NOT_SUPPORTED`; SINE (0x50) answered with one code but is not in `IDENT_FUNKTIONAL`. The code texts come from each module's own `FS_LESEN`.
+- **Typical duration:** 3964 ms.
+- **Confirmed:** 2026-11-23, recording `0031`, `dev/fixtures/battery`.
+
+### `D_MOTOR` `IDENT`
+- **Purpose:** identification of the engine control; resolves the group to its SGBD.
+- **Arguments:** none.
+- **Result fields seen:** `variant` `N62_TUE`; `ID_BMW_NR`, `ID_HW_NR`, `ID_SW_NR_*`, `ID_DATUM*`, `ID_LIEF_TEXT`.
+- **Typical duration:** 253 ms. **Confirmed:** recording `0024`.
+
+### `D_MOTOR` `FS_LESEN` (through `ediabas_read_faults`)
+- **Purpose:** engine fault memory.
+- **Result fields seen:** two codes: `2EF4` (`F_ORT_TEXT` `CDKTHM - Kennfeldthermostat, Mechanik`, present and stored) and `2DED` (`CDKPMRUHV - Powermanagement, Ruhestromüberwachung`, symptom `Ruhestromverletzung`, stored, not present now). The environment data for `2DED` is not read yet (see "For the next session").
+- **Typical duration:** 670 ms. **Confirmed:** recording `0027`.
+
+### `KGM_60` `STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1`, `_2`, `_3`
+- **Purpose:** the gateway's history memory: wake-up and trip records.
+- **Arguments:** none.
+- **Result fields seen:**
+  - `BLOCK_1`: `STAT_DATENSATZ_n`, `STAT_VERURSACHER_n` (and `_HEX_n`), `STAT_KM_STAND_WERT_n` / `_EINH_n` (km), `STAT_RELATIVZEIT_WERT_n` / `_EINH_n` (seconds), n = 1..5.
+  - `BLOCK_2`: `STAT_GESAMTE_KM_WERT_n`, `STAT_ANZAHL_FAHRTEN_0_5_KM_n`, `_5_20_KM_n`, `_20_100_KM_n`, `_UEBER_100_KM_n`, `STAT_ANZAHL_FAHRTEN_WECKER_n`, `STAT_RELATIVZEIT_BEGINN_WERT_n`, n = 0..5. The trip counts are counts, not distances.
+  - `BLOCK_3`: `STAT_WECKER_SG_ID_n`, `STAT_WECKER_CAN_ID_n` (and `_HEX`), `STAT_WECKER_SG_ID_HEX`, `STAT_WECKER_SG_NAME`, `STAT_WECKER_SG_ANZAHL`, `STAT_KM_STAND_*`, `STAT_RELATIVZEIT_*`. A long list (about 26 entries each).
+  - `STAT_VERURSACHER_n` and `STAT_WECKER_SG_ID_n` are module addresses (decimal): 39 = 0x27 = PGS by `IDENT_FUNKTIONAL`; 114 = 0x72 = KBM (`ECU_ADR` 72 in `IDENT_FUNKTIONAL`).
+- **Typical duration:** 829, 883, 1501 ms. **Confirmed:** recording `0016`. Long results: use the tool's `results` option to trim.
+
+### `IHKA60` `STATUS_VERBRAUCHERREDUZIERUNG`
+- **Result fields seen:** `STAT_ZAEHLER_*_WERT` with `_EINH` `min` (counters such as `HHS_AUS`, `GEBL_AUS`, `STANDVERBRAUCHER`; the unit is declared in the result).
+- **Typical duration:** 661 ms. **Confirmed:** recording `0016`.
+
+### `KOMB60` `STATUS_KL30_H_ZAEHLER`
+- **Result fields seen:** `STAT_KL30_H_ZAEHLER_WERT` with `_EINH` `h`: a counter in hours (one value seen: 175755).
+- **Typical duration:** 589 ms. **Confirmed:** recording `0016`.
+
+### `CAS` `STATUS_WUP`, `STATUS_PA_WUP`
+- **Result fields seen:** `STATUS_WUP` gave `WUP` (a hex string); `STATUS_PA_WUP` gave `WAKEUP_PATTERN` (a hex string). Both `OKAY`. What the bits mean is not recorded.
+- **Typical duration:** 1864 ms, 2171 ms. **Confirmed:** recording `0016`.
+- **Not supported on this CAS:** `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG` each answered `ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT` (a negative response from the module, not a bridge fault). Their owner approvals were removed from the VM's `reviewedJobs` on 2026-11-23, and so was the `MPM_60` approval (`MPM_60` did not answer: `IFH-0009`, both items). The three flagged jobs are refused with `job_needs_review` again; `STATUS_WUP` and `MPM_60` `STATUS_AD_WERTE_LESEN` match no screen term under version 4 and run without an approval.
+
+### `NVE_65` `STATUS_BORDNETZSPANNUNG`, `FS_LESEN`, `IS_LESEN`
+- **`STATUS_BORDNETZSPANNUNG`:** `STAT_BORDNETZSPANNUNG_WERT` 12 with `_EINH` `Volt`: an integer, whole volts only. 581 ms (recording `0022`).
+- **`FS_LESEN`:** one set with `F_VERSION` 2 and no `F_ORT_NR`: fault memory empty (404 ms in `0014`, 80 ms in `0020`).
+- **`IS_LESEN`:** the same shape: info memory empty (24 ms, `0014`).
+- **Confirmed:** 2026-11-23, `dev/fixtures/nve-faults`.
+
+### For the next session
+- `ediabas_describe` `N62_TUE` `FS_LESEN_DETAIL` (try at the desk first; its argument is the fault code) for the `2DED` environment data.
+- `KOMB60` `STATUS_KLEMMENSPANNUNG`: confirm its resolution (declared int, `_EINH` normally mV).
+- The `D_SINE` variant (SINE, address 0x50, answers `FS_LESEN_FUNKTIONAL` only).
+- Ignition-off vehicle status with the cable in the car (not recorded yet).
 
 ## Seen in `ediabas_describe` (not yet run)
 
@@ -155,8 +218,7 @@ remaining jobs (`ecu_restricted`).
 ### `UTILITY` — a utility SGBD, not a car module
 
 `ediabas_describe` on 2026-11-22 (policy version 4, cable in the VM, not in the car): 10 jobs,
-3 runnable. `ediabas_vehicle_status` sends the two `STATUS_` jobs. Run so far only without the
-car (below).
+3 runnable. `ediabas_vehicle_status` sends the two `STATUS_` jobs. Run with no car on 2026-11-22 and with the car on 2026-11-23 (below).
 
 | Job | Verdict | Description as returned | Results declared | *(gloss)* |
 |---|---|---|---|---|
@@ -167,7 +229,12 @@ car (below).
 Refused: `INITIALISIERUNG`, `ABS_RELAIS`, `INTERFACE`, `TIME_AND_DATE`, `OGW_CAN_TEST`
 (`ecu_restricted`), `IF_RESET` (`deny.substring:RESET`), `PARALLELE_CODIERUNG_EIN`
 (`deny.substring:CODIER`). What `STAT_UBATT` and `STAT_ZUENDUNG` mean as numbers (units,
-values for on and off) is not declared; it comes from Phase 6.
+values for on and off) is not declared; the values seen are below.
+
+**Run at the car, ignition on, 2026-11-23** (recording `0022`, `dev/fixtures/nve-faults`):
+`STAT_ZUENDUNG=1`; `TMODE` `LESE_SPANNUNG_KL15` `E02E0000`. With no car (below): 0 and `00000000`.
+**Ignition off with the cable in the car is not recorded yet.** `STAT_UBATT` (1) and the KL30
+reading (`E02E0000`) were identical with and without the car: cable-side values.
 
 **Run with no car connected** (rehearsal 2026-11-22, cable in the VM, not in the car; fixture
 `dev/fixtures/no-car`): `STATUS_ZUENDUNG` gave `STAT_ZUENDUNG=0`, `STATUS_UBATT` gave
@@ -275,7 +342,7 @@ job by itself; version 3 added more terms, and version 4 added switching and tri
 `öffnen`). That is why some jobs flagged under version 1 pass now, and why `NVE_65`
 `STATUS_PAIRING` and `LM_60` `STATUS_XENON_AL_EINSCHALTVERSUCHE` are flagged under version 4.
 
-**Approved by the owner on 2026-11-22, pinned the same day for 0.5.0.** Five jobs below (`CAS`
+**Approved by the owner on 2026-11-22, pinned the same day for 0.5.0; the three `CAS` approvals and the `MPM_60` one removed from the VM's `reviewedJobs` on 2026-11-23 (see the `CAS` entry above); `STATUS_WUP` stays pinned.** What follows describes the state while they were pinned. Five jobs below (`CAS`
 `STATUS_WAKEUP_HISTORY`, `STATUS_KLEMMENVERHINDERER`, `STATUS_KL15_ABSCHALTUNG`, `STATUS_WUP`;
 `MPM_60` `STATUS_AD_WERTE_LESEN`), flagged when they were first described, are listed in
 `reviewedJobs` in the VM's `C:\ProgramData\EdiabasBridge\config.json` as pinned

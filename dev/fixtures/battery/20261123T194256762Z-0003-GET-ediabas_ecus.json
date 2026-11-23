@@ -1,0 +1,1169 @@
+{
+  "recordedAt": "2026-11-23T19:42:56.762Z",
+  "request": {
+    "method": "GET",
+    "path": "/ediabas/ecus",
+    "query": {
+      "filter": "D_"
+    },
+    "body": null
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecuPath": "C:\\EDIABAS\\ECU",
+      "count": 286,
+      "truncated": false,
+      "files": [
+        {
+          "name": "asd_10",
+          "type": "prg"
+        },
+        {
+          "name": "asd_89",
+          "type": "prg"
+        },
+        {
+          "name": "asd_i12",
+          "type": "prg"
+        },
+        {
+          "name": "cid_01",
+          "type": "prg"
+        },
+        {
+          "name": "cid_01r1",
+          "type": "prg"
+        },
+        {
+          "name": "cid_01r2",
+          "type": "prg"
+        },
+        {
+          "name": "cid_01t",
+          "type": "prg"
+        },
+        {
+          "name": "cid_25",
+          "type": "prg"
+        },
+        {
+          "name": "cid_60",
+          "type": "prg"
+        },
+        {
+          "name": "CID_70",
+          "type": "prg"
+        },
+        {
+          "name": "cid_85",
+          "type": "prg"
+        },
+        {
+          "name": "cid_87",
+          "type": "prg"
+        },
+        {
+          "name": "cid_89",
+          "type": "prg"
+        },
+        {
+          "name": "cid_90",
+          "type": "prg"
+        },
+        {
+          "name": "cid_lvds",
+          "type": "prg"
+        },
+        {
+          "name": "cid_r",
+          "type": "prg"
+        },
+        {
+          "name": "c_shd_s",
+          "type": "prg"
+        },
+        {
+          "name": "d_0000",
+          "type": "grp"
+        },
+        {
+          "name": "D_0008",
+          "type": "grp"
+        },
+        {
+          "name": "d_000d",
+          "type": "grp"
+        },
+        {
+          "name": "d_0010",
+          "type": "grp"
+        },
+        {
+          "name": "d_0011",
+          "type": "grp"
+        },
+        {
+          "name": "d_0012",
+          "type": "grp"
+        },
+        {
+          "name": "d_0013",
+          "type": "grp"
+        },
+        {
+          "name": "d_0014",
+          "type": "grp"
+        },
+        {
+          "name": "d_0015",
+          "type": "grp"
+        },
+        {
+          "name": "d_0016",
+          "type": "grp"
+        },
+        {
+          "name": "D_0019",
+          "type": "grp"
+        },
+        {
+          "name": "d_0020",
+          "type": "grp"
+        },
+        {
+          "name": "d_0021",
+          "type": "grp"
+        },
+        {
+          "name": "d_0022",
+          "type": "grp"
+        },
+        {
+          "name": "D_0024",
+          "type": "grp"
+        },
+        {
+          "name": "d_0028",
+          "type": "grp"
+        },
+        {
+          "name": "d_002c",
+          "type": "grp"
+        },
+        {
+          "name": "d_002e",
+          "type": "grp"
+        },
+        {
+          "name": "d_0030",
+          "type": "grp"
+        },
+        {
+          "name": "D_0031",
+          "type": "grp"
+        },
+        {
+          "name": "d_0032",
+          "type": "grp"
+        },
+        {
+          "name": "d_0035",
+          "type": "grp"
+        },
+        {
+          "name": "d_0036",
+          "type": "grp"
+        },
+        {
+          "name": "D_003B",
+          "type": "grp"
+        },
+        {
+          "name": "d_0040",
+          "type": "grp"
+        },
+        {
+          "name": "d_0044",
+          "type": "grp"
+        },
+        {
+          "name": "d_0045",
+          "type": "grp"
+        },
+        {
+          "name": "d_0047",
+          "type": "grp"
+        },
+        {
+          "name": "D_0048",
+          "type": "grp"
+        },
+        {
+          "name": "d_0050",
+          "type": "grp"
+        },
+        {
+          "name": "d_0056",
+          "type": "grp"
+        },
+        {
+          "name": "d_0057",
+          "type": "grp"
+        },
+        {
+          "name": "d_0059",
+          "type": "grp"
+        },
+        {
+          "name": "D_005A",
+          "type": "grp"
+        },
+        {
+          "name": "d_005b",
+          "type": "grp"
+        },
+        {
+          "name": "d_0060",
+          "type": "grp"
+        },
+        {
+          "name": "d_0065",
+          "type": "grp"
+        },
+        {
+          "name": "D_0066",
+          "type": "grp"
+        },
+        {
+          "name": "d_0068",
+          "type": "grp"
+        },
+        {
+          "name": "d_0069",
+          "type": "grp"
+        },
+        {
+          "name": "d_006a",
+          "type": "grp"
+        },
+        {
+          "name": "d_006c",
+          "type": "grp"
+        },
+        {
+          "name": "D_0070",
+          "type": "grp"
+        },
+        {
+          "name": "d_0071",
+          "type": "grp"
+        },
+        {
+          "name": "D_0072",
+          "type": "grp"
+        },
+        {
+          "name": "D_0072B",
+          "type": "grp"
+        },
+        {
+          "name": "D_0074",
+          "type": "grp"
+        },
+        {
+          "name": "D_0076",
+          "type": "grp"
+        },
+        {
+          "name": "d_007f",
+          "type": "grp"
+        },
+        {
+          "name": "d_0080",
+          "type": "grp"
+        },
+        {
+          "name": "D_0081",
+          "type": "grp"
+        },
+        {
+          "name": "d_0086",
+          "type": "grp"
+        },
+        {
+          "name": "D_0099",
+          "type": "grp"
+        },
+        {
+          "name": "D_009A",
+          "type": "grp"
+        },
+        {
+          "name": "d_009b",
+          "type": "grp"
+        },
+        {
+          "name": "D_009C",
+          "type": "grp"
+        },
+        {
+          "name": "d_009d",
+          "type": "grp"
+        },
+        {
+          "name": "d_009e",
+          "type": "grp"
+        },
+        {
+          "name": "D_00A0",
+          "type": "grp"
+        },
+        {
+          "name": "d_00a4",
+          "type": "grp"
+        },
+        {
+          "name": "d_00a6",
+          "type": "grp"
+        },
+        {
+          "name": "d_00a7",
+          "type": "grp"
+        },
+        {
+          "name": "D_00AC",
+          "type": "grp"
+        },
+        {
+          "name": "d_00b0",
+          "type": "grp"
+        },
+        {
+          "name": "d_00b9",
+          "type": "grp"
+        },
+        {
+          "name": "D_00BB",
+          "type": "grp"
+        },
+        {
+          "name": "D_00C0",
+          "type": "grp"
+        },
+        {
+          "name": "D_00C2",
+          "type": "grp"
+        },
+        {
+          "name": "d_00c8",
+          "type": "grp"
+        },
+        {
+          "name": "d_00cd",
+          "type": "grp"
+        },
+        {
+          "name": "d_00ce",
+          "type": "grp"
+        },
+        {
+          "name": "d_00d0",
+          "type": "grp"
+        },
+        {
+          "name": "D_00DA",
+          "type": "grp"
+        },
+        {
+          "name": "d_00e0",
+          "type": "grp"
+        },
+        {
+          "name": "D_00E8",
+          "type": "grp"
+        },
+        {
+          "name": "d_00ea",
+          "type": "grp"
+        },
+        {
+          "name": "d_00ed",
+          "type": "grp"
+        },
+        {
+          "name": "d_00f0",
+          "type": "grp"
+        },
+        {
+          "name": "d_00f5",
+          "type": "grp"
+        },
+        {
+          "name": "D_00FF",
+          "type": "grp"
+        },
+        {
+          "name": "d_abskwp",
+          "type": "grp"
+        },
+        {
+          "name": "D_ACC",
+          "type": "grp"
+        },
+        {
+          "name": "D_ADP",
+          "type": "grp"
+        },
+        {
+          "name": "D_ADPF",
+          "type": "grp"
+        },
+        {
+          "name": "D_AFS",
+          "type": "grp"
+        },
+        {
+          "name": "D_AHM",
+          "type": "grp"
+        },
+        {
+          "name": "D_ALBVB",
+          "type": "grp"
+        },
+        {
+          "name": "D_ALBVF",
+          "type": "grp"
+        },
+        {
+          "name": "D_ALC",
+          "type": "grp"
+        },
+        {
+          "name": "D_AMP",
+          "type": "grp"
+        },
+        {
+          "name": "D_ANTTU",
+          "type": "grp"
+        },
+        {
+          "name": "d_ars",
+          "type": "grp"
+        },
+        {
+          "name": "D_ASK",
+          "type": "grp"
+        },
+        {
+          "name": "d_b8_d0",
+          "type": "grp"
+        },
+        {
+          "name": "D_BEHO",
+          "type": "grp"
+        },
+        {
+          "name": "D_BFH",
+          "type": "grp"
+        },
+        {
+          "name": "D_BFS",
+          "type": "grp"
+        },
+        {
+          "name": "D_BZM",
+          "type": "grp"
+        },
+        {
+          "name": "D_BZMF",
+          "type": "grp"
+        },
+        {
+          "name": "D_CAN",
+          "type": "grp"
+        },
+        {
+          "name": "D_CAN2",
+          "type": "grp"
+        },
+        {
+          "name": "d_canbus",
+          "type": "grp"
+        },
+        {
+          "name": "D_CAN_60",
+          "type": "grp"
+        },
+        {
+          "name": "D_CAS",
+          "type": "grp"
+        },
+        {
+          "name": "D_CCC",
+          "type": "grp"
+        },
+        {
+          "name": "D_CDC",
+          "type": "grp"
+        },
+        {
+          "name": "D_CDCDSP",
+          "type": "grp"
+        },
+        {
+          "name": "D_CEM",
+          "type": "grp"
+        },
+        {
+          "name": "D_CID",
+          "type": "grp"
+        },
+        {
+          "name": "D_CIDF",
+          "type": "grp"
+        },
+        {
+          "name": "D_CIDF2",
+          "type": "grp"
+        },
+        {
+          "name": "D_CIM",
+          "type": "grp"
+        },
+        {
+          "name": "D_CVM",
+          "type": "grp"
+        },
+        {
+          "name": "D_DAB",
+          "type": "grp"
+        },
+        {
+          "name": "d_digtun",
+          "type": "grp"
+        },
+        {
+          "name": "D_DSC",
+          "type": "grp"
+        },
+        {
+          "name": "D_DUM_KK",
+          "type": "grp"
+        },
+        {
+          "name": "D_DWA",
+          "type": "grp"
+        },
+        {
+          "name": "D_EC",
+          "type": "grp"
+        },
+        {
+          "name": "d_ecall",
+          "type": "grp"
+        },
+        {
+          "name": "D_ECF",
+          "type": "grp"
+        },
+        {
+          "name": "D_EDC",
+          "type": "grp"
+        },
+        {
+          "name": "D_EDCSHL",
+          "type": "grp"
+        },
+        {
+          "name": "D_EDCSHR",
+          "type": "grp"
+        },
+        {
+          "name": "D_EDCSVL",
+          "type": "grp"
+        },
+        {
+          "name": "D_EDCSVR",
+          "type": "grp"
+        },
+        {
+          "name": "D_EGS",
+          "type": "grp"
+        },
+        {
+          "name": "d_egs_7x",
+          "type": "grp"
+        },
+        {
+          "name": "D_EHC",
+          "type": "grp"
+        },
+        {
+          "name": "d_ekk",
+          "type": "grp"
+        },
+        {
+          "name": "D_EKP",
+          "type": "grp"
+        },
+        {
+          "name": "D_EMF",
+          "type": "grp"
+        },
+        {
+          "name": "D_EPS",
+          "type": "grp"
+        },
+        {
+          "name": "D_EXX",
+          "type": "grp"
+        },
+        {
+          "name": "D_FAH",
+          "type": "grp"
+        },
+        {
+          "name": "D_FAS",
+          "type": "grp"
+        },
+        {
+          "name": "D_FBI",
+          "type": "grp"
+        },
+        {
+          "name": "d_fdm",
+          "type": "grp"
+        },
+        {
+          "name": "D_FDM60",
+          "type": "grp"
+        },
+        {
+          "name": "D_FDM65",
+          "type": "grp"
+        },
+        {
+          "name": "D_FDM89X",
+          "type": "grp"
+        },
+        {
+          "name": "D_FFP",
+          "type": "grp"
+        },
+        {
+          "name": "D_FLA",
+          "type": "grp"
+        },
+        {
+          "name": "D_FZD",
+          "type": "grp"
+        },
+        {
+          "name": "D_GWS",
+          "type": "grp"
+        },
+        {
+          "name": "d_him",
+          "type": "grp"
+        },
+        {
+          "name": "D_HKL",
+          "type": "grp"
+        },
+        {
+          "name": "D_HUD",
+          "type": "grp"
+        },
+        {
+          "name": "D_IBOC",
+          "type": "grp"
+        },
+        {
+          "name": "D_ISPB",
+          "type": "grp"
+        },
+        {
+          "name": "D_KBM",
+          "type": "grp"
+        },
+        {
+          "name": "D_KFS",
+          "type": "grp"
+        },
+        {
+          "name": "D_KHI",
+          "type": "grp"
+        },
+        {
+          "name": "D_KLIMA",
+          "type": "grp"
+        },
+        {
+          "name": "D_KLIMA2",
+          "type": "grp"
+        },
+        {
+          "name": "D_KOMBI",
+          "type": "grp"
+        },
+        {
+          "name": "D_LDM",
+          "type": "grp"
+        },
+        {
+          "name": "d_ldm2",
+          "type": "grp"
+        },
+        {
+          "name": "D_LM",
+          "type": "grp"
+        },
+        {
+          "name": "d_m60_10",
+          "type": "grp"
+        },
+        {
+          "name": "d_m60_12",
+          "type": "grp"
+        },
+        {
+          "name": "D_MMC",
+          "type": "grp"
+        },
+        {
+          "name": "D_MMCDSP",
+          "type": "grp"
+        },
+        {
+          "name": "D_MMI",
+          "type": "grp"
+        },
+        {
+          "name": "D_MMIF",
+          "type": "grp"
+        },
+        {
+          "name": "D_MMIFC",
+          "type": "grp"
+        },
+        {
+          "name": "d_most",
+          "type": "grp"
+        },
+        {
+          "name": "d_most60",
+          "type": "grp"
+        },
+        {
+          "name": "d_most65",
+          "type": "grp"
+        },
+        {
+          "name": "D_MOSTGW",
+          "type": "grp"
+        },
+        {
+          "name": "d_motor",
+          "type": "grp"
+        },
+        {
+          "name": "D_MOTOR2",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRABS",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRDWA",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRKOMB",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRMOT",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRRAD",
+          "type": "grp"
+        },
+        {
+          "name": "d_mrrbt",
+          "type": "grp"
+        },
+        {
+          "name": "D_MRZFE",
+          "type": "grp"
+        },
+        {
+          "name": "d_muster",
+          "type": "grp"
+        },
+        {
+          "name": "D_NAV",
+          "type": "grp"
+        },
+        {
+          "name": "D_NVC",
+          "type": "grp"
+        },
+        {
+          "name": "D_NVE",
+          "type": "grp"
+        },
+        {
+          "name": "d_opps",
+          "type": "grp"
+        },
+        {
+          "name": "D_PDC",
+          "type": "grp"
+        },
+        {
+          "name": "D_PGS",
+          "type": "grp"
+        },
+        {
+          "name": "D_POW",
+          "type": "grp"
+        },
+        {
+          "name": "d_qsg",
+          "type": "grp"
+        },
+        {
+          "name": "D_RADIO",
+          "type": "grp"
+        },
+        {
+          "name": "D_RDC",
+          "type": "grp"
+        },
+        {
+          "name": "D_RFK",
+          "type": "grp"
+        },
+        {
+          "name": "D_RLS",
+          "type": "grp"
+        },
+        {
+          "name": "D_RSE",
+          "type": "grp"
+        },
+        {
+          "name": "D_SASL",
+          "type": "grp"
+        },
+        {
+          "name": "D_SASR",
+          "type": "grp"
+        },
+        {
+          "name": "d_sba",
+          "type": "grp"
+        },
+        {
+          "name": "D_SBSL",
+          "type": "grp"
+        },
+        {
+          "name": "D_SBSL2",
+          "type": "grp"
+        },
+        {
+          "name": "D_SBSR",
+          "type": "grp"
+        },
+        {
+          "name": "D_SBSR2",
+          "type": "grp"
+        },
+        {
+          "name": "D_SECUR1",
+          "type": "grp"
+        },
+        {
+          "name": "D_SECUR2",
+          "type": "grp"
+        },
+        {
+          "name": "D_SFZ",
+          "type": "grp"
+        },
+        {
+          "name": "D_SHD",
+          "type": "grp"
+        },
+        {
+          "name": "D_SHZH",
+          "type": "grp"
+        },
+        {
+          "name": "D_SIM",
+          "type": "grp"
+        },
+        {
+          "name": "D_SINE",
+          "type": "grp"
+        },
+        {
+          "name": "D_SITZ_B",
+          "type": "grp"
+        },
+        {
+          "name": "D_SITZ_F",
+          "type": "grp"
+        },
+        {
+          "name": "D_SMAC",
+          "type": "grp"
+        },
+        {
+          "name": "D_SPMBT",
+          "type": "grp"
+        },
+        {
+          "name": "D_SPMFT",
+          "type": "grp"
+        },
+        {
+          "name": "D_SSBF",
+          "type": "grp"
+        },
+        {
+          "name": "D_SSFA",
+          "type": "grp"
+        },
+        {
+          "name": "D_SSH",
+          "type": "grp"
+        },
+        {
+          "name": "D_STVL",
+          "type": "grp"
+        },
+        {
+          "name": "D_STVL2",
+          "type": "grp"
+        },
+        {
+          "name": "D_STVR",
+          "type": "grp"
+        },
+        {
+          "name": "D_STVR2",
+          "type": "grp"
+        },
+        {
+          "name": "D_SVS",
+          "type": "grp"
+        },
+        {
+          "name": "d_svt",
+          "type": "grp"
+        },
+        {
+          "name": "D_SZL",
+          "type": "grp"
+        },
+        {
+          "name": "D_SZM",
+          "type": "grp"
+        },
+        {
+          "name": "D_TEL",
+          "type": "grp"
+        },
+        {
+          "name": "d_tfe",
+          "type": "grp"
+        },
+        {
+          "name": "D_TLC",
+          "type": "grp"
+        },
+        {
+          "name": "D_TMBT",
+          "type": "grp"
+        },
+        {
+          "name": "D_TMBTH",
+          "type": "grp"
+        },
+        {
+          "name": "D_TMFT",
+          "type": "grp"
+        },
+        {
+          "name": "D_TMFTH",
+          "type": "grp"
+        },
+        {
+          "name": "d_trsvc",
+          "type": "grp"
+        },
+        {
+          "name": "D_VGSG",
+          "type": "grp"
+        },
+        {
+          "name": "D_VIDEO",
+          "type": "grp"
+        },
+        {
+          "name": "d_virt90",
+          "type": "grp"
+        },
+        {
+          "name": "d_virt91",
+          "type": "grp"
+        },
+        {
+          "name": "d_virt92",
+          "type": "grp"
+        },
+        {
+          "name": "D_VIRT93",
+          "type": "grp"
+        },
+        {
+          "name": "D_VIRT98",
+          "type": "grp"
+        },
+        {
+          "name": "d_virt9b",
+          "type": "grp"
+        },
+        {
+          "name": "D_VSW",
+          "type": "grp"
+        },
+        {
+          "name": "D_VVT",
+          "type": "grp"
+        },
+        {
+          "name": "D_VVT2",
+          "type": "grp"
+        },
+        {
+          "name": "D_WIM",
+          "type": "grp"
+        },
+        {
+          "name": "D_XEN_L",
+          "type": "grp"
+        },
+        {
+          "name": "D_XEN_R",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZGM",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZKE3BT",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZKE3FT",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZKE3PM",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZKE3SB",
+          "type": "grp"
+        },
+        {
+          "name": "D_ZKE3SD",
+          "type": "grp"
+        },
+        {
+          "name": "d_zke_gm",
+          "type": "grp"
+        },
+        {
+          "name": "d_zuheiz",
+          "type": "grp"
+        },
+        {
+          "name": "FOND_BT",
+          "type": "prg"
+        },
+        {
+          "name": "FOND_ZIS",
+          "type": "prg"
+        },
+        {
+          "name": "fzd_20",
+          "type": "prg"
+        },
+        {
+          "name": "FZD_70",
+          "type": "prg"
+        },
+        {
+          "name": "FZD_87",
+          "type": "prg"
+        },
+        {
+          "name": "fzd_f15",
+          "type": "prg"
+        },
+        {
+          "name": "hud_01",
+          "type": "prg"
+        },
+        {
+          "name": "HUD_60",
+          "type": "prg"
+        },
+        {
+          "name": "HUD_70",
+          "type": "prg"
+        },
+        {
+          "name": "RAD_83",
+          "type": "prg"
+        },
+        {
+          "name": "rad_ukl",
+          "type": "prg"
+        },
+        {
+          "name": "SD_DS2",
+          "type": "prg"
+        },
+        {
+          "name": "SD_KWP",
+          "type": "prg"
+        },
+        {
+          "name": "SHD_E65",
+          "type": "prg"
+        },
+        {
+          "name": "VID_65_2",
+          "type": "prg"
+        },
+        {
+          "name": "VID_E65",
+          "type": "prg"
+        }
+      ]
+    }
+  }
+}
