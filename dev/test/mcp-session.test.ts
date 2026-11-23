@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -61,8 +61,8 @@ function synthScenario(): void {
 
 const keychainReads: string[] = [];
 
-async function session(scenario: string) {
-  agent = await startReplayAgent({ scenario: loadScenario(root, scenario), token: TOKEN, port: 0, log: () => {} });
+async function session(scenario: string, fixturesDir: string = root) {
+  agent = await startReplayAgent({ scenario: loadScenario(fixturesDir, scenario), token: TOKEN, port: 0, log: () => {} });
   const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: TOKEN, EDIABAS_AUDIT_LOG: join(root, "audit.log") };
   const { config } = loadConfig(env, root);
   const server = createAppServer(config, {
@@ -125,6 +125,31 @@ describe("real MCP server against the replay agent", () => {
     const v = await tool(client, "ediabas_vehicle_status");
     expect(v.isError).toBe(true);
     expect(v.text).toMatch(/^\[cable_in_use\] The diagnostic cable is in use by SYNTH_TOOL \(pid 7\)/);
+  });
+
+  it("the real recordings from the car: whole-car views and the battery batch fit the text budget", async () => {
+    const fixtures = join(import.meta.dirname, "..", "fixtures");
+    const client = await session("battery", fixtures);
+
+    const ident = await tool(client, "ediabas_job", { ecu: "E60", job: "IDENT_FUNKTIONAL", timeoutSeconds: 60 });
+    expect(ident.isError).toBe(false);
+    expect(ident.text).toContain("43 modules answered");
+    expect(ident.text).toContain("PGS (address 0x27): PGS_65_2");
+    expect(ident.text).not.toContain("… cut at");
+
+    const faults = await tool(client, "ediabas_job", { ecu: "E60", job: "FS_LESEN_FUNKTIONAL", timeoutSeconds: 60 });
+    expect(faults.isError).toBe(false);
+    expect(faults.text).toContain("15 modules with faults (24 codes)");
+    expect(faults.text).toContain("PGS (address 0x27): 0xA0B7 present now (F_ART 0x60)");
+    expect(faults.text).not.toContain("… cut at");
+
+    const rec = JSON.parse(readFileSync(join(fixtures, "battery", "20261123T194644919Z-0016-POST-ediabas_jobs-12items.json"), "utf8"));
+    const items = rec.request.body.items;
+    expect(items).toHaveLength(12);
+    const batch = await tool(client, "ediabas_jobs", { jobs: items });
+    expect(batch.isError).toBe(false);
+    expect(batch.text).toContain("STAT_ANZAHL_FAHRTEN_0_5_KM_1=4");
+    expect(batch.text).toContain("CAS STATUS_WAKEUP_HISTORY: job status ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT (the module answered that it does not support this job");
   });
 
   it("with nothing listening, the server reports that the agent is not answering", async () => {
