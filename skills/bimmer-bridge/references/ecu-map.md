@@ -90,7 +90,8 @@ Modules from `E60` `IDENT_FUNKTIONAL` on 2026-11-23 (the name column is the SGBD
   this car's engine group; use `D_MOTOR` (`N62_TUE`).
 - `MPM_60` gave `IFH-0009` (two items, recording `0016`) and is not in the `IDENT_FUNKTIONAL`
   result (`0029`): it did not answer on this car.
-- SINE (address 0x50) answers `FS_LESEN_FUNKTIONAL` (one code) but is not in `IDENT_FUNKTIONAL`.
+- SINE (address 0x50) answers `FS_LESEN_FUNKTIONAL` (one code) but is not in `IDENT_FUNKTIONAL`. The VM has group `D_SINE` and SGBD `SINE_65` (desk, 2026-11-23); which variant answers is not recorded.
+- `N62_TUE` (the engine file) does not load at the desk without the module answering (`SYS-0010`, 2026-11-23): describe its jobs with the ignition on.
 - `VVT` (0x1B) and `VVT2` (0x1E) answer `FS_LESEN_FUNKTIONAL` with
   `ERROR_ECU_SERVICE_NOT_SUPPORTED` (recording `0031`).
 - One `IDENT_FUNKTIONAL` set has no module name (44 sets, 43 named modules).

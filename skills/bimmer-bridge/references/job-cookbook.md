@@ -99,9 +99,10 @@ All 2026-11-23, ignition on, cable in the car. Durations are the agent's `durati
 - **Confirmed:** 2026-11-23, `dev/fixtures/nve-faults`.
 
 ### For the next session
-- `ediabas_describe` `N62_TUE` `FS_LESEN_DETAIL` (try at the desk first; its argument is the fault code) for the `2DED` environment data.
+- `ediabas_describe` `N62_TUE` `FS_LESEN_DETAIL` with the ignition on (it does not load at the desk: "Desk, 2026-11-23" below), then run it for `2DED`.
 - `KOMB60` `STATUS_KLEMMENSPANNUNG`: confirm its resolution (declared int, `_EINH` normally mV).
-- The `D_SINE` variant (SINE, address 0x50, answers `FS_LESEN_FUNKTIONAL` only).
+- `D_SINE` `IDENT`: which variant answers (SINE, address 0x50, answers `FS_LESEN_FUNKTIONAL` only; `SINE_65` is in the VM).
+- `PGS_65_2` (0x27, Comfort Access): `FS_LESEN_DETAIL` for `A0B7`, `IS_LESEN`, `STATUS_PGS_WUP` and `STATUS_TAGE_WUP` per handle (described at the desk: "Desk, 2026-11-23" below). How `F_CODE` takes a code such as `A0B7` (decimal or `0x` hex) is not recorded yet.
 - Ignition-off vehicle status with the cable in the car (not recorded yet).
 
 ## Seen in `ediabas_describe` (not yet run)
@@ -525,3 +526,55 @@ Result names declared:
   all match the names (for example `STAT_SPANNUNG_A_KL30_WERT` is described as `Spannung Kl 15
   in V`); quote them as returned and do not decide which is right.
 
+
+## Desk, 2026-11-23 (after the car session)
+
+Read with `ediabas_describe` after the first session at the car: cable in the VM and **not in
+the car**, policy version 4 (agent 0.7.0), one pinned approval (`CAS:STATUS_WUP`). Nothing here
+has been run on the car. Descriptions are quoted as returned; arguments and results are as the
+SGBD declares them.
+
+**`N62_TUE` does not load without the engine module.** `ediabas_describe` `N62_TUE`
+`FS_LESEN_DETAIL` gave `SYS-0010: INITIALIZATION ERROR` at the desk. Its detail job can only be
+described at the car, with the ignition on.
+
+### `PGS_65_2` — Comfort Access (address 0x27)
+
+The `KGM_60` history names 0x27 as a waker and as a cause of keeping the car awake, and PGS
+holds fault A0B7 (recording `0018`). Full job list: 112 jobs, 51 runnable. Jobs that bear on
+the drain:
+
+| Job | Verdict | Description as returned (first line) | Arguments | Results declared |
+|---|---|---|---|---|
+| `FS_LESEN_DETAIL` | runnable | `Fehlerspeicher lesen (ein Fehler / alle Details)` — `KWP2000: $17 ReadStatusOfDiagnosticTroubleCodes` | `F_CODE` (int): `gewaehlter Fehlercode` | `F_ORT_*`, `F_SYMPTOM_*`, `F_READY_*`, `F_VORHANDEN_*`, `F_WARNUNG_*`, `F_PCODE*`, `F_HFK` (frequency counter), `F_LZ` (logistics counter), `F_ART_ANZ` + `F_ARTi_*`, `F_UW_KM`, `F_UW_ANZ` + `F_UWi_*` |
+| `IS_LESEN` | runnable | `Infospeicher lesen (alle Info-Meldungen / Ort und Art)` — `KWP2000: $22 ReadDataByCommonIdentifier $2000 dtcShadowMemory` | none | `F_VERSION`, `F_ORT_*`, `F_SYMPTOM_*`, `F_READY_*`, `F_VORHANDEN_*`, `F_WARNUNG_*` |
+| `IS_LESEN_DETAIL` | runnable | `Infospeicher lesen (alle Info-Meldungen / Ort und Art)` — `$22 … $2001 - $20FF dtcShadowMemoryEntry` | not described | not described |
+| `STATUS_PGS_WUP` | runnable (hash `691b0dc6b5dd`) | `Liest 3 Byte "Wake-Up-Pattern"` — `KWP2000: $21 ReadDataByLocalIdentifier $70` | none | `STAT_WUP` (binary, 3 bytes) |
+| `STATUS_TAGE_WUP` | runnable (hash `dfed1edc4092`) | `Liest 3 Byte "Wake-Up-Pattern" (TAGE x)` — `$21 … $71`–`$74`; `SG PGS wird als Gateway zu den TAGE benutzt` | `TAGE_KBUS_ADR` (string): `0x02=TAGE_FT / 0x04=TAGE_FTH / 0x08=TAGE_BFT / 0x10=TAGE_BFTH` | `STAT_WUP` (binary, 3 bytes) |
+| `STATUS_TAGE_KBUSADRESSE` | runnable | `Liest 1 Byte "KBUS-Adresse" (TAGE x)` | not described | not described |
+| `STATUS_DIGITAL_WUP_K_BUS` | runnable | `Auslesen des Status des digitalen Signales K_BUS_WUP` — `$30 InputOutputControlByLocalIdentifier` `$01 ReportCurrentState` | not described | not described |
+| `STATUS_ANALOG_VBAT` | runnable (hash `8bd96111ce96`) | `Auslesen des Status von analogem Signal VBAT` — `$30 … $01 ReportCurrentState` | none | `STAT_ANALOG_WERT` (real), `STAT_ANALOG_EINH` (string) |
+
+TAGE are the door-handle modules, reached through PGS (from the descriptions). Which TAGE
+address is which door on this car is not recorded. Flagged (`needs review`, not approved):
+`STATUS_TAGE_ECU_ID`, `STATUS_TAGE_HERSTELLER_DATEN`, `STATUS_TAGE_PRUEFSTEMPEL`,
+`STATUS_TAGE_IO`, `STATUS_ECU_SELBSTTEST`, `STATUS_TAGE_UHRZEIT`,
+`STATUS_TAGE_CODEDATA_CHECKSUM`, `STATUS_PGS_ANTENNEN_TEST` (all `$31 StartRoutineByLocalIdentifier`).
+`INT_STATUS_PGS_SLEEPTIMEOUT` is refused (`deny.substring:SLEEP`).
+
+### `SINE_65` — the SINE file (address 0x50 not confirmed)
+
+`ediabas_list_ecus` shows group `D_SINE` and SGBD `SINE_65`. Whether `D_SINE` resolves to
+`SINE_65` on this car is not recorded. Full job list: 29 jobs, 6 runnable: `INFO`, `IDENT`,
+`FS_LESEN`, `FS_LESEN_DETAIL` (argument `F_CODE` (int), same results as the `PGS_65_2` one),
+`PRUEFSTEMPEL_LESEN`, `C_FG_LESEN`. `STATUS_INCLINATION_X_AXIS`, `_Y_AXIS`, `_Z_AXIS` need
+review (`$21 StartRoutineByLocalIdentifier`, as the SGBD writes it).
+
+### `KOMB60` `STATUS_KLEMMENSPANNUNG`, `NVE_65` `STATUS_PAIRING`
+
+Described again: unchanged from the tables above. `KOMB60` `STATUS_KLEMMENSPANNUNG` is runnable
+(hash `375f3b2189d0`), no arguments, `STAT_KLEMMENSPANNUNG_WERT` (int) and
+`STAT_KLEMMENSPANNUNG_EINH` (`normalerweise mV`). `NVE_65` `STATUS_PAIRING` still needs review
+(hash `f62e5f225aaf`): no arguments, results `STAT_PAIRING_WERT` (int) and `STAT_PAIRING_TEXT`
+(`00: Pairing erfolgreich FE: Pairing nicht erfolgt`); approving it is the owner's choice
+(`NVE_65:STATUS_PAIRING@f62e5f225aaf`).

@@ -56,7 +56,10 @@ On the E61, in this order (2026-11-23):
    `results` to trim them.
 4. `ediabas_read_faults` on the modules the history and the functional read name.
 5. Fault detail (`FS_LESEN_DETAIL`) for a quiescent-current code such as `2DED`, once
-   `ediabas_describe` has shown it.
+   `ediabas_describe` has shown it (`N62_TUE` only describes with the ignition on).
+6. If the history names PGS (0x27): `PGS_65_2` `FS_LESEN_DETAIL` for its fault, `IS_LESEN`,
+   `STATUS_PGS_WUP` and `STATUS_TAGE_WUP` for each door handle. Described at the desk
+   (2026-11-23), not yet run: see "Desk, 2026-11-23" in `../job-cookbook.md`.
 
 ## After
 
