@@ -20,7 +20,7 @@ VM agent's service and policy, with a JSON-lines stdio front and a CLI. The acce
 and are desk sessions: Ryan unplugs the cable from the car first (it may stay in the VM) and
 starts each one. Claude never runs EDIABAS jobs, Tool32 or INPA over SSH.
 
-Status: sections 1–2 done (2026-11-22); section 4 done (2026-11-23); section 3 running.
+Status: done. Sections 1–2 (2026-11-22), sections 3–4 (desk sessions, 2026-11-23).
 
 ---
 
@@ -113,19 +113,45 @@ Expected `vm_error` rows: real EDIABAS runs each SGBD's INIT before `_JOBS` (M0 
 an SGBD whose INIT sends a telegram (DS2 wake-up, for instance) that fails in the VM while the
 cable is not in a car, where the native describe (no INIT, by design) succeeds.
 
-| Kind | Count |
-|---|---|
-| `match` | |
-| `differ` | |
-| `vm_error` | |
-| `native_error` | |
-| `both_error` | |
-| **total** | |
+Run 2026-11-22/23, the cable passed through to the VM and not in a car. The run stalled
+overnight (the Mac slept) and the VM agent then stopped accepting connections; its rows from
+then on were all timeouts, were dropped, and the run was resumed after the agent's scheduled
+task was restarted (Ryan's OK). A last pass re-ran the 83 SGBDs that the fix below changed.
 
-Every `differ` and `*_error` row, explained:
-
-| ECU | Kind | What differs | Why |
+| Kind | First run | After the fix | |
 |---|---|---|---|
+| `match` | 839 | **906** | identical names, comments, arguments, results, variant and verdicts |
+| `verdict_only` | 26 | 31 | everything identical but a review verdict: policy drift, below |
+| `differ` | 162 | 90 | every one: comments the VM agent did not fetch in time, below |
+| `vm_error` | 218 | 218 | below |
+| `native_error` | 0 | 0 | |
+| `both_error` | 6 | 6 | below |
+| **total** | 1,251 | 1,251 | |
+
+**Found and fixed: job descriptions written in lower or mixed case (83 SGBDs).** EdiabasLib keys
+each job's description block by the name as the SGBD writes it (`JOBNAME:initialisierung`,
+`Start_Bus_Communication`, `FS_LESEN_sl`, `Notruf_Status`) and looks it up in upper case, so
+`_JOBCOMMENTS`, `_ARGUMENTS` and `_RESULTS` came back empty for those jobs where real EDIABAS
+finds them: 107 jobs, 69 of them `INITIALISIERUNG`. It failed safe (no comment means
+`needs_review`, never `passed`) but held harmless reads for review. `ediabasd` now rekeys the
+descriptions case-insensitively before every `_` job (`JobDescriptions.IgnoreCase`, by
+reflection like `EdiabasFactory.Activate`; EdiabasLib unmodified). After the fix, no job on
+any SGBD has a comment on the VM that it lacks natively.
+
+Every remaining non-match, explained:
+
+| ECUs | Kind | What differs | Why |
+|---|---|---|---|
+| 90 (AFS_60, CAS, DDE41KR0, MSS52DS0, …) | `differ` | jobs with a comment natively and none on the VM (4,800+ jobs), and the verdicts that follow from it (a job with no comment is `needs_review`) | The VM agent fetches each job's comments with its own `_JOBCOMMENTS` call, and real EDIABAS runs the SGBD's INIT before each one; with no car every INIT waits out its timeouts, and the agent stops at its 60 s request limit (90 "still busy … calling apiBreak" lines in its log). The native describe, without INIT by design, returns them all. Not a native difference; these comments are unchecked against the VM |
+| 31, and verdicts inside 17 `differ` rows | `verdict_only` | `needs_review` on the VM, `passed` natively | Policy drift: the VM agent runs main's policy v4, which adds the screen terms `schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`, `trigger`, `oeffnen`, `öffnen`; this branch has v3. Each case checked contains one (`STATUS_PAIRING` "freigeschaltet", `STATUS_LAMBDA_COUNTER` "Einschaltbedingung", `STATUS_T_MV_OFF` "Ausschalt…", `STATUS_TRIPRCRDKONF_LZQ` "Trigger") |
+| CAS (2 jobs) | inside `differ` | `reviewed` on the VM | The VM's `reviewedJobs` list approves them; the comparison's `ediabasd` config has none |
+| 215 | `vm_error` (`ediabas_error`) | the VM fails, native succeeds | Expected (above): INIT fails with no car (`SYS-0010` INITIALIZATION ERROR, `IFH-0006`, `IFH-0003` in the agent log) |
+| MS411DS2, N55_ALP, N73TU_R0 | `vm_error` (`ediabas_request_lost`) | the VM request lost | Around the agent's stall; the same INIT waits |
+| A-SITZ_B, A-SITZ_F, `KOPIE VON C_ACC` (3) | `both_error` (`job_not_allowed`) | both refuse | File names outside the policy's name pattern (`-`, spaces); same answer on both sides |
+| 00MDS410 | `both_error` (`ediabas_error`) | both fail | Same answer on both sides |
+
+Not covered by this run: the comments of the 90 SGBDs above (unchecked, not mismatched), and
+the 24 gate-refused reads (section 2), which describe does not run.
 
 Groups (`.grp`) are not compared: natively they give `needs_car` until a live request has
 resolved them (353 `.grp` files in the folder).
@@ -215,6 +241,14 @@ What this means for real reads:
 - **EdiabasLib emulates EDIABAS 7.7.3; the VM runs 7.3** (section 4). A divide by zero under a
   full trap mask fails natively; M2's comparisons flag `BIP-0007` and `BIP-0011` as this
   difference, not a transport fault.
+
+- **Policy drift:** main has policy v4, this branch v3 (section 3). Merging main in, or taking
+  v4 over, makes the describe verdicts match.
+
+- **VM agent, not the native engine:** after the Mac slept mid-run the agent logged thread-pool
+  starvation and then stopped accepting connections while its process stayed up; only a
+  restart of its scheduled task recovered it (section 3). Its describe also drops comments past
+  its 60 s limit on SGBDs whose INIT waits. Both belong to the agent's own work.
 
 - The MCP server's native backend (`EDIABAS_BACKEND=native`) and `bridge_health`, with the
   cable's free/locked state.
