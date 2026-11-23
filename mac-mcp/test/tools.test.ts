@@ -934,6 +934,67 @@ describe("timeoutSeconds and namesOnly", () => {
     expect((await call("ediabas_jobs", { jobs: [{ ecu: "NVE_65", job: "IDENT" }], timeoutSeconds: 61 })).isError).toBe(true);
   });
 
+  describe("a describe the agent cut off by time", () => {
+    const job = (i: number, read: boolean) => ({
+      name: `STATUS_${i}`,
+      comment: read ? `Status ${i} lesen` : null,
+      verdict: { allowed: true, rule: "allow.pattern", review: read ? "passed" : "not_checked" },
+    });
+    // Answer n reads `reads[n]` of 4 descriptions; cut off while fewer than 4.
+    const answers = (reads: number[]) => {
+      let n = 0;
+      override("GET /ediabas/describe", () => {
+        const read = reads[Math.min(n++, reads.length - 1)]!;
+        return {
+          status: 200,
+          body: {
+            ecu: "BIG",
+            variant: "BIG",
+            jobCount: 4,
+            jobs: [0, 1, 2, 3].map((i) => job(i, i < read)),
+            durationMs: 60_000,
+            commentsCutOff: read < 4 ? "time_limit" : null,
+          },
+        };
+      });
+    };
+
+    it("is asked again, and the complete answer has no cut-off note", async () => {
+      answers([1, 4]);
+      const { call } = await connect();
+      const r = await call("ediabas_describe", { ecu: "BIG" });
+      expect(toolRequests()).toHaveLength(2);
+      expect(r.text).toMatch(/^BIG: 4 jobs, 4 runnable/);
+      expect(r.text).not.toContain("time limit");
+    });
+
+    it("stops after two more requests, and says what is left", async () => {
+      answers([1, 2, 3, 3]);
+      const { call } = await connect();
+      const r = await call("ediabas_describe", { ecu: "BIG" });
+      expect(toolRequests()).toHaveLength(3);
+      expect(r.text.split("\n")[1]).toMatch(/^\(1 job not screened: the agent's time limit ran out\. .*Asking again goes on/);
+    });
+
+    it("stops as soon as a repeat reads nothing new", async () => {
+      answers([2, 2]);
+      const { call } = await connect();
+      await call("ediabas_describe", { ecu: "BIG" });
+      expect(toolRequests()).toHaveLength(2);
+    });
+
+    it("is not repeated for another reason", async () => {
+      override("GET /ediabas/describe", () => ({
+        status: 200,
+        body: { ecu: "BIG", variant: "BIG", jobCount: 1, jobs: [job(0, false)], durationMs: 5, commentsCutOff: "tool_started" },
+      }));
+      const { call } = await connect();
+      const r = await call("ediabas_describe", { ecu: "BIG" });
+      expect(toolRequests()).toHaveLength(1);
+      expect(r.text).toContain("(1 job not screened: a BMW tool started in the VM during the request.)");
+    });
+  });
+
   it("ediabas_describe with namesOnly asks for no comments and says what that means", async () => {
     const { call } = await connect();
     const r = await call("ediabas_describe", { ecu: "NVE_65", namesOnly: true });

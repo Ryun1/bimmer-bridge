@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using EdiabasAgent.Audit;
 using EdiabasAgent.Core;
@@ -29,7 +30,7 @@ internal sealed class AgentContext : IDisposable
         ApprovalReloader = new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log));
         Runner = new EdiabasRunner(
             () => new EdiabasService(
-                new Api32(config.EdiabasDll),
+                new Api32(config.EdiabasDll, NativeCalls),
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
@@ -42,8 +43,14 @@ internal sealed class AgentContext : IDisposable
                 config.MaxJobTimeoutSeconds,
                 config.EdiabasIdleReleaseSeconds,
                 ApprovalReloader),
-            log);
+            log,
+            HandlerWait(config.MaxJobTimeoutSeconds));
     }
+
+    /// <summary>How long a handler waits for the EDIABAS runner: the longest a request can take
+    /// (its budget and the apiBreak grace) and a margin. Only a stuck runner reaches it.</summary>
+    internal static TimeSpan HandlerWait(int maxJobTimeoutSeconds) =>
+        TimeSpan.FromMilliseconds((Math.Max(1, maxJobTimeoutSeconds) * 1000L) + EdiabasService.BreakGraceMs + 20_000);
 
     public static string Version { get; } =
         typeof(AgentContext).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
@@ -79,6 +86,19 @@ internal sealed class AgentContext : IDisposable
     public LogService Logs { get; }
 
     public EdiabasRunner Runner { get; }
+
+    /// <summary>The api32.dll call the runner is in or last made, for the watchdog's log line.</summary>
+    public NativeCallTracker NativeCalls { get; } = new();
+
+    /// <summary>The address and port the agent listens on now; null while it binds or rebinds.
+    /// The watchdog probes it.</summary>
+    public IPEndPoint? Listening
+    {
+        get => Volatile.Read(ref _listening);
+        set => Volatile.Write(ref _listening, value);
+    }
+
+    private IPEndPoint? _listening;
 
     public void Dispose() => Runner.Dispose();
 

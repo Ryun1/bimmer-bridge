@@ -16,6 +16,9 @@ namespace EdiabasAgent.Ediabas;
 /// <para>Between requests the thread waits only as long as the service says, then lets the
 /// service release api32.dll if it has been idle long enough; so the unload happens on this
 /// thread and never during a request.</para>
+/// <para>A handler waits for its answer at most <c>handlerWait</c>, and never after its client has
+/// gone: a native call that never returns must not also hold every HTTP connection that queues
+/// behind it (issue #15). <see cref="BusySinceMs"/> lets the watchdog see such a call.</para>
 /// </summary>
 internal sealed class EdiabasRunner : IDisposable
 {
@@ -26,23 +29,49 @@ internal sealed class EdiabasRunner : IDisposable
     private readonly Func<EdiabasService> _createService;
     private readonly AgentLog _log;
     private readonly Thread _thread;
+    private readonly TimeSpan _handlerWait;
 
-    public EdiabasRunner(Func<EdiabasService> createService, AgentLog log)
+    // Environment.TickCount64 when the current piece of work started; -1 while idle.
+    private long _busySince = -1;
+
+    /// <param name="handlerWait">How long a handler waits for its answer: longer than any request
+    /// can take, so that only a stuck runner reaches it.</param>
+    public EdiabasRunner(Func<EdiabasService> createService, AgentLog log, TimeSpan handlerWait)
     {
         _createService = createService;
         _log = log;
+        _handlerWait = handlerWait;
 
         // Background so a call hung inside the DLL cannot keep the process alive for ever.
         _thread = new Thread(Loop) { IsBackground = true, Name = "EDIABAS" };
         _thread.Start();
     }
 
+    /// <summary><see cref="Environment.TickCount64"/> when the work now on the runner thread
+    /// started (a request, loading the service, or an idle release); null while it waits.</summary>
+    public long? BusySinceMs
+    {
+        get
+        {
+            var since = Interlocked.Read(ref _busySince);
+            return since < 0 ? null : since;
+        }
+    }
+
     /// <param name="work">Gets the service, how long the item waited in the queue in
     /// milliseconds, and the request's token.</param>
-    public Task<T> Run<T>(Func<EdiabasService, long, CancellationToken, T> work, CancellationToken requestAborted)
+    /// <returns>The work's outcome; <c>ediabas_unavailable</c> if the runner has not answered
+    /// within the handler wait. Cancelled when the client goes away first.</returns>
+    public async Task<Outcome<T>> Run<T>(Func<EdiabasService, long, CancellationToken, Outcome<T>> work, CancellationToken requestAborted)
+        where T : class
     {
-        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<Outcome<T>>(TaskCreationOptions.RunContinuationsAsynchronously);
         var queuedAt = Stopwatch.GetTimestamp();
+
+        // Cancelled when the client goes away or the handler stops waiting: a queued item is then
+        // dropped, and a running one stops starting jobs and breaks the one it runs.
+        using var abandon = CancellationTokenSource.CreateLinkedTokenSource(requestAborted);
+        var abandoned = abandon.Token;
         void Item(EdiabasService? service)
         {
             if (service is null)
@@ -51,13 +80,25 @@ internal sealed class EdiabasRunner : IDisposable
                 return;
             }
 
-            if (requestAborted.IsCancellationRequested || _stopping.IsCancellationRequested)
+            CancellationTokenSource linked;
+            try
             {
+                if (abandoned.IsCancellationRequested || _stopping.IsCancellationRequested)
+                {
+                    tcs.TrySetCanceled();
+                    return;
+                }
+
+                linked = CancellationTokenSource.CreateLinkedTokenSource(abandoned, _stopping.Token);
+            }
+            catch (ObjectDisposedException)
+            {
+                // The handler has already answered and gone.
                 tcs.TrySetCanceled();
                 return;
             }
 
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(requestAborted, _stopping.Token);
+            using var _ = linked;
             try
             {
                 var queuedMs = (long)Stopwatch.GetElapsedTime(queuedAt).TotalMilliseconds;
@@ -74,7 +115,24 @@ internal sealed class EdiabasRunner : IDisposable
             tcs.TrySetException(new InvalidOperationException("the EDIABAS runner is stopping"));
         }
 
-        return tcs.Task;
+        try
+        {
+            return await tcs.Task.WaitAsync(_handlerWait, requestAborted);
+        }
+        catch (TimeoutException)
+        {
+            abandon.Cancel();
+            _log.Error($"EDIABAS runner did not answer a request within {_handlerWait.TotalSeconds:0} s; answering ediabas_unavailable");
+            return ApiFailure.Of(
+                ApiErrors.EdiabasUnavailable,
+                $"The agent's EDIABAS thread did not answer within {_handlerWait.TotalSeconds:0} s. If it stays stuck, the agent restarts itself within a few minutes.",
+                new ReasonDetails("the EDIABAS thread did not answer in time"));
+        }
+        catch (OperationCanceledException) when (requestAborted.IsCancellationRequested)
+        {
+            abandon.Cancel();
+            throw;
+        }
     }
 
     private void Loop()
@@ -83,11 +141,13 @@ internal sealed class EdiabasRunner : IDisposable
         try
         {
             // Created here so the API object belongs to this thread from the start.
+            MarkBusy();
             service = _createService();
         }
         catch (Exception ex)
         {
             _log.Error("EDIABAS runner could not start; every EDIABAS request will fail", ex);
+            MarkIdle();
             foreach (var item in _queue.GetConsumingEnumerable())
             {
                 item(null);
@@ -95,6 +155,8 @@ internal sealed class EdiabasRunner : IDisposable
 
             return;
         }
+
+        MarkIdle();
 
         while (true)
         {
@@ -109,6 +171,7 @@ internal sealed class EdiabasRunner : IDisposable
                     }
 
                     // Waited the idle time with nothing to do.
+                    MarkBusy();
                     service.ReleaseIfIdle();
                     continue;
                 }
@@ -119,9 +182,14 @@ internal sealed class EdiabasRunner : IDisposable
                 _log.Error("EDIABAS runner idle release failed", ex);
                 continue;
             }
+            finally
+            {
+                MarkIdle();
+            }
 
             try
             {
+                MarkBusy();
                 item(service);
             }
             catch (Exception ex)
@@ -129,8 +197,16 @@ internal sealed class EdiabasRunner : IDisposable
                 // Item() already catches; this is only a last line so the thread never dies.
                 _log.Error("EDIABAS runner item failed", ex);
             }
+            finally
+            {
+                MarkIdle();
+            }
         }
     }
+
+    private void MarkBusy() => Interlocked.Exchange(ref _busySince, Environment.TickCount64);
+
+    private void MarkIdle() => Interlocked.Exchange(ref _busySince, -1);
 
     private int WaitMs(EdiabasService service)
     {

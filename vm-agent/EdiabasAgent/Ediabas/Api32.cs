@@ -120,10 +120,12 @@ internal sealed class Api32 : IEdiabasApi
     private uint _handle;
     private bool _haveHandle;
     private int _ownerThread;
+    private readonly NativeCallTracker _calls;
 
-    public Api32(string dllPath)
+    public Api32(string dllPath, NativeCallTracker? calls = null)
     {
         _dllPath = dllPath;
+        _calls = calls ?? new NativeCallTracker();
     }
 
     /// <summary>
@@ -169,7 +171,19 @@ internal sealed class Api32 : IEdiabasApi
             return false;
         }
 
-        if (!NativeLibrary.TryLoad(_dllPath, out var lib))
+        bool loaded;
+        IntPtr lib;
+        _calls.Enter("LoadLibrary");
+        try
+        {
+            loaded = NativeLibrary.TryLoad(_dllPath, out lib);
+        }
+        finally
+        {
+            _calls.Exit();
+        }
+
+        if (!loaded)
         {
             reason = $"{_dllPath} could not be loaded (is it the 32-bit api32.dll?)";
             return false;
@@ -225,11 +239,15 @@ internal sealed class Api32 : IEdiabasApi
         var lib = _lib;
         _f = null;
         _lib = IntPtr.Zero;
-        NativeLibrary.Free(lib);
+        Native("FreeLibrary", () =>
+        {
+            NativeLibrary.Free(lib);
+            return 0;
+        });
 
         // FreeLibrary only lowers a reference count. Say so if the DLL is still mapped, because
         // then ebas32.exe will not exit either.
-        if (IsMapped())
+        if (Native("module list", IsMapped))
         {
             throw new InvalidOperationException($"FreeLibrary returned, but {Path.GetFileName(_dllPath)} is still mapped in the agent process");
         }
@@ -240,7 +258,18 @@ internal sealed class Api32 : IEdiabasApi
         var f = Ready();
         _handle = 0;
         _haveHandle = false;
-        var ok = f.Init(out var h) != 0;
+        uint h;
+        bool ok;
+        _calls.Enter("apiInit");
+        try
+        {
+            ok = f.Init(out h) != 0;
+        }
+        finally
+        {
+            _calls.Exit();
+        }
+
         _handle = h;
 
         // After a failed init a zero handle means there is nothing to end or ask about.
@@ -248,12 +277,34 @@ internal sealed class Api32 : IEdiabasApi
         return ok;
     }
 
-    public void Job(string ecu, string job, string parameters, string results) =>
-        Ready().Job(Handle(), Win1252.ToCString(ecu), Win1252.ToCString(job), Win1252.ToCString(parameters), Win1252.ToCString(results));
+    public void Job(string ecu, string job, string parameters, string results)
+    {
+        var f = Ready();
+        var handle = Handle();
+        Native("apiJob", () =>
+        {
+            f.Job(handle, Win1252.ToCString(ecu), Win1252.ToCString(job), Win1252.ToCString(parameters), Win1252.ToCString(results));
+            return 0;
+        });
+    }
 
-    public int State() => Ready().State(Handle());
+    public int State()
+    {
+        var f = Ready();
+        var handle = Handle();
+        return Native("apiState", () => f.State(handle));
+    }
 
-    public void Break() => Ready().Break(Handle());
+    public void Break()
+    {
+        var f = Ready();
+        var handle = Handle();
+        Native("apiBreak", () =>
+        {
+            f.Break(handle);
+            return 0;
+        });
+    }
 
     public void End()
     {
@@ -264,10 +315,25 @@ internal sealed class Api32 : IEdiabasApi
         }
 
         _haveHandle = false;
-        f.End(_handle);
+        var handle = _handle;
+        Native("apiEnd", () =>
+        {
+            f.End(handle);
+            return 0;
+        });
     }
 
-    public int ErrorCode() => _haveHandle ? Ready().ErrorCode(_handle) : -1;
+    public int ErrorCode()
+    {
+        if (!_haveHandle)
+        {
+            return -1;
+        }
+
+        var f = Ready();
+        var handle = _handle;
+        return Native("apiErrorCode", () => f.ErrorCode(handle));
+    }
 
     public string ErrorText()
     {
@@ -277,13 +343,18 @@ internal sealed class Api32 : IEdiabasApi
         }
 
         var buffer = new byte[APIMAXTEXT + Slack];
-        Ready().ErrorText(_handle, buffer, APIMAXTEXT);
+        var f = Ready();
+        var handle = _handle;
+        Native("apiErrorText", () => f.ErrorText(handle, buffer, APIMAXTEXT));
         return Win1252.FromCString(buffer.AsSpan(0, APIMAXTEXT));
     }
 
     public bool ResultSets(out int sets)
     {
-        var ok = Ready().ResultSets(Handle(), out var n) != 0;
+        var f = Ready();
+        var handle = Handle();
+        ushort n = 0;
+        var ok = Native("apiResultSets", () => f.ResultSets(handle, out n)) != 0;
         sets = n;
         return ok;
     }
@@ -296,7 +367,10 @@ internal sealed class Api32 : IEdiabasApi
             return false;
         }
 
-        var ok = Ready().ResultNumber(Handle(), out var n, s) != 0;
+        var f = Ready();
+        var handle = Handle();
+        ushort n = 0;
+        var ok = Native("apiResultNumber", () => f.ResultNumber(handle, out n, s)) != 0;
         count = n;
         return ok;
     }
@@ -310,6 +384,7 @@ internal sealed class Api32 : IEdiabasApi
         }
 
         var buffer = new byte[APIMAXRESULT + Slack];
+        using var call = Track("apiResultName");
         if (Ready().ResultName(Handle(), buffer, i, s) == 0)
         {
             return false;
@@ -322,48 +397,56 @@ internal sealed class Api32 : IEdiabasApi
     public bool ResultFormat(string name, int set, out int format)
     {
         format = -1;
+        using var call = Track("apiResultFormat");
         return Word(set, out var s) && Ready().ResultFormat(Handle(), out format, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultChar(string name, int set, out sbyte value)
     {
         value = 0;
+        using var call = Track("apiResultChar");
         return Word(set, out var s) && Ready().ResultChar(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultByte(string name, int set, out byte value)
     {
         value = 0;
+        using var call = Track("apiResultByte");
         return Word(set, out var s) && Ready().ResultByte(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultInt(string name, int set, out short value)
     {
         value = 0;
+        using var call = Track("apiResultInt");
         return Word(set, out var s) && Ready().ResultInt(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultWord(string name, int set, out ushort value)
     {
         value = 0;
+        using var call = Track("apiResultWord");
         return Word(set, out var s) && Ready().ResultWord(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultLong(string name, int set, out int value)
     {
         value = 0;
+        using var call = Track("apiResultLong");
         return Word(set, out var s) && Ready().ResultLong(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultDWord(string name, int set, out uint value)
     {
         value = 0;
+        using var call = Track("apiResultDWord");
         return Word(set, out var s) && Ready().ResultDWord(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
     public bool ResultReal(string name, int set, out double value)
     {
         value = 0;
+        using var call = Track("apiResultReal");
         return Word(set, out var s) && Ready().ResultReal(Handle(), out value, Win1252.ToCString(name), s) != 0;
     }
 
@@ -378,6 +461,7 @@ internal sealed class Api32 : IEdiabasApi
         var buffer = new byte[APIMAXTEXT + Slack];
 
         // Empty format: the text result as it is.
+        using var call = Track("apiResultText");
         if (Ready().ResultText(Handle(), buffer, Win1252.ToCString(name), s, EmptyCString) == 0)
         {
             return false;
@@ -396,6 +480,7 @@ internal sealed class Api32 : IEdiabasApi
         }
 
         var buffer = new byte[APIMAXBINARY + Slack];
+        using var call = Track("apiResultBinary");
         if (Ready().ResultBinary(Handle(), buffer, out var length, Win1252.ToCString(name), s) == 0)
         {
             return false;
@@ -440,6 +525,24 @@ internal sealed class Api32 : IEdiabasApi
         }
 
         return false;
+    }
+
+    /// <summary>Marks a native call for the watchdog until the scope ends.</summary>
+    private CallScope Track(string name)
+    {
+        _calls.Enter(name);
+        return new CallScope(_calls);
+    }
+
+    private T Native<T>(string name, Func<T> call)
+    {
+        using var scope = Track(name);
+        return call();
+    }
+
+    private readonly struct CallScope(NativeCallTracker calls) : IDisposable
+    {
+        public void Dispose() => calls.Exit();
     }
 
     private static bool Word(int value, out ushort word)

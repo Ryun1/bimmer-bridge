@@ -63,6 +63,7 @@ public sealed class EdiabasService
     private readonly IEdiabasLog _log;
     private readonly DllLoadState _dll;
     private readonly ApprovalReloader? _approvals;
+    private readonly DescriptionCache _descriptions;
     private readonly int _defaultTimeoutSeconds;
     private readonly int _maxTimeoutSeconds;
     private readonly long _idleReleaseMs;
@@ -91,7 +92,8 @@ public sealed class EdiabasService
         int defaultTimeoutSeconds,
         int maxTimeoutSeconds,
         int idleReleaseSeconds,
-        ApprovalReloader? approvals = null)
+        ApprovalReloader? approvals = null,
+        DescriptionCache? descriptions = null)
     {
         _api = api;
         _conflicts = conflicts;
@@ -103,6 +105,7 @@ public sealed class EdiabasService
         _log = log;
         _dll = dll;
         _approvals = approvals;
+        _descriptions = descriptions ?? new DescriptionCache();
         _maxTimeoutSeconds = Math.Max(1, maxTimeoutSeconds);
         _defaultTimeoutSeconds = Math.Clamp(defaultTimeoutSeconds, 1, _maxTimeoutSeconds);
         _idleReleaseMs = (long)Math.Clamp(idleReleaseSeconds, AgentConfig.MinIdleReleaseSeconds, AgentConfig.MaxIdleReleaseSeconds) * 1000;
@@ -278,9 +281,14 @@ public sealed class EdiabasService
         }
 
         // A BMW tool that starts during the list stops the comment fetches; what was read is
-        // kept and the rest stay not_checked, as when the time budget runs out.
+        // kept and the rest stay not_checked, as when the time budget runs out. Descriptions
+        // already read from the same file come from the cache, so asking again after a cut-off
+        // goes further each time.
         var timeout = _defaultTimeoutSeconds;
+        var fileHash = comments ? DescribedFileHash(variant, upperEcu!) : null;
         var entries = new List<DescribeJobEntry>();
+        var skipped = false;
+        var budgetHit = false;
         foreach (var name in jobs.Value!)
         {
             if (!string.IsNullOrEmpty(filter) && !name.Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -291,24 +299,66 @@ public sealed class EdiabasService
             var verdict = _policy.Evaluate(upperEcu, name);
             string? comment = null;
             var fetch = DescriptionFetch.Skipped;
-            if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && session.BudgetLeftMs > 0)
+            if (comments && fileHash is not null && _descriptions.TryGet(fileHash, name, out var cached))
+            {
+                comment = NullIfBlank(new TextList(cached).Text);
+                fetch = DescriptionFetch.Read;
+            }
+            else if (comments && !session.Poisoned && session.ToolStarted is null && !ct.IsCancellationRequested && session.BudgetLeftMs > 0)
             {
                 var d = ReadDescription(session, upperEcu!, name, timeout, ct);
                 if (d.Ok)
                 {
                     comment = NullIfBlank(d.Value!.Text);
                     fetch = DescriptionFetch.Read;
+                    if (fileHash is not null)
+                    {
+                        _descriptions.Add(fileHash, name, d.Value.Lines);
+                    }
                 }
                 else if (session.ToolStarted is null)
                 {
                     fetch = DescriptionFetch.Failed;
+
+                    // Stopped by the request's limit, not by anything about this job: asking
+                    // again gives it a fresh try.
+                    budgetHit |= d.Failure!.Error.Code == ApiErrors.JobTimeout && session.BudgetLeftMs <= 0;
                 }
+                else
+                {
+                    skipped = true;
+                }
+            }
+            else if (comments)
+            {
+                skipped = true;
             }
 
             entries.Add(new DescribeJobEntry(name, comment, ToJobVerdict(verdict, fetch, comment)));
         }
 
-        return new DescribeListResponse(upperEcu!, variant, entries.Count, entries, _clock.ElapsedMs - start);
+        var cutOff = !skipped && !budgetHit ? null
+            : session.Poisoned ? CutOff.EdiabasStuck
+            : session.ToolStarted is not null ? CutOff.ToolStarted
+            : ct.IsCancellationRequested ? CutOff.Abandoned
+            : CutOff.TimeLimit;
+        return new DescribeListResponse(upperEcu!, variant, entries.Count, entries, _clock.ElapsedMs - start, cutOff);
+    }
+
+    /// <summary>The hash of the SGBD file that answered: the variant EDIABAS reported (for a group
+    /// file, the SGBD it chose), else the requested name. Null means no caching.</summary>
+    private string? DescribedFileHash(string? variant, string ecu)
+    {
+        var name = string.IsNullOrWhiteSpace(variant) ? ecu : variant.Trim();
+        try
+        {
+            return _ecus.PrgHash(name);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn($"{name}: could not hash the SGBD file for the description cache ({ex.GetType().Name}: {ex.Message})");
+            return null;
+        }
     }
 
     public Outcome<DescribeJobResponse> DescribeJob(string? ecu, string? job, RequestAudit audit, CancellationToken ct, long queuedMs = 0)
@@ -356,7 +406,15 @@ public sealed class EdiabasService
         }
 
         var timeout = _defaultTimeoutSeconds;
-        var d = ReadDescription(session, verdict.Ecu, verdict.Job, timeout, ct);
+        var fileHash = DescribedFileHash(variant, verdict.Ecu);
+        Outcome<TextList> d = fileHash is not null && _descriptions.TryGet(fileHash, verdict.Job, out var cached)
+            ? new TextList(cached)
+            : ReadDescription(session, verdict.Ecu, verdict.Job, timeout, ct);
+        if (d.Ok && fileHash is not null)
+        {
+            _descriptions.Add(fileHash, verdict.Job, d.Value!.Lines);
+        }
+
         string? comment = null;
         DescriptionFetch fetch;
         if (d.Ok)
