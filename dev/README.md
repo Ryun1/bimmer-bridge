@@ -5,6 +5,39 @@ scrubber and their tests. What each file is and how to run it:
 [docs/development.md](../docs/development.md#the-dev-folder). The deploy server's contract:
 [docs/deploy.md](../docs/deploy.md). Recorded fixtures: [fixtures/README.md](fixtures/README.md).
 
+## Car comparison (`car-compare.ts`, M2)
+
+`run` sends a job list (`dev/m2/session-b.json`, `session-c.json`) through one side, each job
+alone and once, one JSON line per job. **It talks to the car**: only at the car, with Ryan's go
+for that session (M2 plan, tasks 8 and 9). Before the first job it checks the side: the VM agent
+answers and no BMW tool holds the cable, or `ediabasd`'s cable is `free`. An existing `--out` is
+never overwritten. `compare` pairs two runs job by job: result sets per set by field name (type
+and value), system results and `durationMs` ignored, EdiabasLib's extra `GRUPPE`/`FAMILIE`
+ignored, `variant` and `jobStatus` compared, and a native `BIP-0007`/`BIP-0011` noted as the
+EDIABAS 7.7.3 emulation difference. It also counts IFH-0003 per side.
+
+```sh
+node dev/car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl
+node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl
+node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl
+```
+
+Needs `mac-mcp` built (`npm run build`) and, for native, `ediabasd`'s Release build. Outputs stay
+under `~/m2/`, never in the repo: a `C_FA_LESEN` reply holds the VIN.
+
+## Telegrams (`telegrams.ts`, M2)
+
+Reads files only. `compare` sets EDIABAS's IFH trace from the VM (`IfhTrace = 3`) against a
+`libkline` recording of the same read: one exchange per `SENDECUTEL` block on the VM side, one
+per `send` natively, checksums and the K-line echo aside; it prints the first exchange where they
+diverge, with both sides' bytes. `timing` prints, per recording, its latency label, echo and
+reply times (min / median / max ms), short reads and refusals.
+
+```sh
+node dev/telegrams.ts compare ~/m2/b-ifh.trc ~/m2/b/kline-….jsonl
+node dev/telegrams.ts timing ~/m2/b/*.jsonl
+```
+
 ## Describe comparison (`describe-diff.ts`)
 
 M1 acceptance: `describe` from `ediabasd` matches the VM agent's for every `.prg`. For each

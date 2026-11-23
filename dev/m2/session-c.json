@@ -1,0 +1,10 @@
+[
+  { "ecu": "NVE_65", "job": "FS_LESEN" },
+  { "ecu": "UTILITY", "job": "STATUS_ZUENDUNG" },
+  { "ecu": "UTILITY", "job": "STATUS_UBATT" },
+  { "ecu": "TMODE", "job": "LESE_SPANNUNG_KL30" },
+  { "ecu": "TMODE", "job": "LESE_SPANNUNG_KL15" },
+  { "ecu": "E60", "job": "IDENT_FUNKTIONAL", "timeoutSeconds": 60 },
+  { "ecu": "E60", "job": "FS_LESEN_FUNKTIONAL", "timeoutSeconds": 60 },
+  { "ecu": "CAS", "job": "C_FA_LESEN" }
+]
