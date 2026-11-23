@@ -80,12 +80,13 @@ Formatter fixes and whole-car views, from the first session at the car (Phase 6)
   example `CAS` `STATUS_WAKEUP_HISTORY`), the result says it is a negative response from the
   module, not a bridge, cable or policy fault.
 - **Whole-car views** (B1): `ediabas_job` on `E60` `FS_LESEN_FUNKTIONAL` gives one line per module
-  with faults (name, address, code, present now or stored, from `F_ART`) and a summary count;
+  with faults (name, address, code, present now or stored, inferred from `F_ART`) and a summary count;
   `IDENT_FUNKTIONAL` lists the modules that answered, with their SGBD and group. Both fit the
   text budget. A replay test over the real recordings (`dev/fixtures/battery`) checks the counts.
 
-Open: evals 01, 03 and 06 against the fixtures recorded at the car, and a run without the skills
-that does worse for evals 07 and 08. Earlier versions and the phase results: [docs/history/changes.md](docs/history/changes.md).
+Evals run 2026-11-23 against the Phase 6 fixtures: 03 passes; 01 and 06 fail with the skill because Claude takes names from the skill's references instead of `ediabas_list_ecus`/`ediabas_describe` (rubric vs skill: owner to decide). See [docs/history/evals-2026-11-23.md](docs/history/evals-2026-11-23.md).
+
+Open: a run without the skills that does worse for evals 07 and 08. Earlier versions and the phase results: [docs/history/changes.md](docs/history/changes.md).
 <!-- /STATUS -->
 
 ## Docs

@@ -300,6 +300,11 @@ function moduleLabel(set: ResultSet): string {
   return `${name} (${typeof adr === "string" || typeof adr === "number" ? `address 0x${valueText(adr, 8)}` : "address unknown"})`;
 }
 
+/** The summary set that ends a whole-car result: only JOB_STATUS=OKAY (the recordings print "(set 45) JOB_STATUS=OKAY"). */
+function isTrailingSummary(set: Record<string, unknown>, keys: string[]): boolean {
+  return keys.length === 1 && keys[0] === "JOB_STATUS" && typeof set.JOB_STATUS === "string" && set.JOB_STATUS.toUpperCase() === "OKAY";
+}
+
 export function formatFunctionalFaults(r: JobResult): string {
   const faulted: string[] = [];
   const unread: string[] = [];
@@ -325,6 +330,7 @@ export function formatFunctionalFaults(r: JobResult): string {
       faulted.push(`  ${moduleLabel(set)}: ${items.join("; ")}`);
     } else {
       const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      if (isTrailingSummary(set, keys)) return;
       other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
     }
   });
@@ -356,6 +362,7 @@ export function formatFunctionalIdent(r: JobResult): string {
       modules.push(`  ${moduleLabel(set)}: ${parts.join(", ")}`);
     } else {
       const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      if (isTrailingSummary(set, keys)) return;
       other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
     }
   });

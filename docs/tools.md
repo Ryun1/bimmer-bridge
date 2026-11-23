@@ -54,13 +54,11 @@ are written against this file. Every tool has `readOnlyHint: true`; none is dest
   (KWP2000), so the view says so; `raw: true` shows every field. A result with no `F_ANZ` field
   prints the generic view.
 - **`IDENT_FUNKTIONAL` (whole-car module list):** `ediabas_job` on `E60` prints `N modules answered, M did not.` and one line per module (address, SGBD, group, name, BMW number, date); `raw: true` shows every field.
+- A job status matching `ERROR_ECU_*NOT_SUPPORTED*` is followed by a note that the module refused the job (a negative response; not a bridge, cable or policy fault).
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then
-  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. The result ends with a note that
-  `STAT_UBATT` and the cable's KL30 come from the cable's own lines (with no car connected they
-  read `STAT_UBATT=1` and KL30 `E02E0000`, rehearsal 2026-11-22), so only a voltage source shows
-  the car is awake. Voltage sources are car-specific
+  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. Readings are labelled "Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading)" and "Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading)". The result ends with two notes: IGNITION_NOTE (`STAT_ZUENDUNG` and the cable's KL15 as seen with the ignition on at the car, 2026-11-23, and with no car connected, 2026-11-22; ignition off in the car is not recorded yet) and CABLE_NOTE (`STAT_UBATT` and the cable's KL30 read the same with and without the car, `STAT_UBATT=1` and KL30 `E02E0000`, so they show only that the cable is powered; only a module reading, a voltage source, shows the car's supply voltage). Voltage sources are car-specific
   extra readings in the Mac's git-ignored `config.local.json`, e.g.
   `"voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ]` (the E60/E61
   night-vision module's supply voltage); none by default, and the result then says "Voltage

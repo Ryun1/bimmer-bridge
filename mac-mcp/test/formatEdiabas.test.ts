@@ -445,6 +445,13 @@ describe("whole-car jobs", () => {
     expect(storageState("x")).toBe("status not decoded (F_ART x)");
     expect(storageState(undefined)).toBe("status not decoded (F_ART null)");
   });
+  it("omits a trailing set whose only field is JOB_STATUS=OKAY", () => {
+    const f = formatJobResult(JobResultSchema.parse(jobResult("E60", "FS_LESEN_FUNKTIONAL", [sets[3]!, { JOB_STATUS: "OKAY" }, { SOMETHING_ELSE: 1 }])));
+    expect(f).not.toContain("JOB_STATUS=OKAY");
+    expect(f).toContain("(set 3) SOMETHING_ELSE=1");
+    const i = formatJobResult(JobResultSchema.parse(jobResult("E60", "IDENT_FUNKTIONAL", [{ JOB_STATUS: "OKAY" }])));
+    expect(i).not.toContain("(set 1)");
+  });
   it("falls back to the generic view without F_ANZ", () => {
     const g = formatJobResult(JobResultSchema.parse(jobResult("E60", "FS_LESEN_FUNKTIONAL", [{ A: 1 }])));
     expect(g).toContain("Set 1:");
@@ -468,7 +475,8 @@ describe("whole-car jobs", () => {
       const sets2 = [idSets[0]!, { JOB_STATUS: "OKAY", _TEL_ANTWORT: "AA" }];
       const u = formatJobResult(JobResultSchema.parse(jobResult("E60", "IDENT_FUNKTIONAL", sets2)));
       expect(u).toContain("1 module answered, 0 did not.");
-      expect(u).toContain("(set 2) JOB_STATUS=OKAY");
+      expect(u).not.toContain("(set 2)");
+      expect(u).not.toContain("JOB_STATUS=OKAY");
       expect(u).not.toContain("_TEL_ANTWORT");
     });
   });

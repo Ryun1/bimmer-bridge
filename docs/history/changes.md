@@ -14,7 +14,7 @@ Formatter fixes and whole-car views, from the first session at the car (Phase 6)
   example `CAS` `STATUS_WAKEUP_HISTORY`), the result says it is a negative response from the
   module, not a bridge, cable or policy fault.
 - **Whole-car views** (B1): `ediabas_job` on `E60` `FS_LESEN_FUNKTIONAL` gives one line per module
-  with faults (name, address, code, present now or stored, from `F_ART`) and a summary count;
+  with faults (name, address, code, present now or stored, inferred from `F_ART`) and a summary count;
   `IDENT_FUNKTIONAL` lists the modules that answered, with their SGBD and group. Both fit the
   text budget. A replay test over the real recordings (`dev/fixtures/battery`) checks the counts.
 
@@ -34,6 +34,8 @@ owner removed those approvals and the `MPM_60` one from the VM's `reviewedJobs` 
 `ediabasIdleReleaseSeconds` back to 20. Claude Desktop reads its servers from
 `claude_desktop_config.json`, not from `claude mcp`. Details:
 [the feedback response](../superpowers/specs/2026-11-23-phase6-feedback-response.md).
+
+Evals run 2026-11-23 against the Phase 6 fixtures: 03 passes; 01 and 06 fail with the skill because Claude takes names from the skill's references instead of `ediabas_list_ecus`/`ediabas_describe` (rubric vs skill: owner to decide). See [docs/history/evals-2026-11-23.md](evals-2026-11-23.md).
 
 ## What changed in 0.6.2
 
