@@ -46,10 +46,15 @@ function cleanName(s: string, max = 64): string {
   return cleanText(s, max) || "?";
 }
 
-/** Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer". */
+/**
+ * Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer".
+ * Counts are not distances: an `ANZAHL` (count) token, or `KM` right after a number token
+ * (`FAHRTEN_0_5_KM_1` is the count of trips of 0 to 5 km), is a count.
+ */
 export function isKmName(name: string): boolean {
   // km/h (KM_H, KM_PRO_H) and km per standard (KM_STD) are speeds or rates, not distances.
   if (/(^|_)KM_(H|PRO|STD)(_|$)/i.test(name)) return false;
+  if (/(^|_)ANZAHL(_|$)/i.test(name) || /(^|_)\d+_KM(_|$)/i.test(name)) return false;
   return /(^|_)KM(_|$)/i.test(name) || /KILOMETER/i.test(name);
 }
 

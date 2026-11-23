@@ -27,6 +27,15 @@ describe("isKmName", () => {
     expect(isKmName("SPEED_KM_H")).toBe(false);
     expect(isKmName("X_KM_STD")).toBe(false);
   });
+
+  it("a count is not a distance: ANZAHL token, or KM right after a number token (trip-length buckets)", () => {
+    expect(isKmName("STAT_ANZAHL_FAHRTEN_0_5_KM_1")).toBe(false);
+    expect(isKmName("STAT_ANZAHL_FAHRTEN_UEBER_100_KM_0")).toBe(false);
+    expect(isKmName("STAT_ANZAHL_FAHRTEN_20_100_KM_3")).toBe(false);
+    expect(isKmName("STAT_GESAMTE_KM_WERT_0")).toBe(true);
+    expect(isKmName("STAT_KM_STAND_WERT_1")).toBe(true);
+    expect(isKmName("F_UW_KM")).toBe(true);
+  });
 });
 
 describe("formatKm", () => {
@@ -166,6 +175,18 @@ describe("job results", () => {
     expect(t).toContain("  STAT_KILOMETERSTAND_WERT=621 mi (1,000 km)");
     expect(t).toContain("  X_WERT=3 mi (5 km)");
     expect(t).toContain("  SPEED_KM_H=50");
+  });
+
+  it("trip-count buckets print as counts; the total distance prints as miles and km (KGM_60 history block 2)", () => {
+    const t = formatJobResult(
+      JobResultSchema.parse(
+        jobResult("KGM_60", "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2", [
+          { STAT_ANZAHL_FAHRTEN_0_5_KM_1: 4, STAT_GESAMTE_KM_WERT_1: 343, STAT_GESAMTE_KM_EINH_1: "KM" },
+        ]),
+      ),
+    );
+    expect(t).toContain("  STAT_ANZAHL_FAHRTEN_0_5_KM_1=4");
+    expect(t).toContain("  STAT_GESAMTE_KM_WERT_1=213 mi (343 km)");
   });
 
   it("raw is the agent's JSON with strings cleaned", () => {
