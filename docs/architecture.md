@@ -17,7 +17,8 @@ tools) and [deploy.md](deploy.md) (Mac to VM deployment); this page is the overv
 
 The agent runs as a scheduled task (`ediabas-bridge agent`) at the owner's log-on, so it is in
 their interactive session and can see the desktop for screenshots. A second copy exits at once
-(a global mutex), so the task's 5-minute repeat only matters after a crash.
+(a global mutex), so the task's 5-minute repeat only matters after a crash, or after the
+agent's watchdog ends a process that is alive but stuck (below).
 
 ## The request path
 
@@ -75,7 +76,10 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
   and makes every EDIABAS call. Requests are queued and run one at a time, each from
   `apiInit` to `apiEnd` on that thread. A client that goes away only cancels the request: the
   service stops starting jobs, breaks a running one and still calls `apiEnd`. A request still
-  queued when its client has gone is dropped.
+  queued when its client has gone is dropped. The handler stops waiting as soon as its client
+  has gone, and in any case after the longest a request can take (`maxJobTimeoutSeconds`, the
+  10 s `apiBreak` grace and 20 s more), answering `ediabas_unavailable`: a native call that
+  never returns must not also hold every connection that queues behind it.
 - **A BMW tool that starts during a request.** The same thread runs the conflict check again
   after loading the DLL (a tool seen then means no `apiInit` at all), before every job, and
   every 250 ms while a job is busy; a tool seen during a job stops it with `apiBreak`. No
@@ -90,6 +94,24 @@ Screenshots (`/screen/capture`), window lists (`/windows`) and log reads (`/logs
   EDIABAS alone until it restarts: no `apiEnd` on that handle, no
   unload, and every later EDIABAS request is refused with `ediabas_unavailable`. `/health`
   reports `ediabas.stuck: true`. Restarting Windows restarts the agent.
+- **The watchdog** (`AgentWatchdog.cs`, decisions in `EdiabasAgent.Core/Watchdog.cs`) runs on
+  its own thread, never the thread pool, and checks every 5 s. It ends the agent's process
+  (logging why, as an `ERROR` in `agent.log`) when one request has held the EDIABAS thread for
+  longer than any request can (`maxJobTimeoutSeconds` + 10 s + 120 s; the log line names the
+  `api32.dll` call it is stuck in, or LoadLibrary / FreeLibrary), or when the agent has not
+  answered itself 3 times in a row, a minute apart: it connects to its own address and port and
+  sends a line Kestrel cannot parse, which Kestrel answers with 400 before the request pipeline
+  (no audit line). The task's 5-minute repeat then starts a fresh agent. A gap of 30 s or more
+  between two checks (the VM paused, the Mac asleep) restarts both clocks, so a request that
+  was running across the pause is not taken for a stall. Issue #15: after a five-hour sleep an
+  agent stayed alive and listening but answered nothing until its task was restarted by hand.
+- **Description cache.** Describe keeps every `_JOBCOMMENTS` text it reads, in memory, keyed by
+  the SHA-256 of the `.prg` that answered (the variant) and the job name, so it cannot go stale;
+  a restart empties it. With no module answering, real EDIABAS runs the SGBD's INIT before each
+  `_JOBCOMMENTS` call, so a large SGBD runs out of time before the end of its job list; the
+  answer then says `commentsCutOff: "time_limit"`, and asking again goes on from where it
+  stopped. The MCP server asks up to twice more, while each answer reads more. Only describe
+  uses the cache: the screen before a run always reads the description live.
 - **Everything else** (`/health`, `/windows`, capture, logs) runs on Kestrel's request threads.
   `/health` never loads the DLL; it reports `ediabas.loaded` and the conflicting processes.
 - **Network changes.** `vm-agent/EdiabasAgent/AgentHost.cs` binds one IPv4 address and port,

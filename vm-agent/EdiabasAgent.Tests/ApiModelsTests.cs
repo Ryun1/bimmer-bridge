@@ -77,7 +77,7 @@ public class ApiModelsTests
     {
         var list = new DescribeListResponse("NVE_65", null, 1, [new DescribeJobEntry("FS_LESEN", null, new JobVerdict(true, "allow.global", Review.NotRequired))], 4);
         Assert.Equal(
-            """{"ecu":"NVE_65","variant":null,"jobCount":1,"jobs":[{"name":"FS_LESEN","comment":null,"verdict":{"allowed":true,"rule":"allow.global","review":"not_required"}}],"durationMs":4}""",
+            """{"ecu":"NVE_65","variant":null,"jobCount":1,"jobs":[{"name":"FS_LESEN","comment":null,"verdict":{"allowed":true,"rule":"allow.global","review":"not_required"}}],"durationMs":4,"commentsCutOff":null}""",
             ApiJson.Serialize(list));
 
         var one = new DescribeJobResponse("NVE_65", "NVE_65", "FS_LESEN", "c", "84a516841ba7", new JobVerdict(true, "allow.global", Review.NotRequired), [new JobParameterInfo("A", "int", null)], [], 5);

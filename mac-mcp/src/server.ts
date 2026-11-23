@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { AgentClient, type Health } from "./agentClient.js";
+import { AgentClient, type DescribeList, type Health } from "./agentClient.js";
 import { ApprovalWatch } from "./approvalWatch.js";
 import { AuditLog, type AuditSink } from "./audit.js";
 import { type Config, type VoltageSource, voltageSourceErrors } from "./config.js";
@@ -56,6 +56,11 @@ export function stderrLog(message: string): void {
 export const MAX_FAULT_ECUS = 20;
 /** vm_logs_read: the largest range, and the tail read when no range is given. */
 const LOG_READ_MAX = 65_536;
+
+/** Further describe requests after one cut off by the agent's time limit (each up to ~75 s). */
+const DESCRIBE_FOLLOW_UPS = 2;
+
+const commentCount = (d: DescribeList): number => d.jobs.filter((j) => j.comment).length;
 const LOG_TAIL_DEFAULT = 16_384;
 
 type Client = Pick<
@@ -336,7 +341,8 @@ export function buildServer(parts: ServerParts): McpServer {
         "bridge (optionally filtered by name substring). With `job`: that job's description, arguments and results. " +
         "`filter` is ignored when `job` is given. `namesOnly` lists names without reading descriptions: faster, but " +
         "nothing is screened, so verdicts go by name only. Use it to find job names and arguments; never guess them. Reads the SGBD " +
-        "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD; read-only.",
+        "file through EDIABAS, so it needs the cable attached to the VM, and can take tens of seconds on a large SGBD " +
+          "(a few minutes with no module answering, when it asks the agent again to finish the descriptions); read-only.",
       inputSchema: {
         ecu: Name.describe("SGBD or group name, e.g. from ediabas_list_ecus."),
         job: Name.optional().describe("One job to describe."),
@@ -356,7 +362,16 @@ export function buildServer(parts: ServerParts): McpServer {
             return formatDescribeJob(d, policy.evaluate({ ecu: a.ecu, job: a.job }));
           }
           const namesOnly = a.namesOnly === true;
-          const d = await client.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
+          const ask = () => client.describeJobs({ ecu: a.ecu, filter: a.filter, comments: namesOnly ? false : undefined });
+          let d = await ask();
+          // Cut off by time: the agent keeps every description it read, so asking again goes on
+          // from there. Only while each answer reads more than the one before.
+          for (let i = 0; i < DESCRIBE_FOLLOW_UPS && !namesOnly && d.commentsCutOff === "time_limit"; i++) {
+            const next = await ask();
+            const gained = commentCount(next) > commentCount(d);
+            d = next;
+            if (!gained) break;
+          }
           const text = formatDescribeList(d, a.filter, (job) => policy.evaluate({ ecu: a.ecu, job }));
           if (!namesOnly) return text;
           const [head, ...rest] = text.split("\n");

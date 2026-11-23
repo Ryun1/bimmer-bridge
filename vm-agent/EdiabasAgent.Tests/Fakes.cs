@@ -348,6 +348,11 @@ public sealed class FakeEcus(params string[] present) : IEcuCatalog
 
     public bool Exists(string ecu) => _files.Any(f => string.Equals(f.Name, ecu, StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>What <see cref="PrgHash"/> answers, by name; empty (no caching) unless a test sets it.</summary>
+    public Dictionary<string, string> Hashes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public string? PrgHash(string name) => Hashes.GetValueOrDefault(name);
+
     public EcusResponse? List(string? filter, int max)
     {
         var files = _files.Where(f => string.IsNullOrEmpty(filter) || f.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();

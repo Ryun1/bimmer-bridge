@@ -147,7 +147,7 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 409 | `window_minimized` | the window is minimised; the agent never restores it | `{ handle, title }` |
 | 502 | `cable_not_found` | EDIABAS could not initialise the interface: error 28, `IFH-0018: INITIALIZATION ERROR` | `{ errorCode: 28, errorText }` |
 | 502 | `ediabas_error` | EDIABAS reported an error for the job; or the job finished but its results could not be read (message "The job finished but its results could not be read.", with whatever EDIABAS reported in `details` and `resultsUnread: true` there) | `{ errorCode: 19, errorText: "IFH-0009: …" }`; plus `resultsUnread: true` only in the unread-results case |
-| 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted) | `{ reason }` |
+| 503 | `ediabas_unavailable` | `api32.dll` missing, an expected export missing, `apiInit` failed, or an earlier job did not stop after `apiBreak` (the agent must be restarted), or the agent's EDIABAS thread did not answer within `maxJobTimeoutSeconds` + 30 s (its watchdog restarts it if it stays stuck) | `{ reason }` |
 | 500 | `capture_failed` | the desktop was available but the copy failed or the screen size could not be read | `null` |
 | 503 | `desktop_unavailable` | only a locked screen, the secure desktop, or session 0 | `null` |
 | 503 | `capture_busy` | another capture is still running; nothing was captured. Try again | `null` |
@@ -367,8 +367,13 @@ Without `job` — the job list. `comments` defaults to `true`; `filter` narrows 
       "verdict": { "allowed": true, "rule": "allow.global", "review": "not_required" } },
     { "name": "STEUERN_X", "comment": "…",
       "verdict": { "allowed": false, "rule": "deny.substring:STEUER", "review": "not_required" } } ],
-  "durationMs": 412 }
+  "durationMs": 412, "commentsCutOff": null }
 ```
+`commentsCutOff` is `null` when every description asked for was read (or `comments=false`),
+else why the rest were not: `time_limit` (the request's budget ran out; asking again goes on from
+there, because the agent caches every description it read by the SGBD file's SHA-256),
+`tool_started`, `ediabas_stuck` or `abandoned`. A job whose own description read was stopped by
+the time limit is `needs_review` in that answer, and is read again on the next request.
 `review` is `not_required` (no screen applies), `passed`, `needs_review`, `reviewed` (a pinned
 `reviewedJobs` entry that matches the description), or `not_checked`
 (`comments=false`, or the comment was not fetched because the

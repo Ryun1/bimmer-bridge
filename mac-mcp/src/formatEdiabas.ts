@@ -297,12 +297,35 @@ export function formatDescribeList(d: DescribeList, filter: string | undefined, 
   const out = [
     `${cleanName(d.ecu)}${variant}: ${plural(n, "job")}${filter ? ` matching "${cleanText(filter, 64)}"` : ""}, ${runnable} runnable through the bridge.`,
   ];
+  const cut = cutOffText(d);
+  if (cut) out.push(cut);
   for (const j of d.jobs) {
     const v = verdictText(j.verdict, mac(j.name));
     const comment = j.comment ? ` — ${cleanText(j.comment, 160)}` : "";
     out.push(`${cleanName(j.name)} [${v.text}]${comment}`);
   }
   return out.join("\n");
+}
+
+/** Why some descriptions were not read, when the agent says it stopped early. */
+function cutOffText(d: DescribeList): string | null {
+  const reason = d.commentsCutOff;
+  if (!reason) return null;
+  const unread = d.jobs.filter((j) => j.verdict.review === "not_checked").length;
+  const what = unread > 0 ? `${plural(unread, "job")} not screened` : "some descriptions not read";
+  switch (reason) {
+    case "time_limit":
+      return (
+        `(${what}: the agent's time limit ran out. With no module answering, each description read waits out the SGBD's start-up. ` +
+        "Asking again goes on from where it stopped: the agent keeps what it read.)"
+      );
+    case "tool_started":
+      return `(${what}: a BMW tool started in the VM during the request.)`;
+    case "ediabas_stuck":
+      return `(${what}: an EDIABAS job did not stop; the agent needs a restart.)`;
+    default:
+      return `(${what}: ${cleanText(reason, 40)}.)`;
+  }
 }
 
 function paramLines(ps: DescribeJob["arguments"]): string[] {

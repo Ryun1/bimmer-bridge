@@ -44,6 +44,8 @@ internal sealed class AgentHost
 
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
+        using var watchdog = new AgentWatchdog(_ctx);
+        watchdog.Start();
         try
         {
             string? lastWaitReason = null;
@@ -128,12 +130,14 @@ internal sealed class AgentHost
         }
 
         Log.Info($"listening on http://{address}:{port}/ (HTTP/1.1 only)");
+        _ctx.Listening = new IPEndPoint(address, port);
         try
         {
             await WaitUntilBindingChanges(selection, stop);
         }
         finally
         {
+            _ctx.Listening = null;
             Log.Info($"stopping listener on {address}:{port}");
             await StopQuietly(app);
         }
