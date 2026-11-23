@@ -64,8 +64,9 @@ already talk to the car. Full steps: [docs/install.md](docs/install.md#setup-fro
 <!-- STATUS: maintained by the coordinator -->
 ## Status
 
-Version 0.6.2, job policy version 4, eleven MCP tools. Built and tested at the desk; **nothing
-from 0.3.0 on has been run at the car.**
+Version 0.6.2, job policy version 4, eleven MCP tools. The first session at the car was on
+2026-11-23 with 0.6.2: the acceptance results are in
+[docs/history/changes.md](docs/history/changes.md#phase-6-at-the-car-2026-11-23).
 
 ### What changed in 0.6.2
 
@@ -83,9 +84,8 @@ From a review of the EDIABAS path ahead of the first session at the car (Phase 6
   that answered in `ediabas_read_faults`. The skill says the same for functional jobs.
 - Eval 01 no longer needs a fault with a mileage: `NVE_65` `FS_LESEN` declares none.
 
-Open: the at-the-car checks ([docs/at-the-car.md](docs/at-the-car.md)), evals 01, 03 and 06
-(they need fixtures recorded at the car), and a run without the skills that does worse for evals
-07 and 08. Earlier versions and the phase results: [docs/history/changes.md](docs/history/changes.md).
+Open: evals 01, 03 and 06 against the fixtures recorded at the car, the formatter plan, and a
+run without the skills that does worse for evals 07 and 08. Earlier versions and the phase results: [docs/history/changes.md](docs/history/changes.md).
 <!-- /STATUS -->
 
 ## Docs

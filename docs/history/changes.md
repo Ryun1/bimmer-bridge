@@ -2,6 +2,23 @@
 
 > Historical record: the release notes of earlier versions, moved from the README. For the current state, see the [README's Status](../../README.md#status).
 
+## Phase 6 at the car (2026-11-23)
+
+First session at the car, with 0.6.2, ignition on for every read. Acceptance (PLAN.md section 9):
+
+- Ignition and a voltage in volts shown: **pass** (`STAT_ZUENDUNG` = 1; `NVE_65` `STATUS_BORDNETZSPANNUNG` = 12).
+- `IDENT` through `D_MOTOR` names the engine SGBD: **pass** (`N62_TUE`).
+- `ediabas_read_faults` on `NVE_65` shows A752/A751: **read passed, pair absent** from the car (not a bridge fault).
+- Ignition-on under 10 minutes: **fail**, about 18 minutes, mostly a Claude Desktop link drop (mobile data).
+- Responses saved as fixtures: **recorded** (`dev/fixtures/nve-faults`, `dev/fixtures/battery`).
+
+Also seen: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` took about 4 s each; the DME
+holds `2EF4` and `2DED`; three pinned `CAS` approvals gave a negative response. Afterwards the
+owner removed those approvals and the `MPM_60` one from the VM's `reviewedJobs` and set
+`ediabasIdleReleaseSeconds` back to 20. Claude Desktop reads its servers from
+`claude_desktop_config.json`, not from `claude mcp`. Details:
+[the feedback response](../superpowers/specs/2026-11-23-phase6-feedback-response.md).
+
 ## What changed in 0.6.1
 
 Hardening for the first session at the car, from a desk rehearsal of the at-the-car sequence

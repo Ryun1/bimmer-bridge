@@ -15,9 +15,14 @@ ignition and a voltage in volts are shown; `IDENT` through `D_MOTOR` names the e
 11/09/2026; total ignition-on time under 10 minutes; responses saved as fixtures for the
 replay agent.
 
-Nothing added from 0.3.0 on has been run at the car yet: the whole-car read, `ediabas_jobs`,
-the car-session line, voltage sources, pinned approvals and the longer idle time below are all
-untested there.
+First session at the car: 2026-11-23, version 0.6.2, ignition on for every read. Acceptance:
+ignition and a voltage in volts shown (pass); `IDENT` through `D_MOTOR` names the engine SGBD
+(pass, `N62_TUE`); `ediabas_read_faults` on `NVE_65` (read passed, but the A752/A751 pair was
+absent from the car); ignition-on time under 10 minutes (fail, about 18 minutes, mostly a
+Claude Desktop link drop of three minutes on mobile data); responses recorded as fixtures
+(`nve-faults`, `battery`). The whole-car read, `ediabas_jobs`, the car-session line, voltage
+sources, pinned approvals and the 90 s idle time all ran. Details:
+[history/changes.md](history/changes.md#phase-6-at-the-car-2026-11-23).
 
 ## Before going to the car
 
@@ -29,8 +34,13 @@ untested there.
       not unloaded and reloaded after every pause between reads. Unlike `reviewedJobs`, this
       key is read only when the agent starts: restart Windows in the VM afterwards. While it is
       90, the bridge keeps EDIABAS loaded for 90 s after its last call.
+- [ ] Claude needs a steady internet link at the car: a phone hotspot close to the Mac, or
+      Wi-Fi. On 2026-11-23 mobile data dropped the Claude Desktop link for 3 minutes. If the
+      tools disappear, switch the ignition off until they return.
+- [ ] The Mac keeps a per-call log at `~/Library/Logs/ediabas-bridge/audit.log` (time, tool,
+      outcome, milliseconds, ECU, job): it answers "was that call sent?" after a drop.
 - [ ] To record fixtures, register the recording server (`dev/record-server.ts`, see
-      [development.md](development.md#recording-and-scrubbing)) in place of the production one, with `EDIABAS_RECORD_DIR` set to a
+      [development.md](development.md#recording-and-scrubbing)) in place of the production one, in **each app used at the car** (Claude Code and Claude Desktop read their servers from different places), with `EDIABAS_RECORD_DIR` set to a
       folder **outside the repo**, for example `~/ediabas-recordings/car-YYYYMMDD`. Use **one
       folder for the whole car session**: changing the folder means restarting Claude, which
       the ignition-on time cannot afford. Afterwards the folder is scrubbed once per scenario
@@ -48,10 +58,24 @@ untested there.
       `Environment` entries for the production server (such as `EDIABAS_AGENT_URL`), add each
       as another `-e KEY=value` after the name in both the recording and the restore command.
       Run them from the repo root, with the same `node` as the production registration (macOS's
-      Local Network permission is tied to its path). Restart Claude, call `vm_health`, then
+      Local Network permission is tied to its path). For Claude Desktop, edit
+      `~/Library/Application Support/Claude/claude_desktop_config.json` instead
+      (`claude mcp` does not touch it), with `<repo>` the full path to this repo:
+
+      ```json
+      "bimmer-bridge": {
+        "command": "/opt/homebrew/bin/node",
+        "args": ["--import", "<repo>/dev/ts-resolve.mjs", "<repo>/dev/record-server.ts"],
+        "env": { "EDIABAS_RECORD_DIR": "<recordings folder>" }
+      }
+      ```
+
+      Quit Desktop with Cmd+Q and reopen it to pick the entry up. Restart Claude, call `vm_health`, then
       **check the folder has a `GET-health` file**: a desk rehearsal on 2026-11-22 ran against
       the production server without anyone noticing, and recorded nothing. Afterwards:
       `claude mcp remove bimmer-bridge -s user && claude mcp add --scope user bimmer-bridge -- /opt/homebrew/bin/node "$PWD/mac-mcp/dist/index.js"`.
+      Restore Desktop's entry to `{ "command": "/opt/homebrew/bin/node", "args": ["<repo>/mac-mcp/dist/index.js"] }`
+      and Cmd+Q and reopen it.
 - [ ] Know which scenarios to record at the car: `nve-faults` (evals 01 and 03) and `battery`
       (eval 06). `needs-review` (eval 04) was recorded at the desk on 2026-11-22. What each
       needs is in [dev/fixtures/README.md](../dev/fixtures/README.md#scenarios-the-evals-use-skillsevals);
@@ -114,8 +138,11 @@ untested there.
 ## Ignition on
 
 - [ ] Switch the ignition on and note the time.
-- [ ] `ediabas_vehicle_status` first. Its field names are not confirmed yet: note what
-      ignition and voltage fields it returns, for the skill references. Voltages from a module
+- [ ] `ediabas_vehicle_status` first. Observed on 2026-11-23 with the ignition on: `UTILITY`
+      `STAT_ZUENDUNG` = 1 and the cable's KL15 = `E02E0000`; `STAT_UBATT` = 1 and KL30 =
+      `E02E0000` (the same as with no car); `NVE_65` `STATUS_BORDNETZSPANNUNG` = 12 (whole
+      volts). Only ignition on was observed at the car: no car gave 0 and `00000000`, and
+      ignition off with the cable in the car is not recorded. Voltages from a module
       (e.g. `NVE_65` `STATUS_BORDNETZSPANNUNG` on an E60/E61 with night vision) need
       `voltageSources` in `config.local.json` on the Mac, set before Claude starts.
       `UTILITY` `STAT_UBATT` and the cable's KL30 do **not** show the car is awake: with the
@@ -127,8 +154,9 @@ untested there.
       `LM_60` (the vehicle order).
   - Run each functional job as its **own** `ediabas_job` with `timeoutSeconds: 60`, after
     `ediabas_vehicle_status` has loaded EDIABAS. A request gets at most 60 s, counted from
-    when the agent receives it, so loading EDIABAS (about 10 s) would come out of it. How long
-    a functional job takes on this car is not measured: note each one's time. A
+    when the agent receives it, so loading EDIABAS (about 10 s) would come out of it. On
+    2026-11-23 each functional job took about 4 s (`IDENT_FUNKTIONAL` 3,925 ms,
+    `FS_LESEN_FUNKTIONAL` 3,964 ms). A
     `job_timeout` means it needed longer; do not retry it, read the modules one by one.
   - If a job does not stop within 10 s of being timed out, the agent leaves EDIABAS alone
     until Windows in the VM restarts (`ediabas_unavailable`; INPA may not get the cable
