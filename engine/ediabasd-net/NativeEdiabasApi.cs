@@ -252,6 +252,12 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
                 StoreVariant(ecu, groupHash, ed);
             }
 
+            if (job.StartsWith('_'))
+            {
+                // _JOBCOMMENTS, _ARGUMENTS, _RESULTS: find descriptions written in any case.
+                JobDescriptions.IgnoreCase(ed);
+            }
+
             ed.ExecuteJob(job);
             _results = ed.ResultSets;
         }

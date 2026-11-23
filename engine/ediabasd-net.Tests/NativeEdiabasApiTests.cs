@@ -179,6 +179,21 @@ public sealed class NativeEdiabasApiTests : IDisposable
     }
 
     [Fact]
+    public void JobComments_ForAJobDescribedInLowerCase_AreFound()
+    {
+        using var ecu = new MixedCaseSgbd();
+        using var api = new NativeEdiabasApi(ecu.EcuPath, EmptyReplay().Make, new NoVariantCache(), traceDir: null);
+        Assert.True(api.Init());
+        api.Job("cmd_test2", "_JOBCOMMENTS", "INITIALISIERUNG", "");
+        Assert.Equal(ApiState.Ready, Wait(api));
+        Assert.True(api.ResultSets(out var n));
+        Assert.True(n >= 1);
+        Assert.True(api.ResultText("JOBCOMMENT0", 1, out var first));
+        Assert.Equal("Initialisierung", first);
+        api.End();
+    }
+
+    [Fact]
     public void Describe_NeverCreatesLiveCable()
     {
         var cables = EmptyReplay();

@@ -24,6 +24,7 @@ namespace EdiabasLib.Native
         {
             EnsureEncoding();
             CheckActivateSupported();
+            JobDescriptions.CheckSupported();
             return CreateCore(ecuPath, iface, noInitForVJobs);
         }
 

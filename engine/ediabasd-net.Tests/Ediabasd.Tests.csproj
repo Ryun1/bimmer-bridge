@@ -18,6 +18,7 @@
   <ItemGroup>
     <Compile Include="../EdiabasLib.Native.Tests/TestPaths.cs" Link="TestPaths.cs" />
     <Compile Include="../EdiabasLib.Native.Tests/Recordings.cs" Link="Recordings.cs" />
+    <Compile Include="../EdiabasLib.Native.Tests/MixedCaseSgbd.cs" Link="MixedCaseSgbd.cs" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
