@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffDescribe, type Side } from "../describe-diff-lib.ts";
+import { diffDescribe, diffJob, spread, uncheckedJobs, type Side } from "../describe-diff-lib.ts";
 
 const job = (name: string, comment: string | null, review = "not_required", allowed = true, rule = "allow.global") => ({
   name,
@@ -96,3 +96,72 @@ describe("diffDescribe", () => {
   });
 });
 
+
+describe("uncheckedJobs", () => {
+  it("lists the job indexes where only the VM lacks a comment", () => {
+    const row = {
+      ecu: "AFS_60",
+      kind: "differ",
+      differences: [
+        { path: "jobs[3].comment", vm: null, native: "x" },
+        { path: "jobs[3].verdict.review", vm: "needs_review", native: "passed" },
+        { path: "jobs[7].comment", vm: "y", native: null },
+        { path: "jobs[12].comment", vm: null, native: "z" },
+        { path: "jobs[20].comment", vm: "a", native: "b" },
+      ],
+    };
+    expect(uncheckedJobs(row)).toEqual([3, 12]);
+  });
+
+  it("is empty for a row that is not differ", () => {
+    expect(uncheckedJobs({ ecu: "X", kind: "vm_error", differences: [{ path: "error.code", vm: "ediabas_error", native: null }] })).toEqual([]);
+  });
+});
+
+describe("spread", () => {
+  it("takes the first, middle and last of many", () => {
+    expect(spread([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3)).toEqual([0, 5, 10]);
+  });
+
+  it("takes all when there are no more than n", () => {
+    expect(spread([4, 9], 3)).toEqual([4, 9]);
+  });
+
+  it("takes the first for n = 1", () => {
+    expect(spread([4, 9, 11], 1)).toEqual([4]);
+  });
+});
+
+describe("diffJob", () => {
+  const one = (comment: string | null, review = "passed", extra: Record<string, unknown> = {}) => ({
+    ecu: "AFS_60",
+    variant: "AFS_60",
+    job: "STATUS_X",
+    comment,
+    descriptionHash: "abc",
+    verdict: { allowed: true, rule: "allow.pattern", review },
+    arguments: [{ name: "MODE", type: "string", comment: "m" }],
+    results: [{ name: "STAT", type: "int", comment: "s" }],
+    durationMs: 5,
+    ...extra,
+  });
+
+  it("identical single-job describes match, durations ignored", () => {
+    expect(diffJob(ok(one("c")), ok(one("c", "passed", { durationMs: 900 })))).toEqual({ kind: "match", differences: [] });
+  });
+
+  it("reports a differing comment, arguments and results", () => {
+    const d = diffJob(ok(one("c")), ok(one("d", "passed", { arguments: [], results: [{ name: "STAT", type: "real", comment: "s" }] })));
+    expect(d.kind).toBe("differ");
+    expect(d.differences.map((x) => x.path).sort()).toEqual(["arguments", "comment", "results"]);
+  });
+
+  it("a VM side that still did not read the description is not_checked", () => {
+    const d = diffJob(ok(one(null, "not_checked")), ok(one("c")));
+    expect(d.kind).toBe("not_checked");
+  });
+
+  it("errors are classified as in diffDescribe", () => {
+    expect(diffJob(err("ediabas_error"), ok(one("c"))).kind).toBe("vm_error");
+  });
+});

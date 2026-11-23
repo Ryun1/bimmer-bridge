@@ -14,6 +14,14 @@
  *   node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out describe-diff.jsonl [--only NVE_65 …] [--limit N]
  *
  * One JSON line per ECU goes to --out; ECUs already in it are skipped, so a run can be resumed.
+ *
+ * Sample mode, for jobs a list run could not check (the VM agent's 60 s budget ran out before
+ * their comments): --from takes earlier --out files (a later file's row for an ECU replaces an
+ * earlier one's), and for each differ row --sample N single-job describes go to both sides, for
+ * N of the jobs whose comment only the VM lacked, spread over the SGBD. Each single-job request
+ * has its own budget. One JSON line per job; (ecu, job) pairs already in --out are skipped.
+ *
+ *   node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out sample.jsonl --sample 3 --from full.jsonl --from recheck.jsonl
  * The VM agent is found as the MCP server finds it (config.local.json, Keychain token).
  */
 import { execFile as execFileCb, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
@@ -32,7 +40,7 @@ import type * as ErrorsModule from "../mac-mcp/src/errors.ts";
 import type * as TokenModule from "../mac-mcp/src/token.ts";
 import type * as ClientModule from "../mac-mcp/src/agentClient.ts";
 import type { ExecFileFn } from "../mac-mcp/src/vmAddress.ts";
-import { diffDescribe, type DiffKind, type Side } from "./describe-diff-lib.ts";
+import { diffDescribe, diffJob, spread, uncheckedJobs, type RunRow, type Side } from "./describe-diff-lib.ts";
 
 const repo = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -42,10 +50,12 @@ interface Args {
   only: string[];
   limit: number | undefined;
   ediabasd: string;
+  sample: number | undefined;
+  from: string[];
 }
 
 function parseArgs(argv: string[]): Args {
-  const a: Partial<Args> & { only: string[] } = { only: [] };
+  const a: Partial<Args> & { only: string[]; from: string[] } = { only: [], from: [] };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     const v = () => {
@@ -58,15 +68,22 @@ function parseArgs(argv: string[]): Args {
     else if (k === "--only") a.only.push(v().toUpperCase());
     else if (k === "--limit") a.limit = Number.parseInt(v(), 10);
     else if (k === "--ediabasd") a.ediabasd = v();
+    else if (k === "--sample") a.sample = Number.parseInt(v(), 10);
+    else if (k === "--from") a.from.push(v());
     else throw new Error(`unknown argument ${k}`);
   }
-  if (!a.ecuPath || !a.out) throw new Error("usage: describe-diff.ts --ecu-path DIR --out FILE.jsonl [--only NAME]… [--limit N] [--ediabasd PATH]");
+  if (!a.ecuPath || !a.out) throw new Error("usage: describe-diff.ts --ecu-path DIR --out FILE.jsonl [--only NAME]… [--limit N] [--ediabasd PATH] [--sample N --from FILE.jsonl…]");
+  if ((a.sample === undefined) !== (a.from.length === 0) || (a.sample !== undefined && !(a.sample >= 1))) {
+    throw new Error("--sample N (N >= 1) and --from FILE go together");
+  }
   return {
     ecuPath: a.ecuPath,
     out: a.out,
     only: a.only,
     limit: a.limit,
     ediabasd: a.ediabasd ?? join(repo, "engine/ediabasd-net/bin/Debug/net10.0/ediabasd"),
+    sample: a.sample,
+    from: a.from,
   };
 }
 
@@ -164,9 +181,61 @@ async function vmDescribe(client: AgentClient, ecu: string): Promise<Side> {
   }
 }
 
+async function vmDescribeJob(client: AgentClient, ecu: string, job: string): Promise<Side> {
+  try {
+    return { ok: true, value: await client.describeJob({ ecu, job }) };
+  } catch (e) {
+    if (e instanceof BridgeError) return { ok: false, code: e.code, message: e.message };
+    throw e;
+  }
+}
+
+const readRows = (path: string): Record<string, unknown>[] =>
+  readFileSync(path, "utf8")
+    .split("\n")
+    .filter((l) => l.trim())
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+
+async function sampleMain(args: Args): Promise<void> {
+  const rows = new Map<string, RunRow>();
+  for (const f of args.from) for (const r of readRows(f)) rows.set(String(r.ecu), r as unknown as RunRow);
+  const done = new Set(existsSync(args.out) ? readRows(args.out).map((r) => `${String(r.ecu)}#${String(r.job)}`) : []);
+
+  const native = new Ediabasd(args.ediabasd, args.ecuPath);
+  const client = vmClient();
+  let count = 0;
+  for (const [ecu, row] of rows) {
+    if (args.only.length > 0 && !args.only.includes(ecu)) continue;
+    const picks = spread(uncheckedJobs(row), args.sample ?? 1);
+    if (picks.length === 0) continue;
+    if (args.limit !== undefined && count >= args.limit) break;
+    count++;
+    // Names by index from ediabasd's list (offline, no comments needed).
+    const list = await native.request("describe", { ecu, comments: false });
+    if (!list.ok) throw new Error(`ediabasd describe ${ecu} failed: ${list.code}: ${list.message ?? ""}`);
+    const names = ((list.value as { jobs?: { name: string }[] }).jobs ?? []).map((j) => j.name);
+    for (const i of picks) {
+      const job = names[i];
+      if (job === undefined || done.has(`${ecu}#${job}`)) continue;
+      const vm = await vmDescribeJob(client, ecu, job);
+      const nat = await native.request("describe", { ecu, job });
+      if (!nat.ok && nat.code === "ediabasd_exited") throw new Error(nat.message);
+      const d = diffJob(vm, nat);
+      appendFileSync(args.out, JSON.stringify({ ecu, job, kind: d.kind, differences: d.differences, vmError: vm.ok ? null : vm.code, nativeError: nat.ok ? null : nat.code }) + "\n");
+      console.error(`${ecu} ${job}: ${d.kind}`);
+    }
+  }
+  native.close();
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (!existsSync(args.ediabasd)) throw new Error(`${args.ediabasd} not found; build engine/ediabasd-net first`);
+  if (args.sample !== undefined) {
+    await sampleMain(args);
+    printTally(args.out);
+    return;
+  }
   const done = new Set<string>();
   if (existsSync(args.out)) {
     for (const line of readFileSync(args.out, "utf8").split("\n")) {
@@ -196,13 +265,12 @@ async function main(): Promise<void> {
     console.error(`${ecu}: ${d.kind}`);
   }
   native.close();
+  printTally(args.out);
+}
 
-  const tally = new Map<DiffKind, number>();
-  for (const line of readFileSync(args.out, "utf8").split("\n")) {
-    if (!line.trim()) continue;
-    const k = (JSON.parse(line) as { kind: DiffKind }).kind;
-    tally.set(k, (tally.get(k) ?? 0) + 1);
-  }
+function printTally(out: string): void {
+  const tally = new Map<string, number>();
+  for (const r of readRows(out)) tally.set(String(r.kind), (tally.get(String(r.kind)) ?? 0) + 1);
   for (const [k, n] of tally) console.log(`${k.padEnd(14)} ${n}`);
 }
 

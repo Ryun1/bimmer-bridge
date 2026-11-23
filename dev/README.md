@@ -22,3 +22,14 @@ session: the cable unplugged from the car, Ryan's go-ahead. Build `engine/ediaba
 ```sh
 node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out describe-diff.jsonl [--only NVE_65] [--limit 20]
 ```
+
+**Sample mode** for jobs a list run could not check (the VM agent's 60 s budget ran out before
+their comments; issue #16): `--sample N --from FILE…` reads earlier `--out` files (a later
+file's row for an ECU replaces an earlier one's) and, for each `differ` row, sends single-job
+describes for N of the jobs whose comment only the VM lacked, spread over the SGBD. Each has its
+own budget. One line per job, with `kind` as above plus `not_checked` (the VM still did not read
+the description).
+
+```sh
+node dev/describe-diff.ts --ecu-path ~/ediabas-ecu/Ecu --out sample.jsonl --sample 3 --from full.jsonl --from recheck.jsonl
+```
