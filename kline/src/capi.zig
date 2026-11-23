@@ -158,6 +158,13 @@ export fn kline_find_cable(path: ?[*]u8, path_len: usize) c_int {
     return count;
 }
 
+/// The cable's state at path (kline_cable_state in kline.h) without opening it: 0 absent,
+/// 1 free, 2 locked by another session, 3 not an FTDI FT232R, 4 I/O error.
+export fn kline_cable_state(path: ?[*:0]const u8) c_int {
+    const p = path orelse return @intFromEnum(kline.cable_state.CableState.io);
+    return @intFromEnum(kline.cable_state.cableState(std.mem.span(p), null));
+}
+
 export fn kline_version() [*:0]const u8 {
     return "0.1.0";
 }
@@ -237,6 +244,11 @@ test "bad parity value is unsupported" {
     defer kline_close(s);
     try std.testing.expectEqual(@as(c_int, 10), kline_set_line(s, 9600, 8, 7));
     try std.testing.expectEqual(@as(c_int, 0), kline_set_line(s, 9600, 8, 1));
+}
+
+test "kline_cable_state of a missing path is absent, of null is io" {
+    try std.testing.expectEqual(@as(c_int, 0), kline_cable_state("/dev/does-not-exist"));
+    try std.testing.expectEqual(@as(c_int, 4), kline_cable_state(null));
 }
 
 test "version" {

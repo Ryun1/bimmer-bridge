@@ -134,6 +134,22 @@ public sealed class FrontTests : IDisposable
     }
 
     [Fact]
+    public void Health_ReportsCableStateLatencyAndPolicySha()
+    {
+        _host.Config.Port = "/dev/does-not-exist-ediabasd";
+        var r = Call("health");
+        Assert.True(r.Ok);
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(r.Result, ApiJson.Options));
+        var cable = doc.RootElement.GetProperty("cable");
+        Assert.Equal("absent", cable.GetProperty("state").GetString());
+        Assert.Equal("/dev/does-not-exist-ediabasd", cable.GetProperty("port").GetString());
+        Assert.Equal(JsonValueKind.Null, cable.GetProperty("latency").ValueKind);
+        var sha = doc.RootElement.GetProperty("policySha256").GetString();
+        Assert.Matches("^[0-9a-f]{64}$", sha);
+        Assert.Equal(JobPolicy.Embedded.Sha256, sha);
+    }
+
+    [Fact]
     public void EveryRequest_IsAudited()
     {
         Call("describe", "{\"ecu\":\"cmd_test2\",\"comments\":false}");

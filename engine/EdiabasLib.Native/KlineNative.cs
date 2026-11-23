@@ -61,6 +61,7 @@ namespace EdiabasLib.Native
         [DllImport(Lib)] public static extern void kline_cancel(IntPtr k, int on);
         [DllImport(Lib)] public static extern int kline_last_error(IntPtr k);
         [DllImport(Lib)] public static extern int kline_find_cable(byte* path, UIntPtr pathLen);
+        [DllImport(Lib)] public static extern int kline_cable_state(string path);
         [DllImport(Lib)] public static extern IntPtr kline_version();
 
         public static string Version() => Marshal.PtrToStringUTF8(kline_version());

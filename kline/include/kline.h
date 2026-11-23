@@ -55,6 +55,16 @@ void kline_cancel(kline_t *k, int on);              /* thread-safe */
 int  kline_last_error(kline_t *k);                  /* sticky KLINE_GATE_REFUSED once latched */
 /* Count of FTDI 0403:6001 devices; path is filled when exactly one. Opens nothing. */
 int  kline_find_cable(char *path, size_t path_len);
+/* The cable's state without opening it: identity check, then a try-lock of its lock file,
+ * released at once. Never opens the tty. */
+typedef enum {
+    KLINE_CABLE_ABSENT = 0,
+    KLINE_CABLE_FREE = 1,
+    KLINE_CABLE_LOCKED = 2,   /* another session holds it */
+    KLINE_CABLE_NOT_FTDI = 3,
+    KLINE_CABLE_IO = 4
+} kline_cable_state_t;
+int  kline_cable_state(const char *path);
 const char *kline_version(void);
 
 #ifdef __cplusplus

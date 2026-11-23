@@ -535,9 +535,13 @@ request object gets `bad_request` with `"id": null`; the server carries on.
 | `describe` | `{ "ecu", "job"?, "filter"?, "comments"?: bool }` | as `GET /ediabas/describe` |
 | `job` | the body of `POST /ediabas/job` | as `POST /ediabas/job` |
 | `jobs` | the body of `POST /ediabas/jobs` | as `POST /ediabas/jobs` |
-| `health` | `{}` | `{ "engine": "ediabasd-net", "version", "kline", "ecuPath", "cable": { "state": "absent" \| "present" \| "several" \| "unknown", "port" }, "policyVersion" }` |
+| `health` | `{}` | `{ "engine": "ediabasd-net", "version", "kline", "ecuPath", "cable": { "state": "absent" \| "free" \| "locked" \| "several" \| "unsupported" \| "unknown", "port", "latency" }, "policyVersion", "policySha256" }` |
 
-Unknown params are `bad_request`. `health` never opens the cable: it reads USB identities only.
+Unknown params are `bad_request`. `health` never opens the cable: it reads USB identities and
+try-locks the cable's lock file in `/tmp`, releasing it at once. `locked` means another session
+holds the cable; `unsupported`, that the device is not an FTDI FT232R. `latency` is what the
+last live session in this process applied (`"1ms"`, `"16ms"`, `"unsupported"`), null before any.
+`policySha256` is the SHA-256 of the embedded policy file, as the VM agent's `/health` gives it.
 There is no `vehicle` method, as the agent has no vehicle endpoint: the MCP server reads vehicle
 status as one `jobs` batch on either backend.
 

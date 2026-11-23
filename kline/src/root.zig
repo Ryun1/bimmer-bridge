@@ -7,6 +7,7 @@ pub const sys = struct {
 };
 
 pub const port = @import("port.zig");
+pub const cable_state = @import("cable_state.zig");
 pub const identity = @import("identity.zig");
 pub const gate = @import("gate.zig");
 pub const recording = @import("recording.zig");
@@ -18,6 +19,7 @@ pub const Port = port.Port;
 
 test {
     _ = port;
+    _ = cable_state;
     _ = identity;
     _ = gate;
     _ = recording;

@@ -16,9 +16,11 @@ public sealed record FrontResponse(bool Ok, object? Result, ErrorDetail? Error)
     public static FrontResponse Failure(ApiFailure f) => new(false, null, f.Error);
 }
 
-public sealed record CableHealth(string State, string? Port);
+/// State: absent, free, locked, several, unsupported or unknown. Latency: what the last live
+/// session's open applied ("1ms", "16ms", "unsupported"), null before any in this process.
+public sealed record CableHealth(string State, string? Port, string? Latency);
 
-public sealed record NativeHealth(string Engine, string Version, string Kline, string EcuPath, CableHealth Cable, int? PolicyVersion);
+public sealed record NativeHealth(string Engine, string Version, string Kline, string EcuPath, CableHealth Cable, int? PolicyVersion, string? PolicySha256);
 
 /// <summary>
 /// Dispatches the stdio and CLI methods to EdiabasService: <c>ecus</c>, <c>describe</c>,
@@ -126,31 +128,33 @@ public sealed class Front(EdiabasdHost host, AuditLog audit)
         }
     }
 
-    /// Never opens the cable: present or absent from the USB identity only.
+    /// Never opens the cable: its USB identity and a try-lock of its lock file only.
     NativeHealth Health()
     {
         string kline;
         CableHealth cable;
+        var latency = KlineTransport.LastOpenLatency;
         try
         {
             kline = KlineLibrary.Version();
             if (!string.IsNullOrEmpty(host.Config.Port))
             {
-                cable = new CableHealth(File.Exists(host.Config.Port) ? "present" : "absent", host.Config.Port);
+                cable = new CableHealth(KlineLibrary.CableState(host.Config.Port), host.Config.Port, latency);
             }
             else
             {
                 var found = KlineLibrary.FindCable(out var count);
-                cable = new CableHealth(count switch { 0 => "absent", 1 => "present", _ => "several" }, found);
+                var state = count switch { 0 => "absent", 1 => KlineLibrary.CableState(found), _ => "several" };
+                cable = new CableHealth(state, found, latency);
             }
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
         {
             kline = "unavailable: " + ex.Message;
-            cable = new CableHealth("unknown", host.Config.Port);
+            cable = new CableHealth("unknown", host.Config.Port, latency);
         }
 
-        return new NativeHealth("ediabasd-net", Version, kline, host.Config.EcuPath, cable, host.Policy.Version);
+        return new NativeHealth("ediabasd-net", Version, kline, host.Config.EcuPath, cable, host.Policy.Version, host.Policy.Sha256);
     }
 
     static FrontResponse Answer<T>(Outcome<T> o)

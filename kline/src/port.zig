@@ -375,7 +375,7 @@ fn isStandard(baud: u32) bool {
     };
 }
 
-const default_lock_dir = "/tmp";
+pub const default_lock_dir = "/tmp";
 
 extern "c" fn fchmod(fd: c_int, mode: std.c.mode_t) c_int;
 

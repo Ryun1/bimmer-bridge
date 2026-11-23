@@ -105,6 +105,9 @@ failure's reason, and `ediabasd` turns it into a bridge error (`cable_not_found`
   16 (anything else is `KLINE_UNSUPPORTED` before anything opens), for M2's echo measurement.
   `kline_latency` returns what the open applied (`"1ms"`, `"16ms"`, or `"unsupported"` when
   the driver refused), which is also the recording's `open` event `latency`.
+- **Cable state.** `kline_cable_state(path)` answers absent, free, locked (another session
+  holds it), not FTDI or I/O error from the USB identity and a try-lock of the lock file,
+  released at once. It never opens the tty and never creates the lock file.
 - **Recorder.** With a record directory, every line setting, modem-line and break edge,
   concept, byte sent or received, purge and refusal goes to a JSON-lines file
   (`src/recording.zig` lists the events). Recordings can hold a VIN and other identifiers;
