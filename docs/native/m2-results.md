@@ -23,7 +23,10 @@ restart the VM if a job will not stop. `kline loopback` never runs on a car. The
 gate refuses natively (M1, section 2) are in no native job list. Recordings, traces and run
 outputs stay under `~/m2/`, never in the repo: a `C_FA_LESEN` reply holds the VIN.
 
-Status: procedures written; nothing run yet.
+Status: procedures written; trip A done as Phase 6 (2026-11-23, section 2); the desk rehearsal
+and trips B and C not run yet. The plan's "Amendments after Phase 6" (2026-11-24) changed
+what follows: merge main (0.7.0) first, screen the answering modules' jobs against the gate,
+and trips B and C may run as one ignition-on session.
 
 Commands below use:
 ```sh
@@ -74,29 +77,46 @@ pin 16 there is no echo and no module, so nothing here reaches a car.
 
 ---
 
-## 2. Trip A: Phase 6, the VM only (Ryan at the car; Claude through the MCP tools)
+## 2. Trip A: Phase 6, the VM only (done 2026-11-23)
 
-Exactly [at-the-car.md](../at-the-car.md), unchanged: the VM bridge's own first car session,
-and M2's baseline.
-
-### Before
-
-- [ ] at-the-car.md's "Before going to the car" items.
+Trip A was the VM bridge's Phase 6, run from Claude Desktop with the recording server, on
+0.6.2 with policy version 4 (SHA-256 `5d0afef1659b…`). Sources, all on main: the feedback
+response (`docs/superpowers/specs/2026-11-23-phase6-feedback-response.md`),
+`docs/history/changes.md`, `skills/bimmer-bridge/references/ecu-map.md`, and the fixtures
+`dev/fixtures/battery` and `dev/fixtures/nve-faults` (recording numbers below).
 
 ### Results
 
 | | |
 |---|---|
-| Date, charger voltage | |
-| Ignition-on time | |
-| Modules `IDENT_FUNKTIONAL` showed answering | |
-| `IDENT_FUNKTIONAL` / `FS_LESEN_FUNKTIONAL` durations | |
-| Anything that failed | |
+| Date, charger voltage | 2026-11-23; charger voltage not recorded |
+| Ignition-on time | about 18 minutes, over the 10-minute target; mostly a Claude Desktop link drop of 3 minutes on mobile data (the agent was unaffected) |
+| Modules `IDENT_FUNKTIONAL` showed answering | 43 named modules plus one set without a name (`0029`); the table is in ecu-map.md. Not answering: `MPM_60` (`IFH-0009`, `0016`) and `d_0012` (`IFH-0009`, `0018`). SINE (0x50) answers `FS_LESEN_FUNKTIONAL` only. The light module is `LM_AHL` (0x70), not `LM_60` |
+| `IDENT_FUNKTIONAL` / `FS_LESEN_FUNKTIONAL` durations | 3,925 ms (44 sets) / 3,964 ms (45 sets, 24 codes in 15 modules; `VVT`, `VVT2` answer `ERROR_ECU_SERVICE_NOT_SUPPORTED`) |
+| Other timings (agent `durationMs`) | `FS_LESEN`: `CAS` 18, `KGM_60` 31, `D_KBM` 126, `D_PGS` 163, `D_MOTOR` 670; `D_MOTOR` `IDENT` 253; vehicle status items 1–581; the 12-item battery batch 19,154 in all |
+| Anything that failed | Ignition-on time (link drop). Three pinned `CAS` reads answered "not supported" (`ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT`); their approvals and `MPM_60`'s were removed afterwards. No bridge fault |
 
-Session C's `FS_LESEN` list (`dev/m2/session-c.json`) is filled from the answering
-at-the-car.md modules after this trip, leaving out any gate-refused read.
+Group resolution at the car: `D_MOTOR` → `N62_TUE` (`0024`), `D_PGS` → `PGS_65_2`, `D_KBM` →
+`KBM_60` (`0018`). `NVE_65` fault and info memory were empty (`0014`, `0020`).
 
----
+### Session C's list
+
+`dev/m2/session-c.json` holds Phase 6's reads that a native run can repeat, under the names
+Phase 6 used: vehicle status's four fixed readings, the two functional jobs (60 s each),
+`NVE_65` `FS_LESEN` and `IS_LESEN`, `D_MOTOR` `IDENT` and `FS_LESEN`, `FS_LESEN` on `D_PGS`,
+`CAS`, `KGM_60` and `D_KBM`, and `CAS` `C_FA_LESEN` (not run in Phase 6; its reply holds the
+VIN). Left out: `NVE_65` `STATUS_BORDNETZSPANNUNG` (gate-refused natively, M1), the modules
+that did not answer, and Phase 6's battery reads until the gate screen (plan task 7b) passes
+them.
+
+### Gate screen of the answering modules (plan task 7b)
+
+Not run yet. M1's probe covered eight files chosen at the desk; most of the 43 answering
+modules were never screened.
+
+| SGBD | Jobs screened | Refused by the gate (service) | Could not initialise |
+|---|---|---|---|
+| | | | |
 
 ## 3. Trip B: `NVE_65 IDENT`, telegrams and echo timing (Ryan at the car)
 
@@ -107,13 +127,17 @@ at-the-car.md modules after this trip, leaving out any gate-refused read.
 - [ ] `~/m2/ediabasd-1.json` and `~/m2/ediabasd-16.json`: `ecuPath`, `recordDir` `~/m2/b/`,
       `latencyMs` 1 and 16.
 - [ ] `mac-mcp` built; `ediabasd` Release built; Mac on power and kept awake (`caffeinate -i`).
+- [ ] The trip's commands in `~/m2/trip.sh`, so Ryan can run them himself if Claude's link drops.
+- [ ] Decide whether trips B and C run as one ignition-on session (plan amendment 4): VM B, VM C,
+      move the cable once, native B at 1 and 16 ms, native C.
 
 ### Steps (Ryan's go)
 
 1. **VM side** (cable ticked for the VM, ignition on, note the time):
    `node dev/car-compare.ts run --side vm --jobs dev/m2/session-b.json --out ~/m2/b-vm.jsonl`.
    Copy `C:\EDIABAS\TRACE\ifh.trc` to `~/m2/b-ifh.trc` over the dev shell.
-2. **Move the cable:** untick it in UTM. `$EDIABASD health --config ~/m2/ediabasd-1.json`: `free`.
+2. **Move the cable:** wait until `vm_health` shows EDIABAS not loaded (about 20 s after the
+   last VM read), then untick it in UTM. `$EDIABASD health --config ~/m2/ediabasd-1.json`: `free`.
 3. **Native side, twice:**
    `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-1.json --jobs dev/m2/session-b.json --out ~/m2/b-native-1.jsonl`,
    then the same with `ediabasd-16.json` and `b-native-16.jsonl`. Ignition off. Note the total time.
@@ -152,13 +176,14 @@ split at a job boundary across two trips, and each half is compared on its own.
 
 ### Before
 
-- [ ] `dev/m2/session-c.json` holds trip A's answering modules.
+- [ ] `dev/m2/session-c.json` holds trip A's answering modules (done 2026-11-24) and only
+      reads the gate screen (section 2) passed.
 - [ ] `~/m2/ediabasd-c.json`: `ecuPath`, `recordDir` `~/m2/c/`, `latencyMs` 1.
 
 ### Steps (Ryan's go)
 
 1. **VM side:** `node dev/car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl`.
-2. **Move the cable** (untick in UTM; `health` says `free`).
+2. **Move the cable** (EDIABAS released in the VM, then untick in UTM; `health` says `free`).
 3. **Native side:**
    `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl`.
    Ignition off.
@@ -200,4 +225,7 @@ natively (M1, section 2), `NVE_65 STATUS_BORDNETZSPANNUNG` among them, so native
 
 - The M2 recordings, as replay fixtures (kept local unless scrubbed).
 - The latency answer (section 3).
+- The gate's real cost on this car: of M1's 24 refusals, the 17 `LM_60` ones are not this car's
+  module (`LM_AHL` answers) and two `CAS` ones are "not supported" by this car's CAS; what is
+  left is `NVE_65`'s four and `CAS` `STATUS_CAS_DIAGNOSE`, plus what the gate screen finds.
 - Any telegram divergence found (sections 3 and 4).

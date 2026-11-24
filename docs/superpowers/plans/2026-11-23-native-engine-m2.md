@@ -72,6 +72,68 @@ section 6.
    gate, the `.sim` exporter, committing recordings (they stay local: a `C_FA_LESEN` reply holds
    the VIN), switching the default, and removing the VM backend (M4).
 
+## Amendments after Phase 6 (2026-11-24)
+
+Trip A happened on 2026-11-23 as the VM bridge's Phase 6 (0.6.2, Claude Desktop, ignition on
+about 18 minutes), and main has since released 0.7.0. Sources: main's
+`docs/superpowers/specs/2026-11-23-phase6-feedback-response.md`, `docs/history/changes.md`,
+`skills/bimmer-bridge/references/ecu-map.md` and the fixtures `dev/fixtures/battery` and
+`nve-faults`. What changes here:
+
+1. **Task 7 is done at the desk from Phase 6's evidence** (no further trip A). Section 2 of
+   `m2-results.md` and `dev/m2/session-c.json` are filled from the recordings: the modules
+   whose `FS_LESEN` answered at the car (`NVE_65`, `D_MOTOR` → `N62_TUE`, `D_PGS` →
+   `PGS_65_2`, `CAS`, `KGM_60`, `D_KBM` → `KBM_60`), with the same names Phase 6 used. `d_0012`
+   and `MPM_60` (`IFH-0009`, not on this car) stay out.
+2. **New task 5b: merge main (0.7.0) into this branch before task 6.** The VM runs the 0.7.0
+   agent (watchdog, describe cache) and the trips compare against it; the 0.7.0 formatter
+   (whole-car views, cable-reading labels) must be what the native backend shows too. A trial
+   merge conflicts in five files: `mac-mcp/src/server.ts` (native vehicle-status split against
+   the relabelled vehicle status), `mac-mcp/test/formatEdiabas.test.ts`, `docs/tools.md`,
+   `mac-mcp/package.json` and its lock (0.7.0 there; keep 0.7.0 and this branch's
+   GPL-3.0-only). Resolve keeping both sides' behaviour; all suites green; commit as a merge.
+   Merging main *into* this branch is local; merging this branch into main still waits for
+   Ryan.
+3. **New task 7b: gate screen of the modules that answered at the car (desk, no device).** M1's
+   probe covered eight E61 files chosen at the desk (section 2 of m1-results), and one of them,
+   `LM_60`, is not this car's: `IDENT_FUNKTIONAL` lists `LM_AHL` at 0x70. Most of the 43
+   answering modules (`N62_TUE`, `PGS_65_2`, `KGM_60`, `LM_AHL`, …) were never screened. Run the
+   same probe (every policy-allowed, argument-free job through `NativeEdiabasApi` into an empty
+   replay) over the 43 SGBDs and the groups session C uses; write the refused (ECU, job) pairs
+   to `dev/m2/gate-refused.json` (names only, no SGBD content) and section 2 of m2-results.
+   The job-list test then checks every list against that file instead of its coarse
+   "no `STATUS_` on `NVE_65`/`CAS`/`LM_60`" rule (keep that rule as well). SGBDs that cannot
+   initialise without the module (`N62_TUE`: `SYS-0010` at the desk) are listed as unscreened,
+   and their jobs stay out of session C except `IDENT` and `FS_LESEN`, which Phase 6's VM run
+   shows are plain reads. Only after this may session C add Phase 6's battery reads
+   (`KGM_60` history blocks 1–3, `CAS` `STATUS_WUP`/`STATUS_PA_WUP`, `IHKA60`
+   `STATUS_VERBRAUCHERREDUZIERUNG`, `KOMB60` `STATUS_KL30_H_ZAEHLER`), each only if the screen
+   passes it.
+4. **Trips B and C may run as one ignition-on session (Ryan decides at the trip).** Phase 6
+   timed the reads: the functional jobs about 4 s each, `FS_LESEN` 20–700 ms, vehicle status
+   under 1 s; EDIABAS loads in about 10 s. Each side of B and C together is under a minute,
+   so the budget goes on moving the cable. Combined order: VM B, VM C (IfhTrace on for both;
+   the telegram compare then matches B's exchanges and reports "this side ended" after them),
+   move the cable once, native B at 1 ms, native B at 16 ms, native C. Separate trips stay the
+   fallback.
+5. **Before unticking the cable from the VM, let EDIABAS release it.** The VM is back to
+   `ediabasIdleReleaseSeconds` 20: wait until `vm_health` (or the agent's `/health`) shows
+   EDIABAS not loaded, about 20 s after the last VM read, then untick.
+6. **The trips are driven from a terminal, not through Claude Desktop.** `car-compare.ts` runs
+   locally, so a dropped Claude link (Phase 6 lost 3 minutes on mobile data) cannot interrupt
+   a run; the commands are written to `~/m2/trip.sh` before the trip so Ryan can run them
+   himself if the link drops. If Claude is driving and the link drops: ignition off until it
+   returns, no retry.
+7. **Policy unchanged:** version 4, SHA-256 `5d0afef1659b…` on main and on this branch; the
+   native preflight's SHA check agrees. `NVE_65` `STATUS_PAIRING` is now approved in the VM's
+   `reviewedJobs` (2026-11-23), but natively the gate refuses it (0x30), so it stays out of
+   native job lists.
+8. **What Phase 6 says about the gate's cost on this car** (for section 6, "For M3"): of M1's
+   24 refusals, the 17 `LM_60` ones are not this car's module; `CAS` `STATUS_KL15_ABSCHALTUNG`
+   and `STATUS_WAKEUP_HISTORY` answer "not supported" on this car's CAS (approvals removed). What
+   remains is `NVE_65` (`STATUS_TASTER`, `STATUS_BORDNETZSPANNUNG`, `STATUS_PAIRING`,
+   `STATUS_FSC_LESEN`) and `CAS` `STATUS_CAS_DIAGNOSE`, plus whatever task 7b finds.
+
 ## Global Constraints
 
 - GPL-3.0-only. Our own engine; OpenDS2 and bimmerscope are references only. Read-only, always.
@@ -366,6 +428,14 @@ section 6.
 - [ ] **Step 4: Run** `npm run test:dev && npm run typecheck:dev`. Expected: pass.
 - [ ] **Step 5: Commit** — "Car comparison tools: telegrams against the IFH trace, echo timing, and a VM-then-native job runner"
 
+### Task 5b: Merge main (0.7.0) into this branch
+
+Amendment 2. `git merge main`; resolve the five conflicts keeping both sides' behaviour (the
+native vehicle-status split and 0.7.0's cable-reading labels both show); version 0.7.0,
+license GPL-3.0-only. All suites green, `dev/check-no-bmw-files.sh`, commit the merge with a
+message naming the conflicts and how each was resolved. Rebuild `mac-mcp` and the Release
+`ediabasd` before task 6.
+
 ### Task 6: Desk rehearsal with the cable on the Mac (no car)
 
 **Files:**
@@ -405,6 +475,22 @@ is the VM bridge's own first car session, and it gives M2 its baseline.
   Fill `dev/m2/session-c.json`'s `FS_LESEN` list with the answering `docs/at-the-car.md`
   modules (leaving out any gate-refused read).
 - [ ] **Step 4:** Commit — "M2 results: trip A (Phase 6) baseline; session C's module list"
+
+**Amended (2026-11-24):** trip A was Phase 6 on 2026-11-23; steps 1–2 are done, and steps 3–4
+are filled from its recordings at the desk (amendment 1).
+
+### Task 7b: Gate screen of the modules that answered at the car (no device)
+
+Amendment 3. Desk only, empty replay, nothing opened.
+
+- [ ] **Step 1: Write the failing test first:** the job-list test reads `dev/m2/gate-refused.json`
+  and fails any list entry found there (start with a fixture entry to watch it fail).
+- [ ] **Step 2: Run the probe** over the 43 SGBDs from `IDENT_FUNKTIONAL` and the groups
+  `D_MOTOR`, `D_PGS`, `D_KBM`, with Ryan's SGBDs read in place from `~/ediabas-ecu/Ecu`.
+  Record per SGBD: jobs screened, gate refusals (service byte), and "could not initialise".
+- [ ] **Step 3: Commit `dev/m2/gate-refused.json`** (ECU and job names only) and the table in
+  m2-results section 2; add to `session-c.json` only the battery reads the screen passes.
+  Commit — "M2: gate screen of the modules that answered at the car"
 
 ### Task 8: Trip B — `IDENT` on `NVE_65`, telegrams and echo timing
 
