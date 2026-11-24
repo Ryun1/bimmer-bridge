@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- M2 task 7b: screen SGBDs' policy-allowed, argument-free jobs against libkline's frame
+       gate, through EdiabasLib and KlineInterface on an empty replay. Opens no device. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AssemblyName>gate-screen</AssemblyName>
+    <RootNamespace>GateScreen</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../engine/EdiabasLib.Native/EdiabasLib.Native.csproj" />
+    <ProjectReference Include="../../vm-agent/EdiabasAgent.Core/EdiabasAgent.Core.csproj" />
+  </ItemGroup>
+</Project>

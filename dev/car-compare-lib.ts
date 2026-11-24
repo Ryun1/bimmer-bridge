@@ -113,3 +113,34 @@ export function compareJobResults(vmIn: unknown, nativeIn: unknown): Comparison 
 export function countIfh0003(lines: RunLine[]): number {
   return lines.filter((l) => !l.response.ok && /IFH[-_]0003/.test(l.response.message)).length;
 }
+
+/** One read the gate screen (M2 task 7b, dev/gate-screen) found refused natively. */
+export interface GateRefusal {
+  ecu: string;
+  job: string;
+  /** The refused frame's service byte, hex. */
+  service?: string;
+}
+
+export interface GateRefusedFile {
+  refused: GateRefusal[];
+  /** SGBDs the screen could not run (they need the module to initialise). */
+  unscreened?: { ecu: string; reason: string }[];
+}
+
+/** Parses dev/m2/gate-refused.json. */
+export function readGateRefused(text: string): GateRefusedFile {
+  const v = JSON.parse(text) as Partial<GateRefusedFile>;
+  if (!Array.isArray(v.refused)) throw new Error('gate-refused.json needs a "refused" array');
+  for (const [i, r] of v.refused.entries()) {
+    if (typeof r?.ecu !== "string" || typeof r.job !== "string") throw new Error(`gate-refused.json refused[${i}] needs "ecu" and "job"`);
+  }
+  return v as GateRefusedFile;
+}
+
+/** The job-list entries the gate screen refused, as "ECU JOB" in the list's own spelling. */
+export function gateRefusedIn(jobs: JobSpec[], file: GateRefusedFile): string[] {
+  const key = (ecu: string, job: string) => `${ecu.toUpperCase()} ${job.toUpperCase()}`;
+  const refused = new Set(file.refused.map((r) => key(r.ecu, r.job)));
+  return jobs.filter((j) => refused.has(key(j.ecu, j.job))).map((j) => `${j.ecu} ${j.job}`);
+}

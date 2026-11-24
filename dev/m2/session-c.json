@@ -13,5 +13,12 @@
   { "ecu": "CAS", "job": "FS_LESEN" },
   { "ecu": "KGM_60", "job": "FS_LESEN" },
   { "ecu": "D_KBM", "job": "FS_LESEN" },
+  { "ecu": "KGM_60", "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_1" },
+  { "ecu": "KGM_60", "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_2" },
+  { "ecu": "KGM_60", "job": "STATUS_HISTORIENSPEICHER_LESEN_BLOCK_3" },
+  { "ecu": "CAS", "job": "STATUS_WUP" },
+  { "ecu": "CAS", "job": "STATUS_PA_WUP" },
+  { "ecu": "KOMB60", "job": "STATUS_KL30_H_ZAEHLER" },
+  { "ecu": "KOMB60", "job": "STATUS_KLEMMENSPANNUNG" },
   { "ecu": "CAS", "job": "C_FA_LESEN" }
 ]

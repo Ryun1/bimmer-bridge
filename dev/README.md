@@ -25,6 +25,24 @@ node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl
 Needs `mac-mcp` built (`npm run build`) and, for native, `ediabasd`'s Release build. Outputs stay
 under `~/m2/`, never in the repo: a `C_FA_LESEN` reply holds the VIN.
 
+## Gate screen (`gate-screen/`, M2)
+
+Opens no device. For each SGBD named, runs every job the policy allows by name that takes no
+argument through EdiabasLib and `KlineInterface` into an empty libkline replay, and reports what
+libkline's frame gate did with the first telegram: refused (with its service byte), let through,
+or nothing sent. An SGBD whose `INITIALISIERUNG` sends first is reported as not screened past
+it; a group is screened by its identification telegram. `--with-args SGBD:JOB` also runs a job
+whose arguments are optional. `--refused` writes the refused pairs for `dev/m2/gate-refused.json`
+(names and service bytes only), which the job-list test checks every M2 list against. Results:
+[m2-results.md](../docs/native/m2-results.md), section 2.
+
+```sh
+DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec /opt/homebrew/opt/dotnet@10/bin/dotnet build dev/gate-screen
+DOTNET_ROOT=/opt/homebrew/opt/dotnet@10/libexec dev/gate-screen/bin/Debug/net10.0/gate-screen \
+  --ecu ~/ediabas-ecu/Ecu --out ~/m2/gate-screen.json --refused dev/m2/gate-refused.json \
+  --with-args E60:IDENT_FUNKTIONAL --with-args E60:FS_LESEN_FUNKTIONAL NVE_65 CAS …
+```
+
 ## Telegrams (`telegrams.ts`, M2)
 
 Reads files only. `compare` sets EDIABAS's IFH trace from the VM (`IfhTrace = 3`) against a

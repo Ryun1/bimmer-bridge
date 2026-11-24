@@ -104,18 +104,103 @@ Group resolution at the car: `D_MOTOR` → `N62_TUE` (`0024`), `D_PGS` → `PGS_
 `dev/m2/session-c.json` holds Phase 6's reads that a native run can repeat, under the names
 Phase 6 used: vehicle status's four fixed readings, the two functional jobs (60 s each),
 `NVE_65` `FS_LESEN` and `IS_LESEN`, `D_MOTOR` `IDENT` and `FS_LESEN`, `FS_LESEN` on `D_PGS`,
-`CAS`, `KGM_60` and `D_KBM`, and `CAS` `C_FA_LESEN` (not run in Phase 6; its reply holds the
-VIN). Left out: `NVE_65` `STATUS_BORDNETZSPANNUNG` (gate-refused natively, M1), the modules
-that did not answer, and Phase 6's battery reads until the gate screen (plan task 7b) passes
-them.
+`CAS`, `KGM_60` and `D_KBM`, the battery reads the gate screen passed (below), `KOMB60`
+`STATUS_KLEMMENSPANNUNG`, and `CAS` `C_FA_LESEN` (not run in Phase 6; its reply holds the VIN).
+Left out: `NVE_65` `STATUS_BORDNETZSPANNUNG` and `IHKA60` `STATUS_VERBRAUCHERREDUZIERUNG`
+(gate-refused natively), and the modules that did not answer.
 
-### Gate screen of the answering modules (plan task 7b)
+### Gate screen of the answering modules (plan task 7b, 2026-11-24, no device)
 
-Not run yet. M1's probe covered eight files chosen at the desk; most of the 43 answering
-modules were never screened.
+`dev/gate-screen` (new) ran every policy-allowed (by name), argument-free job of the 43 SGBDs
+that answered `IDENT_FUNKTIONAL`, plus `E60` (its two functional jobs without their optional
+arguments), `UTILITY`, `TMODE` and the groups `D_MOTOR`, `D_PGS`, `D_KBM`, through EdiabasLib
+and `KlineInterface` into an empty libkline replay, as M1's probe did. It reproduces M1 on
+`NVE_65` and `CAS` exactly (4 and 3 refused, same services). Policy version 4. Raw report:
+`~/m2/gate-screen.json`; the refused pairs: `dev/m2/gate-refused.json`, which the job-list
+test now checks every list against.
 
-| SGBD | Jobs screened | Refused by the gate (service) | Could not initialise |
-|---|---|---|---|
+**Outcome:** 930 jobs run; the gate let 618 first telegrams through, refused **264**, and 48
+sent nothing. Every refusal is a policy-allowed `STATUS_` job: 232 × 0x30 (210 of them with
+the byte after the local identifier 01, "report current state"), 25 × 0x31, 5 × 0x33, one
+0x2E and one 0x3B.
+
+| SGBD | Allowed | With arguments | Run | Refused (service) | Note |
+|---|---|---|---|---|---|
+| `ACC2` | 20 | 4 | 16 | none |  |
+| `ACSM60` | 23 | 3 | 20 | 5 × 0x30, 1 × 0x2E |  |
+| `AFS_90` | 51 | 5 | 46 | 33 × 0x30, 1 × 0x33 |  |
+| `AHM_E65` | 18 | 3 | 15 | 2 × 0x30 |  |
+| `ALBV60B` | 20 | 3 | 17 | 5 × 0x31 |  |
+| `ALBV60F` | 20 | 3 | 17 | 5 × 0x31 |  |
+| `AMP_60` | 19 | 3 | 16 | 1 × 0x30 |  |
+| `ANT_60` | 30 | 3 | 27 | 10 × 0x30 |  |
+| `ASK_60` | 20 | 3 | 17 | 4 × 0x31 |  |
+| `BFS_PLX` | 35 | 3 | 32 | 20 × 0x30 |  |
+| `CAS` | 63 | 11 | 52 | 1 × 0x30, 2 × 0x31 |  |
+| `CCC_60` | 30 | 4 | 26 | 1 × 0x31 |  |
+| `CCCA60` | 37 | 3 | 34 | none |  |
+| `CCCG60` | 42 | 4 | 38 | none |  |
+| `CDC_E65` | 17 | 3 | 14 | none |  |
+| `CID_60` | 18 | 2 | 16 | 5 × 0x30 |  |
+| `DWA_E65` | 20 | 3 | 17 | 3 × 0x30 |  |
+| `DXC8_P` | 25 | 2 | 23 | none |  |
+| `EHC_E65` | 16 | 4 | 12 | 1 × 0x30 |  |
+| `FAS_PLX` | 35 | 3 | 32 | 20 × 0x30 |  |
+| `FLA_65` | 18 | 3 | 15 | 1 × 0x3B |  |
+| `GS19B` | 114 | 4 | — | — | INITIALISIERUNG sends first (let through); jobs not screened past it |
+| `HKL_65_2` | 31 | 3 | 28 | 16 × 0x30 |  |
+| `HUD_60` | 26 | 3 | 23 | 6 × 0x30 |  |
+| `IHKA60` | 33 | 2 | 31 | 17 × 0x30 |  |
+| `KBM_60` | 24 | 3 | 21 | 3 × 0x30, 2 × 0x31 |  |
+| `KGM_60` | 33 | 4 | 29 | 14 × 0x30 |  |
+| `KOMB60` | 37 | 3 | 34 | none |  |
+| `LM_AHL` | 43 | 9 | 34 | 16 × 0x30 |  |
+| `N62_TUE` | 85 | 2 | — | — | INITIALISIERUNG sends first (let through); jobs not screened past it |
+| `NVC_65` | 24 | 4 | 20 | 1 × 0x30 |  |
+| `NVE_65` | 22 | 4 | 18 | 2 × 0x30, 2 × 0x31 |  |
+| `PDC_65_2` | 22 | 2 | 20 | 8 × 0x30 |  |
+| `PGS_65_2` | 59 | 13 | 46 | 32 × 0x30, 1 × 0x31 |  |
+| `RLS_E65` | 19 | 2 | — | — | INITIALISIERUNG sends first (let through); jobs not screened past it |
+| `SD_KWP` | 22 | 6 | 16 | 3 × 0x31 |  |
+| `SZL_60` | 20 | 3 | — | — | INITIALISIERUNG sends first (let through); jobs not screened past it |
+| `SZM_60` | 21 | 2 | 19 | 5 × 0x30 |  |
+| `TELE60_2` | 20 | 3 | 17 | none |  |
+| `VID_65_2` | 34 | 5 | 29 | 4 × 0x30, 4 × 0x33 |  |
+| `VVT_B1_0` | 9 | 1 | 8 | none |  |
+| `VVT_B2_0` | 9 | 1 | 8 | none |  |
+| `ZBEH60` | 22 | 4 | 18 | 7 × 0x30 |  |
+| `E60` | 3 | 0 | 3 | none |  |
+| `UTILITY` | 3 | 0 | 3 | none |  |
+| `TMODE` | 5 | 0 | 5 | none |  |
+| `D_MOTOR` | — | — | — | — | group: identification let through; jobs on its variant |
+| `D_PGS` | — | — | — | — | group: identification let through; jobs on its variant |
+| `D_KBM` | — | — | — | — | group: identification let through; jobs on its variant |
+
+**Session C's reads all pass:** `FS_LESEN` (0x18) on `NVE_65`, `CAS`, `KGM_60`, `KBM_60`,
+`PGS_65_2`; `NVE_65` `IS_LESEN` and `CAS` `C_FA_LESEN` (0x22); `E60` `IDENT_FUNKTIONAL` (0x1A)
+and `FS_LESEN_FUNKTIONAL` (0x18), both functionally addressed (`C2 EF F1 …`); vehicle status
+sends nothing (`UTILITY`, `TMODE` are interface jobs). The groups' identification telegrams
+pass. **Not screened past INITIALISIERUNG** (it sends `1A 80` first, which passes): `N62_TUE`,
+`GS19B`, `RLS_E65`, `SZL_60`; so `D_MOTOR` `IDENT` and `FS_LESEN` stay in session C as Phase 6
+ran them, and a refusal at the car would fail them safely (`[frame_refused]`).
+
+**Phase 6's battery reads:** `KGM_60` history blocks 1–3, `CAS` `STATUS_WUP` and
+`STATUS_PA_WUP`, `KOMB60` `STATUS_KL30_H_ZAEHLER` pass and are added to session C;
+`IHKA60` `STATUS_VERBRAUCHERREDUZIERUNG` is refused (0x30) and stays out. `KOMB60`
+`STATUS_KLEMMENSPANNUNG` (main's planned first voltage source) passes, so it is a voltage source
+the native backend can use, unlike `NVE_65` `STATUS_BORDNETZSPANNUNG`; it is added to session C
+to compare it against the VM.
+
+**Found for the VM backend (no frame gate there):** two `STATUS_` jobs that policy version 4
+allows and the description screen passes send **write** services. `ACSM60` (airbag)
+`STATUS_ROC`, described "KWP2000: $22 ReadDataByCommonIdentifier", sends
+`85 01 F1 2E 99 02 FF FF` (0x2E WriteDataByCommonIdentifier). `FLA_65` `STATUS_SENSORPARAMETER`,
+"Auslesen diverser Imager-parameter", sends `83 5F F1 3B FA 01` (0x3B
+WriteDataByLocalIdentifier). Neither has been run on the car. Natively the gate refuses both.
+Whether to deny them in the policy is Ryan's call (main's policy); this branch does not change
+the policy.
+
+---|---|---|---|
 | | | | |
 
 ## 3. Trip BC: `NVE_65 IDENT` with telegrams and echo timing, then session C (Ryan at the car)
@@ -236,7 +321,9 @@ natively (M1, section 2), `NVE_65 STATUS_BORDNETZSPANNUNG` among them, so native
 
 - The M2 recordings, as replay fixtures (kept local unless scrubbed).
 - The latency answer (section 3).
-- The gate's real cost on this car: of M1's 24 refusals, the 17 `LM_60` ones are not this car's
-  module (`LM_AHL` answers) and two `CAS` ones are "not supported" by this car's CAS; what is
-  left is `NVE_65`'s four and `CAS` `STATUS_CAS_DIAGNOSE`, plus what the gate screen finds.
+- The gate's real cost on this car is larger than M1's 24: 264 policy-allowed `STATUS_` reads
+  on the 43 answering modules (section 2), 210 of them 0x30 with "report current state". A
+  gate rule for 0x30 with that option (M1's suggestion) would recover most; it needs its own
+  test cases, and the 0x30 option bytes are SGBD-specific, so each concept is checked first.
+- `KOMB60` `STATUS_KLEMMENSPANNUNG` passes the gate: the native voltage source.
 - Any telegram divergence found (sections 3 and 4).

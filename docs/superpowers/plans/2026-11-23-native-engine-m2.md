@@ -135,6 +135,8 @@ about 18 minutes), and main has since released 0.7.0. Sources: main's
    and `STATUS_WAKEUP_HISTORY` answer "not supported" on this car's CAS (approvals removed). What
    remains is `NVE_65` (`STATUS_TASTER`, `STATUS_BORDNETZSPANNUNG`, `STATUS_PAIRING`,
    `STATUS_FSC_LESEN`) and `CAS` `STATUS_CAS_DIAGNOSE`, plus whatever task 7b finds.
+   **Task 7b found (2026-11-24):** 264 refusals on the 43 modules (m2-results section 2), so
+   the gate's cost is larger than M1 showed, not smaller.
 
 ## Global Constraints
 

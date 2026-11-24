@@ -2,7 +2,7 @@
 // reaches a VM, the engine or a car.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { compareJobResults, countIfh0003, readJobList } from "../car-compare-lib.ts";
+import { compareJobResults, countIfh0003, gateRefusedIn, readGateRefused, readJobList } from "../car-compare-lib.ts";
 
 const ok = (sets: Record<string, unknown>[], o: Record<string, unknown> = {}) => ({
   ok: true as const,
@@ -73,12 +73,27 @@ describe("job lists", () => {
   it.each(files.map((f) => [f.pathname.split("/").pop()!, f] as const))("%s reads and has no gate-refused read", (_name, file) => {
     const jobs = readJobList(readFileSync(file, "utf8"));
     expect(jobs.length).toBeGreaterThan(0);
-    // M1 section 2: 24 policy-allowed STATUS_ reads on NVE_65, CAS and LM_60 are refused natively.
-    for (const j of jobs) expect(["NVE_65", "CAS", "LM_60"].includes(j.ecu.toUpperCase()) && j.job.toUpperCase().startsWith("STATUS_")).toBe(false);
+    // M1 section 2 names LM_60's 17 refused STATUS_ reads only as a count, and the gate screen
+    // (gate-refused.json) did not cover LM_60 (not this car's light module): no LM_60 STATUS_ read.
+    for (const j of jobs) expect(j.ecu.toUpperCase() === "LM_60" && j.job.toUpperCase().startsWith("STATUS_")).toBe(false);
+  });
+
+  it.each(files.map((f) => [f.pathname.split("/").pop()!, f] as const))("%s has no read the gate screen refused (gate-refused.json)", (_name, file) => {
+    const refused = readGateRefused(readFileSync(new URL("../m2/gate-refused.json", import.meta.url), "utf8"));
+    expect(gateRefusedIn(readJobList(readFileSync(file, "utf8")), refused)).toEqual([]);
   });
 
   it("session B is NVE_65 IDENT alone", () => {
     expect(readJobList(readFileSync(files[0]!, "utf8"))).toEqual([{ ecu: "NVE_65", job: "IDENT" }]);
+  });
+
+  it("gateRefusedIn finds a refused read whatever the case", () => {
+    const refused = readGateRefused('{"refused":[{"ecu":"NVE_65","job":"STATUS_TASTER","service":"30"}],"unscreened":[]}');
+    expect(gateRefusedIn([{ ecu: "nve_65", job: "status_taster" }, { ecu: "NVE_65", job: "FS_LESEN" }], refused)).toEqual(["nve_65 status_taster"]);
+  });
+
+  it("readGateRefused rejects a file without a refused array", () => {
+    expect(() => readGateRefused("{}")).toThrow(/refused/);
   });
 
   it("a malformed list is an error naming the entry", () => {
