@@ -20,6 +20,8 @@ pub const Message = extern struct {
 
 /// The lowest compatibility number whose MESSAGE layout is the one above.
 pub const min_compat: i16 = 5;
+/// The highest: a newer EDIABAS may change the layout, so it is not assumed.
+pub const max_compat: i16 = 6;
 
 /// What a refused dllCallIFH (or any call while XStd32.dll is not loaded) returns. Not
 /// verified: which EDIABAS error this produces must be observed in the VM. The agent detects
@@ -33,6 +35,10 @@ pub const Class = enum {
     telegram,
     /// a telegram when msgIn len > 0, else allowed (31, 34).
     telegram_or_empty,
+    /// allowed only when every data byte is zero (28 ifhSetTelPreface: EDIABAS sets an
+    /// empty preface before every job; a real preface would change the bytes on the wire
+    /// after the gate judged them).
+    zero_data,
     /// allowed without inspection.
     allow,
     /// refused, whatever the data.
@@ -43,7 +49,10 @@ pub fn classify(fkt: i16) Class {
     return switch (fkt) {
         29, 30 => .telegram,
         31, 34 => .telegram_or_empty,
-        1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 28, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51, 54 => .allow,
+        28 => .zero_data,
+        // 54 ifhSetParameterRaw is refused: it could set the protocol without the gate
+        // seeing the concept.
+        1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51 => .allow,
         else => .refuse,
     };
 }
@@ -114,6 +123,7 @@ pub const Reason = enum {
     malformed,
     adapter,
     service,
+    ambiguous,
     /// the function number is refused (or unknown)
     function,
     /// the MESSAGE layout is not known to be the compatibility 5/6 one
@@ -213,6 +223,17 @@ pub const Concepts = struct {
     pub fn clear(self: *Concepts) void {
         self.used = 0;
     }
+
+    /// The concept to judge a telegram on `ch` by: the channel's, but only when every channel
+    /// that has one agrees. Whether XStd32 keeps one concept per channel or one for the whole
+    /// interface is not verified, so channels that disagree judge as none (fails closed).
+    pub fn forTelegram(self: *const Concepts, ch: u16) ?u16 {
+        const mine = self.get(ch) orelse return null;
+        for (self.concept[0..self.used]) |v| {
+            if (v) |c| if (c != mine) return null;
+        }
+        return mine;
+    }
 };
 
 const Verdict = union(enum) {
@@ -246,7 +267,7 @@ pub const Gate = struct {
 
     /// The MESSAGE fields beyond fktNo/wParam may be read only with a known 5/6 layout.
     fn layoutKnown(self: *const Gate) bool {
-        return if (self.compat) |c| c >= min_compat else false;
+        return if (self.compat) |c| c >= min_compat and c <= max_compat else false;
     }
 
     pub fn startup(self: *Gate, ini: ?[*:0]const u8, name: ?[*:0]const u8) i16 {
@@ -312,7 +333,7 @@ pub const Gate = struct {
             rc = inner.vtable.check(inner.ctx, compat);
             w.print(" fwd=yes rc={d}", .{rc}) catch {};
         } else w.print(" fwd=no rc={d} (XStd32.dll not loaded)", .{rc}) catch {};
-        if (compat < min_compat) w.writeAll(" layout=unsupported (every call will be refused)") catch {};
+        if (compat < min_compat or compat > max_compat) w.writeAll(" layout=unsupported (every call will be refused)") catch {};
         self.log.line(lb.text());
         return rc;
     }
@@ -353,9 +374,15 @@ pub const Gate = struct {
                 .refuse => break :blk .{ .refuse = .function },
                 .telegram_or_empty => if (msg.len == 0) break :blk .allow else data,
                 .telegram => data,
+                .zero_data => {
+                    if (msg.len == 0) break :blk .allow;
+                    const d = data orelse break :blk .{ .refuse = .malformed };
+                    for (d) |b| if (b != 0) break :blk .{ .refuse = .function };
+                    break :blk .allow;
+                },
             };
             const f = frame orelse break :blk .{ .refuse = .malformed };
-            if (rule.check(self.concepts.get(msg.channel), f, &policy.list)) |r| break :blk .{ .refuse = Reason.fromRule(r) };
+            if (rule.check(self.concepts.forTelegram(msg.channel), f, &policy.list)) |r| break :blk .{ .refuse = Reason.fromRule(r) };
             break :blk .allow;
         };
         const v: Verdict = if (self.latched and !passesLatch(fkt)) .latched else judged;
@@ -401,13 +428,18 @@ pub const Gate = struct {
         }
         const fwd = inner.?;
 
-        // Concept bookkeeping, only for what the real IFH actually receives.
-        if (known) if (msg) |m| if (m.fkt_no == 27) {
-            self.concepts.set(m.channel, conceptOf(m));
-        };
+        // Concept bookkeeping, only for what the real IFH actually receives. A new concept
+        // clears the channel's first, so that a call that never returns leaves none. Whether
+        // XStd32 keeps the old concept when it rejects a new one is not verified (its rc is
+        // logged); a wrong guess between BMW-FAST and KWP2000* cannot pass a write, because
+        // the rule refuses a frame the other framing reads differently (`ambiguous`).
+        if (known) if (msg) |m| if (m.fkt_no == 27) self.concepts.set(m.channel, null);
         const rc = fwd.vtable.call(fwd.ctx, msg, out);
+        if (known) if (msg) |m| if (m.fkt_no == 27) self.concepts.set(m.channel, conceptOf(m));
         if (msg) |m| switch (m.fkt_no) {
-            1, 8 => self.concepts.clear(),
+            // init, end, connect, disconnect: the IFH may reset its protocol, so EDIABAS must
+            // set it again before the next telegram.
+            1, 8, 20, 21 => self.concepts.clear(),
             else => {},
         };
         w.print(" fwd=yes rc={d}", .{rc}) catch {};

@@ -34,6 +34,7 @@ public sealed class TelegramRule
     public const string ReasonMalformed = "malformed";
     public const string ReasonAdapter = "adapter";
     public const string ReasonService = "service";
+    public const string ReasonAmbiguous = "ambiguous";
 
     // Concepts (protocols) as set with SETECUCOMM / ifhSetParameter.
     public const ushort ConceptDs2 = 0x0006;
@@ -213,7 +214,7 @@ public sealed class TelegramRule
 
     /// <summary>
     /// Judges one telegram as sent, under the concept last set for the interface (null when none
-    /// was set). docs/api.md "Telegram rule", steps 1 to 6.
+    /// was set). docs/api.md "Telegram rule", steps 1 to 7.
     /// </summary>
     public TelegramVerdict Evaluate(ushort? concept, ReadOnlySpan<byte> frame)
     {
@@ -246,24 +247,43 @@ public sealed class TelegramRule
             return TelegramVerdict.Refuse(ReasonMalformed);
         }
 
+        var refusal = Judge(frame, data);
+        if (refusal is not null)
+        {
+            return TelegramVerdict.Refuse(refusal);
+        }
+
+        // 7. Both framings: the same bytes read with the other framing must not be something
+        // refused, so a wrong idea of the concept cannot turn an allowed read into a write.
+        if (TryData(frame, !fastFraming, out var other) && Judge(frame, other) is not null)
+        {
+            return TelegramVerdict.Refuse(ReasonAmbiguous);
+        }
+
+        return TelegramVerdict.Allow;
+    }
+
+    /// <summary>Steps 3 to 6 on one reading of the frame: null when allowed, else the reason.</summary>
+    private string? Judge(ReadOnlySpan<byte> frame, ReadOnlySpan<byte> data)
+    {
         var target = frame[1];
         var service = data[0];
 
         // 3. Adapter: the cable itself.
         if (target == Tester)
         {
-            return _adapterReads.Contains(service) ? TelegramVerdict.Allow : TelegramVerdict.Refuse(ReasonAdapter);
+            return _adapterReads.Contains(service) ? null : ReasonAdapter;
         }
 
         // 4. Read services, and the default session exactly.
         if (_readServices.Contains(service))
         {
-            return TelegramVerdict.Allow;
+            return null;
         }
 
         if (data.Length == 2 && service == SessionService && data[1] == _defaultSession)
         {
-            return TelegramVerdict.Allow;
+            return null;
         }
 
         // 5. Exact, reviewed telegrams (address and data; the checksum is not part of the data).
@@ -271,12 +291,12 @@ public sealed class TelegramRule
         {
             if (address == target && data.SequenceEqual(bytes))
             {
-                return TelegramVerdict.Allow;
+                return null;
             }
         }
 
         // 6.
-        return TelegramVerdict.Refuse(ReasonService);
+        return ReasonService;
     }
 
     /// <summary>The data bytes of a well-formed frame: byte 0 addressing <c>10</c> or <c>11</c>,

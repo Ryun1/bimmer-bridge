@@ -357,6 +357,55 @@
    "allowed": false,
    "reason": "service",
    "note": "D-CAN write"
+  },
+  {
+   "concept": "010F",
+   "frame": "A3 12 F1 22 2E 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": false,
+   "reason": "ambiguous",
+   "note": "a $22 read to BMW-FAST, but the same bytes are $2E WriteDataByIdentifier to KWP2000*: refused so a wrong concept cannot pass a write"
+  },
+  {
+   "concept": "010D",
+   "frame": "A3 12 F1 22 2E 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": false,
+   "reason": "service",
+   "note": "the same frame under KWP2000*: $2E"
+  },
+  {
+   "concept": "010D",
+   "frame": "AF 12 F1 2E 22 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": false,
+   "reason": "ambiguous",
+   "note": "a $22 read to KWP2000*, but $2E to BMW-FAST"
+  },
+  {
+   "concept": "0110",
+   "frame": "AF 12 F1 2E 22 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": false,
+   "reason": "service",
+   "note": "the same frame under D-CAN (BMW-FAST framing): $2E"
+  },
+  {
+   "concept": "010F",
+   "frame": "A3 12 F1 22 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": true,
+   "reason": null,
+   "note": "read both ways ($22 to BMW-FAST, $1A to KWP2000*): allowed"
+  },
+  {
+   "concept": "010D",
+   "frame": "A3 12 F1 22 1A 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": true,
+   "reason": null,
+   "note": "the same frame under KWP2000*: allowed"
+  },
+  {
+   "concept": "010F",
+   "frame": "94 12 F1 13 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+   "allowed": false,
+   "reason": "ambiguous",
+   "note": "$13 to BMW-FAST, but $10 00 (a session other than 81) to KWP2000*"
   }
  ]
 }

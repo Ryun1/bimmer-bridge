@@ -12,6 +12,10 @@ pub const Refusal = enum {
     malformed,
     adapter,
     service,
+    /// allowed as the concept's framing reads it, but the same bytes read with the other
+    /// framing (BMW-FAST vs KWP2000*) would not be: refused, so that a wrong idea of the
+    /// concept can never turn an allowed read into a write.
+    ambiguous,
 };
 
 /// One reviewed telegram: the target address (byte 1) and exactly its data bytes.
@@ -48,7 +52,18 @@ pub fn check(concept: ?u16, frame: []const u8, list: *const AllowList) ?Refusal 
         else => return .unknown_concept,
     };
     const data = frameData(frame, framing) orelse return .malformed;
-    // frameData guarantees frame.len >= 4 and data.len >= 1.
+    if (judge(frame, data, list)) |r| return r;
+    // Step 7: the other framing must not read the same bytes as something refused.
+    const other: Framing = if (framing == .bmw_fast) .kwp2000_star else .bmw_fast;
+    if (frameData(frame, other)) |alt| {
+        if (judge(frame, alt, list) != null) return .ambiguous;
+    }
+    return null;
+}
+
+/// Steps 3 to 6 on one reading of the frame. frameData guarantees frame.len >= 4 and
+/// data.len >= 1.
+fn judge(frame: []const u8, data: []const u8, list: *const AllowList) ?Refusal {
     const target = frame[1];
     const source = frame[2];
     if (target == tester and source == tester) {
@@ -115,6 +130,33 @@ test "16-bit length form needs its two length bytes" {
     try testing.expectEqual(@as(?Refusal, .malformed), check(0x010F, &.{ 0x80, 0x12, 0xF1, 0x00, 0x00 }, &test_list));
     try testing.expectEqual(@as(?Refusal, null), check(0x010F, &.{ 0x80, 0x12, 0xF1, 0x00, 0x00, 0x01, 0x22 }, &test_list));
     try testing.expectEqual(@as(?Refusal, .malformed), check(0x010F, &.{ 0x80, 0x12, 0xF1, 0x00, 0x00, 0x00 }, &test_list));
+}
+
+test "a frame both framings can read is allowed only when both readings are" {
+    // BMW-FAST reads $22 (35 data bytes); KWP2000* reads length 0x22 and service $2E.
+    var a: [3 + 35]u8 = undefined;
+    @memset(&a, 0x00);
+    a[0] = 0xA3;
+    a[1] = 0x12;
+    a[2] = 0xF1;
+    a[3] = 0x22;
+    a[4] = 0x2E;
+    try testing.expectEqual(@as(?Refusal, .ambiguous), check(0x010F, &a, &test_list));
+    try testing.expectEqual(@as(?Refusal, .service), check(0x010D, &a, &test_list));
+    // KWP2000* reads $22; BMW-FAST (0x2F = 47 data bytes) reads $2E.
+    var b: [3 + 47]u8 = undefined;
+    @memset(&b, 0x00);
+    b[0] = 0xAF;
+    b[1] = 0x12;
+    b[2] = 0xF1;
+    b[3] = 0x2E;
+    b[4] = 0x22;
+    try testing.expectEqual(@as(?Refusal, .ambiguous), check(0x010D, &b, &test_list));
+    try testing.expectEqual(@as(?Refusal, .service), check(0x010F, &b, &test_list));
+    // Both readings are reads: allowed under either concept.
+    a[4] = 0x1A;
+    try testing.expectEqual(@as(?Refusal, null), check(0x010F, &a, &test_list));
+    try testing.expectEqual(@as(?Refusal, null), check(0x010D, &a, &test_list));
 }
 
 test "an empty allow-list refuses every service" {

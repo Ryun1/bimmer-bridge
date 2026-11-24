@@ -1036,7 +1036,7 @@ public sealed class EdiabasService
             session.Dispose();
             if (session.TraceStart is { } start && _telegrams is not null)
             {
-                var result = _telegrams.End(start, session.JobStarted);
+                var result = _telegrams.End(start, session.JobStarted, session.Poisoned);
                 audit.TelegramsChecked = result.TelegramsChecked;
                 lock (audit.TelegramFindings)
                 {

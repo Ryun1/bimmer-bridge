@@ -135,7 +135,7 @@ const Harness = struct {
 test "function classification" {
     const telegram = [_]i16{ 29, 30 };
     const either = [_]i16{ 31, 34 };
-    const allowed = [_]i16{ 1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 28, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51, 54 };
+    const allowed = [_]i16{ 1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51 };
     var fkt: i32 = std.math.minInt(i16);
     while (fkt <= std.math.maxInt(i16)) : (fkt += 1) {
         const f: i16 = @intCast(fkt);
@@ -143,13 +143,15 @@ test "function classification" {
             .telegram
         else if (std.mem.indexOfScalar(i16, &either, f) != null)
             .telegram_or_empty
+        else if (f == 28)
+            .zero_data
         else if (std.mem.indexOfScalar(i16, &allowed, f) != null)
             .allow
         else
             .refuse;
         try testing.expectEqual(want, gate.classify(f));
     }
-    for ([_]i16{ 25, 26, 36, 38, 39, 41, 42, 44, 45, 50, 0, 6, 7, 52, 53, 55, -1 }) |f| try testing.expectEqual(gate.Class.refuse, gate.classify(f));
+    for ([_]i16{ 25, 26, 36, 38, 39, 41, 42, 44, 45, 50, 54, 0, 6, 7, 52, 53, 55, -1 }) |f| try testing.expectEqual(gate.Class.refuse, gate.classify(f));
 }
 
 test "dllStartupIFH name rewrite" {
@@ -236,7 +238,7 @@ test "refused functions latch; allowed ones are forwarded without inspection" {
     }
     var h: Harness = .{};
     h.init(.enforce);
-    for ([_]i16{ 1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 28, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51, 54 }) |f| {
+    for ([_]i16{ 1, 2, 3, 4, 5, 8, 11, 12, 13, 14, 20, 21, 22, 23, 24, 27, 32, 33, 35, 37, 40, 43, 46, 47, 48, 49, 51 }) |f| {
         try testing.expectEqual(@as(i16, 0), h.send(f, &.{ 0xDE, 0xAD }));
         try testing.expectEqual(@as(?i16, f), h.fake.last());
     }
@@ -292,14 +294,15 @@ test "a telegram before any concept, after ifhInit/ifhEnd, or under DS2 is refus
     try testing.expect(h.lines.has("newConcept=none"));
 }
 
-test "the concept is per channel" {
+test "the concept is per channel, and channels must agree" {
     var h: Harness = .{};
     h.init(.enforce);
-    _ = h.sendCh(27, 1, &.{ 0x0D, 0x01 });
+    _ = h.sendCh(27, 1, &.{ 0x0F, 0x01 });
     _ = h.sendCh(27, 2, &.{ 0x0F, 0x01 });
-    try testing.expectEqual(@as(i16, 0), h.sendCh(29, 1, &.{ 0xB8, 0x12, 0xF1, 0x02, 0x1A, 0x80 }));
+    try testing.expectEqual(@as(i16, 0), h.sendCh(29, 1, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
     try testing.expectEqual(@as(i16, 0), h.sendCh(29, 2, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
     try testing.expect(!h.g.latched);
+    // a channel with no concept of its own
     try testing.expectEqual(gate.refused_rc, h.sendCh(29, 3, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
     try testing.expect(h.lines.has("REFUSED no_concept"));
 }
@@ -345,6 +348,71 @@ test "log mode forwards everything but logs the same decisions" {
     try testing.expect(h.lines.has("verdict=latched judged=refuse:function fwd=yes"));
     try testing.expect(h.lines.has("WOULD_REFUSE function fkt=41 frame=00"));
     try testing.expectEqual(@as(usize, 1), h.lines.count("WOULD_LATCH"));
+}
+
+test "28 ifhSetTelPreface: only an empty or all-zero preface passes" {
+    var h: Harness = .{};
+    h.init(.enforce);
+    try testing.expectEqual(@as(i16, 0), h.send(28, &.{}));
+    try testing.expectEqual(@as(i16, 0), h.send(28, &.{ 0x00, 0x00, 0x00, 0x00 }));
+    try testing.expect(!h.g.latched);
+    const n = h.fake.n;
+    try testing.expectEqual(gate.refused_rc, h.send(28, &.{ 0x00, 0x2E, 0x00, 0x00 }));
+    try testing.expectEqual(n, h.fake.n);
+    try testing.expect(h.lines.has("REFUSED function fkt=28"));
+    try testing.expect(h.g.latched);
+}
+
+test "54 ifhSetParameterRaw is refused (it could set the protocol unseen)" {
+    var h: Harness = .{};
+    h.init(.enforce);
+    try testing.expectEqual(gate.refused_rc, h.send(54, &.{ 0x0D, 0x01 }));
+    try testing.expectEqual(@as(usize, 0), h.fake.n);
+    try testing.expect(h.g.latched);
+}
+
+test "channels that disagree on the concept judge as none" {
+    var h: Harness = .{};
+    h.init(.enforce);
+    h.concept(0x010F);
+    _ = h.sendCh(27, 1, &.{ 0x0D, 0x01, 0x00, 0x00 });
+    try testing.expectEqual(gate.refused_rc, h.send(29, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
+    try testing.expect(h.lines.has("REFUSED no_concept fkt=29"));
+}
+
+test "connect and disconnect clear the concept" {
+    for ([_]i16{ 20, 21 }) |f| {
+        var h: Harness = .{};
+        h.init(.enforce);
+        h.concept(0x010F);
+        _ = h.send(f, &.{});
+        try testing.expectEqual(gate.refused_rc, h.send(29, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
+        try testing.expect(h.lines.has("REFUSED no_concept"));
+    }
+}
+
+test "a frame both framings read is refused unless both readings are allowed" {
+    var h: Harness = .{};
+    h.init(.enforce);
+    h.concept(0x010F);
+    var f: [3 + 35]u8 = [_]u8{0} ** (3 + 35);
+    f[0] = 0xA3;
+    f[1] = 0x12;
+    f[2] = 0xF1;
+    f[3] = 0x22;
+    f[4] = 0x2E; // KWP2000* reading: WriteDataByIdentifier
+    try testing.expectEqual(gate.refused_rc, h.send(29, &f));
+    try testing.expect(h.lines.has("REFUSED ambiguous"));
+}
+
+test "compatibility above 6 is not assumed to have the 5/6 layout" {
+    var h: Harness = .{};
+    h.g = Gate.init(.enforce, h.fake.inner(), h.lines.log());
+    _ = h.g.checkIfh(7);
+    _ = h.g.startup("ini", "GATE:OBD");
+    try testing.expectEqual(gate.refused_rc, h.send(27, &.{ 0x0F, 0x01 }));
+    try testing.expect(h.lines.has("layout=unsupported"));
+    try testing.expect(h.lines.has("REFUSED compat"));
 }
 
 test "compatibility below 5 refuses everything, in every mode" {
