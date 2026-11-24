@@ -24,7 +24,7 @@ gate refuses natively (M1, section 2) are in no native job list. Recordings, tra
 outputs stay under `~/m2/`, never in the repo: a `C_FA_LESEN` reply holds the VIN.
 
 Status: procedures written; trip A done as Phase 6 (2026-11-23, section 2); the desk rehearsal
-and trip BC not run yet. The plan's "Amendments after Phase 6" (2026-11-24) changed what
+done (2026-11-24, section 1); trip BC not run yet. The plan's "Amendments after Phase 6" (2026-11-24) changed what
 follows: merge main (0.7.0) first, screen the answering modules' jobs against the gate, and
 run trips B and C as one ignition-on session, trip BC (Ryan, 2026-11-24).
 
@@ -65,15 +65,31 @@ pin 16 there is no echo and no module, so nothing here reaches a car.
 
 ### Results
 
+Run 2026-11-24 at the desk (Ryan, Claude), Release builds of this branch after the 0.7.0 merge
+(`ediabasd-net` 0.1.0, libkline 0.1.0, `mac-mcp` 0.7.0), policy version 4 (`5d0afef1659b…`).
+
 | Check | Result |
 |---|---|
-| `health`: state and port | |
-| Job at latency 1: error, `open` latency label, sends, refused events | |
-| Job at latency 16: the same | |
-| `telegrams.ts timing` | |
-| `health` during a job | |
-| Cable ticked for the VM: `health`, then a native job | |
-| `bridge_health` and `ediabas_describe NVE_65` on the native backend | |
+| `health`: state and port | `free`, `/dev/cu.usbserial-A50285BI` (the FTDI cable), latency `null` before any session |
+| Job at latency 1: error, `open` latency label, sends, refused events | `IFH-0003` (`ediabas_error` 9007) after 0.46 s; `open` says `1ms`; one `send` `82 57 F1 1A 80 64` (checksum 0x64 correct), then `close` 0.29 s later; no `refused` |
+| Job at latency 16: the same | The same at 0.53 s; `open` says `16ms`; the same single `send`; no `refused` |
+| `telegrams.ts timing` | Runs; both recordings 0 echoes, 0 replies, 0 short reads, 0 refused |
+| `health` during a job | `locked` four times in a row while the job held the port, `free` before and after (this left a third desk recording) |
+| Cable ticked for the VM: `health`, then a native job | `absent`, port `null`; the job is `cable_not_found` (9001, `libkline: no_device`) and opens no recording. Unticked again: `free` |
+| `bridge_health` and `ediabas_describe NVE_65` on the native backend | Both answer. `bridge_health`: server 0.7.0, backend native, Ecu folder, cable `free` on the FTDI port, engine and Mac policy both version 4 `5d0afef1659b`. `ediabas_describe NVE_65`: 59 jobs, 21 runnable through the bridge, offline. The tool list is `bridge_health` and the six `ediabas_*` tools, with no `vm_*` |
+
+Notes:
+- Step 6 ran the built server over stdio from a scratch script, with `EDIABAS_BACKEND=native`,
+  `DOTNET_ROOT`, and `XDG_CONFIG_HOME` pointing at a scratch copy of `ediabasd-1.json`. The
+  production MCP registration was never changed, so nothing needed restoring.
+- `ediabasd` prints `K\u002BDCAN` in its CLI JSON (System.Text.Json escapes `+`). The MCP side
+  parses the JSON and shows `K+DCAN`. Cosmetic only.
+- `describe` counts `NVE_65`'s gate-refused `STATUS_` reads as runnable (policy by name). Natively
+  they fail as `frame_refused`, and they are in no native job list.
+- The gate-refused `NVE_65 STATUS_BORDNETZSPANNUNG` is the only `voltageSources` entry in the
+  worktree's `config.local.json`. A native `ediabas_vehicle_status` through the MCP server would
+  try it and get a gate refusal. Trip BC's `car-compare` runs read `dev/m2/session-c.json`, not
+  `voltageSources`, so the trip is unaffected.
 
 ---
 
