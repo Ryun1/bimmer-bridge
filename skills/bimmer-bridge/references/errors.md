@@ -52,6 +52,21 @@ never look for another tool, job or route (and never computer use on the VM wind
   approval written without the `@hash` part approves nothing (since 0.5.0); `vm_health`
   counts such entries as ignored, and `ediabas_describe` prints the pinned entry to replace
   each with. An approved job called with arguments still goes through the argument check.
+- **`[telegram_not_allowed]`, or `vm_health` says "TELEGRAM CHECK LATCHED".** After the
+  request ran, the agent read EDIABAS's own interface trace and found a telegram the telegram
+  rule refuses (for example a `$30` or `$31` that is not on the reviewed list, a clear or a
+  write), an interface function it does not know, or a trace line it could not read. It may
+  have reached the car: the check proves what was sent, it cannot stop it. From then on every
+  `ediabas_*` call is refused until the agent restarts. Tell the user what the message names
+  (function, telegram, concept, reason) and which job you had asked for; do not retry, do not
+  try another job, ECU, group or tool, and do not restart anything yourself. Whether the
+  telegram becomes a reviewed exact entry in `policy/telegrams.json` is the owner's decision,
+  made in the repo with a case, never mid-session.
+- **`[telegram_check_unavailable]`.** The check cannot run. Before anything was sent: `IfhTrace`
+  in `C:\EDIABAS\BIN\EDIABAS.INI` (section `[Configuration]`) is below 3 or `TracePath` is
+  not a full path; the user sets `IfhTrace = 3`. That file is theirs; never edit it or suggest
+  turning the check off. After a request: EDIABAS wrote no trace for it, so its telegrams went
+  unchecked, and the agent refuses EDIABAS until it is restarted; tell the user.
 
 ## EDIABAS
 
