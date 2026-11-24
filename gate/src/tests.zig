@@ -6,4 +6,5 @@ test {
     _ = @import("gate_test.zig");
     _ = @import("ini.zig");
     _ = @import("allowlist_json.zig");
+    _ = @import("parse_cases_test.zig");
 }

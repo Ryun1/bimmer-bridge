@@ -154,6 +154,13 @@ public sealed class TelegramRule
         var rule = new TelegramRule(null, version);
         foreach (var b in ByteArray(top["readServices"], "readServices"))
         {
+            // $10 is allowed only as the default session, and $30/$31 only as exact telegrams:
+            // a list that allows them by service is refused (the gate's parser refuses it too).
+            if (b is 0x10 or 0x30 or 0x31)
+            {
+                throw new RuleFormatException($"readServices must not list {b:X2}: it is never a read by service");
+            }
+
             if (!rule._readServices.Add(b))
             {
                 throw new RuleFormatException($"readServices lists {b:X2} twice");

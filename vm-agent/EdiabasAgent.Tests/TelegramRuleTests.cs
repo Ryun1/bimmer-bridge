@@ -39,6 +39,33 @@ public class TelegramRuleTests
         Assert.Equal(c.GetProperty("reason").GetString(), v.Reason);
     }
 
+    private static string ParseCasesPath => Path.Combine(JobPolicyTests.PolicyDir(), "telegrams-parse-cases.json");
+
+    public static TheoryData<int, string> ParseCases()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(ParseCasesPath));
+        var data = new TheoryData<int, string>();
+        var i = 0;
+        foreach (var c in doc.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            data.Add(i++, c.GetProperty("name").GetString()!);
+        }
+
+        return data;
+    }
+
+    /// <summary>policy/telegrams-parse-cases.json: the gate's parser (allowlist_json.zig) runs the
+    /// same texts, so a list loads in both or in neither.</summary>
+    [Theory]
+    [MemberData(nameof(ParseCases))]
+    public void ParseFixture(int index, string name)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(ParseCasesPath));
+        var c = doc.RootElement.GetProperty("cases")[index];
+        var rule = TelegramRule.Parse(c.GetProperty("text").GetString()!);
+        Assert.True(c.GetProperty("valid").GetBoolean() == rule.Loaded, $"{name}: {rule.LoadError}");
+    }
+
     [Fact]
     public void Fixture_HasEveryCase()
     {
