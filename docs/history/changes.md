@@ -33,7 +33,7 @@ holds `2EF4` and `2DED`; three pinned `CAS` approvals gave a negative response. 
 owner removed those approvals and the `MPM_60` one from the VM's `reviewedJobs` and set
 `ediabasIdleReleaseSeconds` back to 20. Claude Desktop reads its servers from
 `claude_desktop_config.json`, not from `claude mcp`. Details:
-[the feedback response](../superpowers/specs/2026-11-23-phase6-feedback-response.md).
+[the feedback response](specs/2026-11-23-phase6-feedback-response.md).
 
 Evals run 2026-11-23 against the Phase 6 fixtures: 03 passes; 01 and 06 fail with the skill because Claude takes names from the skill's references instead of `ediabas_list_ecus`/`ediabas_describe` (rubric vs skill: owner to decide). See [docs/history/evals-2026-11-23.md](evals-2026-11-23.md).
 
