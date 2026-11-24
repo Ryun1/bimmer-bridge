@@ -228,16 +228,31 @@ job boundary, and Ryan can run the commands directly if Claude's link drops.
 
 ### Before
 
-- [ ] Plan tasks 5b (main merged), 6 (desk rehearsal) and 7b (gate screen) are done, and
+- [x] Plan tasks 5b (main merged), 6 (desk rehearsal) and 7b (gate screen) are done, and
       `dev/m2/session-c.json` holds only reads the screen passed.
-- [ ] In the VM, with Ryan's OK for this change: back up `C:\EDIABAS\Bin\EDIABAS.INI` and set
+- [x] In the VM, with Ryan's OK for this change: back up `C:\EDIABAS\Bin\EDIABAS.INI` and set
       `IfhTrace = 3` (as M0, section 4). Note the backup's SHA-256.
-- [ ] Three configs, each with `ecuPath`:
+      Done 2026-11-24 by Ryan with `~/m2/ini-trace-on.ps1`, run over the dev shell. The backup
+      `EDIABAS.INI.m2backup` is the original, SHA-256 `27CB98B3…F7AC1` (the same as M0's). The INI
+      with `IfhTrace = 3` is SHA-256 `1F41E552…535E84E3`, the same 26,255 bytes, with one byte
+      changed (offset 462, `0` → `3`).
+- [x] Three configs, each with `ecuPath`:
       - `~/m2/ediabasd-1.json`: `recordDir` `~/m2/b/`, `latencyMs` 1.
       - `~/m2/ediabasd-16.json`: `recordDir` `~/m2/b/`, `latencyMs` 16.
       - `~/m2/ediabasd-c.json`: `recordDir` `~/m2/c/`, `latencyMs` 1.
-- [ ] `mac-mcp` built; `ediabasd` Release built; Mac on power and kept awake (`caffeinate -i`).
-- [ ] `~/m2/trip.sh` written and read through.
+- [x] `mac-mcp` built; `ediabasd` Release built. `trip.sh` runs each step under `caffeinate -i`;
+      the Mac stays on power.
+- [x] `~/m2/trip.sh` written; its `check` step passes. Ryan still has to read it through.
+
+`~/m2/trip.sh <step>` runs the steps one at a time, in this order:
+`check`, `vm-b`, `trace-b`, `vm-c`, `vm-idle`, `free`, `nat-b1`, `nat-b16`, `nat-c`, then, with
+the ignition off, `trace-bc` and `restore-ini`. Each step appends to `~/m2/trip.log` and refuses
+to run if its output already exists. Two changes from the plan:
+- `trace-b` copies `IFH.trc` to `~/m2/b-ifh.trc` straight after the VM's B. `TraceSize` is 1024
+  and loading `NVE_65` alone traced 47 KB in M0, so C's functional jobs could wrap the trace
+  and lose B's telegrams before the copy after the trip.
+- `vm-idle` (`~/m2/vm-idle.mjs`) polls the agent's `/health` until EDIABAS is released, so
+  amendment 5's wait does not depend on Claude's link.
 
 ### Steps (Ryan's go)
 
@@ -268,8 +283,9 @@ job boundary, and Ryan can run the commands directly if Claude's link drops.
 - **Session B:**
   - `node dev/car-compare.ts compare ~/m2/b-vm.jsonl ~/m2/b-native-1.jsonl`, and the same for
     `-16`.
-  - `node dev/telegrams.ts compare ~/m2/bc-ifh.trc <the latency-1 recording>`. The trace also
-    holds session C, so expect B's exchanges to match and then "the native side ended".
+  - `node dev/telegrams.ts compare ~/m2/b-ifh.trc <the latency-1 recording>` (or `bc-ifh.trc`
+    if `trace-b` could not copy). `bc-ifh.trc` also holds session C, so with it expect B's
+    exchanges to match and then "the native side ended".
   - `node dev/telegrams.ts timing ~/m2/b/*.jsonl`.
 - **Session C:**
   - `node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl` (it counts IFH-0003
