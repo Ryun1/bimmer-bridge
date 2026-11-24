@@ -1,5 +1,7 @@
 # Review fixes and simplifications (0.5.0): design
 
+> Historical record: design notes from 2026-11-22 to 2026-11-23. See [changes.md](../changes.md) for what shipped and [evals-2026-11-23.md](../evals-2026-11-23.md) for what was skipped.
+
 Source: the whole-project review of 2026-11-22 (VM agent, Mac server, deploy, docs). This is
 the spec for `docs/superpowers/plans/2026-11-22-review-fixes.md`. Nothing here runs against the
 car; the at-the-car phase (6) and the car-recorded evals stay the owner's and are out of scope.

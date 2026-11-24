@@ -1,5 +1,7 @@
 # Phase 6 at the car: feedback and our response
 
+> Historical record: design notes from 2026-11-22 to 2026-11-23. See [changes.md](../changes.md) for what shipped and [evals-2026-11-23.md](../evals-2026-11-23.md) for what was skipped.
+
 **Date:** 2026-11-23. **Input:** the first session at the car, run from Claude Desktop with the
 recording server (`~/ediabas-recordings/car-20261123`, 31 exchanges, outside the repo), and the
 feedback Claude Desktop wrote afterwards (items A1–F3 below). Every claim was checked against
