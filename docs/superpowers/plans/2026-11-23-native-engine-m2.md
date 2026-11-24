@@ -20,7 +20,7 @@ comes from the first real read.
   natively), and a telegram tool that compares EDIABAS's IFH trace with a `libkline` recording
   and measures echo and reply times.
 - **Sessions:** a desk rehearsal with the cable on the Mac (no car), then Phase 6 (the VM's own
-  first car session, as `docs/at-the-car.md` has it), then two M2 car sessions, written up in
+  first car session, as `docs/at-the-car.md` has it), then one M2 car session (trips B and C together), written up in
   `docs/native/m2-results.md`.
 
 **Tech Stack:** as M1: .NET 10 via `/opt/homebrew/opt/dotnet@10`, xunit; Zig 0.16.0;
@@ -109,20 +109,22 @@ about 18 minutes), and main has since released 0.7.0. Sources: main's
    (`KGM_60` history blocks 1–3, `CAS` `STATUS_WUP`/`STATUS_PA_WUP`, `IHKA60`
    `STATUS_VERBRAUCHERREDUZIERUNG`, `KOMB60` `STATUS_KL30_H_ZAEHLER`), each only if the screen
    passes it.
-4. **Trips B and C may run as one ignition-on session (Ryan decides at the trip).** Phase 6
+4. **Trips B and C run as one ignition-on session, "trip BC"** (Ryan, 2026-11-24). Phase 6
    timed the reads: the functional jobs about 4 s each, `FS_LESEN` 20–700 ms, vehicle status
    under 1 s; EDIABAS loads in about 10 s. Each side of B and C together is under a minute,
-   so the budget goes on moving the cable. Combined order: VM B, VM C (IfhTrace on for both;
-   the telegram compare then matches B's exchanges and reports "this side ended" after them),
-   move the cable once, native B at 1 ms, native B at 16 ms, native C. Separate trips stay the
-   fallback.
+   so the budget goes on moving the cable, which now moves once. Order: VM B, VM C (IfhTrace on
+   for both), move the cable, native B at 1 ms, native B at 16 ms, native C, ignition off. The
+   IFH trace is copied after the ignition is off; it holds B's exchanges first, so the telegram
+   compare matches those and then reports that the native side ended (expected). If the
+   10 minutes run out, stop at a job boundary; what is left goes to another trip. Tasks 8 and 9
+   are rewritten below: task 8 is the trip, task 9 the comparison and write-up at the desk.
 5. **Before unticking the cable from the VM, let EDIABAS release it.** The VM is back to
    `ediabasIdleReleaseSeconds` 20: wait until `vm_health` (or the agent's `/health`) shows
    EDIABAS not loaded, about 20 s after the last VM read, then untick.
 6. **The trips are driven from a terminal, not through Claude Desktop.** `car-compare.ts` runs
    locally, so a dropped Claude link (Phase 6 lost 3 minutes on mobile data) cannot interrupt
    a run; the commands are written to `~/m2/trip.sh` before the trip so Ryan can run them
-   himself if the link drops. If Claude is driving and the link drops: ignition off until it
+   directly if the link drops. If Claude is driving and the link drops: ignition off until it
    returns, no retry.
 7. **Policy unchanged:** version 4, SHA-256 `5d0afef1659b…` on main and on this branch; the
    native preflight's SHA check agrees. `NVE_65` `STATUS_PAIRING` is now approved in the VM's
@@ -445,7 +447,7 @@ message naming the conflicts and how each was resolved. Rebuild `mac-mcp` and th
 reaches a car: with no 12 V on pin 16 there is no echo and no module.
 
 - [ ] **Step 1: Write `docs/native/m2-results.md`** with sections: 1 desk rehearsal, 2 trip A
-  (Phase 6), 3 trip B (`IDENT` and echo timing), 4 trip C (fault memory, vehicle status,
+  (Phase 6), 3 trip BC (`IDENT` and echo timing), 4 session C (fault memory, vehicle status,
   whole-car), 5 results against the spec's M2 list, 6 for M3. Each car section has its
   before-the-trip checklist, the exact commands, and empty result tables.
 - [ ] **Step 2: Build release binaries.** `$DOTNET build -c Release engine/ediabasd-net` and
@@ -492,44 +494,54 @@ Amendment 3. Desk only, empty replay, nothing opened.
   m2-results section 2; add to `session-c.json` only the battery reads the screen passes.
   Commit — "M2: gate screen of the modules that answered at the car"
 
-### Task 8: Trip B — `IDENT` on `NVE_65`, telegrams and echo timing
+### Task 8: Trip BC — `NVE_65 IDENT` with telegrams and echo timing, then session C, in one ignition-on session
 
-**Ryan at the car.** Before the trip, in the VM, with Ryan's OK for this change: back up
-`C:\EDIABAS\Bin\EDIABAS.INI` and set `IfhTrace = 3` (as M0 section 4). Restore it after the trip
-and check its SHA-256 against the backup.
+**Ryan at the car, with Ryan's go for the session** (amendment 4). The commands are in `~/m2/trip.sh`
+(amendment 6), one per step, so a stop always falls at a job boundary.
 
-- [ ] **Step 1: VM side** (cable ticked for the VM, ignition on, note the time):
-  `node dev/car-compare.ts run --side vm --jobs dev/m2/session-b.json --out ~/m2/b-vm.jsonl`.
-  Copy `C:\EDIABAS\TRACE\ifh.trc` to `~/m2/b-ifh.trc` over the dev shell.
-- [ ] **Step 2: Move the cable:** untick it in UTM. `ediabasd health`: `free`.
-- [ ] **Step 3: Native side, twice:** two `ediabasd` configs written before the trip,
-  `~/m2/ediabasd-1.json` and `~/m2/ediabasd-16.json` (`ecuPath`, `recordDir` `~/m2/b/`,
-  `latencyMs` 1 and 16):
+- [ ] **Step 1: Before the trip.** Tasks 5b, 6 and 7b done. In the VM, with Ryan's OK for this
+  change: back up `C:\EDIABAS\Bin\EDIABAS.INI`, note the backup's SHA-256, and set `IfhTrace = 3`
+  (as M0 section 4). Three `ediabasd` configs: `~/m2/ediabasd-1.json` and `~/m2/ediabasd-16.json`
+  (`ecuPath`, `recordDir` `~/m2/b/`, `latencyMs` 1 and 16), and `~/m2/ediabasd-c.json`
+  (`recordDir` `~/m2/c/`, latency 1). `mac-mcp` and the Release `ediabasd` built; the Mac on
+  power with `caffeinate -i`; a charger on the car and its voltage noted.
+- [ ] **Step 2: VM side** (cable ticked for the VM, ignition on, note the time):
+  `node dev/car-compare.ts run --side vm --jobs dev/m2/session-b.json --out ~/m2/b-vm.jsonl`, then
+  `node dev/car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl`.
+- [ ] **Step 3: Move the cable** (amendment 5): wait until `vm_health` shows EDIABAS not loaded
+  (about 20 s), untick the cable in UTM, and check that
+  `ediabasd health --config ~/m2/ediabasd-1.json` says `free`.
+- [ ] **Step 4: Native side:**
   `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-1.json --jobs dev/m2/session-b.json --out ~/m2/b-native-1.jsonl`,
-  then the same with `-16`. Ignition off. Note the total time.
-- [ ] **Step 4: Compare:** `car-compare.ts compare` for each native file against `b-vm.jsonl`;
-  `telegrams.ts compare ~/m2/b-ifh.trc <recording>` for the latency-1 recording;
-  `telegrams.ts timing ~/m2/b/*.jsonl`.
-- [ ] **Step 5: Fill section 3:** results match (or every difference explained), telegrams
-  match (or the first divergence explained), the echo/reply table at 1 and 16 ms, short reads.
-  If latency 1 is no faster than 16, note open risk 3 as real (the fallback is a longer
-  `ObdAddRecTimeout`, for M3). Commit — "M2 results: trip B, NVE_65 IDENT matches the VM; echo timing at 1 and 16 ms"
+  the same with `ediabasd-16.json` and `b-native-16.jsonl`, then
+  `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl`.
+  **Ignition off.** Note the total ignition-on time.
+- [ ] **Step 5: Afterwards** (ignition off): copy `C:\EDIABAS\TRACE\ifh.trc` to `~/m2/bc-ifh.trc`
+  over the dev shell. Restore `EDIABAS.INI` from the backup and check its SHA-256 against the
+  backup's. Unplug the cable from the car, then take the charger off.
+- [ ] **Step 6:** If the 10 minutes ran out, note the last job each side completed. Run the rest
+  on another trip with the same steps. No commit (the outputs stay in `~/m2/`).
 
-### Task 9: Trip C — fault memory, vehicle status and the whole-car reads
+### Task 9: Trip BC comparison and write-up (desk)
 
-**Ryan at the car.** No INI change. If the job list will not fit in 10 minutes ignition-on on
-both sides, split it at a job boundary across two trips; each half is compared on its own.
+- [ ] **Step 1: Session B:**
+  - `node dev/car-compare.ts compare ~/m2/b-vm.jsonl ~/m2/b-native-1.jsonl`, and the same for
+    `-16`.
+  - `node dev/telegrams.ts compare ~/m2/bc-ifh.trc <the latency-1 recording>`. Expected: B's
+    exchanges match, then the native side ends, because the trace also holds session C.
+  - `node dev/telegrams.ts timing ~/m2/b/*.jsonl`.
+- [ ] **Step 2: Fill section 3:**
+  - Results match, or every difference is explained.
+  - Telegrams match, or the first divergence is explained.
+  - The echo/reply table at 1 and 16 ms, and short reads.
 
-- [ ] **Step 1: VM side:** `car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl`.
-- [ ] **Step 2: Move the cable** (untick in UTM; `ediabasd health` says `free`).
-- [ ] **Step 3: Native side** (`~/m2/ediabasd-c.json`: `recordDir` `~/m2/c/`, latency 1):
-  `car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl`.
-  Ignition off.
-- [ ] **Step 4: Compare** with `car-compare.ts compare`; count IFH-0003 errors on each side and
-  short reads (`telegrams.ts timing` reports them per recording).
-- [ ] **Step 5: Fill section 4:** per job, match or the explained difference (live values such
-  as voltages may differ between the two reads; fault entries and identities may not). Commit —
-  "M2 results: trip C, fault memory, vehicle status and whole-car reads against the VM"
+  If latency 1 is no faster than 16, note M0's open risk 3 as real (the fallback is a longer
+  `ObdAddRecTimeout`, for M3). Commit — "M2 results: trip BC, NVE_65 IDENT matches the VM; echo timing at 1 and 16 ms"
+- [ ] **Step 3: Session C:** `node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl`
+  (it counts IFH-0003 per side), and `node dev/telegrams.ts timing ~/m2/c/*.jsonl` for short reads.
+- [ ] **Step 4: Fill section 4:** per job, a match or the explained difference. Live values
+  such as voltages may differ between the two reads; fault entries and identities may not.
+  Commit — "M2 results: trip BC, fault memory, vehicle status and whole-car reads against the VM"
 
 ### Task 10: M2 results and whole-branch review
 

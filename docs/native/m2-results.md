@@ -24,9 +24,9 @@ gate refuses natively (M1, section 2) are in no native job list. Recordings, tra
 outputs stay under `~/m2/`, never in the repo: a `C_FA_LESEN` reply holds the VIN.
 
 Status: procedures written; trip A done as Phase 6 (2026-11-23, section 2); the desk rehearsal
-and trips B and C not run yet. The plan's "Amendments after Phase 6" (2026-11-24) changed
-what follows: merge main (0.7.0) first, screen the answering modules' jobs against the gate,
-and trips B and C may run as one ignition-on session.
+and trip BC not run yet. The plan's "Amendments after Phase 6" (2026-11-24) changed what
+follows: merge main (0.7.0) first, screen the answering modules' jobs against the gate, and
+run trips B and C as one ignition-on session, trip BC (Ryan, 2026-11-24).
 
 Commands below use:
 ```sh
@@ -118,46 +118,78 @@ modules were never screened.
 |---|---|---|---|
 | | | | |
 
-## 3. Trip B: `NVE_65 IDENT`, telegrams and echo timing (Ryan at the car)
+## 3. Trip BC: `NVE_65 IDENT` with telegrams and echo timing, then session C (Ryan at the car)
+
+One ignition-on session (Ryan, 2026-11-24). The VM runs B, then C. The cable moves once. Then
+`ediabasd` runs B at 1 ms, B at 16 ms, then C. By Phase 6's timings each side takes under a
+minute. Every command is in `~/m2/trip.sh`, one per step. A stop therefore always falls at a
+job boundary, and Ryan can run the commands directly if Claude's link drops.
 
 ### Before
 
+- [ ] Plan tasks 5b (main merged), 6 (desk rehearsal) and 7b (gate screen) are done, and
+      `dev/m2/session-c.json` holds only reads the screen passed.
 - [ ] In the VM, with Ryan's OK for this change: back up `C:\EDIABAS\Bin\EDIABAS.INI` and set
       `IfhTrace = 3` (as M0, section 4). Note the backup's SHA-256.
-- [ ] `~/m2/ediabasd-1.json` and `~/m2/ediabasd-16.json`: `ecuPath`, `recordDir` `~/m2/b/`,
-      `latencyMs` 1 and 16.
+- [ ] Three configs, each with `ecuPath`:
+      - `~/m2/ediabasd-1.json`: `recordDir` `~/m2/b/`, `latencyMs` 1.
+      - `~/m2/ediabasd-16.json`: `recordDir` `~/m2/b/`, `latencyMs` 16.
+      - `~/m2/ediabasd-c.json`: `recordDir` `~/m2/c/`, `latencyMs` 1.
 - [ ] `mac-mcp` built; `ediabasd` Release built; Mac on power and kept awake (`caffeinate -i`).
-- [ ] The trip's commands in `~/m2/trip.sh`, so Ryan can run them himself if Claude's link drops.
-- [ ] Decide whether trips B and C run as one ignition-on session (plan amendment 4): VM B, VM C,
-      move the cable once, native B at 1 and 16 ms, native C.
+- [ ] `~/m2/trip.sh` written and read through.
 
 ### Steps (Ryan's go)
 
-1. **VM side** (cable ticked for the VM, ignition on, note the time):
-   `node dev/car-compare.ts run --side vm --jobs dev/m2/session-b.json --out ~/m2/b-vm.jsonl`.
-   Copy `C:\EDIABAS\TRACE\ifh.trc` to `~/m2/b-ifh.trc` over the dev shell.
-2. **Move the cable:** wait until `vm_health` shows EDIABAS not loaded (about 20 s after the
-   last VM read), then untick it in UTM. `$EDIABASD health --config ~/m2/ediabasd-1.json`: `free`.
-3. **Native side, twice:**
+1. **VM side:** cable ticked for the VM, charger on and its voltage noted. Ignition on; note
+   the time. Then run:
+   `node dev/car-compare.ts run --side vm --jobs dev/m2/session-b.json --out ~/m2/b-vm.jsonl`, then
+   `node dev/car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl`.
+2. **Move the cable:**
+   - Wait until `vm_health` shows EDIABAS not loaded (about 20 s after the last VM read).
+   - Untick the cable in UTM.
+   - Check that `$EDIABASD health --config ~/m2/ediabasd-1.json` says `free`.
+3. **Native side:**
    `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-1.json --jobs dev/m2/session-b.json --out ~/m2/b-native-1.jsonl`,
-   then the same with `ediabasd-16.json` and `b-native-16.jsonl`. Ignition off. Note the total time.
-4. **Compare:** `node dev/car-compare.ts compare ~/m2/b-vm.jsonl ~/m2/b-native-1.jsonl` (and
-   `-16`); `node dev/telegrams.ts compare ~/m2/b-ifh.trc <the latency-1 recording>`;
-   `node dev/telegrams.ts timing ~/m2/b/*.jsonl`.
+   the same with `ediabasd-16.json` and `b-native-16.jsonl`, then
+   `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl`.
+   **Ignition off.** Note the total time.
+4. If the 10 minutes run out: stop at a job boundary, switch the ignition off, and note the
+   last job each side completed. The rest goes to another trip.
 
-### Afterwards
+### Afterwards (ignition off)
 
+- [ ] Copy `C:\EDIABAS\TRACE\ifh.trc` to `~/m2/bc-ifh.trc` over the dev shell.
 - [ ] Restore `EDIABAS.INI` from the backup and check its SHA-256 against the backup's.
+- [ ] Unplug the cable from the car, then take the charger off.
 
-### Results
+### Compare (desk)
+
+- **Session B:**
+  - `node dev/car-compare.ts compare ~/m2/b-vm.jsonl ~/m2/b-native-1.jsonl`, and the same for
+    `-16`.
+  - `node dev/telegrams.ts compare ~/m2/bc-ifh.trc <the latency-1 recording>`. The trace also
+    holds session C, so expect B's exchanges to match and then "the native side ended".
+  - `node dev/telegrams.ts timing ~/m2/b/*.jsonl`.
+- **Session C:**
+  - `node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl` (it counts IFH-0003
+    per side).
+  - `node dev/telegrams.ts timing ~/m2/c/*.jsonl` for short reads.
+
+### Results: the trip
 
 | | |
 |---|---|
 | Date, charger voltage, ignition-on time | |
+| Completed: all, or the last job on each side | |
+| `EDIABAS.INI` restored, SHA-256 matches | |
+
+### Results: session B
+
+| | |
+|---|---|
 | Results, native (1 ms) against VM | |
 | Results, native (16 ms) against VM | |
 | Telegrams: matched, first divergence | |
-| `EDIABAS.INI` restored, SHA-256 matches | |
 
 | Recording | Latency | Echoes | Echo ms min/median/max | Replies | Reply ms min/median/max | Short reads |
 |---|---|---|---|---|---|---|
@@ -169,28 +201,7 @@ If latency 1 is no faster than 16, M0's open risk 3 is real; the fallback is a l
 
 ---
 
-## 4. Trip C: fault memory, vehicle status and the whole-car reads (Ryan at the car)
-
-No INI change. If the job list will not fit in 10 minutes of ignition-on on both sides, it is
-split at a job boundary across two trips, and each half is compared on its own.
-
-### Before
-
-- [ ] `dev/m2/session-c.json` holds trip A's answering modules (done 2026-11-24) and only
-      reads the gate screen (section 2) passed.
-- [ ] `~/m2/ediabasd-c.json`: `ecuPath`, `recordDir` `~/m2/c/`, `latencyMs` 1.
-
-### Steps (Ryan's go)
-
-1. **VM side:** `node dev/car-compare.ts run --side vm --jobs dev/m2/session-c.json --out ~/m2/c-vm.jsonl`.
-2. **Move the cable** (EDIABAS released in the VM, then untick in UTM; `health` says `free`).
-3. **Native side:**
-   `node dev/car-compare.ts run --side native --ediabasd-config ~/m2/ediabasd-c.json --jobs dev/m2/session-c.json --out ~/m2/c-native.jsonl`.
-   Ignition off.
-4. **Compare:** `node dev/car-compare.ts compare ~/m2/c-vm.jsonl ~/m2/c-native.jsonl` (it counts
-   IFH-0003 per side); `node dev/telegrams.ts timing ~/m2/c/*.jsonl` for short reads.
-
-### Results
+## 4. Session C: fault memory, vehicle status and the whole-car reads (from trip BC)
 
 | ECU | Job | Outcome | Difference, explained |
 |---|---|---|---|
