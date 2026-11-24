@@ -71,9 +71,22 @@ public sealed class TelegramCheck
     public const string ReasonUnreadable = "unreadable_trace";
     public const string ReasonNoTrace = "no_trace";
     public const string ReasonTooLarge = "trace_too_large";
+    public const string ReasonRewritten = "trace_rewritten";
+    public const string ReasonJobNotStopped = "job_not_stopped";
+    public const string ReasonPreface = "telegram_preface";
+    public const string ReasonCheckFailed = "check_failed";
 
     /// <summary>More trace than this for one request is not read; it is a finding.</summary>
-    public const int MaxSegmentBytes = 64 * 1024 * 1024;
+    public const int MaxSegmentBytes = 16 * 1024 * 1024;
+
+    /// <summary>How many bytes before a request's start are kept and compared afterwards, to see
+    /// that the trace was appended to, not replaced or rewritten.</summary>
+    public const int FingerprintBytes = 256;
+
+    /// <summary>The function that sets the telegram preface; EDIABAS calls it with four zero bytes
+    /// before every job. A real preface changes the bytes on the wire, so anything else is a
+    /// finding.</summary>
+    public const string SetTelParameter = "SETTELPARAMETER";
 
     private const int MaxIniBytes = 1024 * 1024;
 
@@ -81,7 +94,7 @@ public sealed class TelegramCheck
     /// (a frequent or repeated telegram, raw mode, programming voltage, …) is a finding.</summary>
     public static readonly IReadOnlySet<string> KnownFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
-        IfhTrace.Open, "GETBATTERYVOLTAGE", "STOPECUTELFREQUENT", IfhTrace.SetEcuComm, "SETTELPARAMETER", IfhTrace.SendEcuTel,
+        IfhTrace.Open, "GETBATTERYVOLTAGE", "STOPECUTELFREQUENT", IfhTrace.SetEcuComm, SetTelParameter, IfhTrace.SendEcuTel,
     };
 
     private readonly string _mode;
@@ -179,7 +192,19 @@ public sealed class TelegramCheck
         }
 
         var concept = traceFile == _carryPath && length == _carryOffset ? _carryConcept : null;
-        start = new TraceStart(traceFile!, length, concept);
+        byte[] tail;
+        try
+        {
+            var n = (int)Math.Min(length, FingerprintBytes);
+            tail = n > 0 ? _files.Read(traceFile!, length - n, n) : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            tail = [];
+            _log.Warn($"telegram check: the end of {traceFile} cannot be read before the request ({ex.GetType().Name}); a replaced trace is then noticed only if it is shorter");
+        }
+
+        start = new TraceStart(traceFile!, length, concept, tail);
         return null;
     }
 
@@ -210,9 +235,33 @@ public sealed class TelegramCheck
     /// <paramref name="ranJob"/> says whether the request started an EDIABAS job (then the trace
     /// must have grown).
     /// </summary>
-    public TelegramCheckResult End(TraceStart start, bool ranJob)
+    public TelegramCheckResult End(TraceStart start, bool ranJob, bool jobNotStopped = false)
+    {
+        try
+        {
+            return EndCore(start, ranJob, jobNotStopped);
+        }
+        catch (Exception ex)
+        {
+            // Whatever went wrong (memory, a regex timeout, a bug), the request was not checked.
+            var findings = new List<TelegramFinding>
+            {
+                new(CheckUnavailable, ReasonCheckFailed, null, null, null,
+                    $"the check of {start.TraceFile} failed ({ex.GetType().Name}: {ex.Message}), so what EDIABAS sent was not checked."),
+            };
+            return Finish(start, findings, 0, null, null);
+        }
+    }
+
+    private TelegramCheckResult EndCore(TraceStart start, bool ranJob, bool jobNotStopped)
     {
         var findings = new List<TelegramFinding>();
+        if (jobNotStopped)
+        {
+            findings.Add(new TelegramFinding(CheckUnavailable, ReasonJobNotStopped, null, null, null,
+                "a job did not stop after apiBreak, so what it sends from now on cannot be checked."));
+        }
+
         var checkedCount = 0;
         string text;
         var rotated = false;
@@ -225,6 +274,17 @@ public sealed class TelegramCheck
                 // The file is shorter than before the request: EDIABAS started a new one.
                 rotated = true;
                 readFrom = 0;
+            }
+
+            if (!rotated && start.Tail.Length > 0)
+            {
+                var again = _files.Read(start.TraceFile, start.Length - start.Tail.Length, start.Tail.Length);
+                if (!again.AsSpan().SequenceEqual(start.Tail))
+                {
+                    findings.Add(new TelegramFinding(CheckUnavailable, ReasonRewritten, null, null, null,
+                        $"{start.TraceFile} was replaced or rewritten during the request (its bytes before the request's start changed), so what EDIABAS sent cannot be found in it."));
+                    return Finish(start, findings, 0, null, null);
+                }
             }
 
             var added = now - readFrom;
@@ -273,6 +333,13 @@ public sealed class TelegramCheck
             {
                 findings.Add(new TelegramFinding(TelegramNotAllowed, ReasonUnknownFunction, e.Name, concept, input,
                     $"EDIABAS called the interface function {e.Name}, which the check does not know{note}."));
+                continue;
+            }
+
+            if (e.Name == SetTelParameter && (e.Input ?? []).Any(b => b != 0))
+            {
+                findings.Add(new TelegramFinding(TelegramNotAllowed, ReasonPreface, e.Name, concept, input,
+                    $"EDIABAS set the telegram preface to {input}, which would change the bytes sent after they were checked{note}."));
                 continue;
             }
 
@@ -333,4 +400,12 @@ public sealed class TelegramCheck
 }
 
 /// <summary>Where a request's part of the trace starts, and the concept in force there.</summary>
-public sealed record TraceStart(string TraceFile, long Length, ushort? Concept);
+/// <para><paramref name="Tail"/>: the trace's last bytes before the start, compared after the
+/// request.</para>
+public sealed record TraceStart(string TraceFile, long Length, ushort? Concept, byte[] Tail)
+{
+    public TraceStart(string traceFile, long length, ushort? concept)
+        : this(traceFile, length, concept, [])
+    {
+    }
+}

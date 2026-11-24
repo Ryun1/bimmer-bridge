@@ -20,7 +20,7 @@ inside the gate traps before anything is forwarded (ending the EDIABAS process u
 [docs/api.md "Telegram rule"](../docs/api.md#telegram-rule), version 1, from
 [`policy/telegrams.json`](../policy/telegrams.json). `src/rule.zig` implements it as a pure
 function, `check(concept, frame, list) ?Refusal`, with the reasons `no_concept`,
-`unknown_concept`, `ds2`, `malformed`, `adapter`, `service`. The allow-list is compiled in:
+`unknown_concept`, `ds2`, `malformed`, `adapter`, `service`, `ambiguous`. The allow-list is compiled in:
 `tools/gen_allowlist.zig` validates `policy/telegrams.json` at build time (`src/allowlist_json.zig`:
 unknown, missing or duplicate keys, a version other than 1, anything but two-digit hex bytes,
 an empty `note`, or `10`/`30`/`31` in `readServices` fail the build) and emits Zig source.
@@ -36,14 +36,25 @@ DLL. `zig build test` runs every case in
 |---|---|
 | 29 ifhSendTelegram, 30 ifhSendTelegramFreq | `msgIn` data judged as a telegram, under the channel's concept |
 | 31 ifhRequTelegramFreq, 34 ifhRepeatLastMsg | allowed when `msgIn` len is 0, else judged as a telegram |
-| 1–5, 8, 11–14, 20–24, 27, 28, 32, 33, 35, 37, 40, 43, 46–49, 51, 54 | allowed without inspection, logged |
-| 25, 26, 36, 38, 39, 41, 42, 44, 45, 50, and every other number | refused (`function`) |
+| 28 ifhSetTelPreface | allowed only when `msgIn` is empty or all zero bytes (EDIABAS sets `00 00 00 00` before every job, `SETTELPARAMETER` in `IFH.trc`); a real preface would change the bytes on the wire after they were judged, so it is refused (`function`) |
+| 1–5, 8, 11–14, 20–24, 27, 32, 33, 35, 37, 40, 43, 46–49, 51 | allowed without inspection, logged |
+| 25, 26, 36, 38, 39, 41, 42, 44, 45, 50, 54, and every other number | refused (`function`); 54 IfhSetParameterRaw because it could set the protocol without the gate seeing the concept |
 
 The concept is taken from each forwarded `ifhSetParameter` (27): its first two data bytes,
-little-endian (fewer than two bytes → none). It is kept **per `MESSAGE` channel** (a telegram on
-a channel whose concept was never set is `no_concept`; at most 16 channels are tracked, a 17th
-stays at none), and cleared by `ifhInit` (1), `ifhEnd` (8), `dllStartupIFH` and
-`dllShutdownIFH`. `IfhSetParameterRaw` (54) does not set the concept: its data is only logged.
+little-endian (fewer than two bytes → none). The channel's concept is cleared before the call is
+forwarded and set after it returns, so a call that never returns leaves none. It is kept **per
+`MESSAGE` channel** (a telegram on a channel whose concept was never set is `no_concept`; at
+most 16 channels are tracked, a 17th stays at none), but a telegram is judged by it only when
+every channel with a concept has the same one; otherwise it is judged with none
+(`no_concept`), because whether `XStd32.dll` keeps one concept per channel or one in all is not
+known. Concepts are cleared by `ifhInit` (1), `ifhEnd` (8), `ifhConnect` (20), `ifhDisconnect`
+(21), `dllStartupIFH` and `dllShutdownIFH`; EDIABAS sets the concept before every job
+(`SETECUCOMM` in the desk trace), so this costs nothing.
+
+Whether `XStd32.dll` keeps its old protocol when it rejects a new one is not known either (the
+return code is logged). The rule's step 7 makes a wrong guess between BMW-FAST and KWP2000\*
+harmless: a frame that the other framing would read as something refused is refused
+(`ambiguous`).
 
 Other refusal reasons, besides the rule's: `function` (above), `compat` (the `MESSAGE` layout
 is not known to be compatibility 5/6), `no_message` (`msgIn` is null), `ifh_name` (the
@@ -107,7 +118,7 @@ logged (data is capped at 256 bytes, `msgOut` data at 64).
 | Line | When |
 |---|---|
 | `LOAD … mode= ini= rule=v1 inner=` | first call into the DLL; `inner=none: every call fails: <why>` if `XStd32.dll` did not load |
-| `CHECK compat=<n> fwd= rc=` | `dllCheckIFH`; `layout=unsupported` below 5 |
+| `CHECK compat=<n> fwd= rc=` | `dllCheckIFH`; `layout=unsupported` outside 5–6 |
 | `STARTUP ini= ifh= as= fwd= rc=` | `dllStartupIFH`, with the name forwarded (`as=`) |
 | `CALL fkt=<n> <name> wParam= ch= len= data= concept= verdict= [judged=] fwd= rc= [newConcept=] [outLen= out=]` | every `dllCallIFH`, after it returns; `layout=unknown` replaces `ch`…`concept` when the layout is not known |
 | `REFUSED <reason> fkt=<n> frame=<hex>` then `LATCHED` | a refusal in enforce mode (written before that call's `CALL` line) |
@@ -157,12 +168,14 @@ should fail to open, so the agent does not silently run ungated (check this once
 | Assumption | How the log confirms it |
 |---|---|
 | `apiInitExt("GATE:OBD", …)` makes EDIABAS 7.3.0 load `XGate32.dll` | a `LOAD` line appears at all, from the agent's process (`pid=`); `STARTUP ifh=` shows what EDIABAS passes (`GATE:OBD`, `OBD`, …) and `rc=0`-style success from `XStd32.dll` with `as=STD:OBD` |
-| `dllCheckIFH` is called before any `dllCallIFH`, with compatibility 5 or 6 | `CHECK compat=` comes before the first `CALL` (if it does not, enforce refuses everything with `compat`) |
+| `dllCheckIFH` is called before any `dllCallIFH`, with compatibility 5 or 6 | `CHECK compat=` comes before the first `CALL` (if it does not, or the number is outside 5–6, enforce refuses everything with `compat`) |
 | the `MESSAGE` layout (`fktNo, wParam, reserved, channel, len, data`, pack 4) | `CALL` lines show sensible `fkt=`, `len=` and `data=` (no crashes, no huge lengths) |
 | 27 ifhSetParameter: data starts with the concept, UINT16 LE | `CALL fkt=27 … data=0F01…` and `newConcept=010F`, matching `SETECUCOMM` in EDIABAS's `IFH.trc` |
 | 29/30 ifhSendTelegram(Freq): data is exactly the telegram | `data=` equals the `SENDECUTEL` input in `IFH.trc`, and reads come out `verdict=allow` |
 | 31 and 34 carry either nothing or a telegram | their `len=` and `data=` |
-| 54 IfhSetParameterRaw: whether it carries a concept | its `data=` next to the 27 lines (the gate ignores it for the concept) |
+| 28 ifhSetTelPreface is the trace's `SETTELPARAMETER`, always `00 00 00 00` | `CALL fkt=28 … data=00000000 verdict=allow`; any `WOULD_REFUSE function fkt=28` needs a decision |
+| 54 IfhSetParameterRaw is not used in a read session | no `fkt=54` lines (it is refused) |
+| 27's return code on success, and what `XStd32.dll` does on a rejected concept | the `rc=` on `fkt=27` lines |
 | the channel field: one channel per session, set before the telegrams on it | `ch=` on the 27 lines matches `ch=` on the 29 lines (else telegrams show `concept=none` and `judged=refuse:no_concept`) |
 | a refused call's return (`-1`, `msgOut->len = 0`) gives a clean EDIABAS error, not a hang | in enforce mode, run a job the policy denies with the gate's help: note the EDIABAS error the agent reports, and that `ifhEnd`/`ifhDisconnect` still go through after `LATCHED` |
 | `dllExitIFH`'s signature (taken as no arguments; the return register is passed through) | `EXIT eax=` is logged and EDIABAS unloads without an error |

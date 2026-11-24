@@ -69,7 +69,7 @@ public class TelegramRuleTests
     [Fact]
     public void Fixture_HasEveryCase()
     {
-        Assert.Equal(51, Cases().Count);
+        Assert.Equal(58, Cases().Count);
     }
 
     [Fact]

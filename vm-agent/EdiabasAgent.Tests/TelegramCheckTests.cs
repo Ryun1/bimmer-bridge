@@ -326,6 +326,81 @@ public class TelegramCheckTests
         Assert.True(Run(Service()).Ok);
     }
 
+    [Fact]
+    public void TraceRewrittenInPlace_IsUnavailable_AndLatches()
+    {
+        // Same length or longer, but the bytes before the request's start changed: the file was
+        // replaced or wrapped, so the part read afterwards is not this request's.
+        _files.Write(Trace, IfhTraceTests.Fixture());
+        var before = _files.Files[Trace].Count;
+        _api.DuringInit = () => _files.Write(Trace, new string('x', before) + Call("OPEN /x", "--"));
+        Sends = [("010F", "83 12 F1 14 FF FF")];
+
+        var r = Run(Service());
+
+        Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
+        Assert.Equal("trace_rewritten", ((ReasonDetails)r.Failure.Error.Details!).Reason);
+        Assert.NotNull(_latch.Info);
+    }
+
+    [Fact]
+    public void ZeroPreface_Passes_ARealPrefaceIsRefused()
+    {
+        _api.DuringJob = () =>
+        {
+            _files.Append(Trace, Call("SETECUCOMM", "0F 01 00 00"));
+            _files.Append(Trace, Call("SETTELPARAMETER", "00 00 00 00"));
+            _files.Append(Trace, Call("SENDECUTEL", "82 12 F1 1A 80"));
+        };
+        Assert.True(Run(Service()).Ok);
+
+        _api.DuringJob = () =>
+        {
+            _files.Append(Trace, Call("SETECUCOMM", "0F 01 00 00"));
+            _files.Append(Trace, Call("SETTELPARAMETER", "00 2E 00 00"));
+            _files.Append(Trace, Call("SENDECUTEL", "82 12 F1 1A 80"));
+        };
+        var r = Run(Service());
+        Assert.Equal(ApiErrors.TelegramNotAllowed, r.Failure!.Error.Code);
+        Assert.Equal("telegram_preface", ((TelegramRefusalDetails)r.Failure.Error.Details!).Reason);
+        Assert.NotNull(_latch.Info);
+    }
+
+    [Fact]
+    public void AmbiguousFrame_IsRefused()
+    {
+        // $22 to BMW-FAST, $2E to KWP2000*.
+        Sends = [("010F", "A3 12 F1 22 2E" + string.Concat(Enumerable.Repeat(" 00", 33)))];
+        var r = Run(Service());
+        Assert.Equal(ApiErrors.TelegramNotAllowed, r.Failure!.Error.Code);
+        Assert.Equal("ambiguous", ((TelegramRefusalDetails)r.Failure.Error.Details!).Reason);
+    }
+
+    [Fact]
+    public void JobThatNeverStops_Latches()
+    {
+        _api.On("NVE_65 IDENT", new FakeJob { NeverFinishes = true, IgnoresBreak = true });
+
+        var r = Run(Service());
+
+        Assert.False(r.Ok);
+        Assert.NotNull(_latch.Info);
+        Assert.Equal("job_not_stopped", _latch.Info!.Reason);
+    }
+
+    [Fact]
+    public void AnyFailureOfTheCheck_Latches()
+    {
+        // Not an IOException: the check itself fails. The request must not pass unchecked.
+        _api.DuringJob = () => _files.Files[Trace] = null!;
+
+        var r = Run(Service());
+
+        Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
+        Assert.Equal("check_failed", ((ReasonDetails)r.Failure.Error.Details!).Reason);
+        Assert.NotNull(_latch.Info);
+    }
+
     // ---- EDIABAS.INI ----
 
     [Theory]
