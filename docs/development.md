@@ -41,7 +41,7 @@ handles) is built by `vm-agent/build.sh` but can only be exercised in the VM, by
 | `test_serve.py` | its tests: `python3 -m unittest dev/test_serve.py` |
 | `replay-agent.ts` | a stand-in VM agent that answers only from recorded fixtures, on 127.0.0.1 |
 | `record-server.ts`, `recorder.ts`, `ts-resolve.mjs` | the MCP server with a recording `fetch`: writes every agent exchange to `EDIABAS_RECORD_DIR` ([Recording and scrubbing](#recording-and-scrubbing)) |
-| `sgbd-sweep.ts` | reads copies of the VM's SGBD files (`.prg`) and lists every job the job policy allows that sends something other than a read, by replaying each job's code to its sends: how `deny.ecuJobs` was found ([policy/README.md](../policy/README.md)) |
+| `sgbd-sweep.ts` | reads copies of the VM's SGBD and group files (`.prg`, `.grp`), decodes each job's code (instruction format and registers as in EdiabasLib) and replays it to its sends, then lists every job the job policy allows, under the SGBD's name or any group that resolves to it, that sends something other than a read: how `deny.ecuJobs` was found ([policy/README.md](../policy/README.md)) |
 | `scrub-fixtures.ts` | copies a raw recording (`EDIABAS_RECORD_DIR`) into `fixtures/<scenario>/` with identifiers removed |
 | `fixtures/` | recorded scenarios (`idle`, `inpa-open`): [dev/fixtures/README.md](../dev/fixtures/README.md) |
 | `test/` | vitest tests for the replay agent, scrubber and SGBD sweep, run from `mac-mcp`; `fixtures-clean.test.ts` checks that every committed fixture needs no scrubbing; `doc-links.test.ts` checks that every relative link in the repo's markdown resolves |

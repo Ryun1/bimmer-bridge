@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PolicyGuard } from "../../mac-mcp/src/policy.ts";
-import { classifyService, findTelegrams, parsePrg, sweepFolder, traceSends } from "../sgbd-sweep.ts";
+import { analyseJob, classifyService, findTelegrams, groupsBySgbd, parsePrg, sweepFolder, traceSends } from "../sgbd-sweep.ts";
 
 /** `move S1d, "<bytes>"`: opcode 00, mode 0x18 (string register, immediate string). */
 const moveImm = (bytes: number[]) => [0x00, 0x18, 0x1d, bytes.length & 0xff, bytes.length >> 8, ...bytes];
@@ -88,10 +88,17 @@ describe("findTelegrams", () => {
     expect(t).toMatchObject({ service: 0x2c, kind: "define", lengthOk: true });
   });
 
-  it("reads a long-form template whose length byte the job inserts later (service right after the header)", () => {
-    // D40M57A1 STATUS_DIGITAL and MS450DS0: 80 12 F1 2C 10 is $2C, not a session change ($10).
+  it("classes a long-form template whose length byte does not fit as the worse of its two readings", () => {
+    // D40M57A1 STATUS_DIGITAL: 80 12 F1 2C 10 is $2C with the length byte inserted later, or a
+    // length byte 2C and $10. Both are known services, so the worse one counts.
     const [t] = findTelegrams(Buffer.from(moveImm([0x80, 0x12, 0xf1, 0x2c, 0x10])));
-    expect(t).toMatchObject({ service: 0x2c, kind: "define", lengthOk: false });
+    expect(t).toMatchObject({ service: 0x10, kind: "session", lengthOk: false });
+  });
+
+  it("does not let a length byte that equals a read service hide a write after it", () => {
+    // 0x12 and 0x21 are read services as well as plausible lengths for an appended request.
+    expect(classifyService([0xb8, 0x12, 0xf1, 0x12, 0x3b, 0x01])).toMatchObject({ service: 0x3b, kind: "write" });
+    expect(classifyService([0x80, 0x12, 0xf1, 0x21, 0x2e, 0x10, 0x01])).toMatchObject({ service: 0x2e, kind: "write" });
   });
 
   it("reads a length byte whose bytes the job appends (service after the length)", () => {
@@ -177,6 +184,80 @@ describe("traceSends", () => {
   });
 });
 
+describe("analyseJob: what the replay follows", () => {
+  it("decodes operands by their modes, so bytes inside an operand are never read as instructions", () => {
+    // ergs "x", "2a 11 1e 1d": an immediate string that looks like an xsend is data.
+    const ergs = [0x39, 0x88, 1, 0, 0x78, 4, 0, 0x2a, 0x11, 0x1e, 0x1d];
+    expect(analyseJob(Buffer.from(ergs))).toEqual({ sent: [], constants: [], unresolved: 0 });
+  });
+
+  it("follows a patch through an immediate index and value (move S1e[#3], #2E)", () => {
+    const code = [...moveImm([0x83, 0x01, 0xf1, 0x22, 0x10, 0x00]), 0x00, 0x11, 0x1e, 0x1d, 0x00, 0x95, 0x1e, 3, 0, 0x2e, ...xsend(0x1e)];
+    expect(traceSends(Buffer.from(code)).sent.map((t) => t.kind)).toEqual(["write"]);
+  });
+
+  it("uses the extended registers (L4 at 0x98 holds the index)", () => {
+    const code = [
+      ...moveImm([0x83, 0xff, 0xf1, 0x22, 0x10, 0x00]), 0x00, 0x11, 0x1e, 0x1d,
+      0x00, 0x47, 0x98, 3, 0, 0, 0, // move L4, 3
+      0x00, 0xa5, 0x1e, 0x98, 0x3b, // move S1e[L4], #3B
+      ...xsend(0x1e),
+    ];
+    expect(traceSends(Buffer.from(code)).sent.map((t) => t.hex)).toEqual(["83 FF F1 3B 10 00"]);
+  });
+
+  it("clears a register before scat, instead of appending to what was left in it", () => {
+    const code = [...moveImm([0x99]), 0x01, 0x10, 0x1d, ...scatImm([0x82, 0x01, 0xf1, 0x14, 0xff]), ...xsend(0x1d)];
+    expect(traceSends(Buffer.from(code)).sent.map((t) => t.hex)).toEqual(["82 01 F1 14 FF"]);
+  });
+
+  it("follows a length byte inserted with spaste, so the service is read after it (07MSD802 STATUS_HFMS)", () => {
+    // 83 FF F1 30 2E 01 is made long form: format byte set to B8, then a computed length byte
+    // (unknown to the replay) pasted at index 3. The service stays $30, not the $2E after it.
+    const code = [
+      ...moveImm([0x83, 0xff, 0xf1, 0x30, 0x2e, 0x01]), 0x00, 0x11, 0x1e, 0x1d,
+      0x00, 0x95, 0x1e, 0, 0, 0xb8, // move S1e[#0], #B8
+      0x23, 0x31, 0x18, 0x1e, // slen L0, S1e (unknown to the replay)
+      0x24, 0x92, 0x1e, 3, 0, 0x00, // spaste S1e[#3], B0
+      ...xsend(0x1e),
+    ];
+    const [t] = traceSends(Buffer.from(code)).sent;
+    expect(t).toMatchObject({ service: 0x30, kind: "control", exact: true });
+    expect(t!.hex.startsWith("B8 FF F1 00 30 2E 01")).toBe(true);
+  });
+
+  it("does not grade a send whose service byte it could not follow; counts it as unresolved", () => {
+    // 07MSD802-style: the template's bytes are overwritten from a register the replay cannot follow.
+    const code = [
+      ...moveImm([0x83, 0xff, 0xf1, 0x22, 0x40, 0x08]), 0x00, 0x11, 0x1e, 0x1d,
+      0x23, 0x31, 0x18, 0x1f, // slen L0, S1f (unknown)
+      0x00, 0x92, 0x1e, 3, 0, 0x00, // move S1e[#3], B0
+      ...xsend(0x1e),
+    ];
+    const a = analyseJob(Buffer.from(code));
+    expect(a.sent).toEqual([]);
+    expect(a.unresolved).toBe(1);
+    expect(a.constants.map((x) => x.kind)).toEqual(["read"]);
+  });
+
+  it("counts xsendf (request in the first operand) as a send", () => {
+    const code = [...moveImm([0x83, 0x01, 0xf1, 0x2e, 0x10, 0x00]), 0x2b, 0x10, 0x1d];
+    expect(traceSends(Buffer.from(code)).sent.map((t) => t.kind)).toEqual(["write"]);
+  });
+
+  it("keeps a write constant that the straight-line replay never sends (it sits behind a jump)", () => {
+    const code = [
+      ...moveImm([0x83, 0x01, 0xf1, 0x2e, 0x10, 0x00]),
+      0x0b, 0x70, 0, 0, 0, 0, // jump (not followed)
+      ...moveImm([0x83, 0x01, 0xf1, 0x22, 0x10, 0x00]),
+      ...xsend(0x1d),
+    ];
+    const a = analyseJob(Buffer.from(code));
+    expect(a.sent.map((t) => t.kind)).toEqual(["read"]);
+    expect(a.constants.map((t) => t.kind)).toEqual(["write", "read"]);
+  });
+});
+
 describe("sweepFolder", () => {
   let dir: string;
   beforeEach(() => {
@@ -206,20 +287,49 @@ describe("sweepFolder", () => {
     expect(report.files).toBe(1);
     expect(report.allowedJobs).toBe(3);
     expect(report.withoutTelegram).toEqual([{ ecu: "SYNTH_SG", job: "STATUS_LEER", rule: "allow.pattern" }]);
+    expect(report.unresolvedOnly).toEqual([]);
     expect(report.findings).toEqual([
       {
         ecu: "SYNTH_SG",
+        sgbd: "SYNTH_SG",
         job: "STATUS_ROC",
         rule: "allow.pattern",
         kind: "write",
-        traced: false,
+        confirmed: false,
         comment: "Status des Rollover Controller lesen / KWP2000: $22 ReadDataByCommonIdentifier",
-        telegrams: [
+        sent: [],
+        constants: [
           { hex: "85 FF F1 2E 99 02 FF FF", service: 0x2e, name: "WriteDataByCommonIdentifier", kind: "write", lengthOk: true },
           { hex: "83 01 F1 22 99 04", service: 0x22, name: "ReadDataByCommonIdentifier", kind: "read", lengthOk: true },
         ],
+        unresolved: 0,
       },
     ]);
+  });
+
+  it("is confirmed when the write is seen at a send", () => {
+    writeFileSync(join(dir, "SYNTH_SG.prg"), buildPrg([{ name: "STATUS_W", code: [...moveImm([0x83, 0x01, 0xf1, 0x3b, 0xfa, 0x01]), ...xsend(0x1d)] }]));
+    expect(sweepFolder(dir, PolicyGuard.load()).findings.map((f) => [f.job, f.kind, f.confirmed])).toEqual([["STATUS_W", "write", true]]);
+  });
+
+  it("reports a write under every group that can resolve to the SGBD: T_GRTB's group, the address group, and a group naming it", () => {
+    writeFileSync(join(dir, "SYNTH_SG.prg"), buildPrg([{ name: "STATUS_W", code: [...moveImm([0x83, 0x29, 0xf1, 0x2e, 0x10, 0x00]), ...xsend(0x1d)] }]));
+    const rows = Buffer.from("29 ---- 0270\0SYNTH_SG\0D_SYN\0E65\0Synthetic\0", "latin1");
+    writeFileSync(join(dir, "T_GRTB.prg"), Buffer.concat([buildPrg([]), Buffer.from(rows.map((v) => v ^ 0xf7))]));
+    const grp = (text: string) => Buffer.concat([buildPrg([]), Buffer.from(Buffer.from(text, "latin1").map((v) => v ^ 0xf7))]);
+    writeFileSync(join(dir, "D_SYN.grp"), grp("IDENTIFIKATION\0"));
+    writeFileSync(join(dir, "d_0029.grp"), grp("IDENTIFIKATION\0"));
+    writeFileSync(join(dir, "D_OTHER.GRP"), grp("HW_Tabelle\0SYNTH_SG\0"));
+    writeFileSync(join(dir, "D_NONE.grp"), grp("SYNTH_SGX\0"));
+    expect(groupsBySgbd(dir).get("SYNTH_SG")).toEqual(new Set(["D_SYN", "D_0029", "D_OTHER"]));
+    const r = sweepFolder(dir, PolicyGuard.load());
+    expect(r.findings.map((f) => `${f.ecu}->${f.sgbd}`)).toEqual(["SYNTH_SG->SYNTH_SG", "D_0029->SYNTH_SG", "D_OTHER->SYNTH_SG", "D_SYN->SYNTH_SG"]);
+  });
+
+  it("reports a write through a group even when its SGBD is already denied (D_DSC for DSC_E65)", () => {
+    writeFileSync(join(dir, "DSC_E65.prg"), buildPrg([{ name: "STATUS_BBV", code: [...moveImm([0x83, 0x29, 0xf1, 0x3b, 0xfa, 0x00]), ...xsend(0x1d)] }]));
+    writeFileSync(join(dir, "D_SYNDSC.grp"), Buffer.concat([buildPrg([]), Buffer.from(Buffer.from("DSC_E65\0", "latin1").map((v) => v ^ 0xf7))]));
+    expect(sweepFolder(dir, PolicyGuard.load()).findings.map((f) => `${f.ecu}->${f.sgbd} ${f.job}`)).toEqual(["D_SYNDSC->DSC_E65 STATUS_BBV"]);
   });
 
   it("leaves out a job the policy already refuses by deny.ecuJobs (ACSM60 STATUS_ROC)", () => {
@@ -230,6 +340,12 @@ describe("sweepFolder", () => {
     const report = sweepFolder(dir, PolicyGuard.load());
     expect(report.allowedJobs).toBe(0);
     expect(report.findings).toEqual([]);
+  });
+
+  it("lists a job whose only send it could not follow and that holds no request constant", () => {
+    const code = [0x23, 0x31, 0x18, 0x1f, 0x00, 0x92, 0x1e, 0, 0, 0x00, ...xsend(0x1e)];
+    writeFileSync(join(dir, "SYNTH_SG.prg"), buildPrg([{ name: "STATUS_BLIND", code }]));
+    expect(sweepFolder(dir, PolicyGuard.load()).unresolvedOnly).toEqual([{ ecu: "SYNTH_SG", job: "STATUS_BLIND", rule: "allow.pattern", unresolved: 1 }]);
   });
 
   it("names a file it cannot read instead of stopping", () => {
