@@ -14,6 +14,22 @@ import { BridgeError, cleanText } from "./errors.js";
 /** policy/policy.json at the repo root: two levels above both src/ and dist/. */
 export const DEFAULT_POLICY_PATH = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
 
+/**
+ * policy/telegrams.json, the telegram rule the agent enforces on the bytes it sends. The Mac
+ * never sees telegrams, so it does not parse the rule; it only compares the file's SHA-256 with
+ * the one the agent reports, so vm_health can say when the two copies differ.
+ */
+export const DEFAULT_TELEGRAMS_PATH = fileURLToPath(new URL("../../policy/telegrams.json", import.meta.url));
+
+/** Lower-case hex SHA-256 of a file's bytes; null when it cannot be read. */
+export function fileSha256(path: string = DEFAULT_TELEGRAMS_PATH, read: (p: string) => string | Buffer = (p) => readFileSync(p)): string | null {
+  try {
+    return createHash("sha256").update(Buffer.from(read(path))).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
 // As strict as the agent's parser (JobPolicy.cs), checked by policy/policy-parse-cases.json:
 // unknown keys, duplicate keys, empty names and out-of-range numbers make the policy invalid,
 // so the Mac never silently ignores a rule the agent would refuse to load.

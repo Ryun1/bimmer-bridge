@@ -328,6 +328,8 @@ function ediabasErrorAdvice(id: string | null): string {
  */
 export function describeAgentError(code: string, message: string | undefined, details: unknown, run = false): string | null {
   const agentSaid = message ? ` The agent said: "${cleanText(message, 200)}".` : "";
+  // The telegram check's own account (what was refused, when) is longer than most.
+  const longSaid = message ? ` The agent said: "${cleanText(message, 500)}".` : "";
   switch (code) {
     case "job_not_allowed": {
       const rule = detailString(details, "rule");
@@ -401,6 +403,36 @@ export function describeAgentError(code: string, message: string | undefined, de
     case "ediabas_unavailable": {
       const reason = detailString(details, "reason");
       return `EDIABAS could not be started in the VM${reason ? ` (${cleanText(reason, 200)})` : ""}. Check vm_health (EDIABAS DLL); the user may need to check the EDIABAS installation in the VM.`;
+    }
+    case "telegram_not_allowed": {
+      // The agent's check of EDIABAS's interface trace found a telegram (or a trace) it does not
+      // allow, and has stopped using EDIABAS until it is restarted.
+      const fn = detailString(details, "function");
+      const concept = detailString(details, "concept");
+      const frame = detailString(details, "frame");
+      const reason = detailString(details, "reason");
+      const what = [
+        fn ? cleanText(fn, 40) : null,
+        frame ? `telegram ${cleanText(frame, 120)}` : null,
+        concept ? `concept ${cleanText(concept, 8)}` : null,
+        reason ? `reason ${cleanText(reason, 40)}` : null,
+      ]
+        .filter((x) => x !== null)
+        .join(", ");
+      return (
+        `The agent's telegram check refused what EDIABAS sent${what ? ` (${what})` : ""}.${longSaid} ` +
+        "The agent now refuses every EDIABAS request until it is restarted (restart Windows in the VM). " +
+        "Never retry, and do not look for another job, ECU or tool to do the same thing. Tell the user exactly what was refused; the user decides what happens next."
+      );
+    }
+    case "telegram_check_unavailable": {
+      const reason = detailString(details, "reason");
+      return (
+        `The agent's telegram check could not run${reason ? ` (${cleanText(reason, 200)})` : ""}.${longSaid} ` +
+        "Tell the user: the check needs IfhTrace = 3 in the VM's EDIABAS.INI (C:\\EDIABAS\\BIN\\EDIABAS.INI, [Configuration]) and a full TracePath; " +
+        "that file is the user's to edit, never yours. If the message says the agent refuses every EDIABAS request until it is restarted, the user also restarts Windows in the VM. " +
+        "Do not retry until the user says it is fixed."
+      );
     }
     case "job_timeout": {
       const s = detailNumber(details, "timeoutSeconds");
