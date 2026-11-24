@@ -28,9 +28,10 @@ internal sealed class AgentContext : IDisposable
         Logs = new LogService(config.LogRoots, new LogAccess());
         Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
         ApprovalReloader = new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log));
+        IniPath = EdiabasIni.BesideDll(config.EdiabasDll);
         Runner = new EdiabasRunner(
             () => new EdiabasService(
-                new Api32(config.EdiabasDll, NativeCalls),
+                new Api32(config.EdiabasDll, NativeCalls, config.EdiabasInterface),
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
@@ -42,7 +43,12 @@ internal sealed class AgentContext : IDisposable
                 config.JobTimeoutSeconds,
                 config.MaxJobTimeoutSeconds,
                 config.EdiabasIdleReleaseSeconds,
-                ApprovalReloader),
+                ApprovalReloader,
+                telegrams: config.TelegramCheck == TelegramCheckModes.Off
+                    ? null
+                    : new TelegramCheck(config.TelegramCheck, IniPath, new TraceFiles(), Telegrams, TelegramLatch, new EdiabasLogAdapter(log), new SystemRunnerClock()),
+                ediabasInterface: config.EdiabasInterface,
+                requireGate: config.RequireGate),
             log,
             HandlerWait(config.MaxJobTimeoutSeconds));
     }
@@ -71,6 +77,15 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>The telegram rule built into the agent (policy/telegrams.json).</summary>
+    public TelegramRule Telegrams { get; } = TelegramRule.Embedded;
+
+    /// <summary>The telegram check's latch, for /health; it outlives a restart of the runner thread.</summary>
+    public TelegramLatch TelegramLatch { get; } = new();
+
+    /// <summary>EDIABAS.INI beside api32.dll, where the telegram check reads IfhTrace and TracePath.</summary>
+    public string IniPath { get; }
 
     /// <summary>The config's <c>reviewedJobs</c> as the runner uses them, for /health.</summary>
     public ApprovalState Approvals { get; }

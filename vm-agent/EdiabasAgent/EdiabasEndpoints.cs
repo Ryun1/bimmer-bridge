@@ -76,15 +76,22 @@ internal sealed class EdiabasEndpoints
             return;
         }
 
-        if (job is null)
+        try
         {
-            var list = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeList(ecu, filter, comments.Value, audit, ct, queuedMs), http.RequestAborted);
-            await Answer(http, audit, list);
+            if (job is null)
+            {
+                var list = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeList(ecu, filter, comments.Value, audit, ct, queuedMs), http.RequestAborted);
+                await Answer(http, audit, list);
+            }
+            else
+            {
+                var one = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeJob(ecu, job, audit, ct, queuedMs), http.RequestAborted);
+                await Answer(http, audit, one);
+            }
         }
-        else
+        finally
         {
-            var one = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.DescribeJob(ecu, job, audit, ct, queuedMs), http.RequestAborted);
-            await Answer(http, audit, one);
+            WriteFindingLines(http, audit);
         }
     }
 
@@ -107,8 +114,15 @@ internal sealed class EdiabasEndpoints
         var request = parsed.Value!;
         audit.Ecu = request.Request.Ecu;
         audit.Job = request.Request.Job;
-        var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.RunJob(request.Request, request.TimeoutSeconds, audit, ct, queuedMs), http.RequestAborted);
-        await Answer(http, audit, outcome);
+        try
+        {
+            var outcome = await _ctx.Runner.Run((svc, queuedMs, ct) => svc.RunJob(request.Request, request.TimeoutSeconds, audit, ct, queuedMs), http.RequestAborted);
+            await Answer(http, audit, outcome);
+        }
+        finally
+        {
+            WriteFindingLines(http, audit);
+        }
     }
 
     public async Task Jobs(HttpContext http)
@@ -136,6 +150,7 @@ internal sealed class EdiabasEndpoints
         finally
         {
             WriteItemLines(http, audit);
+            WriteFindingLines(http, audit);
         }
     }
 
@@ -220,6 +235,37 @@ internal sealed class EdiabasEndpoints
     {
         audit.ErrorCode = failure.Error.Code;
         return Responses.WriteFailure(http, failure);
+    }
+
+    /// <summary>One audit line per telegram check finding, beside the request's own line: the
+    /// finding's code as the error code, its reason as the rule, and the function, concept and
+    /// frame as the target. Written under report as under enforce.</summary>
+    private void WriteFindingLines(HttpContext http, RequestAudit audit)
+    {
+        // The runner may still be adding to the list if the handler gave up waiting for it.
+        TelegramFinding[] findings;
+        lock (audit.TelegramFindings)
+        {
+            findings = [.. audit.TelegramFindings];
+        }
+
+        for (var i = 0; i < findings.Length; i++)
+        {
+            var f = findings[i];
+            _ctx.Audit.Write(
+                DateTimeOffset.UtcNow,
+                http.Connection.RemoteIpAddress?.ToString(),
+                http.Request.Method,
+                $"{http.Request.Path.Value}#telegram[{i}]",
+                null,
+                http.Response.StatusCode,
+                f.Code,
+                0,
+                audit.Ecu,
+                audit.Job,
+                f.Reason,
+                string.Join(' ', new[] { f.Function, f.Concept is null ? null : "concept " + f.Concept, f.Frame is null ? null : "frame " + f.Frame }.Where(x => x is not null)));
+        }
     }
 
     /// <summary>One audit line per batch item, beside the request's own line.</summary>

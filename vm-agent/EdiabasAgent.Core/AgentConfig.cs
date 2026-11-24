@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace EdiabasAgent.Core;
 
@@ -59,6 +60,30 @@ public sealed class AgentConfig
 
     public const int MinIdleReleaseSeconds = 5;
     public const int MaxIdleReleaseSeconds = 600;
+
+    /// <summary>The telegram check (docs/api.md "Telegram check (agent)"): <c>enforce</c>,
+    /// <c>report</c> or <c>off</c>.</summary>
+    public string TelegramCheck { get; set; } = TelegramCheckModes.Enforce;
+
+    /// <summary>The EDIABAS interface the agent opens with <c>apiInitExt</c>, such as
+    /// <c>GATE:OBD</c>; null opens EDIABAS.INI's interface with <c>apiInit</c>, as before.</summary>
+    public string? EdiabasInterface { get; set; }
+
+    /// <summary>Refuse every EDIABAS request unless <see cref="EdiabasInterface"/> is a
+    /// <c>GATE:</c> interface (the telegram gate, gate/).</summary>
+    public bool RequireGate { get; set; }
+
+    /// <summary>What <see cref="EdiabasInterface"/> must look like: an interface and a unit,
+    /// such as <c>STD:OBD</c> or <c>GATE:OBD</c>.</summary>
+    public static readonly Regex InterfacePattern =
+        new("^[A-Za-z0-9_]{1,16}:[A-Za-z0-9_]{1,16}$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+
+    /// <summary>The prefix of a telegram-gate interface.</summary>
+    public const string GatePrefix = "GATE:";
+
+    /// <summary>Whether <see cref="EdiabasInterface"/> is a gate interface (upper-case <c>GATE:</c>).</summary>
+    [JsonIgnore]
+    public bool UsesGate => EdiabasInterface is not null && EdiabasInterface.StartsWith(GatePrefix, StringComparison.Ordinal);
 
     /// <summary>Set by <see cref="Parse"/>; logged when the agent starts.</summary>
     [JsonIgnore]
@@ -246,6 +271,18 @@ public sealed class AgentConfig
             errors.Add($"ediabasIdleReleaseSeconds: must be between {MinIdleReleaseSeconds} and {MaxIdleReleaseSeconds} (got {EdiabasIdleReleaseSeconds})");
         }
 
+        if (!TelegramCheckModes.IsValid(TelegramCheck))
+        {
+            var got = TelegramCheck is null ? "null" : $"\"{Printable(TelegramCheck)}\"";
+            errors.Add($"telegramCheck: must be \"{TelegramCheckModes.Enforce}\", \"{TelegramCheckModes.Report}\" or \"{TelegramCheckModes.Off}\" (got {got})");
+        }
+
+        // The whole value must match: .NET's $ would also pass a trailing newline.
+        if (EdiabasInterface is not null && !(InterfacePattern.Match(EdiabasInterface) is { Success: true } m && m.Length == EdiabasInterface.Length))
+        {
+            errors.Add($"ediabasInterface: must be null or an interface and unit such as \"GATE:OBD\" (letters, digits and _, 1 to 16 each side of one colon) (got \"{Printable(EdiabasInterface)}\")");
+        }
+
         return errors;
     }
 
@@ -302,4 +339,19 @@ public sealed class AgentConfig
         var chars = s.Select(c => char.IsControl(c) ? '?' : c).Take(64).ToArray();
         return new string(chars);
     }
+}
+
+/// <summary>The values of the config's <c>telegramCheck</c> (docs/api.md "Telegram check (agent)").</summary>
+public static class TelegramCheckModes
+{
+    /// <summary>A finding fails the request and latches the agent shut until it restarts.</summary>
+    public const string Enforce = "enforce";
+
+    /// <summary>Findings are recorded (agent log and audit); requests carry on.</summary>
+    public const string Report = "report";
+
+    /// <summary>No check.</summary>
+    public const string Off = "off";
+
+    public static bool IsValid(string? mode) => mode is Enforce or Report or Off;
 }

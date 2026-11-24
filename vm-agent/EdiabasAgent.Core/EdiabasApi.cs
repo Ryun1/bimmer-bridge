@@ -18,8 +18,9 @@ public interface IEdiabasApi
     /// caller logs it and loads afresh on the next request.</summary>
     void Unload();
 
-    /// <summary><c>apiInit</c>.</summary>
-    bool Init();
+    /// <summary><c>apiInit</c> when <paramref name="ediabasInterface"/> is null (EDIABAS.INI's
+    /// interface); else <c>apiInitExt(ediabasInterface, "", "", "")</c>, such as <c>GATE:OBD</c>.</summary>
+    bool Init(string? ediabasInterface);
 
     /// <summary><c>apiJob(ecu, job, para, result)</c>. Returns at once; poll <see cref="State"/>.</summary>
     void Job(string ecu, string job, string parameters, string results);

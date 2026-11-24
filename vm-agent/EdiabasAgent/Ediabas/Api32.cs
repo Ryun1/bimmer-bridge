@@ -11,9 +11,11 @@ namespace EdiabasAgent.Ediabas;
 /// how pydiabas calls the same DLL. Every other parameter follows Api.h. In this 32-bit process C
 /// <c>long</c> is 32 bits, <c>APIWORD</c> is <c>ushort</c>, <c>APIBOOL</c> and
 /// <c>APIRESULTFORMAT</c> are 4-byte enums.</para>
-/// <para>Only what read jobs need is declared. apiSetConfig, apiSwitchDevice, apiInitExt,
-/// apiJobData, apiJobExt, apiTrace, apiCallBack and apiErrorHandler are deliberately absent and
-/// must not be added.</para>
+/// <para>Only what read jobs need is declared, and <c>apiInitExt</c>, used only to open a
+/// configured interface (<c>ediabasInterface</c>, such as <c>GATE:OBD</c>, the telegram gate) with
+/// empty unit, application and reserved strings. apiSetConfig, apiSwitchDevice, apiJobData,
+/// apiJobExt, apiTrace, apiCallBack and apiErrorHandler are deliberately absent and must not be
+/// added.</para>
 /// <para>The DLL is loaded from the configured full path only, never by bare name or search path,
 /// and only when an EDIABAS request needs it (never by /health). EdiabasService unloads it again
 /// after the idle time (<see cref="Unload"/>) and the next request loads it afresh.</para>
@@ -43,6 +45,19 @@ internal sealed class Api32 : IEdiabasApi
     // APIBOOL apiInit(void);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int InitFn(out uint handle);
+
+    // APIBOOL apiInitExt(const char *ifh, const char *unit, const char *app, const char *reserved);
+    // exported as ___apiInitExt@20: the handle pointer, then the four strings.
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int InitExtFn(out uint handle, byte[] ifh, byte[] unit, byte[] app, byte[] reserved);
+
+    /// <summary>Resolved only when an interface is configured, so an api32.dll without it still
+    /// serves the default interface.</summary>
+    public const string InitExtExport = "__apiInitExt";
+
+    /// <summary>The exports needed with or without a configured interface.</summary>
+    public static string[] ExportsFor(string? ediabasInterface) =>
+        ediabasInterface is null ? Exports : [.. Exports, InitExtExport];
 
     // void apiEnd(void);  void apiBreak(void);
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -115,6 +130,7 @@ internal sealed class Api32 : IEdiabasApi
     private static readonly byte[] EmptyCString = [0];
 
     private readonly string _dllPath;
+    private readonly string[] _exports;
     private IntPtr _lib;
     private Functions? _f;
     private uint _handle;
@@ -122,9 +138,10 @@ internal sealed class Api32 : IEdiabasApi
     private int _ownerThread;
     private readonly NativeCallTracker _calls;
 
-    public Api32(string dllPath, NativeCallTracker? calls = null)
+    public Api32(string dllPath, NativeCallTracker? calls = null, string? ediabasInterface = null)
     {
         _dllPath = dllPath;
+        _exports = ExportsFor(ediabasInterface);
         _calls = calls ?? new NativeCallTracker();
     }
 
@@ -132,7 +149,7 @@ internal sealed class Api32 : IEdiabasApi
     /// For --selftest: loads the DLL, resolves every export, frees it again. Calls nothing in it.
     /// Null on success, else the reason.
     /// </summary>
-    public static string? Probe(string dllPath)
+    public static string? Probe(string dllPath, string? ediabasInterface = null)
     {
         var reason = CheckPath(dllPath);
         if (reason is not null)
@@ -147,7 +164,7 @@ internal sealed class Api32 : IEdiabasApi
 
         try
         {
-            var missing = Exports.Where(e => !NativeLibrary.TryGetExport(lib, e, out _)).ToList();
+            var missing = ExportsFor(ediabasInterface).Where(e => !NativeLibrary.TryGetExport(lib, e, out _)).ToList();
             return missing.Count == 0 ? null : $"{dllPath} lacks export(s): {string.Join(", ", missing)}";
         }
         finally
@@ -192,7 +209,7 @@ internal sealed class Api32 : IEdiabasApi
         // Resolve everything first; a missing export means nothing is called at all.
         var addresses = new Dictionary<string, IntPtr>(StringComparer.Ordinal);
         var missing = new List<string>();
-        foreach (var e in Exports)
+        foreach (var e in _exports)
         {
             if (NativeLibrary.TryGetExport(lib, e, out var p) && p != IntPtr.Zero)
             {
@@ -253,17 +270,25 @@ internal sealed class Api32 : IEdiabasApi
         }
     }
 
-    public bool Init()
+    public bool Init(string? ediabasInterface)
     {
         var f = Ready();
         _handle = 0;
         _haveHandle = false;
         uint h;
         bool ok;
-        _calls.Enter("apiInit");
+        _calls.Enter(ediabasInterface is null ? "apiInit" : "apiInitExt");
         try
         {
-            ok = f.Init(out h) != 0;
+            if (ediabasInterface is null)
+            {
+                ok = f.Init(out h) != 0;
+            }
+            else
+            {
+                var initExt = f.InitExt ?? throw new InvalidOperationException($"{InitExtExport} was not resolved: api32.dll was loaded without it");
+                ok = initExt(out h, Win1252.ToCString(ediabasInterface), EmptyCString, EmptyCString, EmptyCString) != 0;
+            }
         }
         finally
         {
@@ -574,6 +599,7 @@ internal sealed class Api32 : IEdiabasApi
     private sealed class Functions(Dictionary<string, IntPtr> a)
     {
         public InitFn Init { get; } = Get<InitFn>(a, "__apiInit");
+        public InitExtFn? InitExt { get; } = a.ContainsKey(InitExtExport) ? Get<InitExtFn>(a, InitExtExport) : null;
         public HandleFn End { get; } = Get<HandleFn>(a, "__apiEnd");
         public JobFn Job { get; } = Get<JobFn>(a, "__apiJob");
         public HandleIntFn State { get; } = Get<HandleIntFn>(a, "__apiState");
