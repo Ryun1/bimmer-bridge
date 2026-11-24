@@ -2,7 +2,7 @@
 
 | File | What |
 |---|---|
-| `policy.json` | the default-deny job policy, version 4. The agent embeds it at build time; the Mac server reads it at start-up |
+| `policy.json` | the default-deny job policy, version 5. The agent embeds it at build time; the Mac server reads it at start-up |
 | `policy-cases.json` | ECU/job pairs with the expected verdict (`allowed`, `rule`, `screen`) |
 | `policy-parse-cases.json` | whole policy texts each parser must accept or refuse |
 
@@ -17,6 +17,21 @@ Changing the policy:
    first, raise `version`, and change both parsers.
 3. Run `./release.sh`, deploy with the Update line and restart Claude, so that both sides run the
    same version (`vm_health` warns when they differ).
+
+Jobs that look like reads but write: the name rules and the description screen trust the
+SGBD's job name and description. `dev/sgbd-sweep.ts` reads the SGBD files themselves and lists
+every job the policy allows that sends a write service (copy `C:\EDIABAS\ECU\*.prg` and
+`*.PRG` from the VM to a folder on the Mac first; no cable or EDIABAS is used):
+
+    node --import ./dev/ts-resolve.mjs dev/sgbd-sweep.ts <folder> --json sweep.json
+
+Put every job in its `write` section into `deny.ecuJobs`, with a case each. Run it again after
+a policy change that allows more, or a new SGBD set. Its `control` (input/output control,
+routines), `define` (dynamic read definitions) and `session` sections are not put in this list:
+many of those jobs are reads in practice (`$30` with "report current state", as `NVE_65`
+`STATUS_BORDNETZSPANNUNG` sends) and stay with the description screen and the owner's review.
+The sweep cannot see a request built from a table or the job's arguments, so a job missing
+from its report is not proven to be a read.
 
 Other chassis: the `E60` entry in `allow.restrictedEcus` is the group SGBD of the
 E60/E61/E63/E64 (5 and 6 Series), and its functional jobs (`IDENT_FUNKTIONAL`,

@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "namePattern": "^[A-Za-z0-9_]{1,64}$",
   "maxArgLength": 200,
   "allow": {
@@ -161,7 +161,22 @@
       "PROG",
       "SPEICHER",
       "SENDE"
-    ]
+    ],
+    "ecuJobs": {
+      "ACSM2": ["STATUS_ROC"],
+      "ACSM60": ["STATUS_ROC"],
+      "ANT_60": ["STATUS_TUNER_OZENANIEN_LISTE", "STATUS_TUNER_PROFILE", "STATUS_TUNNELERKENNUNG"],
+      "CICMR": ["STATUS_HMI_LICENSE_FILE"],
+      "CICR": ["STATUS_CHECK_CONTACTBOOK", "STATUS_HMI_LICENSE_FILE"],
+      "CID_LVDS": ["STATUS_LVDS_CID_FRONT_KWP"],
+      "DAB_60": ["STATUS_ANT_PRUEFUNG"],
+      "DSC_E65": ["STATUS_BBV", "STATUS_FS_EEPROM", "STATUS_SENSOR_ADAPTION"],
+      "FLA_65": ["STATUS_SENSORPARAMETER"],
+      "FLA_R": ["STATUS_AUSRICHTUNGSTEST_WERK"],
+      "TELE60_3": ["STATUS_ECU_CONNECTIONS"],
+      "VID_E65": ["STATUS_WRITE_AUX_NORM"],
+      "VMSW65": ["STATUS_WRITE_AUX_NORM"]
+    }
   },
   "descriptionScreen": {
     "terms": [

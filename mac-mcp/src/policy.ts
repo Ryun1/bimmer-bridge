@@ -49,7 +49,7 @@ const PolicySchema = z.strictObject({
     patterns: Patterns,
     restrictedEcus: z.record(UpperName, UpperNames),
   }),
-  deny: z.strictObject({ substrings: UpperNames, tokens: UpperNames }),
+  deny: z.strictObject({ substrings: UpperNames, tokens: UpperNames, ecuJobs: z.record(UpperName, UpperNames) }),
   descriptionScreen: z.strictObject({ terms: Names.min(1), ignore: LowerNames }),
 });
 
@@ -141,6 +141,8 @@ export interface Policy {
   restrictedEcus: Map<string, Set<string>>;
   denySubstrings: string[];
   denyTokens: string[];
+  /** deny.ecuJobs: jobs refused on one ECU only (they send write services; dev/sgbd-sweep.ts). */
+  denyEcuJobs: Map<string, Set<string>>;
   /** descriptionScreen.ignore: validated here, used only by the agent's screen. */
   screenIgnore: string[];
 }
@@ -182,6 +184,7 @@ export function parsePolicy(text: string): Policy {
     restrictedEcus: new Map(Object.entries(raw.allow.restrictedEcus).map(([k, v]) => [k, new Set(v)])),
     denySubstrings: raw.deny.substrings,
     denyTokens: raw.deny.tokens,
+    denyEcuJobs: new Map(Object.entries(raw.deny.ecuJobs).map(([k, v]) => [k, new Set(v)])),
     screenIgnore: raw.descriptionScreen.ignore,
   };
 }
@@ -213,6 +216,7 @@ export function evaluate(policy: Policy, req: JobRequest): Verdict {
   for (const s of policy.denySubstrings) if (job.includes(s)) return deny(`deny.substring:${s}`);
   const tokens = job.split("_").filter((t) => t.length > 0);
   for (const t of policy.denyTokens) if (tokens.includes(t)) return deny(`deny.token:${t}`);
+  if (policy.denyEcuJobs.get(ecu)?.has(job)) return deny("deny.ecuJob");
 
   // 4. Restricted ECU: nothing else applies to it
   const restricted = policy.restrictedEcus.get(ecu);
@@ -248,11 +252,13 @@ const RULE_MEANING: Record<string, string> = {
   "shape.results": "the result filter is too long or contains characters other than printable ASCII",
   ecu_restricted: "this ECU only allows a fixed list of jobs",
   default_deny: "the job is not on the read-only allow list",
+  "deny.ecuJob": "this job on this ECU sends a write service despite its name",
 };
 
 function ruleMeaning(rule: string): string {
+  if (RULE_MEANING[rule]) return RULE_MEANING[rule];
   if (rule.startsWith("deny.")) return "the job name marks it as something other than a read";
-  return RULE_MEANING[rule] ?? "refused by the job policy";
+  return "refused by the job policy";
 }
 
 /** `job_not_allowed`, raised on the Mac. Says which rule refused it and not to look for another way. */

@@ -6,6 +6,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // The real MCP server, from source (not dist).
 import { loadConfig } from "../../mac-mcp/src/config.ts";
+import { DEFAULT_POLICY_PATH, PolicyGuard, parsePolicy } from "../../mac-mcp/src/policy.ts";
 import { createAppServer } from "../../mac-mcp/src/server.ts";
 import { loadScenario, startReplayAgent, type ReplayAgent } from "../replay-agent.ts";
 import { TOKEN, agentError, synthHealth, synthJobResult, writeRecording, writeScenarioFile } from "./synthetic.ts";
@@ -61,7 +62,7 @@ function synthScenario(): void {
 
 const keychainReads: string[] = [];
 
-async function session(scenario: string, fixturesDir: string = root) {
+async function session(scenario: string, fixturesDir: string = root, policy?: PolicyGuard) {
   agent = await startReplayAgent({ scenario: loadScenario(fixturesDir, scenario), token: TOKEN, port: 0, log: () => {} });
   const env = { EDIABAS_AGENT_URL: agent.url, EDIABAS_AGENT_TOKEN: TOKEN, EDIABAS_AUDIT_LOG: join(root, "audit.log") };
   const { config } = loadConfig(env, root);
@@ -75,6 +76,7 @@ async function session(scenario: string, fixturesDir: string = root) {
     readFile: async () => "",
     networkInterfaces: () => ({}),
     log: () => {},
+    ...(policy ? { policy } : {}),
   });
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "replay-session-test", version: "0.0.0" });
@@ -129,7 +131,11 @@ describe("real MCP server against the replay agent", () => {
 
   it("the real recordings from the car: whole-car views and the battery batch fit the text budget", async () => {
     const fixtures = join(import.meta.dirname, "..", "fixtures");
-    const client = await session("battery", fixtures);
+    // Recorded under policy version 4, so its /health carries that file's hash and a server
+    // holding today's file would refuse with policy_mismatch. This test is about formatting the
+    // car's answers: the current policy is given without a file hash, which skips that check.
+    const current = PolicyGuard.fromPolicy(parsePolicy(readFileSync(DEFAULT_POLICY_PATH, "utf8")));
+    const client = await session("battery", fixtures, current);
 
     const ident = await tool(client, "ediabas_job", { ecu: "E60", job: "IDENT_FUNKTIONAL", timeoutSeconds: 60 });
     expect(ident.isError).toBe(false);

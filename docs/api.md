@@ -193,7 +193,8 @@ Both also load it the same way: a file with an unknown or duplicate key, a `vers
 empty name, no `descriptionScreen.terms`, or a missing or bad `descriptionScreen.ignore` (it must
 be a list of non-empty lower-case strings, none listed twice; it may be empty) is invalid. So is
 a file where an allow name, a deny substring or token, a restricted ECU key or one of its job
-names is not upper-case; an `allow.patterns` entry has a backslash or a non-ASCII character;
+names, or a `deny.ecuJobs` key or one of its job names, is not upper-case; a `deny` with no
+`ecuJobs` object; an `allow.patterns` entry has a backslash or a non-ASCII character;
 `version` or `maxArgLength` is not written as a plain integer (`3.0` and `3e0` are refused); or
 any text has a lone surrogate. Deny entries are compared as written. The agent then refuses every job
 (`job_not_allowed`, rule `policy_unavailable`) and the Mac every `ediabas_*` tool. Both run
@@ -208,7 +209,8 @@ Evaluation, in this order. The first rule that decides wins; `rule` is the strin
 2. Upper-case `ecu` and `job` (invariant culture). Everything below uses the upper-cased names.
 3. **Deny.** For each entry of `deny.substrings`, in file order: if `job` contains it →
    `deny.substring:<entry>`. Then split `job` on `_`, dropping empty tokens; for each entry of
-   `deny.tokens`, in file order: if it equals a token → `deny.token:<entry>`.
+   `deny.tokens`, in file order: if it equals a token → `deny.token:<entry>`. Then, if `ecu` is
+   a key of `deny.ecuJobs` and `job` is in its list → `deny.ecuJob`.
 4. **Restricted ECU.** If `ecu` is a key of `allow.restrictedEcus`: allowed with `allow.ecu`
    if `job` is in that ECU's list, else `ecu_restricted`. Nothing else applies to that ECU.
 5. `job` in `allow.globalExact` → `allow.global`.
@@ -216,7 +218,12 @@ Evaluation, in this order. The first rule that decides wins; `rule` is the strin
    `screen: true`.
 7. Otherwise `default_deny`.
 
-The file is at `version` 4. Version 2 added `descriptionScreen.ignore`, which a version 1 file
+The file is at `version` 5. Version 5 adds `deny.ecuJobs` (required, may be `{}`): jobs refused
+on one ECU only, because their names pass (most are `STATUS_` jobs, several with descriptions
+that say they read) but the SGBD sends a write service: `$2E`/`$3B` write data, `$14` clear
+fault memory, or a non-default session followed by a `$3B` of code and a routine (`DSC_E65`).
+`dev/sgbd-sweep.ts` finds them by reading the SGBD files ([development.md](development.md));
+its 2026-11-24 run over the VM's 1,251 SGBDs gave the 18 listed. Version 2 added `descriptionScreen.ignore`, which a version 1 file
 does not have (so this build refuses it). Version 4 makes `E65`, `E70`, `E89X`, `F01` and `R56`
 (the chassis SGBDs present in the VM's Ecu folder) restricted ECUs with the same list as `E60`,
 and adds the screen terms `schaltet`, `einschalt`, `ausschalt`, `umschalt`, `ausloes`, `auslös`,
