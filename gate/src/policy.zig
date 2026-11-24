@@ -1,7 +1,9 @@
 //! The allow-list compiled into the DLL: policy/telegrams.json, validated and turned into Zig
 //! source at build time (tools/gen_allowlist.zig). Nothing is read at run time.
 
-const rule = @import("rule.zig");
+/// The rule itself, re-exported so that users of this module (kline's frame gate) and the
+/// list share one instance of its types.
+pub const rule = @import("rule.zig");
 const g = @import("allowlist");
 
 pub const version = g.version;
