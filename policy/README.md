@@ -20,18 +20,24 @@ Changing the policy:
 
 Jobs that look like reads but write: the name rules and the description screen trust the
 SGBD's job name and description. `dev/sgbd-sweep.ts` reads the SGBD files themselves and lists
-every job the policy allows that sends a write service (copy `C:\EDIABAS\ECU\*.prg` and
-`*.PRG` from the VM to a folder on the Mac first; no cable or EDIABAS is used):
+every job the policy allows that sends a write service, under the SGBD's name and every group
+that can resolve to it (copy `C:\EDIABAS\ECU\*.prg`, `*.PRG`, `*.grp` and `*.GRP` from the VM
+into one folder on the Mac first; no cable or EDIABAS is used):
 
     node --import ./dev/ts-resolve.mjs dev/sgbd-sweep.ts <folder> --json sweep.json
 
-Put every job in its `write` section into `deny.ecuJobs`, with a case each. Run it again after
-a policy change that allows more, or a new SGBD set. Its `control` (input/output control,
+Put every confirmed job in its `write` section into `deny.ecuJobs`, under every name it lists
+(it prints the entries), with a case each. A write marked "not confirmed at a send" comes only
+from a constant the replay never saw sent: check it by hand (`EHC2RR` `STATUS_CALIBRATION`
+holds a `$3D` template but sends `$31`). Run it again after a policy change that allows more,
+or a new SGBD set. Its `control` (input/output control,
 routines), `define` (dynamic read definitions) and `session` sections are not put in this list:
 many of those jobs are reads in practice (`$30` with "report current state", as `NVE_65`
 `STATUS_BORDNETZSPANNUNG` sends) and stay with the description screen and the owner's review.
-The sweep cannot see a request built from a table or the job's arguments, so a job missing
-from its report is not proven to be a read.
+The sweep replays each job's code in order without following jumps or subroutine calls. Jobs
+whose request it cannot follow and that hold no request constant are listed as
+`unresolvedOnly` (about 10,700 on 2026-11-24, in UDS and ASAM-generated engine SGBDs; none on
+the E61's 43 modules), so a job missing from its `write` section is not proven to be a read.
 
 Other chassis: the `E60` entry in `allow.restrictedEcus` is the group SGBD of the
 E60/E61/E63/E64 (5 and 6 Series), and its functional jobs (`IDENT_FUNKTIONAL`,
