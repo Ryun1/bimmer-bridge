@@ -1,0 +1,362 @@
+{
+ "comment": "Shared fixture for the telegram rule (docs/api.md \"Telegram rule\"): each implementation (the agent's IFH-trace check, the XGate32 interface handler, the native engine's frame gate) runs every case against policy/telegrams.json. concept is the protocol (hex, as set with SETECUCOMM / ifhSetParameter) or null; frame is the telegram as sent; reason is the refusal reason when allowed is false.",
+ "cases": [
+  {
+   "concept": null,
+   "frame": "82 12 F1 1A 80",
+   "allowed": false,
+   "reason": "no_concept",
+   "note": "nothing is sent before the protocol is set"
+  },
+  {
+   "concept": "0001",
+   "frame": "82 12 F1 1A 80",
+   "allowed": false,
+   "reason": "unknown_concept",
+   "note": "a protocol the rule does not know"
+  },
+  {
+   "concept": "0006",
+   "frame": "12 05 0B 03 1F",
+   "allowed": false,
+   "reason": "ds2",
+   "note": "DS2 commands are manufacturer-specific: refused in version 1"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "ReadECUIdentification"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 1A 80 9F",
+   "allowed": true,
+   "reason": null,
+   "note": "the same with its checksum byte"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 12 F1 18 02 FF FF",
+   "allowed": true,
+   "reason": null,
+   "note": "ReadDTCByStatus"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 40 F1 22 20 00",
+   "allowed": true,
+   "reason": null,
+   "note": "ReadDataByCommonIdentifier"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 40 F1 21 2A",
+   "allowed": true,
+   "reason": null,
+   "note": "ReadDataByLocalIdentifier"
+  },
+  {
+   "concept": "010F",
+   "frame": "C2 EF F1 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "functional ident (E60 IDENT_FUNKTIONAL)"
+  },
+  {
+   "concept": "010F",
+   "frame": "C4 EF F1 18 02 FF FF",
+   "allowed": true,
+   "reason": null,
+   "note": "functional fault read (FS_LESEN_FUNKTIONAL)"
+  },
+  {
+   "concept": "010F",
+   "frame": "81 12 F1 3E",
+   "allowed": true,
+   "reason": null,
+   "note": "TesterPresent"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 10 81",
+   "allowed": true,
+   "reason": null,
+   "note": "default session"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 10 85",
+   "allowed": false,
+   "reason": "service",
+   "note": "programming session"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 10 87",
+   "allowed": false,
+   "reason": "service",
+   "note": "DSC_E65 development session"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 12 F1 10 81 00",
+   "allowed": false,
+   "reason": "service",
+   "note": "a default-session request with extra bytes is not exact"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 12 F1 14 FF FF",
+   "allowed": false,
+   "reason": "service",
+   "note": "ClearDiagnosticInformation"
+  },
+  {
+   "concept": "010F",
+   "frame": "C3 EF F1 14 FF FF",
+   "allowed": false,
+   "reason": "service",
+   "note": "functional clear"
+  },
+  {
+   "concept": "010F",
+   "frame": "85 01 F1 2E 99 02 FF FF",
+   "allowed": false,
+   "reason": "service",
+   "note": "ACSM60 STATUS_ROC write"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 5F F1 3B FA 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "FLA_65 STATUS_SENSORPARAMETER write"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 11 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "ECUReset"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 27 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "SecurityAccess"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 12 F1 2C F0 04 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "DynamicallyDefineLocalIdentifier: not a read service"
+  },
+  {
+   "concept": "010F",
+   "frame": "86 22 F1 A6 00 03 30 40 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "BMW-specific $A6 (LM_AHL motor)"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 78 F1 30 09 07",
+   "allowed": false,
+   "reason": "service",
+   "note": "IHKA60 stepper-motor self-test: $30 not on the exact list"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 57 F1 30 91 01 01",
+   "allowed": true,
+   "reason": null,
+   "note": "exact: NVE_65 STATUS_BORDNETZSPANNUNG"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 57 F1 30 91 01 01 00",
+   "allowed": true,
+   "reason": null,
+   "note": "exact, with a checksum byte"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 12 F1 30 91 01 01",
+   "allowed": false,
+   "reason": "service",
+   "note": "the exact telegram to another address"
+  },
+  {
+   "concept": "010F",
+   "frame": "85 57 F1 30 91 01 01 00",
+   "allowed": false,
+   "reason": "service",
+   "note": "the exact data plus one more byte is not exact"
+  },
+  {
+   "concept": "010F",
+   "frame": "83 78 F1 30 45 01",
+   "allowed": true,
+   "reason": null,
+   "note": "exact: IHKA60 STATUS_VERBRAUCHERREDUZIERUNG"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 57 F1 31 FA",
+   "allowed": true,
+   "reason": null,
+   "note": "exact: NVE_65 STATUS_PAIRING"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 40 F1 31 2A",
+   "allowed": false,
+   "reason": "service",
+   "note": "CAS STATUS_WAKEUP_HISTORY: not on the exact list"
+  },
+  {
+   "concept": "010F",
+   "frame": "80 12 F1 02 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "long form: length byte at [3]"
+  },
+  {
+   "concept": "010F",
+   "frame": "80 12 F1 03 14 FF FF",
+   "allowed": false,
+   "reason": "service",
+   "note": "long form clear"
+  },
+  {
+   "concept": "010F",
+   "frame": "80 12 F1 00 00 02 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "16-bit length form"
+  },
+  {
+   "concept": "010F",
+   "frame": "84 12 F1 1A 80",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "length says 4, 2 data bytes present"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1 1A 80 9F 00",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "two bytes beyond the data"
+  },
+  {
+   "concept": "010F",
+   "frame": "02 12 F1 1A 80",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "address mode bits 00"
+  },
+  {
+   "concept": "010F",
+   "frame": "42 12 F1 1A 80",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "address mode bits 01"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F2 1A 80",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "source is not the tester (F1)"
+  },
+  {
+   "concept": "010F",
+   "frame": "80 12 F1 00",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "zero length"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 12 F1",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "too short"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 F1 F1 FA 00",
+   "allowed": true,
+   "reason": null,
+   "note": "adapter query FA"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 F1 F1 FE 00",
+   "allowed": true,
+   "reason": null,
+   "note": "adapter query FE"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 F1 F1 FB 00",
+   "allowed": false,
+   "reason": "adapter",
+   "note": "adapter command FB rewrites the cable"
+  },
+  {
+   "concept": "010F",
+   "frame": "82 F1 F1 1A 80",
+   "allowed": false,
+   "reason": "adapter",
+   "note": "only FA/FD/FE to the adapter"
+  },
+  {
+   "concept": "010D",
+   "frame": "B8 12 F1 02 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "KWP2000*: length always at [3] (seen in the VM's IFH trace)"
+  },
+  {
+   "concept": "010D",
+   "frame": "B8 12 F1 03 14 FF FF",
+   "allowed": false,
+   "reason": "service",
+   "note": "KWP2000* clear"
+  },
+  {
+   "concept": "010D",
+   "frame": "82 12 F1 1A 80",
+   "allowed": false,
+   "reason": "malformed",
+   "note": "KWP2000*: [3] is the length, 0x1A does not fit"
+  },
+  {
+   "concept": "0110",
+   "frame": "82 12 F1 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "D-CAN uses BMW-FAST framing"
+  },
+  {
+   "concept": "010C",
+   "frame": "82 12 F1 1A 80",
+   "allowed": true,
+   "reason": null,
+   "note": "KWP2000 BMW uses BMW-FAST framing"
+  },
+  {
+   "concept": "0110",
+   "frame": "83 12 F1 3B 01 00",
+   "allowed": false,
+   "reason": "service",
+   "note": "D-CAN write"
+  }
+ ]
+}

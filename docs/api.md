@@ -312,6 +312,52 @@ agent re-reads `reviewedJobs`, and nothing else, from config.json. A file that i
 unreadable or not a valid config keeps the previous list and logs one warning per distinct
 problem; a later good read is picked up.
 
+## Telegram rule
+
+The job policy decides by name; the telegram rule decides by the bytes. `policy/telegrams.json`
+is the single source, version 1. It is enforced in three places, all running
+`policy/telegram-cases.json`: the agent's check of the IFH trace after each request ("Telegram
+check"), the `XGate32.dll` interface handler in the VM (`gate/`), and the native engine's frame
+gate. A telegram is judged with the protocol (concept) last set for the interface:
+
+1. **Concept.** None set → refused (`no_concept`). BMW-FAST `0x010F`, KWP2000 BMW `0x010C` and
+   D-CAN `0x0110` use BMW-FAST framing; KWP2000\* `0x010D` its own; DS2 `0x0006` → refused
+   (`ds2`; DS2 commands are manufacturer-specific, so version 1 allows none); any other →
+   refused (`unknown_concept`).
+2. **Frame.** Byte 0's top two bits must be `10` (physical) or `11` (functional), byte 2 (the
+   source) must be `F1` (the tester). BMW-FAST framing: the data length is byte 0's low six
+   bits; if those are 0, it is byte 3; if that is 0 too, bytes 4–5 (big-endian). KWP2000\*:
+   the length is always byte 3. The data starts after the length; the frame must end with the
+   data or with one more (checksum) byte. Zero length or anything else → `malformed`.
+3. **Adapter.** Target and source both `F1` (the cable itself): allowed only when the first
+   data byte is in `adapterReads` (`FA`, `FD`, `FE`), else `adapter`.
+4. **Read services.** The first data byte (the service) in `readServices` (`$12 $13 $17 $18
+   $19 $1A $21 $22 $23 $3E`) → allowed. `$10` is allowed only as exactly `10 81` (the default
+   session).
+5. **Exact.** Otherwise allowed only when an `exact` entry has the frame's target address
+   (byte 1) and exactly its data bytes (checksum excluded). Each entry is a reviewed telegram,
+   for example `57` / `30 91 01 01` for `NVE_65` `STATUS_BORDNETZSPANNUNG`.
+6. Anything else → `service`.
+
+`$30` and `$31` are never allowed by service: BMW SGBDs use them for both reads and
+actuation, and do not agree on where the "report current state" byte goes. Adding an `exact`
+entry is the owner's decision, made with a case, like a policy change.
+
+## Telegram check (agent)
+
+With `telegramCheck` (agent config) `enforce` (the default) or `report`, the agent checks
+every telegram EDIABAS sent for a request, from EDIABAS's own interface trace
+(`IFH.trc` in `TracePath`, written when `IfhTrace` in `EDIABAS.INI` is 3 or more):
+before the request it notes the trace's length; afterwards it reads what was added, takes
+the concept from each `SETECUCOMM` (its first two input bytes, little-endian) and judges each
+`SENDECUTEL` input with the telegram rule. A function name it does not know is a finding too.
+`enforce` turns any finding into `telegram_not_allowed` for the request and latches: every
+later EDIABAS request is refused with the same code until the agent restarts, and `/health`
+shows the latch. `report` only records findings. With `IfhTrace` below 3, or no trace written
+for a request that used EDIABAS, `enforce` refuses with `telegram_check_unavailable`. This
+check cannot stop a telegram; it proves what was sent and stops everything after a bad one.
+The interface handler below is what stops one.
+
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
 including the ones that only read SGBD files. One `apiInit` … `apiEnd` cycle per request; no
