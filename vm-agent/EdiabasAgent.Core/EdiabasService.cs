@@ -43,8 +43,8 @@ public sealed class RequestAudit
 /// apiEnd in <c>finally</c>. Nothing touches the API when the conflict check fails or when no
 /// job survives the policy.</para>
 /// <para>Telegram check (<see cref="TelegramCheck"/>): a latched check, or <c>requireGate</c>
-/// without a <c>GATE:</c> interface, refuses the request first. Just before the DLL is loaded
-/// for apiInit, the check reads EDIABAS.INI and notes the length of IFH.trc (under enforce an
+/// without a <c>GATE:</c> interface, refuses the request first. Just before apiInit (the DLL
+/// loaded, the conflict check passed again) the check reads EDIABAS.INI and notes the length of IFH.trc (under enforce an
 /// IfhTrace below 3 refuses the request there, before anything is sent); after apiEnd it reads
 /// what the request added and judges every telegram. A batch is one request.</para>
 /// <para>Every job the agent sends, including its own <c>_JOBS</c> / <c>_JOBCOMMENTS</c> /
