@@ -149,6 +149,13 @@ where the message is not enough. The ones that need judgement here:
     Only if the user then says they want to approve it, give them the line `ediabas_describe`
     printed (no restart is needed);
   - do not point to INPA, Tool32 or another job or ECU as a way to get the same reading.
+- **`[telegram_not_allowed]`** — the agent's check of what EDIABAS actually sent found a
+  telegram it does not allow, and the agent now refuses every EDIABAS call until it is
+  restarted. Tell the user exactly what was refused (function, telegram, reason, as given);
+  never retry, never look for another job or route, and stop using `ediabas_*`.
+  **`[telegram_check_unavailable]`** — the check cannot run: the user sets `IfhTrace = 3` in
+  the VM's `EDIABAS.INI` (theirs to edit, not yours); if the message says so, they also
+  restart the agent.
 - **`[cable_in_use]`** — a BMW tool is open; see step 1. **`[cable_not_found]`** — ask the
   user to tick the cable for the VM in UTM's USB menu (UTM does not hand back a replugged cable).
 - **`[ecu_not_found]`, `[job_not_found]`** — the name was wrong; go back to the lookup tools.

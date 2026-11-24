@@ -87,6 +87,9 @@ public sealed class FakeEdiabasApi : IEdiabasApi
     /// <summary>Run inside every apiJob call, to act while a request is in flight.</summary>
     public Action? DuringJob { get; set; }
 
+    /// <summary>Run inside every apiInit call (EDIABAS writes OPEN to its interface trace then).</summary>
+    public Action? DuringInit { get; set; }
+
     /// <summary>apiEnd throws (a native failure while closing the handle).</summary>
     public bool EndThrows { get; set; }
 
@@ -118,9 +121,10 @@ public sealed class FakeEdiabasApi : IEdiabasApi
         return LoadOk;
     }
 
-    public bool Init()
+    public bool Init(string? ediabasInterface)
     {
-        Calls.Add("Init");
+        Calls.Add(ediabasInterface is null ? "Init" : "InitExt " + ediabasInterface);
+        DuringInit?.Invoke();
         if (!InitOk)
         {
             _lastErrorCode = 95;

@@ -103,12 +103,15 @@ internal sealed class Endpoints
             Port: _ctx.Config.Port,
             Gateway: _selection.Gateway?.ToString(),
             ConflictingProcesses: _ctx.Conflicts.Running(),
-            Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck, _ctx.DllState.HeldOpen),
+            Ediabas: new EdiabasInfo(dll, dllFound, _ctx.DllState.Loaded, _ctx.DllState.Stuck, _ctx.DllState.HeldOpen, _ctx.Config.EdiabasInterface, _ctx.Config.RequireGate),
             LastCableUseAt: _ctx.CableUse.LastInitAt is { } t ? ApiFormat.Timestamp(t) : null,
             PolicyVersion: _ctx.Policy.Version,
             PolicySha256: _ctx.Policy.Sha256,
             Capabilities: AgentContext.Capabilities,
-            Approvals: _ctx.Approvals.Current.Counts);
+            Approvals: _ctx.Approvals.Current.Counts,
+            TelegramsVersion: _ctx.Telegrams.Version,
+            TelegramsSha256: _ctx.Telegrams.Sha256,
+            TelegramCheck: new TelegramCheckInfo(_ctx.Config.TelegramCheck, _ctx.TelegramLatch.Info));
 
         return Responses.WriteJson(http, StatusCodes.Status200OK, body);
     }

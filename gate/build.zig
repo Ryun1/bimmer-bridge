@@ -71,6 +71,7 @@ pub fn build(b: *std.Build) void {
     });
     test_mod.addAnonymousImport("allowlist", .{ .root_source_file = allowlist_zig });
     test_mod.addAnonymousImport("telegram_cases_json", .{ .root_source_file = cases_json });
+    test_mod.addAnonymousImport("telegrams_parse_cases_json", .{ .root_source_file = b.path("../policy/telegrams-parse-cases.json") });
     test_mod.addAnonymousImport("telegrams_json", .{ .root_source_file = telegrams_json });
     const tests = b.addRunArtifact(b.addTest(.{ .root_module = test_mod }));
     tests.has_side_effects = true;

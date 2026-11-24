@@ -86,9 +86,12 @@ public sealed class NativeEdiabasApi : IEdiabasApi, IDisposable
     }
 
     /// Starts a request. The live instance is created at the request's first live job, so a
-    /// describe never creates it.
-    public bool Init()
+    /// describe never creates it. There is no EDIABAS interface handler to choose natively
+    /// (libkline's frame gate enforces the telegram rule in its place), so a named interface,
+    /// which only the VM agent's <c>ediabasInterface</c> setting gives, is refused.
+    public bool Init(string? interfaceName = null)
     {
+        if (interfaceName is not null) return false;
         EnsureIdle();
         DisposeLive();
         return true;

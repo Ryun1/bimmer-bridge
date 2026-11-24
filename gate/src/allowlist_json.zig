@@ -13,6 +13,7 @@ pub const Error = error{
     EmptyData,
     EmptyNote,
     ForbiddenReadService,
+    Duplicate,
 } || std.json.ParseError(std.json.Scanner) || std.mem.Allocator.Error;
 
 pub const Exact = struct { address: u8, data: []const u8, note: []const u8 };
@@ -60,17 +61,25 @@ pub fn parse(arena: std.mem.Allocator, json: []const u8) Error!List {
     if (raw.version.value != 1) return error.WrongVersion;
 
     const reads = try arena.alloc(u8, raw.readServices.len);
-    for (raw.readServices, reads) |s, *b| {
+    for (raw.readServices, reads, 0..) |s, *b, i| {
         b.* = try hexByte(s);
         if (std.mem.indexOfScalar(u8, &never_by_service, b.*) != null) return error.ForbiddenReadService;
+        if (std.mem.indexOfScalar(u8, reads[0..i], b.*) != null) return error.Duplicate;
     }
     const adapter = try arena.alloc(u8, raw.adapterReads.len);
-    for (raw.adapterReads, adapter) |s, *b| b.* = try hexByte(s);
+    for (raw.adapterReads, adapter, 0..) |s, *b, i| {
+        b.* = try hexByte(s);
+        if (std.mem.indexOfScalar(u8, adapter[0..i], b.*) != null) return error.Duplicate;
+    }
 
     const exact = try arena.alloc(Exact, raw.exact.len);
-    for (raw.exact, exact) |e, *out| {
+    for (raw.exact, exact, 0..) |e, *out, i| {
         if (e.note.len == 0) return error.EmptyNote;
         out.* = .{ .address = try hexByte(e.address), .data = try hexData(arena, e.data), .note = e.note };
+        // The same telegram to the same address twice (as the agent's parser refuses it).
+        for (exact[0..i]) |prev| {
+            if (prev.address == out.address and std.mem.eql(u8, prev.data, out.data)) return error.Duplicate;
+        }
     }
     return .{
         .version = raw.version.value,
@@ -81,10 +90,14 @@ pub fn parse(arena: std.mem.Allocator, json: []const u8) Error!List {
     };
 }
 
-/// Exactly two hex digits.
+/// Exactly two upper-case hex digits (as the agent's parser requires).
 fn hexByte(s: []const u8) Error!u8 {
-    if (s.len != 2 or !std.ascii.isHex(s[0]) or !std.ascii.isHex(s[1])) return error.BadHexByte;
+    if (s.len != 2 or !isUpperHex(s[0]) or !isUpperHex(s[1])) return error.BadHexByte;
     return std.fmt.parseInt(u8, s, 16) catch error.BadHexByte;
+}
+
+fn isUpperHex(c: u8) bool {
+    return (c >= '0' and c <= '9') or (c >= 'A' and c <= 'F');
 }
 
 /// Two-digit hex bytes separated by single spaces, at least one byte.
@@ -142,7 +155,7 @@ fn parseText(json: []const u8) Error!List {
 }
 
 const good =
-    \\{"version":1,"readServices":["12","1a"],"defaultSession":"81","adapterReads":["FA"],
+    \\{"version":1,"readServices":["12","1A"],"defaultSession":"81","adapterReads":["FA"],
     \\ "exact":[{"address":"57","data":"30 91 01 01","note":"x"}]}
 ;
 

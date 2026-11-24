@@ -17,8 +17,14 @@ public sealed record ConflictingProcess(string Name, int Pid);
 
 /// <summary><c>Loaded</c>: whether the agent has api32.dll loaded right now (docs/api.md, "Idle release").
 /// <c>Stuck</c>: a job did not stop after <c>apiBreak</c>; EDIABAS is not used again until the agent restarts.
-/// <c>HeldOpen</c>: <c>apiEnd</c> threw, so EDIABAS stays loaded and the interface in use until the agent restarts.</summary>
-public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck, bool HeldOpen);
+/// <c>HeldOpen</c>: <c>apiEnd</c> threw, so EDIABAS stays loaded and the interface in use until the agent restarts.
+/// <c>Interface</c>: the configured <c>ediabasInterface</c> opened with <c>apiInitExt</c> (such as <c>GATE:OBD</c>); null when
+/// <c>apiInit</c> opens EDIABAS.INI's interface. <c>RequireGate</c>: EDIABAS requests are refused unless <c>Interface</c> is a <c>GATE:</c> one.</summary>
+public sealed record EdiabasInfo(string DllPath, bool DllFound, bool Loaded, bool Stuck, bool HeldOpen, string? Interface = null, bool RequireGate = false);
+
+/// <summary>The telegram check: its <c>mode</c> (<c>enforce</c>, <c>report</c> or <c>off</c>) and its latch
+/// (null until a finding under enforce; then every EDIABAS request is refused until the agent restarts).</summary>
+public sealed record TelegramCheckInfo(string Mode, TelegramLatchInfo? Latch);
 
 /// <summary>How many distinct <c>reviewedJobs</c> entries are pinned to a description, and how many are ignored (unpinned or malformed: they approve nothing).</summary>
 public sealed record ApprovalCounts(int Pinned, int Ignored, IReadOnlyList<string> Entries, string Hash);
@@ -41,7 +47,10 @@ public sealed record HealthResponse(
     int? PolicyVersion,
     string? PolicySha256,
     IReadOnlyList<string> Capabilities,
-    ApprovalCounts Approvals)
+    ApprovalCounts Approvals,
+    int? TelegramsVersion = null,
+    string? TelegramsSha256 = null,
+    TelegramCheckInfo? TelegramCheck = null)
 {
     public const string AgentName = "ediabas-bridge-agent";
 }
@@ -75,6 +84,8 @@ public static class ApiErrors
     public const string EdiabasUnavailable = "ediabas_unavailable";
     public const string JobTimeout = "job_timeout";
     public const string NotRun = "not_run";
+    public const string TelegramNotAllowed = "telegram_not_allowed";
+    public const string TelegramCheckUnavailable = "telegram_check_unavailable";
 
     // The native engine (ediabasd) only.
     public const string CableUnsupported = "cable_unsupported";
@@ -98,12 +109,12 @@ public static class ApiErrors
     {
         BadRequest => 400,
         Unauthorized => 401,
-        Forbidden or JobNotAllowed or JobNeedsReview or PathNotAllowed or FrameRefused => 403,
+        Forbidden or JobNotAllowed or JobNeedsReview or PathNotAllowed or FrameRefused or TelegramNotAllowed => 403,
         NotFound or EcuNotFound or JobNotFound or FileNotFound or WindowNotFound => 404,
         MethodNotAllowed => 405,
         CableInUse or WindowMinimized or NeedsCar => 409,
         EdiabasError or CableNotFound or CableUnsupported or CablePermission => 502,
-        EdiabasUnavailable or NotRun or DesktopUnavailable or CaptureBusy => 503,
+        EdiabasUnavailable or NotRun or DesktopUnavailable or CaptureBusy or TelegramCheckUnavailable => 503,
         CaptureFailed => 500,
         JobTimeout => 504,
         _ => 500,

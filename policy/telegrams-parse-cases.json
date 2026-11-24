@@ -1,0 +1,125 @@
+{
+ "comment": "Shared fixture: policy/telegrams.json texts that every parser of the telegram list (the agent's TelegramRule, the gate's allowlist_json.zig) must accept (valid true) or refuse (valid false), so the VM's trace check, XGate32.dll and the native frame gate never disagree on whether a list loads.",
+ "cases": [
+  {
+   "name": "a minimal valid list",
+   "valid": true,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an empty exact list is valid",
+   "valid": true,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": []}"
+  },
+  {
+   "name": "the repo's own list is valid",
+   "valid": true,
+   "text": "{\n  \"version\": 1,\n  \"readServices\": [\"12\", \"13\", \"17\", \"18\", \"19\", \"1A\", \"21\", \"22\", \"23\", \"3E\"],\n  \"defaultSession\": \"81\",\n  \"adapterReads\": [\"FA\", \"FD\", \"FE\"],\n  \"exact\": [\n    { \"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"NVE_65 STATUS_BORDNETZSPANNUNG: the voltage source; $30 report current state (2026-11-23 at the car)\" },\n    { \"address\": \"78\", \"data\": \"30 45 01\", \"note\": \"IHKA60 STATUS_VERBRAUCHERREDUZIERUNG: $30 report current state (2026-11-23 at the car)\" },\n    { \"address\": \"57\", \"data\": \"31 FA\", \"note\": \"NVE_65 STATUS_PAIRING: approved by the owner on 2026-11-23 (reviewedJobs)\" }\n  ]\n}\n"
+  },
+  {
+   "name": "version 2",
+   "valid": false,
+   "text": "{\"version\": 2, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "version as a string",
+   "valid": false,
+   "text": "{\"version\": \"1\", \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an unknown top-level key",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}], \"extra\": 1}"
+  },
+  {
+   "name": "a missing key (adapterReads)",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an unknown key in an exact entry",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\", \"mask\": \"FF\"}]}"
+  },
+  {
+   "name": "lower-case hex in readServices",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1a\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "lower-case hex in exact data",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 0a\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "a byte with one digit",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"A\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "a byte with a sign",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"+1\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "exact data with two spaces",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30  91\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "exact data with a trailing space",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 \", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "empty exact data",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an empty note",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"\"}]}"
+  },
+  {
+   "name": "a read service listed twice",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"1A\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an adapter read listed twice",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\", \"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "an exact entry listed twice",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}, {\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "$10 as a read service (sessions only via defaultSession)",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"10\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "$30 as a read service (only as exact telegrams)",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"30\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "$31 as a read service (only as exact telegrams)",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"31\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}]}"
+  },
+  {
+   "name": "a duplicate top-level key",
+   "valid": false,
+   "text": "{\"version\": 1, \"readServices\": [\"1A\", \"22\"], \"defaultSession\": \"81\", \"adapterReads\": [\"FA\"], \"exact\": [{\"address\": \"57\", \"data\": \"30 91 01 01\", \"note\": \"reviewed\"}], \"version\": 1}"
+  },
+  {
+   "name": "not JSON",
+   "valid": false,
+   "text": "{ not json"
+  }
+ ]
+}

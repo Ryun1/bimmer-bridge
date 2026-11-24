@@ -147,6 +147,60 @@ describe("formatHealth", () => {
     expect(t).not.toContain("\u001b");
     expect(t).toContain("EVIL [2J X");
   });
+
+  describe("telegram rule and check", () => {
+    const dll = { dllPath: "C:\\EDIABAS\\BIN\\api32.dll", dllFound: true };
+    const sha = "ab".repeat(32);
+    const tg = (o: Record<string, unknown> = {}, ediabas: Record<string, unknown> = { interface: null, requireGate: false }) =>
+      health({ ediabas: { ...dll, ...ediabas }, telegramsVersion: 1, telegramsSha256: sha, telegramCheck: { mode: "enforce", latch: null }, ...o });
+
+    it("says nothing for an agent that reports neither", () => {
+      const t = formatHealth(health(), null, undefined, null, sha);
+      expect(t).not.toMatch(/Telegram|EDIABAS interface/);
+    });
+
+    it("reports the version, the check and the interface", () => {
+      const t = formatHealth(tg(), null, undefined, null, sha);
+      expect(t).toContain(`Telegram rule: agent version 1 (sha256 ${sha.slice(0, 12)}); check: enforce.`);
+      expect(t).toContain("EDIABAS interface: from EDIABAS.INI (apiInit).");
+      expect(t).not.toMatch(/WARNING|LATCHED/);
+      expect(formatHealth(tg({}, { interface: "GATE:OBD", requireGate: true }))).toContain(
+        "EDIABAS interface: GATE:OBD (apiInitExt); only a GATE: interface is allowed.",
+      );
+    });
+
+    it("warns when the Mac's policy/telegrams.json is not the agent's file", () => {
+      const t = formatHealth(tg(), null, undefined, null, "cd".repeat(32));
+      expect(t).toMatch(/^WARNING: the agent's telegram rule \(sha256 abababababab\) is not the same file as this Mac's policy\/telegrams\.json \(cdcdcdcdcdcd\)\. The agent enforces its own copy\. /m);
+      expect(formatHealth(tg(), null, undefined, null, null)).not.toMatch(/WARNING/);
+    });
+
+    it("shows a latch prominently, with what was refused and what to do", () => {
+      const latch = {
+        at: "2026-11-24T10:00:00Z",
+        code: "telegram_not_allowed",
+        reason: "service",
+        function: "SENDECUTEL",
+        concept: "010F",
+        frame: "83 12 F1 14 FF FF",
+        message: "EDIABAS sent 83 12 F1 14 FF FF under concept 010F, which the telegram rule refuses (service).",
+      };
+      const t = formatHealth(tg({ telegramCheck: { mode: "enforce", latch } }));
+      expect(t).toMatch(
+        /^TELEGRAM CHECK LATCHED at 2026-11-24T10:00:00Z \[telegram_not_allowed\] \(SENDECUTEL, telegram 83 12 F1 14 FF FF, concept 010F, reason service\): EDIABAS sent .*Every EDIABAS tool is refused until the user restarts the agent.*never retry/m,
+      );
+    });
+
+    it("warns about off, explains report, and flags requireGate without a gate", () => {
+      expect(formatHealth(tg({ telegramCheck: { mode: "off", latch: null } }))).toMatch(/^WARNING: the agent's telegram check is off/m);
+      expect(formatHealth(tg({ telegramCheck: { mode: "report", latch: null } }))).toMatch(/^The telegram check is in report mode/m);
+      expect(formatHealth(tg({}, { interface: "STD:OBD", requireGate: true }))).toMatch(/^WARNING: requireGate is set but the interface is not a GATE: one/m);
+    });
+
+    it("says when the agent's rule did not load", () => {
+      expect(formatHealth(tg({ telegramsVersion: null, telegramsSha256: null }))).toContain("Telegram rule: agent did not load one; check: enforce.");
+    });
+  });
 });
 
 describe("formatWindows", () => {

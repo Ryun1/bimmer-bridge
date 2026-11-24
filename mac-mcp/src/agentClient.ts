@@ -54,6 +54,10 @@ export const HealthSchema = z.object({
     loaded: z.boolean().nullable().optional(),
     stuck: z.boolean().nullable().optional(),
     heldOpen: z.boolean().nullable().optional(),
+    // The interface opened with apiInitExt (e.g. GATE:OBD); null: EDIABAS.INI's, with apiInit.
+    // Both absent from an agent before the telegram check.
+    interface: z.string().nullable().optional(),
+    requireGate: z.boolean().nullable().optional(),
   }),
   lastCableUseAt: z.string().nullable(),
   // Phase 2 additions; an older agent omits them.
@@ -75,6 +79,29 @@ export const HealthSchema = z.object({
       }),
       z.object({ pinned: z.number().int().nonnegative(), unpinned: z.number().int().nonnegative() }),
     ])
+    .nullable()
+    .optional(),
+  // The telegram rule built into the agent (policy/telegrams.json) and its check of the bytes
+  // EDIABAS sent; absent from an older agent.
+  telegramsVersion: z.number().int().nullable().optional(),
+  telegramsSha256: z.string().nullable().optional(),
+  telegramCheck: z
+    .object({
+      mode: z.string(),
+      // Set once the check refused something under enforce: every EDIABAS request is then refused
+      // until the agent restarts.
+      latch: z
+        .object({
+          at: z.string(),
+          code: z.string(),
+          reason: z.string(),
+          function: z.string().nullable(),
+          concept: z.string().nullable(),
+          frame: z.string().nullable(),
+          message: z.string(),
+        })
+        .nullable(),
+    })
     .nullable()
     .optional(),
 });
@@ -316,7 +343,7 @@ const HEALTH: RequestSpec = { method: "GET", path: "/health" };
 const NOT_THE_AGENT = new Set(["wrong_service", "bad_response"]);
 
 /** 403 codes that are agent decisions, not the gateway check. */
-const AGENT_403_CODES = new Set(["job_not_allowed", "job_needs_review", "path_not_allowed"]);
+const AGENT_403_CODES = new Set(["job_not_allowed", "job_needs_review", "path_not_allowed", "telegram_not_allowed"]);
 
 function definedQuery(q: Record<string, QueryValue> | undefined): Record<string, string> {
   const out: Record<string, string> = {};

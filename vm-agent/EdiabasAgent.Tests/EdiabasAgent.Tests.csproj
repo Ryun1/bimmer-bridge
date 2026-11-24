@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Recorded traces (IFH.trc from the VM), read by the trace parser tests. -->
+    <None Include="Fixtures\**\*.trc" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\EdiabasAgent.Core\EdiabasAgent.Core.csproj" />
   </ItemGroup>
 

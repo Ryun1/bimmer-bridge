@@ -12,7 +12,7 @@ import { BATCH_MAX, readFaults, runBatch, runJobBatch, runVehicleSplit } from ".
 import { formatBridgeHealth, formatCaptureCaption, formatHealth, formatLogList, formatLogRead, formatWindows } from "./format.js";
 import { NativeClient, type NativeHealth, type SpawnFn } from "./nativeClient.js";
 import { formatDescribeJob, formatDescribeList, formatEcus, formatJobRaw, formatJobResult, formatVehicle, vehicleBatch } from "./formatEdiabas.js";
-import { PolicyGuard } from "./policy.js";
+import { PolicyGuard, fileSha256 } from "./policy.js";
 import { CarSession } from "./carSession.js";
 import { TEXT_BUDGET, fitText } from "./textBudget.js";
 import { TokenProvider } from "./token.js";
@@ -109,6 +109,8 @@ export interface ServerParts {
   now?: (() => number) | undefined;
   /** Extra voltage readings for ediabas_vehicle_status (config.local.json); default none. */
   voltageSources?: VoltageSource[] | undefined;
+  /** SHA-256 of this Mac's policy/telegrams.json, compared with the agent's in vm_health; null when unreadable. */
+  telegramsSha256?: string | null | undefined;
 }
 
 /** Per call: what run() adds to the result besides the tool's own text. */
@@ -250,7 +252,7 @@ export function buildServer(parts: ServerParts): McpServer {
           "Check this Mac server's version and start time and the Windows VM's bimmer-bridge agent: agent version and uptime, Windows version, whether it runs in an " +
           "interactive session, elevation, bind address, which BMW tools (INPA, Tool32, NCS Expert, " +
           "WinKFP, ...) are running and therefore hold the diagnostic cable, whether the EDIABAS DLL was found and is loaded now, last cable use, " +
-          "which features the agent has, and its job policy version against this Mac's. " +
+          "which features the agent has, its job policy version against this Mac's, and its telegram check (whether it has latched shut). " +
           "Call this first in a session, and again when another tool fails. Read-only.",
         annotations: { title: "VM agent health", ...READ_ONLY },
       },
@@ -258,7 +260,7 @@ export function buildServer(parts: ServerParts): McpServer {
         run("vm_health", async (ctx) => {
           const h = await client.health();
           ctx.notice = noticeOf(h);
-          return formatHealth(h, policy.version, mac, policy.sha256);
+          return formatHealth(h, policy.version, mac, policy.sha256, parts.telegramsSha256 ?? null);
         }),
     );
 
@@ -581,6 +583,8 @@ export interface AppDeps extends DiscoverySources {
   requestTimeoutMs?: number;
   ediabasTimeoutMs?: number;
   probeTimeoutMs?: number;
+  /** SHA-256 of policy/telegrams.json; default the repo's file (null: unreadable). */
+  telegramsSha256?: string | null;
   /** The job policy; default policy/policy.json at the repo root. */
   policy?: PolicyGuard;
   /** The clock (ms since the epoch); default Date.now. */
@@ -605,7 +609,8 @@ export function createAppServer(config: Config, deps: AppDeps): McpServer {
   if (policy.error) log(`warning: job policy not loaded (${policy.error}); every ediabas_* tool will refuse with policy_unavailable.`);
   for (const e of voltageSourceErrors(config.voltageSources, policy)) log(`config error: ${e} ediabas_vehicle_status refuses until it is fixed.`);
   const audit = new AuditLog(config.auditLogPath, { warn: log });
-  const common = { policy, audit, redact: (t: string) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources };
+  const telegramsSha256 = deps.telegramsSha256 !== undefined ? deps.telegramsSha256 : fileSha256();
+  const common = { policy, audit, redact: (t: string) => tokens.redact(t), log, now: deps.now, voltageSources: config.voltageSources, telegramsSha256 };
 
   if (config.backend === "native" && config.backendError === undefined) {
     const engine = new NativeClient({

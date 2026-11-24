@@ -218,4 +218,12 @@ public sealed class NativeEdiabasApiTests : IDisposable
         api.End();
         Assert.True(((FakeCable)cables.Last!).Disposed);
     }
+
+    [Fact]
+    public void Init_RefusesANamedInterface_TheNativeEngineHasNone()
+    {
+        using var api = new NativeEdiabasApi(Path.GetTempPath(), () => throw new InvalidOperationException("no cable in this test"), new VariantCache(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".json")), null);
+        Assert.False(api.Init("GATE:OBD"));
+        Assert.True(api.Init(null));
+    }
 }
