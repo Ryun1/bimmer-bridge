@@ -77,8 +77,13 @@ the Mac (unticked in UTM's USB menu):
    the defaults. Or register a second MCP server with `EDIABAS_BACKEND=native` in its environment.
 4. Restart Claude. `bridge_health` replaces `vm_health`; there are no `vm_*` tools.
 
-The strict frame gate refuses 24 reads natively ([m1-results.md](native/m1-results.md),
-section 2), including `NVE_65 STATUS_BORDNETZSPANNUNG`; they stay on the VM backend.
+The frame gate enforces the shared telegram rule ([api.md "Telegram rule"](api.md#telegram-rule)):
+a `$30`/`$31` read runs natively only once its exact telegram is on `policy/telegrams.json`
+(`NVE_65 STATUS_BORDNETZSPANNUNG`, `IHKA60 STATUS_VERBRAUCHERREDUZIERUNG` and `NVE_65
+STATUS_PAIRING` are, since 2026-11-24). The others stay on the VM backend; `dev/m2/gate-refused.json`
+lists the refused first telegrams (regenerated with policy version 5 and the new rule:
+253 pairs). The M1 results ([m1-results.md](native/m1-results.md), section 2) record the
+earlier deny-list gate.
 
 ## Policy fixtures: both sides must agree
 

@@ -1,5 +1,5 @@
 {
-  "policyVersion": 4,
+  "policyVersion": 5,
   "refused": [
     {
       "ecu": "ACSM60",
@@ -25,11 +25,6 @@
       "ecu": "ACSM60",
       "job": "STATUS_SPS_FAHRER",
       "service": "30"
-    },
-    {
-      "ecu": "ACSM60",
-      "job": "STATUS_ROC",
-      "service": "2E"
     },
     {
       "ecu": "AFS_90",
@@ -183,16 +178,6 @@
     },
     {
       "ecu": "AFS_90",
-      "job": "STATUS_EEPROM_OFFSET_SZL",
-      "service": "30"
-    },
-    {
-      "ecu": "AFS_90",
-      "job": "STATUS_EEPROM_SENSOREN",
-      "service": "30"
-    },
-    {
-      "ecu": "AFS_90",
       "job": "STATUS_LWG_QUADRANT_ABFRAGEN",
       "service": "33"
     },
@@ -260,11 +245,6 @@
       "ecu": "ALBV60F",
       "job": "STATUS_STROM",
       "service": "31"
-    },
-    {
-      "ecu": "AMP_60",
-      "job": "STATUS_GERAETE_TEMPERATUR",
-      "service": "30"
     },
     {
       "ecu": "ANT_60",
@@ -602,11 +582,6 @@
       "service": "30"
     },
     {
-      "ecu": "FLA_65",
-      "job": "STATUS_SENSORPARAMETER",
-      "service": "3B"
-    },
-    {
       "ecu": "HKL_65_2",
       "job": "STATUS_DWG",
       "service": "30"
@@ -778,11 +753,6 @@
     },
     {
       "ecu": "IHKA60",
-      "job": "STATUS_VERBRAUCHERREDUZIERUNG",
-      "service": "30"
-    },
-    {
-      "ecu": "IHKA60",
       "job": "STATUS_BS_DRUCKSENSOR",
       "service": "30"
     },
@@ -794,11 +764,6 @@
     {
       "ecu": "IHKA60",
       "job": "STATUS_DRUCKSENSOR_MAX",
-      "service": "30"
-    },
-    {
-      "ecu": "IHKA60",
-      "job": "STATUS_SELBSTTEST_SCHRITTMOTORE",
       "service": "30"
     },
     {
@@ -977,6 +942,11 @@
       "service": "30"
     },
     {
+      "ecu": "LM_AHL",
+      "job": "STATUS_REFERENZLAUF_ALC_SYSTEM",
+      "service": "A6"
+    },
+    {
       "ecu": "NVC_65",
       "job": "STATUS_SHUTTER_CYCLE",
       "service": "30"
@@ -985,16 +955,6 @@
       "ecu": "NVE_65",
       "job": "STATUS_TASTER",
       "service": "30"
-    },
-    {
-      "ecu": "NVE_65",
-      "job": "STATUS_BORDNETZSPANNUNG",
-      "service": "30"
-    },
-    {
-      "ecu": "NVE_65",
-      "job": "STATUS_PAIRING",
-      "service": "31"
     },
     {
       "ecu": "NVE_65",
@@ -1024,16 +984,6 @@
     {
       "ecu": "PDC_65_2",
       "job": "STATUS_AUSSCHWINGZEITEN",
-      "service": "30"
-    },
-    {
-      "ecu": "PDC_65_2",
-      "job": "STATUS_WEGE",
-      "service": "30"
-    },
-    {
-      "ecu": "PDC_65_2",
-      "job": "STATUS_ABSTAND",
       "service": "30"
     },
     {
@@ -1130,11 +1080,6 @@
       "ecu": "PGS_65_2",
       "job": "STATUS_ANALOG_VBAT",
       "service": "30"
-    },
-    {
-      "ecu": "PGS_65_2",
-      "job": "STATUS_PGS_ANTENNEN_TEST",
-      "service": "31"
     },
     {
       "ecu": "PGS_65_2",

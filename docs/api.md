@@ -629,7 +629,7 @@ refusal of one cannot fail the fixed readings).
 |---|---|
 | `cable_unsupported` | the serial device is not an FTDI FT232R (USB `0403:6001`) |
 | `cable_permission` | the device cannot be opened for lack of permission (on Linux, the udev rule) |
-| `frame_refused` | the cable layer's frame gate refused a telegram that could write to the car or reconfigure the cable. The whole request fails, whatever the SGBD made of the send error, and nothing more is sent on that port until it closes |
+| `frame_refused` | the cable layer's frame gate refused a telegram the telegram rule does not allow (see "Telegram rule"). The whole request fails, whatever the SGBD made of the send error, and nothing more is sent on that port until it closes |
 | `needs_car` | a describe on a group file whose variant is not cached yet |
 
 An `ediabas_error` for IFH-0003 with no cable-layer reason says to check the cable switch is on
