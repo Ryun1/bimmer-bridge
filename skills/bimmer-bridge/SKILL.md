@@ -35,7 +35,7 @@ is a decision, not an obstacle. Report it.
 | `vm_logs_list`, `vm_logs_read` | list and read EDIABAS / NCS Expert trace files |
 | `ediabas_list_ecus` | SGBD names (`prg`) and group names (`grp`) installed in the VM |
 | `ediabas_describe` | an SGBD's jobs and whether each is runnable; or one job's arguments and results |
-| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default) |
+| `ediabas_vehicle_status` | one batch: ignition (`UTILITY STATUS_ZUENDUNG`), the cable's supply (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any voltage sources configured on the Mac (`voltageSources` in `config.local.json`; none by default). On the E61 (2026-11-23, ignition on) `STAT_ZUENDUNG` read 1 and the cable's KL15 `E02E0000`; with no car connected (2026-11-22) 0 and `00000000`. Ignition off at the car is not recorded yet. `STAT_UBATT` and KL30 come from the cable, so only a voltage source shows the car's supply voltage |
 | `ediabas_read_faults` | fault memory (and optionally info memory) from 1–20 ECUs in one call |
 | `ediabas_job`, `ediabas_jobs` | one allowed read-only job; or 1–20 of them in one call |
 
@@ -76,14 +76,16 @@ turns it on.
    without the module answering (on the E61: `N62_TUE2`, `ME9N62_2`, `GS19D`, `SZL_60`; see
    `references/ecu-map.md`). Describe large files with a `filter`: on the E61 a full list of
    `CAS` or `LM_60` took the whole 60 s limit and left its last jobs unscreened.
-3. **Learn which modules the car has from the car, not by guessing names.** *Not yet run at
-   the car.* On an E60/E61 (the `E60` group SGBD), plan these as the first reads: `ediabas_job`
-   on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
+3. **Learn which modules the car has from the car, not by guessing names.** On an E60/E61
+   (the `E60` group SGBD), run these first: `ediabas_job` on `E60` with `IDENT_FUNKTIONAL` lists the modules that answer, `FS_LESEN_FUNKTIONAL` reads
    all their faults in one job, and `C_FA_LESEN` on `CAS` or `LM_60` reads the vehicle order.
+   `IDENT_FUNKTIONAL` prints one line per module (SGBD, group, name, BMW number); the SGBD is what to pass to `ediabas_read_faults`.
+   `FS_LESEN_FUNKTIONAL` prints one line per module (address, codes, present or stored inferred
+   from `F_ART`); `raw: true` shows every field.
    Describe them beforehand to see the result names, and use what they return to pick SGBDs.
    Run each functional job as its own `ediabas_job` with `timeoutSeconds: 60`, after an
    earlier call has loaded EDIABAS (`ediabas_vehicle_status`): a request gets at most 60 s,
-   and how long these take on a car is not yet measured. Then name only the modules that
+   and on the E61 (2026-11-23) `IDENT_FUNKTIONAL` took 3,925 ms and `FS_LESEN_FUNKTIONAL` 3,964 ms (recordings 0029, 0031), about 4 s each. Then name only the modules that
    answered in `ediabas_read_faults`: one that does not answer can use its whole timeout.
    The job policy allows these whole-car jobs only on `E60`, `E65`, `E70`, `E89X`, `F01` and `R56`; on another
    chassis `ediabas_describe` on its group SGBD shows them refused until the owner adds that group to
@@ -93,7 +95,10 @@ turns it on.
    user to switch the ignition on and say when it is. Suggest a battery charger or support unit on
    the car for the session (general knowledge, not from this car): it takes away most of the
    time pressure and avoids communication errors from low voltage.
-5. **`ediabas_vehicle_status`**, then the reads, batched: one `ediabas_read_faults` for all
+5. **`ediabas_vehicle_status`** (on the E61, 2026-11-23, ignition on: `STAT_ZUENDUNG` 1, the cable's
+   KL15 `E02E0000`; with no car connected, 2026-11-22: 0 and `00000000`; ignition off at the car
+   is not recorded yet. `STAT_UBATT` and KL30 come from the cable, and only a voltage source
+   shows the car's supply voltage), then the reads, batched: one `ediabas_read_faults` for all
    the ECUs wanted (up to 20), and the status jobs in one `ediabas_jobs` call rather than one
    `ediabas_job` each.
 6. **Report**, then say "ignition off" plainly, and remind the user to unplug the cable from
@@ -113,6 +118,15 @@ buries the answer.
 2026-11-21). That is normal: wait rather than retrying, and allow for it in the rough time.
 `vm_health` shows whether EDIABAS is loaded. For a session at the car the user can raise the
 idle time (`docs/at-the-car.md` in the repo).
+
+**If the bridge tools disappear mid-session**, do not retry anything. Ask the user to switch the
+ignition off while the link is down. When the tools return, `vm_health` "Last cable use" shows
+whether the last job reached the car (2026-11-23: a link drop over mobile data; the agent was
+unaffected).
+
+**Long results.** Pass `results` (a semicolon list of result names, from `ediabas_describe`) to
+trim history jobs such as the `KGM_60` blocks. A batch's items share one 60 s limit (the 12-item
+battery batch took 19 s on 2026-11-23).
 
 ## Refusals and errors
 

@@ -24,7 +24,7 @@ never resends one; if the engine exits or stops answering, the next call starts 
 | `vm_logs_read` | `path`, then `tailBytes?` (default 16384) or `offset?` + `length?`, `grep?`; at most 65536 bytes per call | `GET /logs/read` | header line (path, range, encoding, truncated) then the text |
 | `ediabas_list_ecus` | `filter?` | `GET /ediabas/ecus` | names with type (`prg` / `grp`); at most 500 names, then "N more; use filter to narrow the list." |
 | `ediabas_describe` | `ecu`, `job?`, `filter?` (ignored with `job`), `namesOnly?` (job list only; sent as `comments=false`) | `GET /ediabas/describe` | job list with description and whether each is runnable; or one job's description, arguments and results |
-| `ediabas_vehicle_status` | — | `POST /ediabas/jobs` (one batch, built on the Mac) | ignition (`UTILITY STATUS_ZUENDUNG`), battery (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any `voltageSources` configured on the Mac |
+| `ediabas_vehicle_status` | — | `POST /ediabas/jobs` (one batch, built on the Mac) | ignition (`UTILITY STATUS_ZUENDUNG`), the cable's supply (`UTILITY STATUS_UBATT`), the interface's KL30/KL15 voltages (`TMODE`), and any `voltageSources` configured on the Mac |
 | `ediabas_job` | `ecu`, `job`, `args?`, `results?`, `raw?`, `timeoutSeconds?` (1–60) | `POST /ediabas/job` | formatted result sets; the agent's JSON when `raw: true` |
 | `ediabas_jobs` | `jobs` (1–20 of `{ecu, job, args?, results?}`), `raw?`, `timeoutSeconds?` (1–60, for each job) | `POST /ediabas/jobs` | header "N of M ran.", then one block per job in request order; a failed job as `ECU JOB: [code] …` |
 | `ediabas_read_faults` | `ecus` (1–20 names), `includeInfoMemory?` | `POST /ediabas/jobs` | one fault table per ECU |
@@ -60,16 +60,17 @@ never resends one; if the engine exits or stops answering, the next call starts 
   still print. An `IS_LESEN` that fails with `ediabas_error` after that ECU's `FS_LESEN` read shows "Info memory: not read (...). Many
   modules have no info memory (no IS_LESEN job); ediabas_describe <ECU> shows whether this one has it."
   Otherwise its error is shown like a fault memory error.
+- **`FS_LESEN_FUNKTIONAL` (whole-car faults):** `ediabas_job` on `E60` prints one line per module
+  with faults (address, each code in hex and its state), then the modules that could not be read,
+  then `Without faults: ...`. Present or stored is inferred from the `F_ART` status byte
+  (KWP2000), so the view says so; `raw: true` shows every field. A result with no `F_ANZ` field
+  prints the generic view.
+- **`IDENT_FUNKTIONAL` (whole-car module list):** `ediabas_job` on `E60` prints `N modules answered, M did not.` and one line per module (address, SGBD, group, name, BMW number, date); `raw: true` shows every field.
+- A job status matching `ERROR_ECU_*NOT_SUPPORTED*` is followed by a note that the module refused the job (a negative response; not a bridge, cable or policy fault).
 - **Distances are miles first**, km in brackets: `100,000 mi (160,935 km)`. Miles are rounded down.
 - <a id="ediabas_vehicle_status"></a>`ediabas_vehicle_status` sends one `/ediabas/jobs` batch, in this
   order: `UTILITY STATUS_ZUENDUNG`, `UTILITY STATUS_UBATT`, each `voltageSources` entry, then
-  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. On the native backend it sends two:
-  the four fixed readings, then the voltage sources, because the engine's frame gate fails a
-  whole request; a source the gate refuses (`NVE_65 STATUS_BORDNETZSPANNUNG` is one) shows
-  `[frame_refused]` in its place and the other readings still print. The result ends with a note that
-  `STAT_UBATT` and the cable's KL30 come from the cable's own lines (with no car connected they
-  read `STAT_UBATT=1` and KL30 `E02E0000`, rehearsal 2026-11-22), so only a voltage source shows
-  the car is awake. Voltage sources are car-specific
+  `TMODE LESE_SPANNUNG_KL30` and `TMODE LESE_SPANNUNG_KL15`. Readings are labelled "Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading)" and "Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading)". On the native backend it sends two requests: the four fixed readings, then the voltage sources, because the engine's frame gate fails a whole request; a source the gate refuses (`NVE_65 STATUS_BORDNETZSPANNUNG` is one) shows `[frame_refused]` in its place and the other readings still print. The result ends with two notes: IGNITION_NOTE (`STAT_ZUENDUNG` and the cable's KL15 as seen with the ignition on at the car, 2026-11-23, and with no car connected, 2026-11-22; ignition off in the car is not recorded yet) and CABLE_NOTE (`STAT_UBATT` and the cable's KL30 read the same with and without the car, `STAT_UBATT=1` and KL30 `E02E0000`, so they show only that the cable is powered; only a module reading, a voltage source, shows the car's supply voltage). Voltage sources are car-specific
   extra readings in the Mac's git-ignored `config.local.json`, e.g.
   `"voltageSources": [ { "ecu": "NVE_65", "job": "STATUS_BORDNETZSPANNUNG" } ]` (the E60/E61
   night-vision module's supply voltage); none by default, and the result then says "Voltage

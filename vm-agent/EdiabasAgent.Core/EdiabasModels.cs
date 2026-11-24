@@ -41,12 +41,32 @@ public sealed record JobVerdict(bool Allowed, string Rule, string Review);
 
 public sealed record DescribeJobEntry(string Name, string? Comment, JobVerdict Verdict);
 
+/// <summary><c>CommentsCutOff</c>: null when every description asked for was fetched (or none
+/// was asked for); else why the rest are <c>not_checked</c>, one of <see cref="CutOff"/>.</summary>
 public sealed record DescribeListResponse(
     string Ecu,
     string? Variant,
     int JobCount,
     IReadOnlyList<DescribeJobEntry> Jobs,
-    long DurationMs);
+    long DurationMs,
+    string? CommentsCutOff = null);
+
+/// <summary>Why a describe stopped fetching descriptions before the end of the list.</summary>
+public static class CutOff
+{
+    /// <summary>The request reached its time limit. Asking again goes further: the descriptions
+    /// already read come from the agent's cache.</summary>
+    public const string TimeLimit = "time_limit";
+
+    /// <summary>A BMW tool started during the request.</summary>
+    public const string ToolStarted = "tool_started";
+
+    /// <summary>A job did not stop after apiBreak; EDIABAS is not used again until a restart.</summary>
+    public const string EdiabasStuck = "ediabas_stuck";
+
+    /// <summary>The client went away.</summary>
+    public const string Abandoned = "abandoned";
+}
 
 public sealed record JobParameterInfo(string? Name, string? Type, string? Comment);
 

@@ -1,0 +1,61 @@
+{
+  "recordedAt": "2026-11-23T19:50:41.136Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/job",
+    "query": {},
+    "body": {
+      "ecu": "D_MOTOR",
+      "job": "IDENT"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "D_MOTOR",
+      "job": "IDENT",
+      "variant": "N62_TUE",
+      "jobStatus": "OKAY",
+      "systemResults": {
+        "OBJECT": "n62_tue",
+        "SAETZE": 1,
+        "JOBNAME": "IDENT",
+        "VARIANTE": "N62_TUE",
+        "JOBSTATUS": "",
+        "UBATTCURRENT": -1,
+        "UBATTHISTORY": -1,
+        "IGNITIONCURRENT": -1,
+        "IGNITIONHISTORY": -1
+      },
+      "sets": [
+        {
+          "ID_DATUM": "11.11.2005",
+          "ID_HW_NR": "01",
+          "ID_BMW_NR": "7566706",
+          "ID_EWS_SS": 3,
+          "ID_SG_ADR": 18,
+          "ID_LIEF_NR": 8,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "9FF1125A800000075667060112002035512005111108000E7AFFFFFFFFFFFFFFFFFFCD",
+          "_TEL_AUFTRAG": "8212F11A80",
+          "ID_COD_INDEX": 18,
+          "ID_DATUM_TAG": 11,
+          "ID_LIEF_TEXT": "Bosch",
+          "ID_SW_NR_FSV": "255.255.255",
+          "ID_SW_NR_MCV": "0.14.122",
+          "ID_SW_NR_OSV": "255.255.255",
+          "ID_SW_NR_RES": "255.255.255",
+          "ID_VAR_INDEX": 13649,
+          "ID_DATUM_JAHR": 2005,
+          "ID_DIAG_INDEX": 32,
+          "ID_DATUM_MONAT": 11
+        }
+      ],
+      "durationMs": 253
+    }
+  }
+}

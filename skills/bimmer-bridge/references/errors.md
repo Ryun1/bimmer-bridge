@@ -95,6 +95,10 @@ never look for another tool, job or route (and never computer use on the VM wind
 - **`ediabas_vehicle_status` battery and KL30 are not evidence the car is awake.** With no car
   connected they read `STAT_UBATT=1` and KL30 `E02E0000` (rehearsal, 2026-11-22): they come from
   the cable. Only a voltage source (a module's reading) shows the car answered.
+- **A job status `ERROR_ECU_..._NOT_SUPPORTED...`** (for example
+  `ERROR_ECU_SUBFUNCTION_NOT_SUPPORTED__INVALID_FORMAT`, seen on the E61's `CAS` on 2026-11-23).
+  The module answered and refused the job (a negative response). It is not a bridge, cable or
+  policy fault. Do not retry. Record it in the cookbook as "not supported on this module".
 - **`[ediabas_error]` "The job finished but its results could not be read".** The job ran.
   Report EDIABAS's code and text; do not run it again without asking the user.
 - **`[ediabas_request_lost]`.** Tell the user the job may have run. Call `vm_health`; repeat

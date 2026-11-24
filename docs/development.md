@@ -121,7 +121,12 @@ Fixtures come only from real sessions; nothing is written by hand.
    command `node` (the same binary as the production registration, so macOS's Local Network
    permission carries over), arguments `--import /path/to/repo/dev/ts-resolve.mjs
    /path/to/repo/dev/record-server.ts`, and the same `env`
-   as the production registration plus `EDIABAS_RECORD_DIR`. From a shell:
+   as the production registration plus `EDIABAS_RECORD_DIR`. `claude mcp` registers it for Claude Code only;
+   Claude Desktop reads `~/Library/Application Support/Claude/claude_desktop_config.json`
+   (`mcpServers`), where the entry is
+   `"bimmer-bridge": { "command": "/opt/homebrew/bin/node", "args": ["--import", "<repo>/dev/ts-resolve.mjs", "<repo>/dev/record-server.ts"], "env": { "EDIABAS_RECORD_DIR": "<recordings folder>" } }`;
+   quit Desktop with Cmd+Q and reopen it, and restore the production entry
+   (`"args": ["<repo>/mac-mcp/dist/index.js"]`) afterwards. From a shell:
    `EDIABAS_RECORD_DIR=~/ediabas-recordings/x node --import ./dev/ts-resolve.mjs dev/record-server.ts`. It is the production server
    (`mac-mcp/src`) with a recording `fetch` (`dev/recorder.ts`); the production server itself
    never writes exchanges. Every agent exchange except `GET /hello` is written as one JSON file

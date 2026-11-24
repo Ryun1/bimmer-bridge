@@ -1,0 +1,84 @@
+{
+  "recordedAt": "2026-11-23T19:56:51.506Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "D_MOTOR",
+          "job": "FS_LESEN"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "D_MOTOR",
+            "job": "FS_LESEN",
+            "variant": "N62_TUE",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "n62_tue",
+              "SAETZE": 3,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "N62_TUE",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_ORT_NR": 12020,
+                "F_VERSION": 2,
+                "F_HEX_CODE": "2EF468",
+                "F_ORT_TEXT": "CDKTHM - Kennfeldthermostat, Mechanik",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 265,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "Thermostat fehlerhaft",
+                "F_VORHANDEN_NR": 35,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan vorhanden und bereits gespeichert"
+              },
+              {
+                "F_ORT_NR": 11757,
+                "F_HEX_CODE": "2DED28",
+                "F_ORT_TEXT": "CDKPMRUHV - Powermanagement, Ruhestromüberwachung",
+                "F_READY_NR": 16,
+                "F_READY_TEXT": "Testbedingungen erfüllt",
+                "F_SYMPTOM_NR": 230,
+                "F_WARNUNG_NR": 48,
+                "F_SYMPTOM_TEXT": "Ruhestromverletzung",
+                "F_VORHANDEN_NR": 33,
+                "F_WARNUNG_TEXT": "Fehler würde kein Aufleuchten einer Warnlampe verursachen",
+                "F_VORHANDEN_TEXT": "Fehler momentan nicht vorhanden, aber bereits gespeichert"
+              },
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "88F11258022EF4682DED28B1",
+                "_TEL_AUFTRAG": "8412F11802FFFF"
+              }
+            ],
+            "durationMs": 670
+          },
+          "error": null
+        }
+      ],
+      "durationMs": 670
+    }
+  }
+}

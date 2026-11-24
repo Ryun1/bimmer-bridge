@@ -174,7 +174,7 @@ describe("vehicle status", () => {
     ]);
     expect(r.isError).toBeFalsy();
     expect(r.text).toMatch(/Ignition \(UTILITY STATUS_ZUENDUNG\): job status OKAY/);
-    expect(r.text).toMatch(/Battery \(UTILITY STATUS_UBATT\): job status OKAY/);
+    expect(r.text).toMatch(/Cable supply \(UTILITY STATUS_UBATT; from the cable, not a battery reading\): job status OKAY/);
     expect(r.text).toMatch(/Voltage \(NVE_65 STATUS_BORDNETZSPANNUNG\): error: \[frame_refused\]/);
     expect(r.text).toMatch(/Cable KL15 \(TMODE LESE_SPANNUNG_KL15\): job status OKAY/);
   });

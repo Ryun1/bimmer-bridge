@@ -46,10 +46,15 @@ function cleanName(s: string, max = 64): string {
   return cleanText(s, max) || "?";
 }
 
-/** Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer". */
+/**
+ * Field names that hold a distance in km: a `KM` name token (not `KM_H`), or "kilometer".
+ * Counts are not distances: an `ANZAHL` (count) token, or `KM` right after a number token
+ * (`FAHRTEN_0_5_KM_1` is the count of trips of 0 to 5 km), is a count.
+ */
 export function isKmName(name: string): boolean {
   // km/h (KM_H, KM_PRO_H) and km per standard (KM_STD) are speeds or rates, not distances.
   if (/(^|_)KM_(H|PRO|STD)(_|$)/i.test(name)) return false;
+  if (/(^|_)ANZAHL(_|$)/i.test(name) || /(^|_)\d+_KM(_|$)/i.test(name)) return false;
   return /(^|_)KM(_|$)/i.test(name) || /KILOMETER/i.test(name);
 }
 
@@ -79,6 +84,15 @@ function fieldLines(set: ResultSet, indent: string): string[] {
 function fieldsInline(set: ResultSet, keys: string[] = Object.keys(set)): string {
   const km = kmKeys(set);
   return keys.map((k) => `${cleanName(k)}=${km.has(k) && typeof set[k] === "number" ? formatKm(set[k] as number) : inlineValue(set[k])}`).join(" ");
+}
+
+const NOT_SUPPORTED_NOTE = "the module answered that it does not support this job: a negative response from the module, not a bridge, cable or policy fault";
+
+/** `job status X` (or `not reported`); a module's "not supported" answer gets a note saying what it is. */
+export function jobStatusText(status: string | null | undefined): string {
+  if (!status) return "job status not reported";
+  const text = valueText(status, 60);
+  return /^ERROR_ECU_.*NOT_SUPPORTED/i.test(text) ? `job status ${text} (${NOT_SUPPORTED_NOTE})` : `job status ${text}`;
 }
 
 function plural(n: number, one: string, many = `${one}s`): string {
@@ -172,10 +186,11 @@ export function formatFaultTable(result: JobResult, label: string): string[] {
   const sets = result.sets;
   const faults = sets.filter(isFaultSet);
   const status = result.jobStatus ? valueText(result.jobStatus, 60) : null;
+  const statusText = jobStatusText(result.jobStatus);
   const ok = status === "OKAY";
   const lines: string[] = [];
   if (faults.length === 0) {
-    lines.push(ok ? `  ${label}: no faults stored.` : `  ${label}: no fault entries returned (job status ${status ?? "not reported"}).`);
+    lines.push(ok ? `  ${label}: no faults stored.` : `  ${label}: no fault entries returned (${statusText}).`);
   } else {
     lines.push(`  ${label}: ${plural(faults.length, "entry", "entries")}${ok ? "" : ` (job status ${status ?? "not reported"})`}`);
   }
@@ -244,20 +259,118 @@ export function formatFaultReport(reports: FaultReport[], includeInfo: boolean):
 // Job results
 // ---------------------------------------------------------------------------
 
-export function formatJobResult(r: JobResult): string {
+/** First line of a job view: `ECU JOB: job status …, variant …, N ms, N result sets`. */
+function jobHeader(r: JobResult): string {
   const facts = [
-    `job status ${r.jobStatus ? valueText(r.jobStatus, 60) : "not reported"}`,
+    jobStatusText(r.jobStatus),
     r.variant ? `variant ${valueText(r.variant, 64)}` : null,
     typeof r.durationMs === "number" ? `${Math.round(r.durationMs)} ms` : null,
     plural(r.sets.length, "result set"),
   ].filter(Boolean);
-  const out = [`${cleanName(r.ecu)} ${cleanName(r.job)}: ${facts.join(", ")}`];
+  return `${cleanName(r.ecu)} ${cleanName(r.job)}: ${facts.join(", ")}`;
+}
+
+export function formatJobResult(r: JobResult): string {
+  if (r.job.toUpperCase() === "IDENT_FUNKTIONAL" && r.sets.some((s) => "ECU_SGBD" in s)) return formatFunctionalIdent(r);
+  if (r.job.toUpperCase() === "FS_LESEN_FUNKTIONAL" && r.sets.some((s) => "F_ANZ" in s)) return formatFunctionalFaults(r);
+  const out = [jobHeader(r)];
   if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
   r.sets.forEach((set, i) => {
     out.push(`Set ${i + 1}:`);
     const lines = fieldLines(set, "  ");
     out.push(...(lines.length ? lines : ["  (empty)"]));
   });
+  return out.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Whole-car jobs (E60 group SGBD: one result set per module)
+// ---------------------------------------------------------------------------
+
+/** KWP2000 storage-state bits of an F_ART byte; inferred, so the view says so. */
+export function storageState(fArt: unknown): string {
+  if (typeof fArt !== "number" || !Number.isInteger(fArt) || fArt < 0) return `status not decoded (F_ART ${valueText(fArt, 20)})`;
+  const state = (fArt & 0x60) === 0x60 ? "present now" : (fArt & 0x60) === 0x20 ? "stored, not present" : "status not decoded";
+  return `${state} (F_ART 0x${fArt.toString(16).toUpperCase().padStart(2, "0")})`;
+}
+
+function moduleLabel(set: ResultSet): string {
+  const name = typeof set.ECU_GROBNAME === "string" && set.ECU_GROBNAME ? cleanName(set.ECU_GROBNAME) : "(unnamed module)";
+  const adr = set.ECU_ADR;
+  return `${name} (${typeof adr === "string" || typeof adr === "number" ? `address 0x${valueText(adr, 8)}` : "address unknown"})`;
+}
+
+/** The summary set that ends a whole-car result: only JOB_STATUS=OKAY (the recordings print "(set 45) JOB_STATUS=OKAY"). */
+function isTrailingSummary(set: Record<string, unknown>, keys: string[]): boolean {
+  return keys.length === 1 && keys[0] === "JOB_STATUS" && typeof set.JOB_STATUS === "string" && set.JOB_STATUS.toUpperCase() === "OKAY";
+}
+
+export function formatFunctionalFaults(r: JobResult): string {
+  const faulted: string[] = [];
+  const unread: string[] = [];
+  const clean: string[] = [];
+  const other: string[] = [];
+  let codes = 0;
+  r.sets.forEach((set, i) => {
+    const status = set.JOB_STATUS;
+    if (typeof status === "string" && status.toUpperCase() !== "OKAY") {
+      unread.push(`  ${moduleLabel(set)}: ${jobStatusText(status)}`);
+    } else if (typeof set.F_ANZ === "number" && Number.isInteger(set.F_ANZ) && set.F_ANZ >= 0) {
+      if (set.F_ANZ === 0) {
+        clean.push(typeof set.ECU_GROBNAME === "string" ? cleanName(set.ECU_GROBNAME) : moduleLabel(set));
+        return;
+      }
+      const n = Math.min(set.F_ANZ, 99);
+      const items: string[] = [];
+      for (let k = 1; k <= n; k++) {
+        if (!(`F_ORT${k}_NR` in set)) continue;
+        items.push(`${faultCode(set[`F_ORT${k}_NR`])} ${storageState(set[`F_ART${k}_NR`])}`);
+      }
+      codes += items.length;
+      faulted.push(`  ${moduleLabel(set)}: ${items.join("; ")}`);
+    } else {
+      const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      if (isTrailingSummary(set, keys)) return;
+      other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
+    }
+  });
+  const out = [jobHeader(r)];
+  if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
+  out.push(`${plural(faulted.length, "module")} with faults (${plural(codes, "code")}), ${clean.length} without, ${unread.length} could not be read.`);
+  out.push(...faulted, ...unread);
+  if (clean.length) out.push(`Without faults: ${clean.join(", ")}`);
+  out.push(...other);
+  out.push("Present/stored is inferred from the F_ART status byte (KWP2000); ediabas_read_faults on the module gives its own wording. raw: true shows every field.");
+  return out.join("\n");
+}
+
+export function formatFunctionalIdent(r: JobResult): string {
+  const modules: string[] = [];
+  const failed: string[] = [];
+  const other: string[] = [];
+  let answered = 0;
+  let did_not = 0;
+  r.sets.forEach((set, i) => {
+    const status = set.JOB_STATUS;
+    if (typeof status === "string" && status.toUpperCase() !== "OKAY") {
+      if ("ECU_GROBNAME" in set) did_not++;
+      failed.push(`  ${moduleLabel(set)}: ${jobStatusText(status)}`);
+    } else if ("ECU_SGBD" in set) {
+      answered++;
+      const f = (k: string, label: string) => (k in set && set[k] != null ? [`${label}${valueText(set[k], 80)}`] : []);
+      const parts = [...f("ECU_SGBD", ""), ...f("ECU_GRUPPE", "group "), ...f("ECU_NAME", ""), ...f("ID_BMW_NR", "BMW no. "), ...f("ID_DATUM", "date ")];
+      modules.push(`  ${moduleLabel(set)}: ${parts.join(", ")}`);
+    } else {
+      const keys = Object.keys(set).filter((k) => !k.startsWith("_TEL_"));
+      if (isTrailingSummary(set, keys)) return;
+      other.push(`  (set ${i + 1}) ${fieldsInline(set, keys)}`);
+    }
+  });
+  const out = [jobHeader(r)];
+  if (r.systemResults && Object.keys(r.systemResults).length) out.push(`System results: ${fieldsInline(r.systemResults)}`);
+  out.push(`${plural(answered, "module")} answered, ${did_not} did not.`);
+  out.push(...modules, ...failed, ...other);
+  out.push("raw: true shows every field (hardware and software numbers, coding index).");
   return out.join("\n");
 }
 
@@ -297,12 +410,35 @@ export function formatDescribeList(d: DescribeList, filter: string | undefined, 
   const out = [
     `${cleanName(d.ecu)}${variant}: ${plural(n, "job")}${filter ? ` matching "${cleanText(filter, 64)}"` : ""}, ${runnable} runnable through the bridge.`,
   ];
+  const cut = cutOffText(d);
+  if (cut) out.push(cut);
   for (const j of d.jobs) {
     const v = verdictText(j.verdict, mac(j.name));
     const comment = j.comment ? ` — ${cleanText(j.comment, 160)}` : "";
     out.push(`${cleanName(j.name)} [${v.text}]${comment}`);
   }
   return out.join("\n");
+}
+
+/** Why some descriptions were not read, when the agent says it stopped early. */
+function cutOffText(d: DescribeList): string | null {
+  const reason = d.commentsCutOff;
+  if (!reason) return null;
+  const unread = d.jobs.filter((j) => j.verdict.review === "not_checked").length;
+  const what = unread > 0 ? `${plural(unread, "job")} not screened` : "some descriptions not read";
+  switch (reason) {
+    case "time_limit":
+      return (
+        `(${what}: the agent's time limit ran out. With no module answering, each description read waits out the SGBD's start-up. ` +
+        "Asking again goes on from where it stopped: the agent keeps what it read.)"
+      );
+    case "tool_started":
+      return `(${what}: a BMW tool started in the VM during the request.)`;
+    case "ediabas_stuck":
+      return `(${what}: an EDIABAS job did not stop; the agent needs a restart.)`;
+    default:
+      return `(${what}: ${cleanText(reason, 40)}.)`;
+  }
 }
 
 function paramLines(ps: DescribeJob["arguments"]): string[] {
@@ -344,7 +480,7 @@ export function formatDescribeJob(d: DescribeJob, mac: Verdict | null): string {
 function readingText(item: BatchItem): string {
   if (!item.ok || !item.result) return `error: ${itemErrorText(item.error)}`;
   const r = item.result;
-  const parts = [`job status ${r.jobStatus ? valueText(r.jobStatus, 60) : "not reported"}`];
+  const parts = [jobStatusText(r.jobStatus)];
   for (const set of r.sets) {
     const keys = Object.keys(set).filter((k) => k.toUpperCase() !== "JOB_STATUS");
     if (keys.length) parts.push(fieldsInline(set, keys));
@@ -366,25 +502,24 @@ export function vehicleBatch(sources: { ecu: string; job: string }[]): { ecu: st
   ];
 }
 
-// Rehearsal, 2026-11-22, cable in the VM and not in the car: STAT_UBATT=1 and KL30 E02E0000.
-// EdiabasLib's serial driver likewise reports a fixed 12000 mV whenever the cable's DSR line is set.
-const VEHICLE_NOTE =
-  "Note: STAT_UBATT and the cable's KL30 come from the cable's own lines, not from the car: with no car connected (desk, 2026-11-22) " +
-  "they read STAT_UBATT=1 and KL30 E02E0000 (12000 read little-endian). They do not show that the car is awake or how charged " +
-  "the battery is; only a reading from a module (a voltage source) shows that.";
+const IGNITION_NOTE =
+  "Ignition: with the ignition on at the car (2026-11-23) STAT_ZUENDUNG was 1 and the cable's KL15 E02E0000; with no car connected (desk, 2026-11-22) 0 and 00000000. Ignition off with the cable in the car has not been recorded yet.";
+const CABLE_NOTE =
+  "Battery: STAT_UBATT and the cable's KL30 read the same with and without the car (STAT_UBATT=1, KL30 E02E0000), so they show only that the cable is powered. Only a module reading (a voltage source) shows the car's supply voltage.";
 
 /** `r` answers `vehicleBatch(sources)`, one item per item sent. */
 export function formatVehicle(r: Pick<JobsResponse, "items">, sources: { ecu: string; job: string }[]): string {
   const it = r.items;
   const n = sources.length;
-  const out = ["Vehicle status (each reading's result fields as returned; their meaning is not yet confirmed at the car):"];
+  const out = ["Vehicle status (result fields as returned):"];
   out.push(`Ignition (UTILITY STATUS_ZUENDUNG): ${readingText(it[0]!)}`);
-  out.push(`Battery (UTILITY STATUS_UBATT): ${readingText(it[1]!)}`);
+  out.push(`Cable supply (UTILITY STATUS_UBATT; from the cable, not a battery reading): ${readingText(it[1]!)}`);
   sources.forEach((s, i) => out.push(`Voltage (${cleanName(s.ecu)} ${cleanName(s.job)}): ${readingText(it[2 + i]!)}`));
   if (n === 0) out.push("Voltage sources: none configured (voltageSources in config.local.json on the Mac).");
-  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30): ${readingText(it[2 + n]!)}`);
+  out.push(`Cable KL30 (TMODE LESE_SPANNUNG_KL30; from the cable, not a battery reading): ${readingText(it[2 + n]!)}`);
   out.push(`Cable KL15 (TMODE LESE_SPANNUNG_KL15): ${readingText(it[3 + n]!)}`);
-  out.push(VEHICLE_NOTE);
+  out.push(IGNITION_NOTE);
+  out.push(CABLE_NOTE);
   return out.join("\n");
 }
 

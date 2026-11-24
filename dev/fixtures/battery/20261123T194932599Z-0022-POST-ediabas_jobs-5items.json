@@ -1,0 +1,184 @@
+{
+  "recordedAt": "2026-11-23T19:49:32.599Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_ZUENDUNG"
+        },
+        {
+          "ecu": "UTILITY",
+          "job": "STATUS_UBATT"
+        },
+        {
+          "ecu": "NVE_65",
+          "job": "STATUS_BORDNETZSPANNUNG"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL30"
+        },
+        {
+          "ecu": "TMODE",
+          "job": "LESE_SPANNUNG_KL15"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "UTILITY",
+            "job": "STATUS_ZUENDUNG",
+            "variant": "UTILITY",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "utility",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_ZUENDUNG",
+              "VARIANTE": "UTILITY",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "STAT_ZUENDUNG": 1
+              }
+            ],
+            "durationMs": 152
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "UTILITY",
+            "job": "STATUS_UBATT",
+            "variant": "UTILITY",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "utility",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_UBATT",
+              "VARIANTE": "UTILITY",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "STAT_UBATT": 1
+              }
+            ],
+            "durationMs": 1
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "NVE_65",
+            "job": "STATUS_BORDNETZSPANNUNG",
+            "variant": "NVE_65",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "nve_65",
+              "SAETZE": 1,
+              "JOBNAME": "STATUS_BORDNETZSPANNUNG",
+              "VARIANTE": "NVE_65",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "83F157700078B3",
+                "STAT_BORDNETZSPANNUNG_EINH": "Volt",
+                "STAT_BORDNETZSPANNUNG_WERT": 12
+              }
+            ],
+            "durationMs": 581
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "TMODE",
+            "job": "LESE_SPANNUNG_KL30",
+            "variant": "TMODE",
+            "jobStatus": null,
+            "systemResults": {
+              "OBJECT": "tmode",
+              "SAETZE": 1,
+              "JOBNAME": "LESE_SPANNUNG_KL30",
+              "VARIANTE": "TMODE",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "SPANNUNG": "E02E0000"
+              }
+            ],
+            "durationMs": 11
+          },
+          "error": null
+        },
+        {
+          "ok": true,
+          "result": {
+            "ecu": "TMODE",
+            "job": "LESE_SPANNUNG_KL15",
+            "variant": "TMODE",
+            "jobStatus": null,
+            "systemResults": {
+              "OBJECT": "tmode",
+              "SAETZE": 1,
+              "JOBNAME": "LESE_SPANNUNG_KL15",
+              "VARIANTE": "TMODE",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "SPANNUNG": "E02E0000"
+              }
+            ],
+            "durationMs": 1
+          },
+          "error": null
+        }
+      ],
+      "durationMs": 746
+    }
+  }
+}

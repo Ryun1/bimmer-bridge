@@ -1,0 +1,58 @@
+{
+  "recordedAt": "2026-11-23T19:48:30.490Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/jobs",
+    "query": {},
+    "body": {
+      "items": [
+        {
+          "ecu": "NVE_65",
+          "job": "FS_LESEN"
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "items": [
+        {
+          "ok": true,
+          "result": {
+            "ecu": "NVE_65",
+            "job": "FS_LESEN",
+            "variant": "NVE_65",
+            "jobStatus": "OKAY",
+            "systemResults": {
+              "OBJECT": "nve_65",
+              "SAETZE": 1,
+              "JOBNAME": "FS_LESEN",
+              "VARIANTE": "NVE_65",
+              "JOBSTATUS": "",
+              "UBATTCURRENT": -1,
+              "UBATTHISTORY": -1,
+              "IGNITIONCURRENT": -1,
+              "IGNITIONHISTORY": -1
+            },
+            "sets": [
+              {
+                "F_VERSION": 2,
+                "JOB_STATUS": "OKAY",
+                "_TEL_ANTWORT": "82F157580022",
+                "_TEL_AUFTRAG": "8457F11802FFFF"
+              }
+            ],
+            "durationMs": 80
+          },
+          "error": null
+        }
+      ],
+      "durationMs": 81
+    }
+  }
+}

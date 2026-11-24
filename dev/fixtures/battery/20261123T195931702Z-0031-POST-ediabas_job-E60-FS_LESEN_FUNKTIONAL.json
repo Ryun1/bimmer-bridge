@@ -1,0 +1,443 @@
+{
+  "recordedAt": "2026-11-23T19:59:31.702Z",
+  "request": {
+    "method": "POST",
+    "path": "/ediabas/job",
+    "query": {},
+    "body": {
+      "ecu": "E60",
+      "job": "FS_LESEN_FUNKTIONAL",
+      "timeoutSeconds": 60
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-content-type-options": "nosniff"
+    },
+    "body": {
+      "ecu": "E60",
+      "job": "FS_LESEN_FUNKTIONAL",
+      "variant": "E60",
+      "jobStatus": "OKAY",
+      "systemResults": {
+        "OBJECT": "e60",
+        "SAETZE": 45,
+        "JOBNAME": "FS_LESEN_FUNKTIONAL",
+        "VARIANTE": "E60",
+        "JOBSTATUS": "",
+        "UBATTCURRENT": -1,
+        "UBATTHISTORY": -1,
+        "IGNITIONCURRENT": -1,
+        "IGNITIONHISTORY": -1
+      },
+      "sets": [
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "59",
+          "F_ART1_NR": 40,
+          "F_ORT1_NR": 42777,
+          "ID_SG_ADR": 89,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F1595801A7192810",
+          "_TEL_AUFTRAG": "C4EFF11802FFFF",
+          "ECU_GROBNAME": "ALBV_FA"
+        },
+        {
+          "F_ANZ": 2,
+          "ECU_ADR": "00",
+          "F_ART1_NR": 97,
+          "F_ART2_NR": 33,
+          "F_ORT1_NR": 37836,
+          "F_ORT2_NR": 37810,
+          "ID_SG_ADR": 0,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "88F100580293CC6193B221F9",
+          "ECU_GROBNAME": "ZGM"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "5A",
+          "ID_SG_ADR": 90,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F15A580025",
+          "ECU_GROBNAME": "ALBV_BF"
+        },
+        {
+          "F_ANZ": 2,
+          "ECU_ADR": "78",
+          "F_ART1_NR": 97,
+          "F_ART2_NR": 34,
+          "F_ORT1_NR": 40020,
+          "F_ORT2_NR": 40058,
+          "ID_SG_ADR": 120,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "88F17858029C54619C7A22D4",
+          "ECU_GROBNAME": "KLIMA"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "44",
+          "ID_SG_ADR": 68,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F14458000F",
+          "ECU_GROBNAME": "SHD/MDS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "38",
+          "ID_SG_ADR": 56,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F138580003",
+          "ECU_GROBNAME": "EHC"
+        },
+        {
+          "F_ANZ": 2,
+          "ECU_ADR": "12",
+          "F_ART1_NR": 104,
+          "F_ART2_NR": 40,
+          "F_ORT1_NR": 12020,
+          "F_ORT2_NR": 11757,
+          "ID_SG_ADR": 18,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "88F11258022EF4682DED28B1",
+          "ECU_GROBNAME": "DME/DDE"
+        },
+        {
+          "F_ANZ": 3,
+          "ECU_ADR": "27",
+          "F_ART1_NR": 96,
+          "F_ART2_NR": 32,
+          "F_ART3_NR": 32,
+          "F_ORT1_NR": 41143,
+          "F_ORT2_NR": 41159,
+          "F_ORT3_NR": 41111,
+          "ID_SG_ADR": 39,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "8BF1275803A0B760A0C720A0972093",
+          "ECU_GROBNAME": "PGS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "02",
+          "ID_SG_ADR": 2,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1025800CD",
+          "ECU_GROBNAME": "SZL"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "01",
+          "ID_SG_ADR": 1,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1015800CC",
+          "ECU_GROBNAME": "SIM/SGM"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "21",
+          "F_ART1_NR": 96,
+          "F_ORT1_NR": 23828,
+          "ID_SG_ADR": 33,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F12158015D1460C1",
+          "ECU_GROBNAME": "ACC"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "40",
+          "ID_SG_ADR": 64,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F14058000B",
+          "ECU_GROBNAME": "CAS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "45",
+          "ID_SG_ADR": 69,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F145580010",
+          "ECU_GROBNAME": "RLS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "5F",
+          "ID_SG_ADR": 95,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F15F58002A",
+          "ECU_GROBNAME": "FLA"
+        },
+        {
+          "F_ANZ": 4,
+          "ECU_ADR": "60",
+          "F_ART1_NR": 32,
+          "F_ART2_NR": 32,
+          "F_ART3_NR": 40,
+          "F_ART4_NR": 104,
+          "F_ORT1_NR": 41927,
+          "F_ORT2_NR": 42329,
+          "F_ORT3_NR": 42327,
+          "F_ORT4_NR": 37655,
+          "ID_SG_ADR": 96,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "8EF1605804A3C720A55920A5572893176819",
+          "ECU_GROBNAME": "KOMBI"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "64",
+          "F_ART1_NR": 178,
+          "F_ORT1_NR": 40506,
+          "ID_SG_ADR": 100,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F16458019E3AB2BD",
+          "ECU_GROBNAME": "PDC"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "41",
+          "ID_SG_ADR": 65,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F14158000C",
+          "ECU_GROBNAME": "DWA"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "65",
+          "ID_SG_ADR": 101,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F165580030",
+          "ECU_GROBNAME": "BZM/SZM"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "62",
+          "ID_SG_ADR": 98,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F16258002D",
+          "ECU_GROBNAME": "MOSTGW"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "67",
+          "ID_SG_ADR": 103,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F167580032",
+          "ECU_GROBNAME": "ZBE"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "6B",
+          "F_ART1_NR": 33,
+          "F_ORT1_NR": 41650,
+          "ID_SG_ADR": 107,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F16B5801A2B221AF",
+          "ECU_GROBNAME": "HKL"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "29",
+          "ID_SG_ADR": 41,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1295800F4",
+          "ECU_GROBNAME": "DSC"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "6D",
+          "ID_SG_ADR": 109,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F16D580038",
+          "ECU_GROBNAME": "FAS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "18",
+          "ID_SG_ADR": 24,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1185800E3",
+          "ECU_GROBNAME": "EGS"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "6E",
+          "ID_SG_ADR": 110,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F16E580039",
+          "ECU_GROBNAME": "BFS"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "70",
+          "F_ART1_NR": 36,
+          "F_ORT1_NR": 58652,
+          "ID_SG_ADR": 112,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F1705801E51C2464",
+          "ECU_GROBNAME": "LM"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "71",
+          "ID_SG_ADR": 113,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F17158003C",
+          "ECU_GROBNAME": "AHM"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "72",
+          "ID_SG_ADR": 114,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F17258003D",
+          "ECU_GROBNAME": "KBM"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "73",
+          "F_ART1_NR": 36,
+          "F_ORT1_NR": 42093,
+          "ID_SG_ADR": 115,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F1735801A46D2477",
+          "ECU_GROBNAME": "CID"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "57",
+          "ID_SG_ADR": 87,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F157580022",
+          "ECU_GROBNAME": "NVE"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "8B",
+          "ID_SG_ADR": 139,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F18B580056",
+          "ECU_GROBNAME": "NVC"
+        },
+        {
+          "ECU_ADR": "1E",
+          "ID_SG_ADR": 30,
+          "JOB_STATUS": "ERROR_ECU_SERVICE_NOT_SUPPORTED",
+          "_TEL_ANTWORT": "83F11E7F18113A",
+          "ECU_GROBNAME": "VVT2"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "50",
+          "F_ART1_NR": 1,
+          "F_ORT1_NR": 40210,
+          "ID_SG_ADR": 80,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F15058019D1201CF",
+          "ECU_GROBNAME": "SINE"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "3C",
+          "ID_SG_ADR": 60,
+          "JOB_STATUS": "OKAY",
+          "JOB_MESSAGE": "1 Fehlercode ausgeblendet",
+          "_TEL_ANTWORT": "85F13C5801D8102013",
+          "ECU_GROBNAME": "CDC"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "4B",
+          "F_ART1_NR": 33,
+          "F_ORT1_NR": 41871,
+          "ID_SG_ADR": 75,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F14B5801A38F216D",
+          "ECU_GROBNAME": "VIDEO"
+        },
+        {
+          "ECU_ADR": "1B",
+          "ID_SG_ADR": 27,
+          "JOB_STATUS": "ERROR_ECU_SERVICE_NOT_SUPPORTED",
+          "_TEL_ANTWORT": "83F11B7F181137",
+          "ECU_GROBNAME": "VVT"
+        },
+        {
+          "F_ANZ": 2,
+          "ECU_ADR": "36",
+          "F_ART1_NR": 32,
+          "F_ART2_NR": 96,
+          "F_ORT1_NR": 41873,
+          "F_ORT2_NR": 41888,
+          "ID_SG_ADR": 54,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "88F1365802A39120A3A06000",
+          "ECU_GROBNAME": "TEL/MULF"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "63",
+          "ID_SG_ADR": 99,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F16358002E",
+          "ECU_GROBNAME": "MMI/CCC"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "37",
+          "ID_SG_ADR": 55,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F137580002",
+          "ECU_GROBNAME": "AMP"
+        },
+        {
+          "F_ANZ": 1,
+          "ECU_ADR": "3D",
+          "F_ART1_NR": 96,
+          "F_ORT1_NR": 42229,
+          "ID_SG_ADR": 61,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "85F13D5801A4F56005",
+          "ECU_GROBNAME": "HUD"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "A0",
+          "ID_SG_ADR": 160,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1A058006B",
+          "ECU_GROBNAME": "CCC"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "3F",
+          "ID_SG_ADR": 63,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F13F58000A",
+          "ECU_GROBNAME": "ASK"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "47",
+          "ID_SG_ADR": 71,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F147580012",
+          "ECU_GROBNAME": "ANTTU"
+        },
+        {
+          "F_ANZ": 0,
+          "ECU_ADR": "16",
+          "ID_SG_ADR": 22,
+          "JOB_STATUS": "OKAY",
+          "_TEL_ANTWORT": "82F1165800E1",
+          "ECU_GROBNAME": "AFS"
+        },
+        {
+          "JOB_STATUS": "OKAY"
+        }
+      ],
+      "durationMs": 3964
+    }
+  }
+}

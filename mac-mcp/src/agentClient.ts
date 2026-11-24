@@ -137,6 +137,9 @@ export const DescribeListSchema = z.object({
   jobCount: z.number().int().nullable().optional(),
   jobs: z.array(z.object({ name: z.string(), comment: z.string().nullable().optional(), verdict: VerdictSchema })),
   durationMs: z.number().nullable().optional(),
+  // Why the agent stopped reading descriptions before the end (time_limit, tool_started,
+  // ediabas_stuck, abandoned); null when it read them all. Older agents omit it.
+  commentsCutOff: z.string().nullable().optional(),
 });
 export type DescribeList = z.infer<typeof DescribeListSchema>;
 

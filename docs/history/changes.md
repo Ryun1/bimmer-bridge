@@ -1,6 +1,57 @@
-# What changed in 0.3.0 to 0.6.1
+# What changed in 0.3.0 to 0.7.0
 
 > Historical record: the release notes of earlier versions, moved from the README. For the current state, see the [README's Status](../../README.md#status).
+
+## What changed in 0.7.0
+
+Formatter fixes and whole-car views, from the first session at the car (Phase 6).
+
+- **Trip counts are not distances** (A1): `STAT_ANZAHL_FAHRTEN_*` and similar counts in the
+  `KGM_60` history blocks are shown as counts, not as kilometres or miles.
+- **Vehicle status labels** (A2, A3): the battery and KL30 values are labelled as cable
+  readings, and the ignition values are shown as seen at the car.
+- **"Not supported" answers** (C1): when a module answers that it does not support a job (for
+  example `CAS` `STATUS_WAKEUP_HISTORY`), the result says it is a negative response from the
+  module, not a bridge, cable or policy fault.
+- **Whole-car views** (B1): `ediabas_job` on `E60` `FS_LESEN_FUNKTIONAL` gives one line per module
+  with faults (name, address, code, present now or stored, inferred from `F_ART`) and a summary count;
+  `IDENT_FUNKTIONAL` lists the modules that answered, with their SGBD and group. Both fit the
+  text budget. A replay test over the real recordings (`dev/fixtures/battery`) checks the counts.
+
+## Phase 6 at the car (2026-11-23)
+
+First session at the car, with 0.6.2, ignition on for every read. Acceptance (PLAN.md section 9):
+
+- Ignition and a voltage in volts shown: **pass** (`STAT_ZUENDUNG` = 1; `NVE_65` `STATUS_BORDNETZSPANNUNG` = 12).
+- `IDENT` through `D_MOTOR` names the engine SGBD: **pass** (`N62_TUE`).
+- `ediabas_read_faults` on `NVE_65` shows A752/A751: **read passed, pair absent** from the car (not a bridge fault).
+- Ignition-on under 10 minutes: **fail**, about 18 minutes, mostly a Claude Desktop link drop (mobile data).
+- Responses saved as fixtures: **recorded** (`dev/fixtures/nve-faults`, `dev/fixtures/battery`).
+
+Also seen: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL` took about 4 s each; the DME
+holds `2EF4` and `2DED`; three pinned `CAS` approvals gave a negative response. Afterwards the
+owner removed those approvals and the `MPM_60` one from the VM's `reviewedJobs` and set
+`ediabasIdleReleaseSeconds` back to 20. Claude Desktop reads its servers from
+`claude_desktop_config.json`, not from `claude mcp`. Details:
+[the feedback response](../superpowers/specs/2026-11-23-phase6-feedback-response.md).
+
+Evals run 2026-11-23 against the Phase 6 fixtures: 03 passes; 01 and 06 fail with the skill because Claude takes names from the skill's references instead of `ediabas_list_ecus`/`ediabas_describe` (rubric vs skill: owner to decide). See [docs/history/evals-2026-11-23.md](evals-2026-11-23.md).
+
+## What changed in 0.6.2
+
+From a review of the EDIABAS path ahead of the first session at the car (Phase 6).
+
+- **A job gets 10 s to stop after `apiBreak`** (was 2 s) before the agent treats EDIABAS as
+  stuck until a restart. A job on the car's line may act on a break only between steps; 60 s
+  plus 10 s still ends inside the Mac's 75 s.
+- **A pinned approval whose description cannot be read is the EDIABAS error** (for example
+  `IFH-0009`, a module that does not answer), as for an unpinned job, not `job_needs_review`.
+  The job is still not run.
+- `docs/at-the-car.md`: record the evals' own calls by typing their prompts at the car (the
+  replay agent needs an exact match); describe the engine group with the ignition on; run each
+  functional job on its own with `timeoutSeconds: 60` once EDIABAS is loaded; name only modules
+  that answered in `ediabas_read_faults`. The skill says the same for functional jobs.
+- Eval 01 no longer needs a fault with a mileage: `NVE_65` `FS_LESEN` declares none.
 
 ## What changed in 0.6.1
 
