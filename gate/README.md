@@ -69,8 +69,9 @@ unchanged. `dllCheckIFH(compat)` records the compatibility number and forwards.
 
 A refusal latches: from then until `dllShutdownIFH` or `dllStartupIFH`, every `dllCallIFH`
 returns failure without reaching `XStd32.dll`, except 3 ifhGetIfhStatus, 4 ifhGetIfhError,
-5 ifhGetResult, 8 ifhEnd and 21 ifhDisconnect, which are still forwarded so that EDIABAS can
-read its status and close cleanly.
+5 ifhGetResult, 8 ifhEnd, 21 ifhDisconnect and 49 ifhCloseChannel, which are still forwarded
+so that EDIABAS can read its status and close cleanly. (With 49 refused, EDIABAS 7.3.0
+skipped `ifhEnd` and `dllExitIFH` altogether: desk run, 2026-11-25.)
 
 A refused call returns `-1` and, when the layout is known, sets `msgOut->len` to 0. Which
 EDIABAS error that produces is not known yet (see below); the agent detects refusals from the
