@@ -2155,6 +2155,326 @@
    "rule": "deny.ecuJob",
    "screen": false,
    "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
   }
  ]
 }
