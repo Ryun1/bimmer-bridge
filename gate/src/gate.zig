@@ -429,14 +429,15 @@ pub const Gate = struct {
         }
         const fwd = inner.?;
 
-        // Concept bookkeeping, only for what the real IFH actually receives. A new concept
-        // clears the channel's first, so that a call that never returns leaves none. Whether
-        // XStd32 keeps the old concept when it rejects a new one is not verified (its rc is
-        // logged); a wrong guess between BMW-FAST and KWP2000* cannot pass a write, because
-        // the rule refuses a frame the other framing reads differently (`ambiguous`).
+        // Concept bookkeeping, only for what the real IFH actually applied. A new concept
+        // clears the channel's first, and is recorded only when XStd32 returns 0: in the desk
+        // run (2026-11-25) it answered the first call after an ifhGetIfhError with rc=4 and did
+        // not carry it out (no SETECUCOMM in IFH.trc), so ME9N62_2's switch to KWP2000* never
+        // happened and its B8 frame went out under BMW-FAST. A rejected concept leaves none:
+        // the channel's telegrams are refused until a concept is set that XStd32 accepts.
         if (known) if (msg) |m| if (m.fkt_no == 27) self.concepts.set(m.channel, null);
         const rc = fwd.vtable.call(fwd.ctx, msg, out);
-        if (known) if (msg) |m| if (m.fkt_no == 27) self.concepts.set(m.channel, conceptOf(m));
+        if (known) if (msg) |m| if (m.fkt_no == 27 and rc == 0) self.concepts.set(m.channel, conceptOf(m));
         if (msg) |m| switch (m.fkt_no) {
             // init, end, connect, disconnect: the IFH may reset its protocol, so EDIABAS must
             // set it again before the next telegram.
