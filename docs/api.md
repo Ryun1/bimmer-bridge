@@ -423,6 +423,9 @@ How the agent does it (`EdiabasAgent.Core/TelegramCheck.cs`, `IfhTrace.cs`, `Edi
   finding with the gate's reason, its function as `XGate fkt <n>` and the frame. A request that
   ran a job while the gate logged no call is `telegram_check_unavailable` (`gate_not_seen`):
   EDIABAS did not go through the gate. A gate log that cannot be read is `unreadable_trace`.
+  The gate renames its log to `XGate.log.1` at 1 MB; the agent recognises that by the log's
+  last 256 bytes before the request and reads the rest of `XGate.log.1` too. If that part is
+  not there, the finding is `trace_rewritten`.
 - **Records.** Each finding is a `WARN` line in `agent.log` and an audit line of its own (path
   `<path>#telegram[i]`, the finding's code as the error code, its reason as the rule, and the
   function, concept and frame as the target), under `report` as under `enforce`. The request's

@@ -212,11 +212,14 @@ public sealed class TelegramCheck
         }
 
         long? gateLength = null;
+        byte[] gateTail = [];
         if (_gateLogPath is not null)
         {
             try
             {
                 gateLength = _files.Length(_gateLogPath) ?? 0;
+                var n = (int)Math.Min(gateLength.Value, FingerprintBytes);
+                gateTail = n > 0 ? _files.Read(_gateLogPath, gateLength.Value - n, n) : [];
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -225,7 +228,7 @@ public sealed class TelegramCheck
             }
         }
 
-        start = new TraceStart(traceFile!, length, concept, tail) { GateLength = gateLength };
+        start = new TraceStart(traceFile!, length, concept, tail) { GateLength = gateLength, GateTail = gateTail };
         return null;
     }
 
@@ -401,8 +404,23 @@ public sealed class TelegramCheck
             }
 
             var now = _files.Length(_gateLogPath) ?? 0;
-            if (now < from)
+            var earlier = "";
+            if (now < from || !SameBytes(_gateLogPath, from, start.GateTail))
             {
+                // The gate renamed its log to <LogPath>.1 at 1 MB during the request: the
+                // request's first part is at the end of that file, after the same bytes the log
+                // ended with before the request. If it is not there (the gate truncated instead,
+                // or the file is gone), that part is lost.
+                var old = _gateLogPath + ".1";
+                var oldLength = _files.Length(old);
+                if (oldLength is not { } ol || ol < from || ol - from > MaxSegmentBytes || !SameBytes(old, from, start.GateTail))
+                {
+                    findings.Add(new TelegramFinding(CheckUnavailable, ReasonRewritten, null, null, null,
+                        $"{_gateLogPath} (the telegram gate's log) was started again during the request and its earlier part is not in {old}, so whether the gate refused a telegram is not known."));
+                    return;
+                }
+
+                earlier = System.Text.Encoding.UTF8.GetString(ol > from ? _files.Read(old, from, (int)(ol - from)) : []);
                 from = 0;
             }
 
@@ -414,7 +432,7 @@ public sealed class TelegramCheck
                 return;
             }
 
-            text = System.Text.Encoding.UTF8.GetString(added > 0 ? _files.Read(_gateLogPath, from, (int)added) : []);
+            text = earlier + System.Text.Encoding.UTF8.GetString(added > 0 ? _files.Read(_gateLogPath, from, (int)added) : []);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -437,6 +455,19 @@ public sealed class TelegramCheck
             findings.Add(new TelegramFinding(CheckUnavailable, ReasonGateNotSeen, null, null, null,
                 $"EDIABAS ran a job but the telegram gate logged no interface call in {_gateLogPath}, so the request may not have gone through the gate."));
         }
+    }
+
+    /// <summary>Whether <paramref name="path"/> holds <paramref name="tail"/> just before
+    /// <paramref name="end"/> (true for an empty tail).</summary>
+    private bool SameBytes(string path, long end, byte[] tail)
+    {
+        if (tail.Length == 0)
+        {
+            return true;
+        }
+
+        var length = _files.Length(path);
+        return length is { } l && l >= end && _files.Read(path, end - tail.Length, tail.Length).AsSpan().SequenceEqual(tail);
     }
 
     private TelegramCheckResult Finish(TraceStart start, List<TelegramFinding> findings, int checkedCount, string? carryPath, long? carryOffset, ushort? carryConcept = null)
@@ -485,6 +516,9 @@ public sealed record TraceStart(string TraceFile, long Length, ushort? Concept, 
 {
     /// <summary>XGate32.dll's log length before the request (null: no gate; -1: unreadable).</summary>
     public long? GateLength { get; init; }
+
+    /// <summary>The gate log's last bytes before the request, to recognise a rotation.</summary>
+    public byte[] GateTail { get; init; } = [];
 
     public TraceStart(string traceFile, long length, ushort? concept)
         : this(traceFile, length, concept, [])

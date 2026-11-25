@@ -180,6 +180,13 @@ Confirmed, first in log mode and then in enforce mode:
 - **Refusal:** `-1` from 29 gives EDIABAS error 2, `ERRORCODE OUT OF RANGE`, with no hang, and the
   telegram is not forwarded. With 49 refused by the latch, EDIABAS skipped `ifhEnd` and
   `dllExitIFH`, so 49 now passes the latch; EDIABAS then closes and unloads normally.
+- **A rejected concept:** after an error that EDIABAS has fetched with 4 ifhGetIfhError,
+  `XStd32.dll` answers the next call with `rc=4` and does not carry it out: it is not in
+  `IFH.trc`. EDIABAS ignores that. So `ME9N62_2`, `N62_TUE2` and `GS19B`, whose SGBDs fall back
+  from BMW-FAST to KWP2000\* when the module does not answer, switch nothing, and their
+  `B8 12 F1 02 1A 80` goes out under BMW-FAST (a frame BMW-FAST reads as malformed). The same
+  happens with `apiInit` and `STD:OBD`, without the gate. The gate now records a concept only on
+  `rc=0`; otherwise the channel has none, and the `B8` frame is refused (`no_concept`).
 - A refused telegram never reaches `IFH.trc` (`XStd32.dll` writes it), so the agent reads this log
   for refusals.
 - EDIABAS sometimes sends the same telegram again at once, after a `rc=4` from 29. Each send is

@@ -1261,8 +1261,9 @@ public sealed class EdiabasService
 
             var code = owner._api.ErrorCode();
             var text = owner._api.ErrorText();
-            owner._log.Warn($"apiInit failed: EDIABAS error {code}: {text}");
-            var why = $"apiInit failed (error {code}: {text})";
+            var call = owner._interface is null ? "apiInit" : $"apiInitExt(\"{owner._interface}\")";
+            owner._log.Warn($"{call} failed: EDIABAS error {code}: {text}");
+            var why = $"{call} failed (error {code}: {text})";
             _initFailure = ApiFailure.Of(ApiErrors.EdiabasUnavailable, "EDIABAS cannot be used: " + why, new ReasonDetails(why));
             return _initFailure;
         }

@@ -295,6 +295,21 @@ test "a telegram before any concept, after ifhInit/ifhEnd, or under DS2 is refus
     try testing.expect(h.lines.has("newConcept=none"));
 }
 
+test "a concept XStd32 rejects (rc != 0) is not recorded: the desk run's ME9N62_2" {
+    var h: Harness = .{};
+    h.init(.enforce);
+    h.concept(0x010F);
+    try testing.expectEqual(@as(i16, 0), h.send(29, &.{ 0x82, 0x12, 0xF1, 0x1A, 0x80 }));
+    // After an error, XStd32 answers the next call with 4 and does not carry it out.
+    h.fake.rc = 4;
+    _ = h.send(27, &.{ 0x0D, 0x01, 0x00, 0x00 });
+    h.fake.rc = 0;
+    try testing.expect(h.lines.has("rc=4 newConcept=none"));
+    // The SGBD now sends KWP2000* framing, but the IFH is not in KWP2000*: refused.
+    try testing.expectEqual(gate.refused_rc, h.send(29, &.{ 0xB8, 0x12, 0xF1, 0x02, 0x1A, 0x80 }));
+    try testing.expect(h.lines.has("REFUSED no_concept fkt=29 frame=B812F1021A80"));
+}
+
 test "the concept is per channel, and channels must agree" {
     var h: Harness = .{};
     h.init(.enforce);

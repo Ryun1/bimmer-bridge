@@ -483,6 +483,42 @@ public class TelegramCheckTests
     }
 
     [Fact]
+    public void Gate_LogRotatedDuringTheRequest_RefusalBeforeTheRotationIsFound()
+    {
+        _files.Write(GateLogFile, "2026-11-25 11:00:00.000 LOAD XGate32 pid=1 mode=enforce\r\n");
+        _api.DuringJob = () =>
+        {
+            GateWrites("REFUSED service fkt=29 frame=8457F130910100", "CALL fkt=29 ifhSendTelegram verdict=refuse:service fwd=no rc=-1");
+            // The gate renames the log at 1 MB and starts a new one.
+            _files.Files[GateLogFile + ".1"] = _files.Files[GateLogFile];
+            _files.Files[GateLogFile] = [];
+            GateWrites("CALL fkt=49 ifhCloseChannel verdict=allow fwd=yes rc=0");
+        };
+
+        var r = Run(Service(gateLog: GateLogFile));
+
+        Assert.Equal(ApiErrors.TelegramNotAllowed, r.Failure!.Error.Code);
+        Assert.Equal("84 57 F1 30 91 01 00", ((TelegramRefusalDetails)r.Failure.Error.Details!).Frame);
+    }
+
+    [Fact]
+    public void Gate_LogTruncatedDuringTheRequest_IsUnavailable()
+    {
+        _files.Write(GateLogFile, "2026-11-25 11:00:00.000 LOAD XGate32 pid=1 mode=enforce\r\n");
+        _api.DuringJob = () =>
+        {
+            // The rename failed, so the gate truncated its log: the earlier part is gone.
+            _files.Files[GateLogFile] = [];
+            GateWrites("CALL fkt=49 ifhCloseChannel verdict=allow fwd=yes rc=0");
+        };
+
+        var r = Run(Service(gateLog: GateLogFile));
+
+        Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
+        Assert.Equal("trace_rewritten", ((ReasonDetails)r.Failure.Error.Details!).Reason);
+    }
+
+    [Fact]
     public void UtilityAndTmodeFunctions_AreKnown()
     {
         _api.DuringJob = () =>
