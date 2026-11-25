@@ -90,7 +90,9 @@ public class TelegramCheckTests
     private static string Call(string name, string input, string error = "NO ERROR") =>
         Lines($"_STD     [        16] {name}", $"_STD     [        16]  INPUT: {input} ", $"_STD     [        16]  ERROR: {error}", "_STD     [        16]  OUTPUT: --");
 
-    private EdiabasService Service(string mode = TelegramCheckModes.Enforce, TelegramRule? rule = null, string? ediabasInterface = null, bool requireGate = false, bool check = true) =>
+    private const string GateLogFile = @"C:\EDIABAS\TRACE\XGate.log";
+
+    private EdiabasService Service(string mode = TelegramCheckModes.Enforce, TelegramRule? rule = null, string? ediabasInterface = null, bool requireGate = false, bool check = true, string? gateLog = null) =>
         new(
             _api,
             _conflicts,
@@ -104,7 +106,7 @@ public class TelegramCheckTests
             30,
             60,
             20,
-            telegrams: check ? new TelegramCheck(mode, EdiabasIni.BesideDll(Dll), _files, rule ?? TelegramRule.Embedded, _latch, _log, _clock) : null,
+            telegrams: check ? new TelegramCheck(mode, EdiabasIni.BesideDll(Dll), _files, rule ?? TelegramRule.Embedded, _latch, _log, _clock, gateLog) : null,
             ediabasInterface: ediabasInterface,
             requireGate: requireGate);
 
@@ -399,6 +401,98 @@ public class TelegramCheckTests
         Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
         Assert.Equal("check_failed", ((ReasonDetails)r.Failure.Error.Details!).Reason);
         Assert.NotNull(_latch.Info);
+    }
+
+    // ---- the gate's log ----
+
+    private void GateWrites(params string[] lines) =>
+        _files.Append(GateLogFile, string.Concat(lines.Select(l => "2026-11-25 11:48:52.905 " + l + "\r\n")));
+
+    [Fact]
+    public void Gate_CallsAndNoRefusal_Passes()
+    {
+        _files.Write(GateLogFile, "");
+        var job = _api.DuringJob!;
+        _api.DuringJob = () =>
+        {
+            job();
+            GateWrites("CALL fkt=29 ifhSendTelegram wParam=0 ch=1 len=5 data=8212F11A80 concept=010F verdict=allow fwd=yes rc=0");
+        };
+        Assert.True(Run(Service(gateLog: GateLogFile)).Ok);
+        Assert.Null(_latch.Info);
+    }
+
+    [Fact]
+    public void Gate_Refusal_IsAFinding_EvenWithNoTraceOfIt()
+    {
+        // The desk run: the gate refuses before XStd32.dll, so IFH.trc never shows the telegram,
+        // and EDIABAS reports only "ERRORCODE OUT OF RANGE".
+        _files.Write(GateLogFile, "2026-11-25 11:00:00.000 LOAD XGate32 pid=1 mode=enforce\r\n");
+        _api.On("NVE_65 IDENT", FakeJob.Error(2, "ERRORCODE OUT OF RANGE"));
+        _api.DuringJob = () =>
+        {
+            _files.Append(Trace, Call("SETECUCOMM", "0F 01 00 00"));
+            GateWrites(
+                "REFUSED service fkt=29 frame=8457F130910100",
+                "LATCHED",
+                "CALL fkt=29 ifhSendTelegram wParam=0 ch=1 len=7 data=8457F130910100 concept=010F verdict=refuse:service fwd=no rc=-1");
+        };
+
+        var r = Run(Service(gateLog: GateLogFile));
+
+        Assert.Equal(ApiErrors.TelegramNotAllowed, r.Failure!.Error.Code);
+        var d = Assert.IsType<TelegramRefusalDetails>(r.Failure.Error.Details);
+        Assert.Equal("service", d.Reason);
+        Assert.Equal("84 57 F1 30 91 01 00", d.Frame);
+        Assert.Contains("it was not sent", r.Failure.Error.Message);
+        Assert.NotNull(_latch.Info);
+    }
+
+    [Fact]
+    public void Gate_LogMode_WouldRefuse_IsAFinding()
+    {
+        _files.Write(GateLogFile, "");
+        var job = _api.DuringJob!;
+        _api.DuringJob = () =>
+        {
+            job();
+            GateWrites("WOULD_REFUSE function fkt=41 frame=00", "CALL fkt=41 ifhDownload wParam=0 ch=1 len=1 data=00 verdict=refuse:function fwd=yes rc=0");
+        };
+        var r = Run(Service(gateLog: GateLogFile));
+        Assert.Equal(ApiErrors.TelegramNotAllowed, r.Failure!.Error.Code);
+        Assert.Contains("would have refused", r.Failure.Error.Message);
+    }
+
+    [Fact]
+    public void Gate_NoCallsForAJob_IsUnavailable()
+    {
+        _files.Write(GateLogFile, "");
+        var r = Run(Service(gateLog: GateLogFile));
+        Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
+        Assert.Equal("gate_not_seen", ((ReasonDetails)r.Failure.Error.Details!).Reason);
+    }
+
+    [Fact]
+    public void Gate_LogUnreadable_IsUnavailable()
+    {
+        _files.Write(GateLogFile, "");
+        _api.DuringJob = () => _files.Broken.Add(GateLogFile);
+        var r = Run(Service(gateLog: GateLogFile));
+        Assert.Equal(ApiErrors.TelegramCheckUnavailable, r.Failure!.Error.Code);
+        Assert.Equal("unreadable_trace", ((ReasonDetails)r.Failure.Error.Details!).Reason);
+    }
+
+    [Fact]
+    public void UtilityAndTmodeFunctions_AreKnown()
+    {
+        _api.DuringJob = () =>
+        {
+            _files.Append(Trace, Call("GETHANDLERTYPE", "--"));
+            _files.Append(Trace, Call("GETIGNITIONVOLTAGE", "--"));
+            _files.Append(Trace, Call("GETBATTERYVOLTAGE", "--"));
+        };
+        Assert.True(Run(Service()).Ok);
+        Assert.Null(_latch.Info);
     }
 
     // ---- EDIABAS.INI ----

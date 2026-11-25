@@ -396,8 +396,8 @@ How the agent does it (`EdiabasAgent.Core/TelegramCheck.cs`, `IfhTrace.cs`, `Edi
   was replaced or rewritten in place and the request's part cannot be found
   (`trace_rewritten`). More than 16 MB added is a finding (`trace_too_large`).
 - **What is a finding.** A `SENDECUTEL` the rule refuses; any function other than `OPEN`,
-  `GETBATTERYVOLTAGE`, `STOPECUTELFREQUENT`, `SETECUCOMM`, `SETTELPARAMETER` and `SENDECUTEL`
-  (`unknown_function`); a `SETTELPARAMETER` (the telegram preface) whose input is not all
+  `GETBATTERYVOLTAGE`, `GETIGNITIONVOLTAGE`, `GETHANDLERTYPE`, `STOPECUTELFREQUENT`,
+  `SETECUCOMM`, `SETTELPARAMETER` and `SENDECUTEL` (`unknown_function`); a `SETTELPARAMETER` (the telegram preface) whose input is not all
   zero bytes (`telegram_preface`: a preface would change the bytes sent after they were
   judged); a trace line the parser cannot read (`unreadable_trace`: nothing is skipped
   silently); and, for `telegram_check_unavailable`, a request that called `apiJob` but added no
@@ -414,6 +414,15 @@ How the agent does it (`EdiabasAgent.Core/TelegramCheck.cs`, `IfhTrace.cs`, `Edi
   unknown, so a telegram before any `SETECUCOMM` is `no_concept`. Trace written between two
   requests (a BMW tool's, which the conflict check keeps out during a request) is not judged;
   `agent.log` notes it.
+- **The gate's log.** With a `GATE:` interface the agent also reads what the request added to
+  `XGate32.dll`'s log (`LogPath` in `XGate.ini` beside `api32.dll`, read as the gate reads it;
+  default `C:\EDIABAS\TRACE\XGate.log`). The gate refuses a telegram before `XStd32.dll`
+  sees it, so a refused telegram is in no `IFH.trc`, and EDIABAS reports only error 2
+  (`ERRORCODE OUT OF RANGE`, desk run 2026-11-25): each `REFUSED` line, and each
+  `WOULD_REFUSE` line in log mode (that telegram was forwarded), is a `telegram_not_allowed`
+  finding with the gate's reason, its function as `XGate fkt <n>` and the frame. A request that
+  ran a job while the gate logged no call is `telegram_check_unavailable` (`gate_not_seen`):
+  EDIABAS did not go through the gate. A gate log that cannot be read is `unreadable_trace`.
 - **Records.** Each finding is a `WARN` line in `agent.log` and an audit line of its own (path
   `<path>#telegram[i]`, the finding's code as the error code, its reason as the rule, and the
   function, concept and frame as the target), under `report` as under `enforce`. The request's

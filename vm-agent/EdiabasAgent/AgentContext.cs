@@ -46,11 +46,38 @@ internal sealed class AgentContext : IDisposable
                 ApprovalReloader,
                 telegrams: config.TelegramCheck == TelegramCheckModes.Off
                     ? null
-                    : new TelegramCheck(config.TelegramCheck, IniPath, new TraceFiles(), Telegrams, TelegramLatch, new EdiabasLogAdapter(log), new SystemRunnerClock()),
+                    : new TelegramCheck(config.TelegramCheck, IniPath, new TraceFiles(), Telegrams, TelegramLatch, new EdiabasLogAdapter(log), new SystemRunnerClock(), GateLogPath(config)),
                 ediabasInterface: config.EdiabasInterface,
                 requireGate: config.RequireGate),
             log,
             HandlerWait(config.MaxJobTimeoutSeconds));
+    }
+
+    /// <summary>XGate32.dll's log when EDIABAS is opened through the gate (a <c>GATE:</c>
+    /// interface): <c>LogPath</c> from <c>XGate.ini</c> beside api32.dll, read as the gate reads
+    /// it (the gate's default when the file or the key is missing); else null.</summary>
+    private static string? GateLogPath(AgentConfig config)
+    {
+        if (config.EdiabasInterface is not { } ifh || !ifh.StartsWith(AgentConfig.GatePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string? text = null;
+        try
+        {
+            var ini = GateLog.IniBesideDll(config.EdiabasDll);
+            if (File.Exists(ini) && new FileInfo(ini).Length < 4096)
+            {
+                text = File.ReadAllText(ini);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The gate itself then uses its default too.
+        }
+
+        return GateLog.LogPathFrom(text);
     }
 
     /// <summary>How long a handler waits for the EDIABAS runner: the longest a request can take

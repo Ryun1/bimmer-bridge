@@ -206,11 +206,12 @@ test "a read telegram is forwarded; a write is refused and latches" {
     try testing.expectEqual(gate.refused_rc, h.send(1, &.{}));
     try testing.expectEqual(gate.refused_rc, h.send(2, &.{}));
     try testing.expectEqual(gate.refused_rc, h.send(20, &.{}));
+    try testing.expectEqual(gate.refused_rc, h.send(48, &.{}));
     try testing.expectEqual(before, h.fake.n);
     try testing.expect(h.lines.has("verdict=latched judged=allow fwd=no"));
     try testing.expectEqual(@as(usize, 1), h.lines.count("LATCHED"));
-    // ... except status, error, result, end and disconnect.
-    for ([_]i16{ 3, 4, 5, 21, 8 }) |f| {
+    // ... except status, error, result, closing the channel, end and disconnect.
+    for ([_]i16{ 3, 4, 5, 49, 21, 8 }) |f| {
         try testing.expectEqual(@as(i16, 0), h.send(f, &.{}));
         try testing.expectEqual(@as(?i16, f), h.fake.last());
     }

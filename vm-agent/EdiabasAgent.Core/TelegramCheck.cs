@@ -75,6 +75,7 @@ public sealed class TelegramCheck
     public const string ReasonJobNotStopped = "job_not_stopped";
     public const string ReasonPreface = "telegram_preface";
     public const string ReasonCheckFailed = "check_failed";
+    public const string ReasonGateNotSeen = "gate_not_seen";
 
     /// <summary>More trace than this for one request is not read; it is a finding.</summary>
     public const int MaxSegmentBytes = 16 * 1024 * 1024;
@@ -95,6 +96,8 @@ public sealed class TelegramCheck
     public static readonly IReadOnlySet<string> KnownFunctions = new HashSet<string>(StringComparer.Ordinal)
     {
         IfhTrace.Open, "GETBATTERYVOLTAGE", "STOPECUTELFREQUENT", IfhTrace.SetEcuComm, SetTelParameter, IfhTrace.SendEcuTel,
+        // UTILITY and TMODE: the interface's type and its ignition (KL15) line (desk, 2026-11-25).
+        "GETHANDLERTYPE", "GETIGNITIONVOLTAGE",
     };
 
     private readonly string _mode;
@@ -104,6 +107,7 @@ public sealed class TelegramCheck
     private readonly TelegramLatch _latch;
     private readonly IEdiabasLog _log;
     private readonly IRunnerClock _clock;
+    private readonly string? _gateLogPath;
 
     // Where the last segment read ended, and the concept in force there: the next request starts
     // with it only when nothing else wrote to the trace in between.
@@ -111,8 +115,11 @@ public sealed class TelegramCheck
     private long _carryOffset = -1;
     private ushort? _carryConcept;
 
-    public TelegramCheck(string mode, string iniPath, ITraceFiles files, TelegramRule rule, TelegramLatch latch, IEdiabasLog log, IRunnerClock clock)
+    /// <param name="gateLogPath">XGate32.dll's log (see <see cref="GateLog"/>) when EDIABAS is opened
+    /// through the gate (a <c>GATE:</c> interface), else null.</param>
+    public TelegramCheck(string mode, string iniPath, ITraceFiles files, TelegramRule rule, TelegramLatch latch, IEdiabasLog log, IRunnerClock clock, string? gateLogPath = null)
     {
+        _gateLogPath = gateLogPath;
         _mode = TelegramCheckModes.IsValid(mode) ? mode : TelegramCheckModes.Enforce;
         _iniPath = iniPath;
         _files = files;
@@ -204,7 +211,21 @@ public sealed class TelegramCheck
             _log.Warn($"telegram check: the end of {traceFile} cannot be read before the request ({ex.GetType().Name}); a replaced trace is then noticed only if it is shorter");
         }
 
-        start = new TraceStart(traceFile!, length, concept, tail);
+        long? gateLength = null;
+        if (_gateLogPath is not null)
+        {
+            try
+            {
+                gateLength = _files.Length(_gateLogPath) ?? 0;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                gateLength = -1;
+                _log.Warn($"telegram check: {_gateLogPath} cannot be read before the request ({ex.GetType().Name})");
+            }
+        }
+
+        start = new TraceStart(traceFile!, length, concept, tail) { GateLength = gateLength };
         return null;
     }
 
@@ -357,7 +378,65 @@ public sealed class TelegramCheck
             }
         }
 
+        CheckGateLog(start, ranJob, findings);
         return Finish(start, findings, checkedCount, start.TraceFile, readFrom, segment.EndConcept);
+    }
+
+    /// <summary>What XGate32.dll logged during the request: every refusal is a finding (the
+    /// telegram it refused is in no IFH trace), and a request that ran a job must show the gate
+    /// handled calls, else EDIABAS did not go through it.</summary>
+    private void CheckGateLog(TraceStart start, bool ranJob, List<TelegramFinding> findings)
+    {
+        if (_gateLogPath is null || start.GateLength is not { } from)
+        {
+            return;
+        }
+
+        string text;
+        try
+        {
+            if (from < 0)
+            {
+                throw new IOException("it could not be read before the request");
+            }
+
+            var now = _files.Length(_gateLogPath) ?? 0;
+            if (now < from)
+            {
+                from = 0;
+            }
+
+            var added = now - from;
+            if (added > MaxSegmentBytes)
+            {
+                findings.Add(new TelegramFinding(CheckUnavailable, ReasonTooLarge, null, null, null,
+                    $"the request added {added} bytes to {_gateLogPath}, more than the check reads ({MaxSegmentBytes})."));
+                return;
+            }
+
+            text = System.Text.Encoding.UTF8.GetString(added > 0 ? _files.Read(_gateLogPath, from, (int)added) : []);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            findings.Add(new TelegramFinding(CheckUnavailable, ReasonUnreadable, null, null, null,
+                $"{_gateLogPath} (the telegram gate's log) cannot be read ({ex.GetType().Name}: {ex.Message}), so whether the gate refused a telegram is not known."));
+            return;
+        }
+
+        var gate = GateLog.Parse(text);
+        foreach (var r in gate.Refusals)
+        {
+            var what = r.Frame is null ? $"interface function {r.Function}" : $"telegram {r.Frame} (function {r.Function})";
+            findings.Add(new TelegramFinding(TelegramNotAllowed, r.Reason, $"XGate fkt {r.Function}", null, r.Frame, r.Sent
+                ? $"the telegram gate in log mode would have refused the {what} ({r.Reason}) and forwarded it."
+                : $"the telegram gate refused the {what} ({r.Reason}); it was not sent."));
+        }
+
+        if (ranJob && gate.Calls == 0)
+        {
+            findings.Add(new TelegramFinding(CheckUnavailable, ReasonGateNotSeen, null, null, null,
+                $"EDIABAS ran a job but the telegram gate logged no interface call in {_gateLogPath}, so the request may not have gone through the gate."));
+        }
     }
 
     private TelegramCheckResult Finish(TraceStart start, List<TelegramFinding> findings, int checkedCount, string? carryPath, long? carryOffset, ushort? carryConcept = null)
@@ -369,7 +448,7 @@ public sealed class TelegramCheck
 
         foreach (var f in findings)
         {
-            var where = f.Function is null ? "" : $" [{f.Function}{(f.Concept is null ? "" : " concept " + f.Concept)}{(f.Frame is null ? "" : " frame " + f.Frame)}]";
+            var where = f.Function is null ? "" : $" [{f.Function}{(f.Concept is null ? "" : " concept " + f.Concept)}{(string.IsNullOrEmpty(f.Frame) ? "" : " frame " + f.Frame)}]";
             _log.Warn(AuditLine.Neutralise($"telegram check ({_mode}): {f.Code} {f.Reason}{where}: {f.Message}"));
         }
 
@@ -404,6 +483,9 @@ public sealed class TelegramCheck
 /// request.</para>
 public sealed record TraceStart(string TraceFile, long Length, ushort? Concept, byte[] Tail)
 {
+    /// <summary>XGate32.dll's log length before the request (null: no gate; -1: unreadable).</summary>
+    public long? GateLength { get; init; }
+
     public TraceStart(string traceFile, long length, ushort? concept)
         : this(traceFile, length, concept, [])
     {

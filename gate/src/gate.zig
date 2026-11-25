@@ -57,11 +57,12 @@ pub fn classify(fkt: i16) Class {
     };
 }
 
-/// Functions still forwarded while latched: status, error and result queries, and end and
-/// disconnect so that EDIABAS can close cleanly.
+/// Functions still forwarded while latched: status, error and result queries, and closing the
+/// channel, end and disconnect so that EDIABAS can close cleanly. In the desk run (2026-11-25) a
+/// refused 49 ifhCloseChannel made EDIABAS skip ifhEnd and dllExitIFH altogether.
 pub fn passesLatch(fkt: i16) bool {
     return switch (fkt) {
-        3, 4, 5, 8, 21 => true,
+        3, 4, 5, 8, 21, 49 => true,
         else => false,
     };
 }
