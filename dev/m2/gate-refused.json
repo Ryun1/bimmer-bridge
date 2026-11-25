@@ -197,56 +197,6 @@
       "service": "30"
     },
     {
-      "ecu": "ALBV60B",
-      "job": "STATUS_INITIALISIERUNG",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60B",
-      "job": "STATUS_HALLIMPULSE",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60B",
-      "job": "STATUS_HARDWARE_LINKS",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60B",
-      "job": "STATUS_HARDWARE_RECHTS",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60B",
-      "job": "STATUS_STROM",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60F",
-      "job": "STATUS_INITIALISIERUNG",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60F",
-      "job": "STATUS_HALLIMPULSE",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60F",
-      "job": "STATUS_HARDWARE_LINKS",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60F",
-      "job": "STATUS_HARDWARE_RECHTS",
-      "service": "31"
-    },
-    {
-      "ecu": "ALBV60F",
-      "job": "STATUS_STROM",
-      "service": "31"
-    },
-    {
       "ecu": "ANT_60",
       "job": "STATUS_TUNER",
       "service": "30"
