@@ -118,7 +118,7 @@ public class JobPolicyTests
     public void Embedded_Loads()
     {
         Assert.True(JobPolicy.Embedded.Loaded, JobPolicy.Embedded.LoadError);
-        Assert.Equal(4, JobPolicy.Embedded.Version);
+        Assert.Equal(5, JobPolicy.Embedded.Version);
         Assert.Contains("lösch", JobPolicy.Embedded.ScreenTerms);
         Assert.Equal(["beschreibung", "umsetzer"], JobPolicy.Embedded.ScreenIgnore);
     }
@@ -175,6 +175,10 @@ public class JobPolicyTests
         Mutate(n => n["extra"] = 1),
         Mutate(n => n["deny"]!["patterns"] = new JsonArray("X")),
         Mutate(n => n["deny"]!.AsObject().Remove("tokens")),
+        Mutate(n => n["deny"]!.AsObject().Remove("ecuJobs")),
+        Mutate(n => n["deny"]!["ecuJobs"] = new JsonArray()),
+        Mutate(n => n["deny"]!["ecuJobs"] = new JsonObject { ["ACSM60"] = "STATUS_ROC" }),
+        Mutate(n => n["deny"]!["ecuJobs"] = new JsonObject { ["ACSM60"] = new JsonArray("status_roc") }),
         Mutate(n => n["deny"]!["substrings"] = new JsonArray("SCHREIB", 5)),
         Mutate(n => n["deny"]!["substrings"] = new JsonArray("SCHREIB", "")),
         Mutate(n => n["allow"]!["patterns"] = new JsonArray("[")),
@@ -186,8 +190,8 @@ public class JobPolicyTests
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "umsetzer")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = new JsonArray("umsetzer", "")),
         Mutate(n => n["descriptionScreen"]!["ignore"] = "umsetzer"),
-        Text().Replace("\"version\": 4,", "\"version\": 4, \"version\": 5,", StringComparison.Ordinal),
-        Text().Replace("\"version\": 4,", "// comment\n\"version\": 4,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 5,", "\"version\": 5, \"version\": 6,", StringComparison.Ordinal),
+        Text().Replace("\"version\": 5,", "// comment\n\"version\": 5,", StringComparison.Ordinal),
     ];
 
     [Theory]

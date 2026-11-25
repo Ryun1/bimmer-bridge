@@ -4,217 +4,217 @@
   {
    "name": "a minimal valid policy",
    "valid": true,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "empty lists and no restricted ECUs (terms still set)",
    "valid": true,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":0,\"allow\":{\"globalExact\":[],\"patterns\":[],\"restrictedEcus\":{}},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":0,\"allow\":{\"globalExact\":[],\"patterns\":[],\"restrictedEcus\":{}},\"deny\":{\"substrings\":[],\"tokens\":[],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "whitespace and key order do not matter",
    "valid": true,
-   "text": "{\n  \"descriptionScreen\": { \"ignore\": [ \"umsetzer\" ],\n    \"terms\": [ \"start\" ] },\n  \"deny\": { \"tokens\": [ \"START\" ], \"substrings\": [ \"LOESCH\" ] },\n  \"allow\": { \"restrictedEcus\": { \"TMODE\": [ \"INFO\" ] }, \"patterns\": [ \"^STATUS_[A-Z]+$\" ], \"globalExact\": [ \"IDENT\" ] },\n  \"maxArgLength\": 10, \"namePattern\": \"^[A-Z_]+$\", \"version\": 1\n}\n"
+   "text": "{\n  \"descriptionScreen\": { \"ignore\": [ \"umsetzer\" ],\n    \"terms\": [ \"start\" ] },\n  \"deny\": { \"tokens\": [ \"START\" ], \"substrings\": [ \"LOESCH\" ], \"ecuJobs\": {} },\n  \"allow\": { \"restrictedEcus\": { \"TMODE\": [ \"INFO\" ] }, \"patterns\": [ \"^STATUS_[A-Z]+$\" ], \"globalExact\": [ \"IDENT\" ] },\n  \"maxArgLength\": 10, \"namePattern\": \"^[A-Z_]+$\", \"version\": 1\n}\n"
   },
   {
    "name": "an empty descriptionScreen.ignore list",
    "valid": true,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[]}}"
   },
   {
    "name": "lower-case ignore entries, one with an umlaut",
    "valid": true,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"zähler\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"zähler\"]}}"
   },
   {
    "name": "an unknown top-level key",
    "valid": false,
-   "text": "{\"version\":1,\"comment\":\"x\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"comment\":\"x\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown kind of deny rule",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"regex\":[\"^X\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"regex\":[\"^X\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown key under allow",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"prefixes\":[\"READ_\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"prefixes\":[\"READ_\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an unknown key under descriptionScreen",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"],\"extra\":[\"x\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"],\"extra\":[\"x\"]}}"
   },
   {
    "name": "a duplicate top-level key (deny twice)",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"deny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"deny\":{\"substrings\":[],\"tokens\":[],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key written with an escape (\\u0064eny)",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"\\u0064eny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"\\u0064eny\":{\"substrings\":[],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key under allow",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"globalExact\":[\"FS_LOESCHEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"globalExact\":[\"FS_LOESCHEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate restricted ECU",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"],\"TMODE\":[\"INFO\",\"SENDE\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"],\"TMODE\":[\"INFO\",\"SENDE\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a duplicate key under deny",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"tokens\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"tokens\":[],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version 0",
    "valid": false,
-   "text": "{\"version\":0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a negative version",
    "valid": false,
-   "text": "{\"version\":-1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":-1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a fractional version",
    "valid": false,
-   "text": "{\"version\":1.5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1.5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version as a string",
    "valid": false,
-   "text": "{\"version\":\"1\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":\"1\",\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version beyond a 32-bit integer",
    "valid": false,
-   "text": "{\"version\":2147483648,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":2147483648,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a negative maxArgLength",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":-1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":-1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "maxArgLength beyond a 32-bit integer",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":2147483648,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":2147483648,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty namePattern",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a namePattern that does not compile",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"([\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"([\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in globalExact",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in deny.substrings",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\",\"\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\",\"\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in deny.tokens",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty string in a restricted ECU list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty restricted ECU name",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty pattern",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "no description screen terms",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an empty description screen term",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\",\"\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\",\"\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "no descriptionScreen.ignore (a version 1 file)",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"]}}"
   },
   {
    "name": "an upper-case ignore entry",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"BESCHREIBUNG\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"BESCHREIBUNG\"]}}"
   },
   {
    "name": "a mixed-case ignore entry",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"Umsetzer\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\",\"Umsetzer\"]}}"
   },
   {
    "name": "an ignore entry with an upper-case umlaut",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"rÜck\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"rÜck\"]}}"
   },
   {
    "name": "a duplicate ignore entry",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"umsetzer\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"umsetzer\"]}}"
   },
   {
    "name": "an empty ignore entry",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"\"]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",\"\"]}}"
   },
   {
    "name": "an ignore entry that is not a string",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",1]}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"umsetzer\",1]}}"
   },
   {
    "name": "ignore that is not a list",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":\"umsetzer\"}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":\"umsetzer\"}}"
   },
   {
    "name": "null for ignore",
    "valid": false,
-   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":null}}"
+   "text": "{\"version\":2,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":null}}"
   },
   {
    "name": "a missing key",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}}}"
   },
   {
    "name": "a list entry that is not a string",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",1],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",1],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a restricted ECU that is not a list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":\"INFO\"}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":\"INFO\"}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "deny that is not an object",
@@ -224,22 +224,22 @@
   {
    "name": "null for a list",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":null,\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":null,\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a top level that is not an object",
    "valid": false,
-   "text": "[{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}]"
+   "text": "[{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}]"
   },
   {
    "name": "a trailing comma",
    "valid": false,
-   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]},}"
+   "text": "{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]},}"
   },
   {
    "name": "a comment",
    "valid": false,
-   "text": "// policy\n{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "// policy\n{\"version\":1,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"], \"ecuJobs\": {}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "not JSON",
@@ -254,127 +254,172 @@
   {
    "name": "upper-case names with digits and underscores",
    "valid": true,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"_JOBS\",\"C_FA_LESEN\",\"PRUEFSTEMPEL_LESEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"E60\":[\"FS_LESEN_FUNKTIONAL\",\"_JOBS\"],\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"POWER_DOWN\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"_JOBS\",\"C_FA_LESEN\",\"PRUEFSTEMPEL_LESEN\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"E60\":[\"FS_LESEN_FUNKTIONAL\",\"_JOBS\"],\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"POWER_DOWN\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a lower-case deny substring",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"loesch\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"loesch\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a mixed-case deny token",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"Start\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"Start\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a lower-case globalExact name",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"fs_lesen\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"fs_lesen\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a lower-case restricted ECU key",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a mixed-case restricted ECU key",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"Tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"Tmode\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a lower-case restricted job name",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"lese_interface_typ\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\",\"lese_interface_typ\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an allow name with ß (no single upper-case form)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"STRAßE\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"STRAßE\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a deny substring with a lower-case ligature",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"ﬂASH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"ﬂASH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a deny token with a lower-case letter outside the BMP",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"𐐨\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\",\"𐐨\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a pattern with a backslash escape (\\d)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\d+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\d+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a pattern with a Unicode class (\\p{Lu})",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\p{Lu}+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_\\\\p{Lu}+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a pattern with an escaped underscore",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS\\\\_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS\\\\_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a pattern with a non-ASCII character",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-ZÄÖÜ]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-ZÄÖÜ]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version written as 3.0",
    "valid": false,
-   "text": "{\"version\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version written as 3e0",
    "valid": false,
-   "text": "{\"version\":3e0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3e0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version written as 3E+0",
    "valid": false,
-   "text": "{\"version\":3E+0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3E+0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "maxArgLength written as 10.0",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10.0,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10.0,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "maxArgLength written as 1e1",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":1e1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":1e1,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "version 3.0 under an escaped key (\\u0076ersion)",
    "valid": false,
-   "text": "{\"\\u0076ersion\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"\\u0076ersion\":3.0,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an integer version and maxArgLength with spaces around them",
    "valid": true,
-   "text": "{\"version\" :  3 ,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":\n10\n,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\" :  3 ,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":\n10\n,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"], \"ecuJobs\": {}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "an allow name with a lone surrogate (\\ud800)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"ID\\ud800\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\",\"ID\\ud800\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a deny substring with a title-case letter (ǅ)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ǅ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ǅ\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a deny substring with a circled lower-case letter (ⓐ)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ⓐ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"ⓐ\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   },
   {
    "name": "a deny substring with a combining mark that upper-cases (U+0345)",
    "valid": false,
-   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"LOESCHͅ\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+   "text": "{\"version\":3,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"SCHREIB\",\"LOESCHͅ\"],\"tokens\":[\"START\"],\"ecuJobs\":{}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "deny.ecuJobs with entries",
+   "valid": true,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"ACSM60\":[\"STATUS_ROC\"],\"FLA_65\":[\"STATUS_SENSORPARAMETER\",\"STATUS_X\"]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "deny without ecuJobs (a version 4 file)",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "deny.ecuJobs that is not an object",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":[]},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny.ecuJobs ECU key that is not upper-case",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"acsm60\":[\"STATUS_ROC\"]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny.ecuJobs job that is not upper-case",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"ACSM60\":[\"status_roc\"]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "an empty deny.ecuJobs ECU key",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"\":[\"STATUS_ROC\"]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "an empty deny.ecuJobs job name",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"ACSM60\":[\"\"]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a deny.ecuJobs job list that is not a list",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"ACSM60\":\"STATUS_ROC\"}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
+  },
+  {
+   "name": "a duplicate key under deny.ecuJobs",
+   "valid": false,
+   "text": "{\"version\":5,\"namePattern\":\"^[A-Z_]+$\",\"maxArgLength\":10,\"allow\":{\"globalExact\":[\"IDENT\"],\"patterns\":[\"^STATUS_[A-Z]+$\"],\"restrictedEcus\":{\"TMODE\":[\"INFO\"]}},\"deny\":{\"substrings\":[\"LOESCH\"],\"tokens\":[\"START\"],\"ecuJobs\":{\"ACSM60\":[\"STATUS_ROC\"],\"ACSM60\":[]}},\"descriptionScreen\":{\"terms\":[\"start\"],\"ignore\":[\"beschreibung\"]}}"
   }
  ]
 }

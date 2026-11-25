@@ -41,7 +41,14 @@ In order, the first step that decides wins:
 2. Names are upper-cased.
 3. **Deny.** A job whose name contains a write-like substring (`SCHREIB`, `LOESCH`, `STEUER`,
    `CODIER`, `FLASH`, ...) or has a write-like word between underscores (`START`, `STOP`,
-   `LERN`, `PROG`, ...) is refused, whatever else applies.
+   `LERN`, `PROG`, ...) is refused, whatever else applies. So is a job listed for its ECU in
+   `deny.ecuJobs`: jobs whose names and descriptions look like reads but whose SGBD sends a
+   write service (for example `ACSM60` `STATUS_ROC`, airbag, "Status ... lesen", which writes
+   `$2E` twice). The list names each SGBD and every group that can resolve to it (`D_SIM` for
+   `ACSM60`), since the policy sees only the name it is given. `dev/sgbd-sweep.ts` finds them
+   in the SGBD and group files; it cannot follow every request (on 2026-11-24, about 10,700
+   allowed jobs in UDS/ASAM engine files, none on the E61's own modules), so a job missing
+   from the list is not proven to be a read.
 4. **Restricted ECUs.** `TMODE` and `UTILITY` contain dangerous jobs beside their reads, so
    only the jobs listed for them by name may run. The chassis SGBDs `E60`, `E65`, `E70`,
    `E89X`, `F01` and `R56` are restricted the same way: only `INFO`, `IDENT_FUNKTIONAL`,

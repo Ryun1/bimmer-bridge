@@ -126,8 +126,8 @@ sources, pinned approvals and the 90 s idle time all ran. Details:
   - Already described at the desk on 2026-11-22, with their result names in the skill's
     `job-cookbook.md`: `E60` `IDENT_FUNKTIONAL` and `FS_LESEN_FUNKTIONAL`, `C_FA_LESEN` on
     `CAS` and `LM_60`, `UTILITY` `STATUS_UBATT` and `STATUS_ZUENDUNG`, `NVE_65` `FS_LESEN`.
-    Check `vm_health`'s policy version is still 4; if so, their verdicts and result names
-    are known. They still have to be described again in this session wherever a scenario
+    Check `vm_health`'s policy version is still 5 (version 5 changed none of these
+    verdicts); if so, their verdicts and result names are known. They still have to be described again in this session wherever a scenario
     records a describe (`nve-faults` needs `ediabas_describe` of `NVE_65`): running the eval
     prompts above does that by itself.
 - [ ] Agree the plan: which ECUs and jobs, in how many calls, and a rough time. The first

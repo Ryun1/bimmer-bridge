@@ -100,11 +100,11 @@ describe("policy loading", () => {
     expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
     const g = PolicyGuard.load();
     expect(g.error).toBeNull();
-    expect(g.version).toBe(4);
+    expect(g.version).toBe(5);
   });
 
   it("reads descriptionScreen.ignore (the agent runs the screen; the Mac only validates it)", () => {
-    expect(policy.version).toBe(4);
+    expect(policy.version).toBe(5);
     expect(policy.screenIgnore).toEqual(["beschreibung", "umsetzer"]);
   });
 
@@ -170,6 +170,18 @@ describe("PolicyGuard", () => {
       expect(err.rule).toBe("deny.substring:LOESCH");
       expect(err.message).toContain("deny.substring:LOESCH");
       expect(err.message).toMatch(/do not look for another/i);
+    }
+  });
+
+  it("check() says a deny.ecuJobs refusal is a write despite the name, not a name rule", () => {
+    try {
+      g.check({ ecu: "ACSM60", job: "STATUS_ROC" });
+      throw new Error("expected a refusal");
+    } catch (e) {
+      const err = e as BridgeError;
+      expect(err.rule).toBe("deny.ecuJob");
+      expect(err.message).toContain("rule deny.ecuJob: this job on this ECU sends a write service despite its name");
+      expect(err.message).not.toContain("the job name marks it");
     }
   });
 
