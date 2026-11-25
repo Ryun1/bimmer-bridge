@@ -10,7 +10,7 @@ Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. A small agent i
 > [!WARNING]
 > **Disclaimer: use at your own risk.** This is a personal project, provided as is, with no
 > warranty of any kind. It talks to a real car's control units through software and a cable
-> that are not made for it, and it has been tested on one car, at the desk only. Its
+> that are not made for it, and it has been tested on one car, in one session at the car. Its
 > read-only limits reduce the risk but cannot remove it: a fault in the code, the cable,
 > EDIABAS, an SGBD file or the car could still leave a module, the battery or the car in a bad
 > state. You are responsible for your car, for what you run on it and for checking any result
@@ -41,8 +41,10 @@ chassis-specific; Claude finds a car's modules and jobs with `ediabas_list_ecus`
 on the group SGBDs listed in [policy/policy.json](policy/README.md).
 
 **Tested:** one 2005 E61 550i, K+DCAN USB cable, EDIABAS 7.3.0, Windows 11 on ARM in UTM on an
-Apple Silicon Mac, with the cable in the VM but not in the car. No job has been run against a car
-yet. ENET, ICOM and F-series cars are untested.
+Apple Silicon Mac. One session at the car (2026-11-23, 0.6.2, ignition on): fault reads,
+identification, vehicle status and the `E60` whole-car reads
+([results](docs/history/changes.md#phase-6-at-the-car-2026-11-23)). ENET, ICOM and F-series cars
+are untested.
 
 ## Quick start
 
