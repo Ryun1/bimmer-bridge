@@ -162,7 +162,8 @@ EDIABAS does not look up. The DLL imports only `KERNEL32.dll`.
 
 Uninstall: delete `XGate32.dll`, `XGate.ini` and `XGate.log*` from `C:\EDIABAS\BIN` /
 `C:\EDIABAS\TRACE`, and switch the agent back to `STD:OBD`. With the DLL gone, `GATE:OBD`
-should fail to open, so the agent does not silently run ungated (check this once too).
+fails to open (`IFH-0027: IFH NOT FOUND`), so the agent does not silently run ungated
+(confirmed at the desk, below).
 
 ## Desk run, 2026-11-25 (EDIABAS 7.3.0, K+DCAN cable in the VM, no car)
 
@@ -170,7 +171,8 @@ Confirmed, first in log mode and then in enforce mode:
 
 - `apiInitExt("GATE:OBD", …)` loads `XGate32.dll` in the agent's process. EDIABAS passes the name
   in lower case (`gate:obd`), and it is forwarded as `STD:obd` with `rc=0`.
-- `dllCheckIFH` comes before any call, with compatibility 6, and the `MESSAGE` layout is as
+- `dllCheckIFH` comes after `dllStartupIFH` and before any `dllCallIFH`, with compatibility 6,
+  and the `MESSAGE` layout is as
   assumed: `fkt=`, `ch=`, `len=` and `data=` are sensible throughout.
 - 27 carries the concept as UINT16 LE (`0F01…` → `010F`, the same as `SETECUCOMM` in `IFH.trc`) and
   returns `rc=0` on success. 28 is the trace's `SETTELPARAMETER`, always `00000000`. 29 carries
@@ -191,6 +193,17 @@ Confirmed, first in log mode and then in enforce mode:
   for refusals.
 - EDIABAS sometimes sends the same telegram again at once, after a `rc=4` from 29. Each send is
   judged, and only the forwarded ones appear in `IFH.trc`.
+
+### Desk checks after the merge, 2026-11-25 (agent 0.7.0 at `ed952e6`, same setup)
+
+- **Both checks enforcing:** with `Mode=enforce` here and the agent's `telegramCheck` at
+  `enforce`, `ediabas_vehicle_status` ran its adapter reads normally (`UTILITY`, `TMODE`). The
+  gate allowed the three sends of `NVE_65 STATUS_BORDNETZSPANNUNG`'s `8457F130910101` (an exact
+  entry in `policy/telegrams.json`; no module answered, so `IFH-0003`). Nothing was refused or
+  latched, and the agent's check stayed open.
+- **No DLL, no EDIABAS:** with `XGate32.dll` renamed (EDIABAS unloaded first), the agent's
+  `apiInitExt("GATE:OBD")` failed with error 37, `IFH-0027: IFH NOT FOUND`, and no job ran. With
+  the DLL back (same SHA-256) the next request went through the gate as before.
 
 Still to see at the car: the functions a session with modules answering uses (any
 `WOULD_REFUSE function` or unknown trace name needs a decision).
