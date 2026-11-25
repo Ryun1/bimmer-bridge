@@ -41,9 +41,10 @@ handles) is built by `vm-agent/build.sh` but can only be exercised in the VM, by
 | `test_serve.py` | its tests: `python3 -m unittest dev/test_serve.py` |
 | `replay-agent.ts` | a stand-in VM agent that answers only from recorded fixtures, on 127.0.0.1 |
 | `record-server.ts`, `recorder.ts`, `ts-resolve.mjs` | the MCP server with a recording `fetch`: writes every agent exchange to `EDIABAS_RECORD_DIR` ([Recording and scrubbing](#recording-and-scrubbing)) |
+| `sgbd-sweep.ts` | reads copies of the VM's SGBD and group files (`.prg`, `.grp`), decodes each job's code (instruction format and registers as in EdiabasLib) and replays it to its sends, then lists every job the job policy allows, under the SGBD's name or any group that resolves to it, that sends something other than a read: how `deny.ecuJobs` was found ([policy/README.md](../policy/README.md)) |
 | `scrub-fixtures.ts` | copies a raw recording (`EDIABAS_RECORD_DIR`) into `fixtures/<scenario>/` with identifiers removed |
 | `fixtures/` | recorded scenarios (`idle`, `inpa-open`): [dev/fixtures/README.md](../dev/fixtures/README.md) |
-| `test/` | vitest tests for the replay agent and scrubber, run from `mac-mcp`; `fixtures-clean.test.ts` checks that every committed fixture needs no scrubbing; `doc-links.test.ts` checks that every relative link in the repo's markdown resolves |
+| `test/` | vitest tests for the replay agent, scrubber and SGBD sweep, run from `mac-mcp`; `fixtures-clean.test.ts` checks that every committed fixture needs no scrubbing; `doc-links.test.ts` checks that every relative link in the repo's markdown resolves |
 
 ```sh
 python3 dev/serve.py [--accept-token] [--client <VM IPv4>] [--bind <Mac IPv4>] [--port 8000]
@@ -76,8 +77,13 @@ the Mac (unticked in UTM's USB menu):
    the defaults. Or register a second MCP server with `EDIABAS_BACKEND=native` in its environment.
 4. Restart Claude. `bridge_health` replaces `vm_health`; there are no `vm_*` tools.
 
-The strict frame gate refuses 24 reads natively ([m1-results.md](native/m1-results.md),
-section 2), including `NVE_65 STATUS_BORDNETZSPANNUNG`; they stay on the VM backend.
+The frame gate enforces the shared telegram rule ([api.md "Telegram rule"](api.md#telegram-rule)):
+a `$30`/`$31` read runs natively only once its exact telegram is on `policy/telegrams.json`
+(`NVE_65 STATUS_BORDNETZSPANNUNG`, `IHKA60 STATUS_VERBRAUCHERREDUZIERUNG` and `NVE_65
+STATUS_PAIRING` are, since 2026-11-24). The others stay on the VM backend; `dev/m2/gate-refused.json`
+lists the refused first telegrams (regenerated with policy version 5 and the new rule:
+253 pairs). The M1 results ([m1-results.md](native/m1-results.md), section 2) record the
+earlier deny-list gate.
 
 ## Policy fixtures: both sides must agree
 

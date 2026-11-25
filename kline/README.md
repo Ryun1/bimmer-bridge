@@ -89,13 +89,14 @@ One handle per open cable, or per replayed recording. Every call returns a reaso
 failure's reason, and `ediabasd` turns it into a bridge error (`cable_not_found`,
 `cable_in_use`, `cable_unsupported`, `cable_permission`, `frame_refused`).
 
-- **Frame gate** (`src/gate.zig`). Every send is checked against the concept the SGBD declared
-  with `kline_set_concept`. It fails closed: no concept, or one other than BMW-FAST (0x010F),
-  KWP2000\* (0x010D), KWP2000 BMW (0x010C), DS2 (0x0006) or D-CAN (0x0110), refuses every
-  send. Under the header concepts it refuses service IDs 0x10 (except the default session),
-  0x11, 0x14, 0x27–0x29, 0x2E, 0x2F, 0x30–0x37, 0x3B, 0x3D and 0x85, and every `F1→F1` adapter
-  command except the FA/FD/FE reads. The first refusal **latches**: every later send fails until
-  `kline_close`.
+- **Frame gate** (`src/gate.zig`). Every send is checked, with the concept the SGBD declared
+  with `kline_set_concept`, against the shared telegram rule ([docs/api.md "Telegram
+  rule"](../docs/api.md#telegram-rule)): read services by service ID, anything else only as an
+  exact reviewed telegram to its address from `policy/telegrams.json`, and `F1→F1` adapter
+  commands only as the FA/FD/FE reads. It is the same rule and embedded list as the VM's
+  `XGate32.dll` (`gate/`, built in from `gate/src/policy.zig` by `build.zig`). It fails closed:
+  no concept, an unknown one, DS2 (version 1 allows none) or a malformed frame refuses. The
+  first refusal **latches**: every later send fails until `kline_close`.
 - **Inter-byte time.** With `kline_set_interbyte(ms)` the bytes of one send are paced as
   EdiabasLib paces them (one byte time plus the inter-byte time per byte), so the gate always
   sees whole telegrams.

@@ -11,6 +11,9 @@
     <!-- The job policy is linked, never copied: policy/policy.json is the single source for
          both the agent and the Mac server. -->
     <EmbeddedResource Include="..\..\policy\policy.json" Link="policy.json" LogicalName="EdiabasAgent.Core.policy.json" />
+    <!-- The telegram rule (docs/api.md "Telegram rule"), linked the same way: policy/telegrams.json
+         is shared with the interface handler under gate/ and the native engine. -->
+    <EmbeddedResource Include="..\..\policy\telegrams.json" Link="telegrams.json" LogicalName="EdiabasAgent.Core.telegrams.json" />
   </ItemGroup>
 
 </Project>

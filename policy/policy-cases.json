@@ -1211,6 +1211,1270 @@
    "allowed": true,
    "rule": "allow.ecu",
    "screen": false
+  },
+  {
+   "ecu": "ACSM2",
+   "job": "STATUS_ROC",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "ACSM60",
+   "job": "STATUS_ROC",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "ANT_60",
+   "job": "STATUS_TUNER_OZENANIEN_LISTE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "ANT_60",
+   "job": "STATUS_TUNER_PROFILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "ANT_60",
+   "job": "STATUS_TUNNELERKENNUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "CICMR",
+   "job": "STATUS_HMI_LICENSE_FILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "CICR",
+   "job": "STATUS_CHECK_CONTACTBOOK",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "CICR",
+   "job": "STATUS_HMI_LICENSE_FILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "CID_LVDS",
+   "job": "STATUS_LVDS_CID_FRONT_KWP",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "DAB_60",
+   "job": "STATUS_ANT_PRUEFUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "DSC_E65",
+   "job": "STATUS_BBV",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "DSC_E65",
+   "job": "STATUS_FS_EEPROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "DSC_E65",
+   "job": "STATUS_SENSOR_ADAPTION",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "FLA_65",
+   "job": "STATUS_SENSORPARAMETER",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "FLA_R",
+   "job": "STATUS_AUSRICHTUNGSTEST_WERK",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "TELE60_3",
+   "job": "STATUS_ECU_CONNECTIONS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "VID_E65",
+   "job": "STATUS_WRITE_AUX_NORM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "VMSW65",
+   "job": "STATUS_WRITE_AUX_NORM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): the SGBD sends a write service, found by dev/sgbd-sweep.ts"
+  },
+  {
+   "ecu": "acsm60",
+   "job": "status_roc",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "compared after upper-casing, like every rule"
+  },
+  {
+   "ecu": "NVE_65",
+   "job": "STATUS_ROC",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "deny.ecuJobs names the ECU: the same job name elsewhere is still allowed by the pattern"
+  },
+  {
+   "ecu": "ACSM60",
+   "job": "STATUS_ROC_KONFIG",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "whole job names only, never a prefix"
+  },
+  {
+   "ecu": "ACSM60",
+   "job": "IDENT",
+   "allowed": true,
+   "rule": "allow.global",
+   "screen": false,
+   "note": "the ECU's other jobs are unaffected"
+  },
+  {
+   "ecu": "ACSM60",
+   "job": "STATUS_ROC_LOESCHEN",
+   "allowed": false,
+   "rule": "deny.substring:LOESCH",
+   "screen": false,
+   "note": "substrings and tokens are checked before deny.ecuJobs"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_ANT_PRUEFUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_BBV",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_ECU_CONNECTIONS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_FS_EEPROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_ROC",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_SENSORPARAMETER",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_SENSOR_ADAPTION",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_TUNER_OZENANIEN_LISTE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_TUNER_PROFILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_TUNNELERKENNUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_WRITE_AUX_NORM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0036",
+   "job": "STATUS_ECU_CONNECTIONS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0047",
+   "job": "STATUS_TUNER_OZENANIEN_LISTE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0047",
+   "job": "STATUS_TUNER_PROFILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_0047",
+   "job": "STATUS_TUNNELERKENNUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_005B",
+   "job": "STATUS_ANT_PRUEFUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_ANTTU",
+   "job": "STATUS_TUNER_OZENANIEN_LISTE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_ANTTU",
+   "job": "STATUS_TUNER_PROFILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_ANTTU",
+   "job": "STATUS_TUNNELERKENNUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_DAB",
+   "job": "STATUS_ANT_PRUEFUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_DSC",
+   "job": "STATUS_BBV",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_DSC",
+   "job": "STATUS_FS_EEPROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_DSC",
+   "job": "STATUS_SENSOR_ADAPTION",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_FLA",
+   "job": "STATUS_AUSRICHTUNGSTEST_WERK",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_FLA",
+   "job": "STATUS_SENSORPARAMETER",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_MMI",
+   "job": "STATUS_CHECK_CONTACTBOOK",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_MMI",
+   "job": "STATUS_HMI_LICENSE_FILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_ANT_PRUEFUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_BBV",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_ECU_CONNECTIONS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_FS_EEPROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_ROC",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_SENSORPARAMETER",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_SENSOR_ADAPTION",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_TUNER_OZENANIEN_LISTE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_TUNER_PROFILE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_TUNNELERKENNUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_WRITE_AUX_NORM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_SIM",
+   "job": "STATUS_ROC",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_TEL",
+   "job": "STATUS_ECU_CONNECTIONS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_VIDEO",
+   "job": "STATUS_WRITE_AUX_NORM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): a group that can resolve to an SGBD that sends a write service; EDIABAS runs a group name as the variant it identifies"
+  },
+  {
+   "ecu": "D_DSC",
+   "job": "STATUS_DSC_LESEN",
+   "allowed": true,
+   "rule": "allow.pattern",
+   "screen": true,
+   "note": "a denied group's other STATUS_ jobs are still allowed by the pattern"
+  },
+  {
+   "ecu": "PGS_65_2",
+   "job": "STATUS_ECU_SELBSTTEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "PGS_65_2",
+   "job": "STATUS_PGS_ANTENNEN_TEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_PGS",
+   "job": "STATUS_ECU_SELBSTTEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_PGS",
+   "job": "STATUS_PGS_ANTENNEN_TEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_ECU_SELBSTTEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_PGS_ANTENNEN_TEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_RAUS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_WEGE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_ABSTAND",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_AMPLITUDEN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_SELBSTTEST_SCHRITTMOTORE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_FSP_MPC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_FSP_NEC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_EEPROM_OFFSET_SZL",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_EEPROM_SENSOREN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_GERAETE_TEMPERATUR",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_ECU_SELBSTTEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_PGS_ANTENNEN_TEST",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_RAUS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_WEGE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_ABSTAND",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_AMPLITUDEN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_SELBSTTEST_SCHRITTMOTORE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_FSP_MPC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_FSP_NEC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_EEPROM_OFFSET_SZL",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_EEPROM_SENSOREN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_GERAETE_TEMPERATUR",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "GS19B",
+   "job": "STATUS_RAUS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_EGS",
+   "job": "STATUS_RAUS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "PDC_65_2",
+   "job": "STATUS_WEGE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "PDC_65_2",
+   "job": "STATUS_ABSTAND",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_PDC",
+   "job": "STATUS_WEGE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_PDC",
+   "job": "STATUS_ABSTAND",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ACC2",
+   "job": "STATUS_AMPLITUDEN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ACC",
+   "job": "STATUS_AMPLITUDEN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0021",
+   "job": "STATUS_AMPLITUDEN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "IHKA60",
+   "job": "STATUS_SELBSTTEST_SCHRITTMOTORE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_KLIMA",
+   "job": "STATUS_SELBSTTEST_SCHRITTMOTORE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "AFS_90",
+   "job": "STATUS_FSP_MPC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "AFS_90",
+   "job": "STATUS_FSP_NEC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "AFS_90",
+   "job": "STATUS_EEPROM_OFFSET_SZL",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "AFS_90",
+   "job": "STATUS_EEPROM_SENSOREN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_AFS",
+   "job": "STATUS_FSP_MPC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_AFS",
+   "job": "STATUS_FSP_NEC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_AFS",
+   "job": "STATUS_EEPROM_OFFSET_SZL",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_AFS",
+   "job": "STATUS_EEPROM_SENSOREN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0016",
+   "job": "STATUS_FSP_MPC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0016",
+   "job": "STATUS_FSP_NEC_CONTROLFELD",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0016",
+   "job": "STATUS_EEPROM_OFFSET_SZL",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0016",
+   "job": "STATUS_EEPROM_SENSOREN",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "AMP_60",
+   "job": "STATUS_GERAETE_TEMPERATUR",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_AMP",
+   "job": "STATUS_GERAETE_TEMPERATUR",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, the job actuates rather than reads ($30 with no report-current-state byte, a self-test routine, or a non-default session), found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60B",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "ALBV60F",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0032",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_0059",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_005A",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVB",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_ALBVF",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HALLIMPULSE",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HARDWARE_LINKS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_HARDWARE_RECHTS",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_INITIALISIERUNG",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
+  },
+  {
+   "ecu": "D_RLS",
+   "job": "STATUS_STROM",
+   "allowed": false,
+   "rule": "deny.ecuJob",
+   "screen": false,
+   "note": "deny.ecuJobs (policy version 5): on the E61's modules, ALBV60 (active backrest width) routines ($31 31 25..2A) tagged \"Standard Codierjob\" or reading motor current on a motor module: the bytes cannot show they only read, found by dev/sgbd-sweep.ts; or a group that resolves to such a module"
   }
  ]
 }

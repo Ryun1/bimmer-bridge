@@ -121,7 +121,10 @@ public class ApiModelsTests
             PolicyVersion: 1,
             PolicySha256: new string('a', 64),
             Capabilities: ["ediabas"],
-            Approvals: new ApprovalCounts(2, 1, ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], "0123456789ab"));
+            Approvals: new ApprovalCounts(2, 1, ["A:B@b8ae0dd9d242", "C:D@7b69322a754f"], "0123456789ab"),
+            TelegramsVersion: 1,
+            TelegramsSha256: new string('b', 64),
+            TelegramCheck: new TelegramCheckInfo("enforce", null));
 
         using var doc = JsonDocument.Parse(ApiJson.Serialize(h));
         var root = doc.RootElement;
@@ -130,6 +133,7 @@ public class ApiModelsTests
             "agent", "version", "startedAt", "uptimeSeconds", "os", "user", "elevated", "sessionId",
             "bindAddress", "port", "gateway", "conflictingProcesses", "ediabas", "lastCableUseAt",
             "policyVersion", "policySha256", "capabilities", "approvals",
+            "telegramsVersion", "telegramsSha256", "telegramCheck",
         ];
         Assert.Equal(expected, root.EnumerateObject().Select(p => p.Name).ToArray());
         Assert.Equal("ediabas-bridge-agent", root.GetProperty("agent").GetString());
@@ -147,7 +151,9 @@ public class ApiModelsTests
         Assert.Equal(@"C:\EDIABAS\BIN\api32.dll", ed.GetProperty("dllPath").GetString());
         Assert.True(ed.GetProperty("dllFound").GetBoolean());
         Assert.True(ed.GetProperty("heldOpen").GetBoolean());
-        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck", "heldOpen"], ed.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(["dllPath", "dllFound", "loaded", "stuck", "heldOpen", "interface", "requireGate"], ed.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(JsonValueKind.Null, ed.GetProperty("interface").ValueKind);
+        Assert.Equal("""{"mode":"enforce","latch":null}""", root.GetProperty("telegramCheck").GetRawText());
         Assert.Equal(JsonValueKind.False, ed.GetProperty("loaded").ValueKind);
         Assert.Equal(JsonValueKind.True, ed.GetProperty("stuck").ValueKind);
         Assert.Equal("""{"pinned":2,"ignored":1,"entries":["A:B@b8ae0dd9d242","C:D@7b69322a754f"],"hash":"0123456789ab"}""", root.GetProperty("approvals").GetRawText());

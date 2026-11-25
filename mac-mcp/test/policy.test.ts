@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
+import { DEFAULT_POLICY_PATH, DEFAULT_TELEGRAMS_PATH, PolicyGuard, evaluate, fileSha256, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
 import { BridgeError } from "../src/errors.js";
 
 const REPO_POLICY = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
@@ -95,16 +95,32 @@ describe("findNonIntegerLiteral (JSON.parse reads 3.0 as 3; the agent refuses it
   });
 });
 
+describe("telegrams.json hash (compared with the agent's in vm_health)", () => {
+  it("hashes the repo's policy/telegrams.json by default", () => {
+    const path = fileURLToPath(new URL("../../policy/telegrams.json", import.meta.url));
+    expect(DEFAULT_TELEGRAMS_PATH).toBe(path);
+    expect(fileSha256()).toBe(createHash("sha256").update(readFileSync(path)).digest("hex"));
+  });
+
+  it("is null when the file cannot be read", () => {
+    expect(
+      fileSha256("/x/telegrams.json", () => {
+        throw new Error("ENOENT");
+      }),
+    ).toBeNull();
+  });
+});
+
 describe("policy loading", () => {
   it("resolves the repo's policy/policy.json by default", () => {
     expect(DEFAULT_POLICY_PATH).toBe(REPO_POLICY);
     const g = PolicyGuard.load();
     expect(g.error).toBeNull();
-    expect(g.version).toBe(4);
+    expect(g.version).toBe(5);
   });
 
   it("reads descriptionScreen.ignore (the agent runs the screen; the Mac only validates it)", () => {
-    expect(policy.version).toBe(4);
+    expect(policy.version).toBe(5);
     expect(policy.screenIgnore).toEqual(["beschreibung", "umsetzer"]);
   });
 
@@ -170,6 +186,18 @@ describe("PolicyGuard", () => {
       expect(err.rule).toBe("deny.substring:LOESCH");
       expect(err.message).toContain("deny.substring:LOESCH");
       expect(err.message).toMatch(/do not look for another/i);
+    }
+  });
+
+  it("check() says a deny.ecuJobs refusal is a write despite the name, not a name rule", () => {
+    try {
+      g.check({ ecu: "ACSM60", job: "STATUS_ROC" });
+      throw new Error("expected a refusal");
+    } catch (e) {
+      const err = e as BridgeError;
+      expect(err.rule).toBe("deny.ecuJob");
+      expect(err.message).toContain("rule deny.ecuJob: this job on this ECU sends a write service despite its name");
+      expect(err.message).not.toContain("the job name marks it");
     }
   });
 

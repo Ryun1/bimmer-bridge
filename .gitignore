@@ -42,3 +42,7 @@ __pycache__/
 
 # scratch output
 reports/
+
+# gate/ (XGate32.dll) build output
+gate/zig-out/
+gate/.zig-cache/

@@ -406,11 +406,13 @@ test "inter-byte pacing" {
     defer lock.cleanup();
     const s = try openPty(&pty, &lock, null);
     defer s.close();
-    try testing.expectEqual(Reason.ok, s.setConcept(&.{ 0x0006, 9600 }));
+    // A 4-byte frame the telegram rule allows (TesterPresent under BMW-FAST); the gate no
+    // longer lets DS2 through, and this test is about pacing, not the protocol.
+    try testing.expectEqual(Reason.ok, s.setConcept(&.{ 0x010F, 9600 }));
     try testing.expectEqual(Reason.ok, s.setInterByte(5));
     var arrivals = Arrivals{ .fd = pty.master };
     const t = try std.Thread.spawn(.{}, Arrivals.run, .{ &arrivals, 4 });
-    try testing.expectEqual(Reason.ok, s.send(&.{ 0x12, 0x04, 0x00, 0x16 }));
+    try testing.expectEqual(Reason.ok, s.send(&.{ 0x81, 0x12, 0xF1, 0x3E }));
     t.join();
     try testing.expectEqual(@as(usize, 4), arrivals.count);
     const spread_ms = (arrivals.times[3] - arrivals.times[0]) / std.time.ns_per_ms;

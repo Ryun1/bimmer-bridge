@@ -26,7 +26,7 @@ public sealed class JobPolicy
     // policy invalid rather than silently ignored.
     private static readonly string[] TopKeys = ["version", "namePattern", "maxArgLength", "allow", "deny", "descriptionScreen"];
     private static readonly string[] AllowKeys = ["globalExact", "patterns", "restrictedEcus"];
-    private static readonly string[] DenyKeys = ["substrings", "tokens"];
+    private static readonly string[] DenyKeys = ["substrings", "tokens", "ecuJobs"];
     private static readonly string[] ScreenKeys = ["terms", "ignore"];
 
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(1);
@@ -38,6 +38,7 @@ public sealed class JobPolicy
     private readonly Dictionary<string, HashSet<string>> _restricted = new(StringComparer.Ordinal);
     private readonly List<string> _denySubstrings = [];
     private readonly List<string> _denyTokens = [];
+    private readonly Dictionary<string, HashSet<string>> _denyEcuJobs = new(StringComparer.Ordinal);
     private readonly List<string> _screenTerms = [];
     private readonly List<string> _screenIgnore = [];
 
@@ -199,6 +200,22 @@ public sealed class JobPolicy
         var deny = Obj(top["deny"], "deny", DenyKeys);
         policy._denySubstrings.AddRange(UpperArray(deny["substrings"], "deny.substrings"));
         policy._denyTokens.AddRange(UpperArray(deny["tokens"], "deny.tokens"));
+        // Jobs refused on one ECU only: their names pass, but they send write services
+        // (found by dev/sgbd-sweep.ts). Same shape and checks as allow.restrictedEcus.
+        var ecuJobsEl = deny["ecuJobs"];
+        if (ecuJobsEl.ValueKind != JsonValueKind.Object)
+        {
+            throw new PolicyFormatException("deny.ecuJobs must be an object");
+        }
+
+        foreach (var ecu in ecuJobsEl.EnumerateObject())
+        {
+            RequireUpper(ecu.Name, "deny.ecuJobs key");
+            if (ecu.Name.Length == 0 || !policy._denyEcuJobs.TryAdd(ecu.Name, new HashSet<string>(UpperArray(ecu.Value, $"deny.ecuJobs.{ecu.Name}"), StringComparer.Ordinal)))
+            {
+                throw new PolicyFormatException($"deny.ecuJobs has an empty or duplicate key '{ecu.Name}'");
+            }
+        }
 
         var screen = Obj(top["descriptionScreen"], "descriptionScreen", ScreenKeys);
         policy._screenTerms.AddRange(StrArray(screen["terms"], "descriptionScreen.terms"));
@@ -263,7 +280,7 @@ public sealed class JobPolicy
         var e = ecu!.ToUpperInvariant();
         var j = job!.ToUpperInvariant();
 
-        // 3. Deny: substrings, then whole _-separated tokens. Overrides every allow rule.
+        // 3. Deny: substrings, then whole _-separated tokens, then deny.ecuJobs. Overrides every allow rule.
         foreach (var s in _denySubstrings)
         {
             if (j.Contains(s, StringComparison.Ordinal))
@@ -279,6 +296,12 @@ public sealed class JobPolicy
             {
                 return new PolicyVerdict(false, "deny.token:" + t, false, e, j);
             }
+        }
+
+        // Jobs that send write services on this ECU, whatever their name.
+        if (_denyEcuJobs.TryGetValue(e, out var denied) && denied.Contains(j))
+        {
+            return new PolicyVerdict(false, "deny.ecuJob", false, e, j);
         }
 
         // 4. Restricted ECU: its own list and nothing else.

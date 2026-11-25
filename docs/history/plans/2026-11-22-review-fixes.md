@@ -1,5 +1,7 @@
 # Review fixes and simplifications (0.5.0) Implementation Plan
 
+> Historical record: carried out 2026-11-22 to 2026-11-23. The checkboxes were not ticked as the work was done, so they do not show what was finished; see [changes.md](../changes.md) for what shipped and [evals-2026-11-23.md](../evals-2026-11-23.md) for what was skipped.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix every confirmed finding of the 2026-11-22 review and take the simplifications that

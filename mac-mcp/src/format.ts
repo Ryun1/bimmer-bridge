@@ -70,6 +70,52 @@ function policyLines(h: Health, macPolicyVersion: number | null, macSha256: stri
   return lines;
 }
 
+/**
+ * The agent's telegram rule and check (an agent before them reports neither: nothing is said).
+ * The Mac does not enforce the rule, so a different file is a warning, not a refusal.
+ */
+function telegramLines(h: Health, macSha256: string | null): string[] {
+  const lines: string[] = [];
+  const check = h.telegramCheck ?? null;
+  const iface = h.ediabas.interface;
+  if (iface !== undefined) {
+    lines.push(`EDIABAS interface: ${iface === null ? "from EDIABAS.INI (apiInit)" : `${clean(iface)} (apiInitExt)`}${h.ediabas.requireGate ? "; only a GATE: interface is allowed" : ""}.`);
+    if (h.ediabas.requireGate && (iface === null || !iface.startsWith("GATE:"))) {
+      lines.push("WARNING: requireGate is set but the interface is not a GATE: one, so every EDIABAS tool is refused. The user sets ediabasInterface in the agent config.");
+    }
+  }
+  if (h.telegramsVersion === undefined && check === null) return lines;
+
+  const v = h.telegramsVersion ?? null;
+  const agentSha = h.telegramsSha256 ? clean(h.telegramsSha256) : null;
+  const mode = check ? clean(check.mode) : "not reported";
+  lines.push(
+    `Telegram rule: agent ${v === null ? "did not load one" : `version ${v}`}${agentSha ? ` (sha256 ${agentSha.slice(0, 12)})` : ""}; check: ${mode}.`,
+  );
+  if (check?.mode === "off") {
+    lines.push("WARNING: the agent's telegram check is off (telegramCheck in the agent config): nothing checks the bytes EDIABAS sends.");
+  } else if (check?.mode === "report") {
+    lines.push("The telegram check is in report mode: what it finds is logged in the VM, and requests carry on.");
+  }
+  const latch = check?.latch ?? null;
+  if (latch) {
+    const what = [latch.function, latch.frame ? `telegram ${latch.frame}` : null, latch.concept ? `concept ${latch.concept}` : null, `reason ${latch.reason}`]
+      .filter((x): x is string => x !== null)
+      .map((x) => clean(x))
+      .join(", ");
+    lines.push(
+      `TELEGRAM CHECK LATCHED at ${clean(latch.at)} [${clean(latch.code)}] (${what}): ${truncate(clean(latch.message), 400)} ` +
+        "Every EDIABAS tool is refused until the user restarts the agent (restart Windows in the VM). Tell the user what was refused; never retry or look for another way.",
+    );
+  }
+  if (agentSha !== null && macSha256 !== null && agentSha.toLowerCase() !== macSha256) {
+    lines.push(
+      `WARNING: the agent's telegram rule (sha256 ${agentSha.slice(0, 12)}) is not the same file as this Mac's policy/telegrams.json (${macSha256.slice(0, 12)}). The agent enforces its own copy. ${UPDATE_HINT}`,
+    );
+  }
+  return lines;
+}
+
 /** `2026-11-22 09:05:07` in this Mac's time zone. */
 function localTime(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -81,7 +127,13 @@ export interface MacServerInfo {
   startedAt: Date;
 }
 
-export function formatHealth(h: Health, macPolicyVersion: number | null = null, mac?: MacServerInfo, macPolicySha256: string | null = null): string {
+export function formatHealth(
+  h: Health,
+  macPolicyVersion: number | null = null,
+  mac?: MacServerInfo,
+  macPolicySha256: string | null = null,
+  macTelegramsSha256: string | null = null,
+): string {
   const lines: string[] = [];
   if (mac) lines.push(`Mac server ${mac.version}, started ${localTime(mac.startedAt)}`);
   const since = h.startedAt ? ` (since ${clean(h.startedAt)})` : "";
@@ -126,6 +178,7 @@ export function formatHealth(h: Health, macPolicyVersion: number | null = null, 
   }
   lines.push(`Last cable use: ${h.lastCableUseAt ? clean(h.lastCableUseAt) : "never (since the agent started)"}`);
   lines.push(...policyLines(h, macPolicyVersion, macPolicySha256));
+  lines.push(...telegramLines(h, macTelegramsSha256));
   return lines.join("\n");
 }
 

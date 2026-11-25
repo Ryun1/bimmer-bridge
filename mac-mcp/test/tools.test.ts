@@ -153,7 +153,7 @@ describe("vm_health", () => {
     const r = await call("vm_health");
     expect(r.isError).toBeFalsy();
     expect(r.text).toContain("Agent features: ediabas, capture, logs");
-    expect(r.text).toMatch(/Job policy: agent version 4; Mac version 4 \(sha256 [0-9a-f]{12}\)\./);
+    expect(r.text).toMatch(/Job policy: agent version 5; Mac version 5 \(sha256 [0-9a-f]{12}\)\./);
     expect(r.text).not.toMatch(/WARNING: the agent's job policy/);
   });
 
@@ -170,7 +170,7 @@ describe("vm_health", () => {
     override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 2, capabilities: ["ediabas"] }) }));
     const { call } = await connect();
     const r = await call("vm_health");
-    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 2\) differs from this Mac's \(version 4\)/);
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 2\) differs from this Mac's \(version 5\)/);
     expect(r.text).toMatch(/Update line/);
   });
 
@@ -178,7 +178,7 @@ describe("vm_health", () => {
     override("GET /health", () => ({ status: 200, body: healthBody({ policyVersion: 1, capabilities: ["ediabas"] }) }));
     const { call } = await connect();
     const r = await call("vm_health");
-    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 1\) differs from this Mac's \(version 4\)/);
+    expect(r.text).toMatch(/WARNING: the agent's job policy \(version 1\) differs from this Mac's \(version 5\)/);
     expect(r.text).toMatch(/Update line/);
   });
 
@@ -419,6 +419,18 @@ describe("ediabas_describe", () => {
     ["ediabas_unavailable", 503, { reason: "api32.dll missing" }, /could not be started in the VM \(api32.dll missing\)/],
     // As seen at the desk on 2026-11-21: describing a real SGBD with the cable unplugged.
     ["cable_not_found", 502, { errorCode: 28, errorText: "IFH-0018: INITIALIZATION ERROR" }, /\(EDIABAS error 28: IFH-0018: INITIALIZATION ERROR\): the K\+DCAN cable is not connected to the VM\..*pass it through to the Windows VM in UTM\. Do not retry until the user says it is connected\./],
+    [
+      "telegram_not_allowed",
+      403,
+      { function: "SENDECUTEL", concept: "010F", frame: "83 12 F1 14 FF FF", reason: "service" },
+      /^\[telegram_not_allowed\] The agent's telegram check refused what EDIABAS sent \(SENDECUTEL, telegram 83 12 F1 14 FF FF, concept 010F, reason service\)\..*refuses every EDIABAS request until it is restarted.*Never retry, and do not look for another job, ECU or tool.*Tell the user exactly what was refused/,
+    ],
+    [
+      "telegram_check_unavailable",
+      503,
+      { reason: "IfhTrace in C:\\EDIABAS\\BIN\\EDIABAS.INI is \"0\"; it must be 3 or more" },
+      /^\[telegram_check_unavailable\] The agent's telegram check could not run \(IfhTrace in .*\)\..*IfhTrace = 3 in the VM's EDIABAS\.INI.*the user's to edit, never yours\..*Do not retry until the user says it is fixed\./,
+    ],
   ] as const)("maps %s", async (code, status, details, msg) => {
     override("GET /ediabas/describe", () => agentErr(status, code, "x", details));
     const { call } = await connect();

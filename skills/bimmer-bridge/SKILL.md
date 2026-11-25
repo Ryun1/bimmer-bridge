@@ -134,8 +134,10 @@ A failed call starts with its code in brackets, `[code]`, then a message saying 
 and what to do (for reaching the VM, relay its fix). `references/errors.md` covers the cases
 where the message is not enough. The ones that need judgement here:
 
-- **`[job_not_allowed]`** — refused by name. Say which job and rule; do not look for another
-  job, tool or route that does the same thing.
+- **`[job_not_allowed]`** — refused by the job policy: by name, or (rule `deny.ecuJob`)
+  because that job on that ECU or group sends a write service whatever its name says. Say
+  which job and rule; do not look for another job, tool or route that does the same thing,
+  and never try the same job under a group name or another SGBD.
 - **`[job_needs_review]`, or a job `ediabas_describe` shows as "needs review"** — the job's
   own description (or its arguments' description) suggests it may not be a pure read, has
   none, or has changed since the user approved it. In your answer:
@@ -147,6 +149,13 @@ where the message is not enough. The ones that need judgement here:
     Only if the user then says they want to approve it, give them the line `ediabas_describe`
     printed (no restart is needed);
   - do not point to INPA, Tool32 or another job or ECU as a way to get the same reading.
+- **`[telegram_not_allowed]`** — the agent's check of what EDIABAS actually sent found a
+  telegram it does not allow, and the agent now refuses every EDIABAS call until it is
+  restarted. Tell the user exactly what was refused (function, telegram, reason, as given);
+  never retry, never look for another job or route, and stop using `ediabas_*`.
+  **`[telegram_check_unavailable]`** — the check cannot run: the user sets `IfhTrace = 3` in
+  the VM's `EDIABAS.INI` (theirs to edit, not yours); if the message says so, they also
+  restart the agent.
 - **`[cable_in_use]`** — a BMW tool is open; see step 1. **`[cable_not_found]`** — ask the
   user to tick the cable for the VM in UTM's USB menu (UTM does not hand back a replugged cable).
 - **`[ecu_not_found]`, `[job_not_found]`** — the name was wrong; go back to the lookup tools.
