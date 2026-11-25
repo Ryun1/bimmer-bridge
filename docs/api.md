@@ -243,7 +243,9 @@ group files ([policy/README.md](../policy/README.md)); its 2026-11-24 run over t
 SGBDs and 353 groups gave 18 jobs on 13 SGBDs, reachable through 13 groups. It also lists 11
 jobs on the E61's own modules that actuate rather than read (`$30` with no report-current-state
 byte in either layout, the `PGS_65_2` self-test and antenna test, and a non-default session in
-`GS19B` `STATUS_RAUS`), with their groups; a reviewed exact telegram can bring one back once the
+`GS19B` `STATUS_RAUS`), and the five `$31` routine jobs of each `ALBV60B`/`ALBV60F` backrest
+module, whose bytes cannot show they only read (`31 25` to `31 2A`, two tagged "Standard
+Codierjob", one reading motor current), with their groups; a reviewed exact telegram can bring one back once the
 telegram gate exists ([spikes/2026-11-24-write-gate.md](spikes/2026-11-24-write-gate.md)). Version 2 added `descriptionScreen.ignore`, which a version 1 file
 does not have (so this build refuses it). Version 4 makes `E65`, `E70`, `E89X`, `F01` and `R56`
 (the chassis SGBDs present in the VM's Ecu folder) restricted ECUs with the same list as `E60`,
