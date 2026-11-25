@@ -1,4 +1,4 @@
-//! `zig build check-exports` (also run by `zig build`): reads the export table of the built
+//! `zig build check-exports` (also run by `zig build`; a program, not a test, so that its report on stderr does not fail the step): reads the export table of the built
 //! XGate32.dll (embedded as "xgate_dll") and checks that it is a 32-bit x86 DLL exporting the
 //! seven IFH entry points under both their stdcall-decorated and plain names, each pair at the
 //! same address. Prints the export table.
@@ -49,7 +49,7 @@ const Pe = struct {
     }
 };
 
-test "XGate32.dll export table" {
+pub fn main() !void {
     const pe_off = try u32At(0x3C);
     try std.testing.expectEqualSlices(u8, "PE\x00\x00", dll[pe_off..][0..4]);
     const machine = try u16At(pe_off + 4);

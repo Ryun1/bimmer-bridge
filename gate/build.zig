@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
         .target = host,
     });
     check_mod.addAnonymousImport("xgate_dll", .{ .root_source_file = dll.getEmittedBin() });
-    const check = b.addRunArtifact(b.addTest(.{ .root_module = check_mod }));
+    const check = b.addRunArtifact(b.addExecutable(.{ .name = "check_exports", .root_module = check_mod }));
     check.has_side_effects = true;
     const check_step = b.step("check-exports", "Check the export table of XGate32.dll");
     check_step.dependOn(&check.step);
