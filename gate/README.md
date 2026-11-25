@@ -164,6 +164,30 @@ Uninstall: delete `XGate32.dll`, `XGate.ini` and `XGate.log*` from `C:\EDIABAS\B
 `C:\EDIABAS\TRACE`, and switch the agent back to `STD:OBD`. With the DLL gone, `GATE:OBD`
 should fail to open, so the agent does not silently run ungated (check this once too).
 
+## Desk run, 2026-11-25 (EDIABAS 7.3.0, K+DCAN cable in the VM, no car)
+
+Confirmed, first in log mode and then in enforce mode:
+
+- `apiInitExt("GATE:OBD", …)` loads `XGate32.dll` in the agent's process. EDIABAS passes the name
+  in lower case (`gate:obd`), and it is forwarded as `STD:obd` with `rc=0`.
+- `dllCheckIFH` comes before any call, with compatibility 6, and the `MESSAGE` layout is as
+  assumed: `fkt=`, `ch=`, `len=` and `data=` are sensible throughout.
+- 27 carries the concept as UINT16 LE (`0F01…` → `010F`, the same as `SETECUCOMM` in `IFH.trc`) and
+  returns `rc=0` on success. 28 is the trace's `SETTELPARAMETER`, always `00000000`. 29 carries
+  the exact telegram (`8457F130910101`, `8257F11A80`). No 54 or 30/31/34 appear in these jobs.
+- Each `ifhConnect` (20) opens a new channel (48, numbered 1, 2, 3, …). The concept is set on
+  that channel before its telegrams, and 49 closes it.
+- **Refusal:** `-1` from 29 gives EDIABAS error 2, `ERRORCODE OUT OF RANGE`, with no hang, and the
+  telegram is not forwarded. With 49 refused by the latch, EDIABAS skipped `ifhEnd` and
+  `dllExitIFH`, so 49 now passes the latch; EDIABAS then closes and unloads normally.
+- A refused telegram never reaches `IFH.trc` (`XStd32.dll` writes it), so the agent reads this log
+  for refusals.
+- EDIABAS sometimes sends the same telegram again at once, after a `rc=4` from 29. Each send is
+  judged, and only the forwarded ones appear in `IFH.trc`.
+
+Still to see at the car: the functions a session with modules answering uses (any
+`WOULD_REFUSE function` or unknown trace name needs a decision).
+
 ## Not verified yet (confirm in log mode before enforcing)
 
 | Assumption | How the log confirms it |
