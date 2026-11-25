@@ -80,7 +80,8 @@ internal sealed class RequestPipeline
                 detail?.Ecu,
                 detail?.Job,
                 detail?.Rule,
-                http.Items.TryGetValue(HandlerSupport.AuditTargetKey, out var t) ? t as string : null);
+                http.Items.TryGetValue(HandlerSupport.AuditTargetKey, out var t) ? t as string : null,
+                detail?.TelegramsChecked);
         }
     }
 

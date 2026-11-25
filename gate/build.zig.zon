@@ -1,0 +1,14 @@
+.{
+    .name = .xgate,
+    .version = "0.1.0",
+    .fingerprint = 0x96ef1b9bc6bee32e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tools",
+        "README.md",
+    },
+}

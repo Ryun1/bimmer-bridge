@@ -1,0 +1,2 @@
+# Recorded EDIABAS traces: keep their CRLF line ends byte for byte.
+*.trc -text

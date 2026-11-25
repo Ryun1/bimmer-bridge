@@ -21,6 +21,13 @@ public sealed class RequestAudit
     public string? ErrorCode { get; set; }
 
     public List<ItemAudit> Items { get; } = [];
+
+    /// <summary>How many telegrams (<c>SENDECUTEL</c>) the telegram check judged for the
+    /// request; null when it did not check (no EDIABAS use, or the check is off).</summary>
+    public int? TelegramsChecked { get; set; }
+
+    /// <summary>What the telegram check found for the request, under enforce or report.</summary>
+    public List<TelegramFinding> TelegramFindings { get; } = [];
 }
 
 /// <summary>
@@ -35,6 +42,11 @@ public sealed class RequestAudit
 /// while the job is busy at the same rate, sees a BMW tool) → read every result set →
 /// apiEnd in <c>finally</c>. Nothing touches the API when the conflict check fails or when no
 /// job survives the policy.</para>
+/// <para>Telegram check (<see cref="TelegramCheck"/>): a latched check, or <c>requireGate</c>
+/// without a <c>GATE:</c> interface, refuses the request first. Just before apiInit (the DLL
+/// loaded, the conflict check passed again) the check reads EDIABAS.INI and notes the length of IFH.trc (under enforce an
+/// IfhTrace below 3 refuses the request there, before anything is sent); after apiEnd it reads
+/// what the request added and judges every telegram. A batch is one request.</para>
 /// <para>Every job the agent sends, including its own <c>_JOBS</c> / <c>_JOBCOMMENTS</c> /
 /// <c>_ARGUMENTS</c> / <c>_RESULTS</c> calls, is checked by the policy first.</para>
 /// <para>Idle release: the DLL is loaded at the first request that needs it and unloaded once no
@@ -68,6 +80,12 @@ public sealed class EdiabasService
     private readonly int _maxTimeoutSeconds;
     private readonly long _idleReleaseMs;
 
+    // The check of what EDIABAS sent (null: no check, as with telegramCheck "off"), the interface
+    // to open (null: apiInit), and whether only a GATE: interface may be used.
+    private readonly TelegramCheck? _telegrams;
+    private readonly string? _interface;
+    private readonly bool _requireGate;
+
     // Idle-release state. Touched only on the runner thread.
     private bool _loaded;
     private long _lastUseMs;
@@ -93,8 +111,14 @@ public sealed class EdiabasService
         int maxTimeoutSeconds,
         int idleReleaseSeconds,
         ApprovalReloader? approvals = null,
-        DescriptionCache? descriptions = null)
+        DescriptionCache? descriptions = null,
+        TelegramCheck? telegrams = null,
+        string? ediabasInterface = null,
+        bool requireGate = false)
     {
+        _telegrams = telegrams;
+        _interface = ediabasInterface;
+        _requireGate = requireGate;
         _api = api;
         _conflicts = conflicts;
         _ecus = ecus;
@@ -174,6 +198,14 @@ public sealed class EdiabasService
     public Outcome<EcusResponse> ListEcus(string? filter)
     {
         _approvals?.Refresh();
+
+        // Only the latch: the listing does not use EDIABAS, but a latched agent answers nothing
+        // on /ediabas/* until it is restarted.
+        if (_telegrams?.LatchedRefusal() is { } latched)
+        {
+            return latched;
+        }
+
         if (ConflictFailure() is { } busy)
         {
             return busy;
@@ -192,6 +224,11 @@ public sealed class EdiabasService
         _approvals?.Refresh();
         audit.Ecu = request.Ecu;
         audit.Job = request.Job;
+        if (RequestRefusal() is { } refused)
+        {
+            return refused;
+        }
+
         if (WaitedTooLong(queuedMs) is { } waited)
         {
             return waited;
@@ -202,7 +239,11 @@ public sealed class EdiabasService
             return busy;
         }
 
-        using var session = new Session(this, queuedMs);
+        return InSession(queuedMs, audit, session => RunJobIn(session, request, timeoutSeconds, audit, ct));
+    }
+
+    private Outcome<JobResult> RunJobIn(Session session, JobRequest request, int? timeoutSeconds, RequestAudit audit, CancellationToken ct)
+    {
         var run = RunItem(session, request, EffectiveTimeout(timeoutSeconds), ct);
         audit.Ecu = run.Ecu;
         audit.Job = run.Job;
@@ -230,6 +271,11 @@ public sealed class EdiabasService
             return ApiFailure.Of(ApiErrors.BadRequest, $"items must hold 1 to {MaxBatchItems} jobs.", new ParameterDetails("items"));
         }
 
+        if (RequestRefusal() is { } refused)
+        {
+            return refused;
+        }
+
         if (WaitedTooLong(queuedMs) is { } waited)
         {
             return waited;
@@ -241,14 +287,16 @@ public sealed class EdiabasService
         }
 
         var start = _clock.ElapsedMs;
-        using var session = new Session(this, queuedMs);
-        var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), audit, ct);
-        if (batch.WholeRequest is { } whole)
+        return InSession<BatchResponse>(queuedMs, audit, session =>
         {
-            return whole;
-        }
+            var batch = RunBatch(session, items, EffectiveTimeout(timeoutSeconds), audit, ct);
+            if (batch.WholeRequest is { } whole)
+            {
+                return whole;
+            }
 
-        return new BatchResponse(batch.Items, _clock.ElapsedMs - start);
+            return new BatchResponse(batch.Items, _clock.ElapsedMs - start);
+        });
     }
 
     // ---------------------------------------------------------------- /ediabas/describe
@@ -257,6 +305,11 @@ public sealed class EdiabasService
     {
         _approvals?.Refresh();
         audit.Ecu = ecu;
+        if (RequestRefusal() is { } refused)
+        {
+            return refused;
+        }
+
         if (WaitedTooLong(queuedMs) is { } waited)
         {
             return waited;
@@ -272,8 +325,12 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
+        return InSession(queuedMs, audit, session => DescribeListIn(session, ecu, filter, comments, audit, ct));
+    }
+
+    private Outcome<DescribeListResponse> DescribeListIn(Session session, string? ecu, string? filter, bool comments, RequestAudit audit, CancellationToken ct)
+    {
         var start = _clock.ElapsedMs;
-        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, ecu, audit, ct, out var variant, out var upperEcu);
         if (!jobs.Ok)
         {
@@ -366,6 +423,11 @@ public sealed class EdiabasService
         _approvals?.Refresh();
         audit.Ecu = ecu;
         audit.Job = job;
+        if (RequestRefusal() is { } refused)
+        {
+            return refused;
+        }
+
         if (WaitedTooLong(queuedMs) is { } waited)
         {
             return waited;
@@ -392,8 +454,18 @@ public sealed class EdiabasService
             return NotRun("The request was abandoned before it started.");
         }
 
+        return InSession(queuedMs, audit, session => DescribeJobIn(session, verdict, audit, ct));
+    }
+
+    private Outcome<DescribeJobResponse> DescribeJobIn(Session session, PolicyVerdict verdict, RequestAudit audit, CancellationToken ct)
+    {
+        if (verdict.Ecu is null || verdict.Job is null)
+        {
+            // The caller has refused a name of the wrong shape.
+            throw new InvalidOperationException("describe of a job whose name failed the shape rule");
+        }
+
         var start = _clock.ElapsedMs;
-        using var session = new Session(this, queuedMs);
         var jobs = ReadJobList(session, verdict.Ecu, audit, ct, out var variant, out _);
         if (!jobs.Ok)
         {
@@ -804,6 +876,7 @@ public sealed class EdiabasService
             return ToolStartedNotRun(running);
         }
 
+        session.JobStarted = true;
         _api.Job(ecu, job, parameters, results);
         var started = _clock.ElapsedMs;
         var limitMs = Math.Min((long)timeoutSeconds * 1000, budgetLeftMs);
@@ -937,6 +1010,63 @@ public sealed class EdiabasService
         return new JobVerdict(true, v.Rule, review);
     }
 
+    /// <summary>
+    /// Runs <paramref name="body"/> in one apiInit … apiEnd cycle, then (after apiEnd) checks what
+    /// the request added to the IFH trace. Under enforce a finding replaces the answer with its
+    /// failure. The check runs even when the body throws (the latch is then set all the same).
+    /// </summary>
+    private Outcome<T> InSession<T>(long queuedMs, RequestAudit audit, Func<Session, Outcome<T>> body)
+        where T : class
+    {
+        Outcome<T>? outcome = null;
+        var session = new Session(this, queuedMs);
+        try
+        {
+            outcome = body(session);
+        }
+        finally
+        {
+            session.Dispose();
+            if (session.TraceStart is { } start && _telegrams is not null)
+            {
+                var result = _telegrams.End(start, session.JobStarted, session.Poisoned);
+                audit.TelegramsChecked = result.TelegramsChecked;
+                lock (audit.TelegramFindings)
+                {
+                    audit.TelegramFindings.AddRange(result.Findings);
+                }
+
+                if (result.Failure is { } failure && outcome is not null)
+                {
+                    outcome = failure;
+                }
+            }
+        }
+
+        return outcome;
+    }
+
+    /// <summary>Refusals before anything else in an EDIABAS request: the telegram check's latch,
+    /// and <c>requireGate</c> without a <c>GATE:</c> interface.</summary>
+    private ApiFailure? RequestRefusal()
+    {
+        if (_telegrams?.LatchedRefusal() is { } latched)
+        {
+            return latched;
+        }
+
+        if (_requireGate && (_interface is null || !_interface.StartsWith(AgentConfig.GatePrefix, StringComparison.Ordinal)))
+        {
+            var why = $"requireGate is set in the agent config, but ediabasInterface is {(_interface is null ? "not set" : $"\"{_interface}\"")}, not a {AgentConfig.GatePrefix} interface";
+            return ApiFailure.Of(
+                ApiErrors.EdiabasUnavailable,
+                $"EDIABAS is not used: {why}. Nothing was sent. The user sets ediabasInterface (for example \"GATE:OBD\") once the telegram gate is installed, or clears requireGate.",
+                new ReasonDetails(why));
+        }
+
+        return null;
+    }
+
     private ApiFailure? ConflictFailure()
     {
         var running = _conflicts.Running();
@@ -1058,6 +1188,13 @@ public sealed class EdiabasService
         /// stopped with apiBreak.</summary>
         public bool ToolStoppedJob { get; set; }
 
+        /// <summary>Where this request's part of the IFH trace starts; null when the telegram
+        /// check is off, could not run (report), or apiInit was never reached.</summary>
+        public TraceStart? TraceStart { get; private set; }
+
+        /// <summary>Whether apiJob was called in this request (then EDIABAS must have traced it).</summary>
+        public bool JobStarted { get; set; }
+
         public ApiFailure? EnsureInit()
         {
             if (_initCalled || _initFailure is not null)
@@ -1093,9 +1230,23 @@ public sealed class EdiabasService
                 return _initFailure;
             }
 
+            // The telegram check notes where the IFH trace ends now, just before apiInit, so what
+            // it reads afterwards is this request's alone. Under enforce it refuses here, before
+            // anything is sent, when EDIABAS.INI does not have IfhTrace 3.
+            if (owner._telegrams is { } telegrams)
+            {
+                if (telegrams.Begin(out var start) is { } unavailable)
+                {
+                    _initFailure = unavailable;
+                    return _initFailure;
+                }
+
+                TraceStart = start;
+            }
+
             owner._cableUse.Mark(owner._clock.UtcNow);
             _initCalled = true;
-            if (owner._api.Init())
+            if (owner._api.Init(owner._interface))
             {
                 Initialised = true;
                 return null;
@@ -1103,8 +1254,9 @@ public sealed class EdiabasService
 
             var code = owner._api.ErrorCode();
             var text = owner._api.ErrorText();
-            owner._log.Warn($"apiInit failed: EDIABAS error {code}: {text}");
-            var why = $"apiInit failed (error {code}: {text})";
+            var call = owner._interface is null ? "apiInit" : $"apiInitExt(\"{owner._interface}\")";
+            owner._log.Warn($"{call} failed: EDIABAS error {code}: {text}");
+            var why = $"{call} failed (error {code}: {text})";
             _initFailure = ApiFailure.Of(ApiErrors.EdiabasUnavailable, "EDIABAS cannot be used: " + why, new ReasonDetails(why));
             return _initFailure;
         }

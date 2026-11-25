@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { DEFAULT_POLICY_PATH, PolicyGuard, evaluate, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
+import { DEFAULT_POLICY_PATH, DEFAULT_TELEGRAMS_PATH, PolicyGuard, evaluate, fileSha256, findDuplicateKey, findNonIntegerLiteral, parsePolicy } from "../src/policy.js";
 import { BridgeError } from "../src/errors.js";
 
 const REPO_POLICY = fileURLToPath(new URL("../../policy/policy.json", import.meta.url));
@@ -92,6 +92,22 @@ describe("findNonIntegerLiteral (JSON.parse reads 3.0 as 3; the agent refuses it
   ] as const)("%s → %s", (text, key) => {
     JSON.parse(text); // the cases are valid JSON
     expect(findNonIntegerLiteral(text)).toBe(key);
+  });
+});
+
+describe("telegrams.json hash (compared with the agent's in vm_health)", () => {
+  it("hashes the repo's policy/telegrams.json by default", () => {
+    const path = fileURLToPath(new URL("../../policy/telegrams.json", import.meta.url));
+    expect(DEFAULT_TELEGRAMS_PATH).toBe(path);
+    expect(fileSha256()).toBe(createHash("sha256").update(readFileSync(path)).digest("hex"));
+  });
+
+  it("is null when the file cannot be read", () => {
+    expect(
+      fileSha256("/x/telegrams.json", () => {
+        throw new Error("ENOENT");
+      }),
+    ).toBeNull();
   });
 });
 

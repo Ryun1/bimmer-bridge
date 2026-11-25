@@ -63,6 +63,11 @@ internal static partial class SelfTest
             ? new Check("job policy", Outcome.Pass, $"version {policy.Version} loaded")
             : new Check("job policy", Outcome.Fail, $"{policy.LoadError}; every EDIABAS job would be refused"));
 
+        var telegrams = TelegramRule.Embedded;
+        checks.Add(telegrams.Loaded
+            ? new Check("telegram rule", Outcome.Pass, $"version {telegrams.Version} loaded")
+            : new Check("telegram rule", Outcome.Fail, $"{telegrams.LoadError}; the telegram check would refuse every request"));
+
         if (config is null)
         {
             checks.Add(new Check("token file", Outcome.Skip, "no valid config"));
@@ -279,9 +284,9 @@ internal static partial class SelfTest
             return new Check(name, Outcome.Skip, DllProbeSkip.Reason(running, config.EdiabasIdleReleaseSeconds));
         }
 
-        var problem = Api32.Probe(config.EdiabasDll);
+        var problem = Api32.Probe(config.EdiabasDll, config.EdiabasInterface);
         return problem is null
-            ? new Check(name, Outcome.Pass, $"{config.EdiabasDll} loads and all {Api32.Exports.Length} exports resolve (nothing called)")
+            ? new Check(name, Outcome.Pass, $"{config.EdiabasDll} loads and all {Api32.ExportsFor(config.EdiabasInterface).Length} exports resolve (nothing called)")
             : new Check(name, Outcome.Fail, problem);
     }
 

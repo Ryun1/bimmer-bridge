@@ -56,3 +56,6 @@ agent exit: it logs why in `agent.log` and re-reads the file every 30 s.
 | `jobTimeoutSeconds` | 30 | default per job; at most `maxJobTimeoutSeconds` |
 | `maxJobTimeoutSeconds` | 60 | a request's time budget; at most 60, because the Mac stops waiting after 75 s |
 | `ediabasIdleReleaseSeconds` | 20 | unload `api32.dll` after this long without an EDIABAS request (5 to 600; another value is a config error). Read at start-up only |
+| `telegramCheck` | `enforce` | check every telegram EDIABAS sent, from its IFH trace, after each EDIABAS request ([docs/api.md](../docs/api.md#telegram-check-agent)): `enforce` fails the request on a finding and refuses every later EDIABAS request until the agent restarts, and refuses requests while `IfhTrace` in `EDIABAS.INI` is below 3; `report` only logs and audits findings; `off` checks nothing. Another value is a config error |
+| `ediabasInterface` | `null` | the EDIABAS interface to open with `apiInitExt`, such as `GATE:OBD` (the telegram gate); `null` opens EDIABAS.INI's interface with `apiInit`. Letters, digits and `_`, 1 to 16 each side of one colon; another value is a config error |
+| `requireGate` | `false` | refuse every EDIABAS request unless `ediabasInterface` starts with `GATE:` |

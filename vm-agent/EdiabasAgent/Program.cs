@@ -182,6 +182,15 @@ internal static class Program
                 log.Error($"job policy did not load ({ctx.Policy.LoadError}); every EDIABAS job will be refused");
             }
 
+            if (ctx.Telegrams.Loaded)
+            {
+                log.Info($"telegram rule version {ctx.Telegrams.Version} loaded; telegramCheck {config.TelegramCheck}; EDIABAS interface {config.EdiabasInterface ?? "from EDIABAS.INI (apiInit)"}{(config.RequireGate ? "; requireGate" : "")}");
+            }
+            else
+            {
+                log.Error($"telegram rule did not load ({ctx.Telegrams.LoadError}); with telegramCheck {config.TelegramCheck} every telegram counts as refused");
+            }
+
             new AgentHost(ctx).RunAsync(stop.Token).GetAwaiter().GetResult();
             log.Info("agent stopped");
             return ExitOk;

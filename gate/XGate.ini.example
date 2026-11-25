@@ -1,0 +1,5 @@
+; XGate.ini: copy (renamed) to C:\EDIABAS\BIN\XGate.ini (next to XGate32.dll).
+; Mode=log      forward everything, log what enforce would refuse (first install, to verify)
+; Mode=enforce  refuse and latch (the default: also used with no file, no key, or any other value)
+Mode=enforce
+LogPath=C:\EDIABAS\TRACE\XGate.log

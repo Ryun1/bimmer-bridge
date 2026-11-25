@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "readServices": ["12", "13", "17", "18", "19", "1A", "21", "22", "23", "3E"],
+  "defaultSession": "81",
+  "adapterReads": ["FA", "FD", "FE"],
+  "exact": [
+    { "address": "57", "data": "30 91 01 01", "note": "NVE_65 STATUS_BORDNETZSPANNUNG: the voltage source; $30 report current state (2026-11-23 at the car)" },
+    { "address": "78", "data": "30 45 01", "note": "IHKA60 STATUS_VERBRAUCHERREDUZIERUNG: $30 report current state (2026-11-23 at the car)" },
+    { "address": "57", "data": "31 FA", "note": "NVE_65 STATUS_PAIRING: approved by the owner on 2026-11-23 (reviewedJobs)" }
+  ]
+}

@@ -5,6 +5,8 @@
 | `policy.json` | the default-deny job policy, version 5. The agent embeds it at build time; the Mac server reads it at start-up |
 | `policy-cases.json` | ECU/job pairs with the expected verdict (`allowed`, `rule`, `screen`) |
 | `policy-parse-cases.json` | whole policy texts each parser must accept or refuse |
+| `telegrams.json` | the telegram rule, version 1: which bytes may be sent ([docs/api.md "Telegram rule"](../docs/api.md#telegram-rule)). The agent embeds it and checks every telegram in EDIABAS's interface trace with it; the Mac only compares its SHA-256 in `vm_health` |
+| `telegram-cases.json` | concept and telegram with the expected `allowed` and `reason`; run by `vm-agent/EdiabasAgent.Tests/TelegramRuleTests.cs` (and the interface handler and native engine) |
 
 Both test suites (`vm-agent/EdiabasAgent.Tests/JobPolicyTests.cs` and
 `mac-mcp/test/policy.test.ts`) run every case in both case files, so the C# and TypeScript

@@ -28,9 +28,10 @@ internal sealed class AgentContext : IDisposable
         Logs = new LogService(config.LogRoots, new LogAccess());
         Approvals = new ApprovalState(new ApprovalList(config.ReviewedJobs));
         ApprovalReloader = new ApprovalReloader(new ConfigFile(configPath), Approvals, new EdiabasLogAdapter(log));
+        IniPath = EdiabasIni.BesideDll(config.EdiabasDll);
         Runner = new EdiabasRunner(
             () => new EdiabasService(
-                new Api32(config.EdiabasDll, NativeCalls),
+                new Api32(config.EdiabasDll, NativeCalls, config.EdiabasInterface),
                 Conflicts,
                 new EcuFolder(config.EcuPath),
                 Policy,
@@ -42,9 +43,41 @@ internal sealed class AgentContext : IDisposable
                 config.JobTimeoutSeconds,
                 config.MaxJobTimeoutSeconds,
                 config.EdiabasIdleReleaseSeconds,
-                ApprovalReloader),
+                ApprovalReloader,
+                telegrams: config.TelegramCheck == TelegramCheckModes.Off
+                    ? null
+                    : new TelegramCheck(config.TelegramCheck, IniPath, new TraceFiles(), Telegrams, TelegramLatch, new EdiabasLogAdapter(log), new SystemRunnerClock(), GateLogPath(config)),
+                ediabasInterface: config.EdiabasInterface,
+                requireGate: config.RequireGate),
             log,
             HandlerWait(config.MaxJobTimeoutSeconds));
+    }
+
+    /// <summary>XGate32.dll's log when EDIABAS is opened through the gate (a <c>GATE:</c>
+    /// interface): <c>LogPath</c> from <c>XGate.ini</c> beside api32.dll, read as the gate reads
+    /// it (the gate's default when the file or the key is missing); else null.</summary>
+    private static string? GateLogPath(AgentConfig config)
+    {
+        if (config.EdiabasInterface is not { } ifh || !ifh.StartsWith(AgentConfig.GatePrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string? text = null;
+        try
+        {
+            var ini = GateLog.IniBesideDll(config.EdiabasDll);
+            if (File.Exists(ini) && new FileInfo(ini).Length < 4096)
+            {
+                text = File.ReadAllText(ini);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The gate itself then uses its default too.
+        }
+
+        return GateLog.LogPathFrom(text);
     }
 
     /// <summary>How long a handler waits for the EDIABAS runner: the longest a request can take
@@ -71,6 +104,15 @@ internal sealed class AgentContext : IDisposable
     public JobPolicy Policy { get; }
 
     public CableUse CableUse { get; } = new();
+
+    /// <summary>The telegram rule built into the agent (policy/telegrams.json).</summary>
+    public TelegramRule Telegrams { get; } = TelegramRule.Embedded;
+
+    /// <summary>The telegram check's latch, for /health; it outlives a restart of the runner thread.</summary>
+    public TelegramLatch TelegramLatch { get; } = new();
+
+    /// <summary>EDIABAS.INI beside api32.dll, where the telegram check reads IfhTrace and TracePath.</summary>
+    public string IniPath { get; }
 
     /// <summary>The config's <c>reviewedJobs</c> as the runner uses them, for /health.</summary>
     public ApprovalState Approvals { get; }

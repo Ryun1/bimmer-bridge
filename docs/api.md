@@ -153,6 +153,8 @@ Errors may carry structured details. `details` is `null` when there are none.
 | 503 | `capture_busy` | another capture is still running; nothing was captured. Try again | `null` |
 | 503 | `not_run` | `/ediabas/job` or describe started no job, or stopped one: the request's `maxJobTimeoutSeconds` budget ran out before the job (or the screen before it) could start, or the client gave up (the running job was stopped with `apiBreak`). The message says which, e.g. "The request was abandoned before {JOB} started." A request that spent the whole budget queued behind another EDIABAS request gets "The request waited behind another EDIABAS request for the whole {max} s limit; nothing was started." on `/ediabas/job`, `/ediabas/jobs` and both describe modes, and EDIABAS is not loaded for it. Also a per-item code in `/ediabas/jobs` (see there) | `null` |
 | 504 | `job_timeout` | the job was still busy at its timeout; `apiBreak` was called | `{ timeoutSeconds }` |
+| 403 | `telegram_not_allowed` | the telegram check (see "Telegram check (agent)") found, in what the request added to the IFH trace, a telegram the telegram rule refuses, an interface function it does not know, or a line it cannot read; or the check latched on an earlier request (every `/ediabas/*` request, `/ediabas/ecus` included, until the agent restarts) | `{ function, concept, frame, reason }`: the interface function (`SENDECUTEL`), the concept as four hex digits, the telegram as hex bytes (`"83 12 F1 14 FF FF"`), and the rule's reason (`service`, `malformed`, …) or `unknown_function` / `unreadable_trace` / `trace_too_large` / `telegram_preface`; any of the first three is `null` when it does not apply |
+| 503 | `telegram_check_unavailable` | under `enforce`: before anything is sent, `EDIABAS.INI` is missing or unreadable, its `IfhTrace` is below 3, its `TracePath` is not a full path, or the telegram rule did not load; or, after a request that ran a job, EDIABAS wrote no trace for it or the trace could not be read (this latches like `telegram_not_allowed`, and later requests get this code) | `{ reason }` |
 
 
 **Settled at the desk (2026-11-21, cable unplugged):** loading a real SGBD (`NVE_65`, even for
@@ -169,6 +171,18 @@ caught by the conflict check before EDIABAS is called.
   built into the agent; `null` only if the policy did not load. A 0.4.x agent omits it. Before
   every `ediabas_*` call the Mac compares it with the SHA-256 of the file it loaded; if both are
   present and differ, it refuses with `policy_mismatch` and sends no `/ediabas/*` request.
+- `telegramsVersion`, `telegramsSha256`: the same for the telegram rule built into the agent
+  (`policy/telegrams.json`); both `null` if it did not load. The Mac compares the SHA-256 with its
+  own copy of the file and `vm_health` warns when they differ; it refuses nothing for it (the Mac
+  never sees telegrams). An agent before the telegram check omits them.
+- `telegramCheck`: `{ "mode": "enforce" | "report" | "off", "latch": null | { "at", "code",
+  "reason", "function", "concept", "frame", "message" } }`. `latch` is set by the first finding
+  under `enforce` and stays until the agent restarts: `at` is the UTC time, `code`
+  `telegram_not_allowed` or `telegram_check_unavailable`, the rest as in that error's details,
+  and `message` says what was found.
+- `ediabas.interface`: the `ediabasInterface` the agent opens with `apiInitExt` (such as
+  `"GATE:OBD"`), or `null` when it opens EDIABAS.INI's interface with `apiInit`.
+  `ediabas.requireGate`: whether EDIABAS requests are refused unless that is a `GATE:` interface.
 - `capabilities`: array of strings, the endpoint groups this build has:
   `"ediabas"`, `"capture"`, `"logs"`.
 - `ediabas.loaded`: boolean, whether `api32.dll` is loaded right now (see "Idle release").
@@ -313,6 +327,116 @@ run.
 agent re-reads `reviewedJobs`, and nothing else, from config.json. A file that is missing,
 unreadable or not a valid config keeps the previous list and logs one warning per distinct
 problem; a later good read is picked up.
+
+## Telegram rule
+
+The job policy decides by name; the telegram rule decides by the bytes. `policy/telegrams.json`
+is the single source, version 1. It is enforced in three places, all running
+`policy/telegram-cases.json`: the agent's check of the IFH trace after each request ("Telegram
+check"), the `XGate32.dll` interface handler in the VM (`gate/`), and the native engine's frame
+gate. A telegram is judged with the protocol (concept) last set for the interface:
+
+1. **Concept.** None set → refused (`no_concept`). BMW-FAST `0x010F`, KWP2000 BMW `0x010C` and
+   D-CAN `0x0110` use BMW-FAST framing; KWP2000\* `0x010D` its own; DS2 `0x0006` → refused
+   (`ds2`; DS2 commands are manufacturer-specific, so version 1 allows none); any other →
+   refused (`unknown_concept`).
+2. **Frame.** Byte 0's top two bits must be `10` (physical) or `11` (functional), byte 2 (the
+   source) must be `F1` (the tester). BMW-FAST framing: the data length is byte 0's low six
+   bits; if those are 0, it is byte 3; if that is 0 too, bytes 4–5 (big-endian). KWP2000\*:
+   the length is always byte 3. The data starts after the length; the frame must end with the
+   data or with one more (checksum) byte. Zero length or anything else → `malformed`.
+3. **Adapter.** Target and source both `F1` (the cable itself): allowed only when the first
+   data byte is in `adapterReads` (`FA`, `FD`, `FE`), else `adapter`.
+4. **Read services.** The first data byte (the service) in `readServices` (`$12 $13 $17 $18
+   $19 $1A $21 $22 $23 $3E`) → allowed. `$10` is allowed only as exactly `10 81` (the default
+   session).
+5. **Exact.** Otherwise allowed only when an `exact` entry has the frame's target address
+   (byte 1) and exactly its data bytes (checksum excluded). Each entry is a reviewed telegram,
+   for example `57` / `30 91 01 01` for `NVE_65` `STATUS_BORDNETZSPANNUNG`. The addressing
+   mode (physical or functional, byte 0) is not part of the match.
+6. Anything else → `service`.
+7. **Both framings.** A frame allowed by steps 3–5 is read once more with the other framing
+   (BMW-FAST ↔ KWP2000\*). If that reading is well-formed too and steps 3–6 would refuse it,
+   the frame is refused (`ambiguous`). Only a crafted frame parses both ways (for example
+   `A3 12 F1 22 2E …`: `$22` to BMW-FAST, `$2E` to KWP2000\*), so this costs real reads
+   nothing, and it means a wrong idea of the concept, in the gate or the trace check, can
+   never turn an allowed read into a write.
+
+`$30` and `$31` are never allowed by service: BMW SGBDs use them for both reads and
+actuation, and do not agree on where the "report current state" byte goes. Adding an `exact`
+entry is the owner's decision, made with a case, like a policy change.
+
+## Telegram check (agent)
+
+With `telegramCheck` (agent config) `enforce` (the default) or `report`, the agent checks
+every telegram EDIABAS sent for a request, from EDIABAS's own interface trace
+(`IFH.trc` in `TracePath`, written when `IfhTrace` in `EDIABAS.INI` is 3 or more):
+before the request it notes the trace's length; afterwards it reads what was added, takes
+the concept from each `SETECUCOMM` (its first two input bytes, little-endian) and judges each
+`SENDECUTEL` input with the telegram rule. A function name it does not know is a finding too.
+`enforce` turns any finding into `telegram_not_allowed` for the request and latches: every
+later EDIABAS request is refused with the same code until the agent restarts, and `/health`
+shows the latch. `report` only records findings. With `IfhTrace` below 3, or no trace written
+for a request that ran a job, `enforce` refuses with `telegram_check_unavailable`. This
+check cannot stop a telegram; it proves what was sent and stops everything after a bad one.
+The interface handler below is what stops one.
+
+How the agent does it (`EdiabasAgent.Core/TelegramCheck.cs`, `IfhTrace.cs`, `EdiabasIni.cs`):
+
+- **Where.** `EDIABAS.INI` is the one beside `ediabasDll` (`C:\EDIABAS\BIN\EDIABAS.INI`). From
+  its `[Configuration]` section (keys in any case, the first of a repeated key, `;` starts a
+  comment) it reads `IfhTrace` (a whole number) and `TracePath`, which must be a full path
+  (`C:\…`); the trace is `IFH.trc` there. Both are read again for every request.
+- **When.** Per EDIABAS request (a batch is one request), just before `apiInit` (after the DLL
+  is loaded and the conflict check has passed again) the agent reads `EDIABAS.INI` and the
+  trace's length; after `apiEnd` it reads everything the request added. Under `enforce`, an
+  `EDIABAS.INI` problem refuses the request there, before `apiInit`; under `report` the request
+  runs unchecked and the agent log says why. A request refused before `apiInit` (by the policy,
+  say) reads nothing. A trace that is shorter after the request than before was replaced: the
+  agent reads the whole new file and says so in the finding and in `agent.log`. Before the
+  request the agent also keeps the trace's last 256 bytes; if they differ afterwards, the file
+  was replaced or rewritten in place and the request's part cannot be found
+  (`trace_rewritten`). More than 16 MB added is a finding (`trace_too_large`).
+- **What is a finding.** A `SENDECUTEL` the rule refuses; any function other than `OPEN`,
+  `GETBATTERYVOLTAGE`, `GETIGNITIONVOLTAGE`, `GETHANDLERTYPE`, `STOPECUTELFREQUENT`,
+  `SETECUCOMM`, `SETTELPARAMETER` and `SENDECUTEL` (`unknown_function`); a `SETTELPARAMETER` (the telegram preface) whose input is not all
+  zero bytes (`telegram_preface`: a preface would change the bytes sent after they were
+  judged); a trace line the parser cannot read (`unreadable_trace`: nothing is skipped
+  silently); and, for `telegram_check_unavailable`, a request that called `apiJob` but added no
+  trace lines (`no_trace`), a trace that could not be read afterwards (`unreadable_trace`) or
+  was rewritten (`trace_rewritten`), a job still running after `apiBreak`
+  (`job_not_stopped`: whatever it sends later is never in a checked part), or any other
+  failure of the check itself (`check_failed`). A
+  `telegram_check_unavailable` after a request latches as `telegram_not_allowed` does, because
+  that request's telegrams went unchecked.
+- **The concept.** Each `SETECUCOMM` that ends `ERROR: NO ERROR` sets it from its first two
+  INPUT bytes; one that fails, or has fewer than two bytes, leaves it unknown, as does `OPEN`.
+  A request's part of the trace starts with the concept the previous request ended with only
+  when nothing was written to the trace in between and the previous part had no finding; else
+  unknown, so a telegram before any `SETECUCOMM` is `no_concept`. Trace written between two
+  requests (a BMW tool's, which the conflict check keeps out during a request) is not judged;
+  `agent.log` notes it.
+- **The gate's log.** With a `GATE:` interface the agent also reads what the request added to
+  `XGate32.dll`'s log (`LogPath` in `XGate.ini` beside `api32.dll`, read as the gate reads it;
+  default `C:\EDIABAS\TRACE\XGate.log`). The gate refuses a telegram before `XStd32.dll`
+  sees it, so a refused telegram is in no `IFH.trc`, and EDIABAS reports only error 2
+  (`ERRORCODE OUT OF RANGE`, desk run 2026-11-25): each `REFUSED` line, and each
+  `WOULD_REFUSE` line in log mode (that telegram was forwarded), is a `telegram_not_allowed`
+  finding with the gate's reason, its function as `XGate fkt <n>` and the frame. A request that
+  ran a job while the gate logged no call is `telegram_check_unavailable` (`gate_not_seen`):
+  EDIABAS did not go through the gate. A gate log that cannot be read is `unreadable_trace`.
+  The gate renames its log to `XGate.log.1` at 1 MB; the agent recognises that by the log's
+  last 256 bytes before the request and reads the rest of `XGate.log.1` too. If that part is
+  not there, the finding is `trace_rewritten`.
+- **Records.** Each finding is a `WARN` line in `agent.log` and an audit line of its own (path
+  `<path>#telegram[i]`, the finding's code as the error code, its reason as the rule, and the
+  function, concept and frame as the target), under `report` as under `enforce`. The request's
+  own audit line ends with the number of telegrams checked (see "Audit").
+- **Interface.** `ediabasInterface` (agent config, default `null`) opens that interface with
+  `apiInitExt(ifh, "", "", "")` instead of `apiInit`; it must be an interface and a unit such as
+  `GATE:OBD` (`^[A-Za-z0-9_]{1,16}:[A-Za-z0-9_]{1,16}$`, else a config error). With
+  `requireGate: true` every EDIABAS request except the Ecu listing is refused with
+  `ediabas_unavailable` unless the interface starts with `GATE:`.
 
 ## EDIABAS endpoints
 Every one of these runs the conflict check first and returns `cable_in_use` if it fails,
@@ -535,4 +659,6 @@ Newest first.
 One line per request as before, now also carrying `ecu`, `job`, for refusals the policy
 `rule` (or the path refusal reason), and `target` (the log path or window asked for). Batch
 requests write one line per item plus one for the request. Control characters and Unicode
-format characters (U+202E, U+200B, U+2066 …) in a field are replaced with `_`.
+format characters (U+202E, U+200B, U+2066 …) in a field are replaced with `_`. A last field,
+`telegrams`, holds the number of telegrams the telegram check judged for an EDIABAS request
+(`-` when it did not check), and each telegram check finding adds a line of its own.
