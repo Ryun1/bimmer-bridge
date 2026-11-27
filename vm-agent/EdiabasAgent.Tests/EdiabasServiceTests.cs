@@ -236,6 +236,31 @@ public class EdiabasServiceTests
         Assert.Equal(0, _api.Count("End")); // the job never stopped: no unbounded apiEnd on it
     }
 
+    // ---- native engine: a frame refused by the cable layer fails the whole request ----
+
+    [Fact]
+    public void FrameRefused_FailsTheWholeBatch_AndStartsNothingMore()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Error(NativeErrorCodes.GateRefused, "IFH-0003 (libkline: gate_refused)"));
+        _api.On("NVE_65 FS_LESEN", FakeJob.Ok());
+        var r = Service().RunJobs([new("NVE_65", "IDENT"), new("NVE_65", "FS_LESEN")], null, _audit, default);
+
+        Assert.False(r.Ok);
+        Assert.Equal(ApiErrors.FrameRefused, r.Failure!.Error.Code);
+        Assert.Single(_api.JobCalls);
+        Assert.Equal(1, _api.Count("End"));
+    }
+
+    [Fact]
+    public void FrameRefused_FailsASingleJob()
+    {
+        _api.On("NVE_65 IDENT", FakeJob.Error(NativeErrorCodes.GateRefused, "x"));
+        var r = Service().RunJob(new JobRequest("NVE_65", "IDENT"), null, _audit, default);
+
+        Assert.Equal(ApiErrors.FrameRefused, r.Failure!.Error.Code);
+        Assert.Equal(403, r.Failure.Status);
+    }
+
     // ---- description screen ----
 
     [Fact]

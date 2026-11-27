@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- EdiabasLib's interpreter core, linked unmodified from the pinned submodule (GPL-3.0).
+       Upstream's .csproj and Directory.Build.* are never imported: this project lives
+       outside the submodule's tree, so MSBuild never finds them. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- CA1416: the Wi-Fi adapter helper's DHCP query is Windows-only; that path is never
+         reached (no Wi-Fi port name is ever configured). -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Up>$(MSBuildThisFileDirectory)../../third_party/ediabaslib/EdiabasLib/EdiabasLib</Up>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(Up)/EdiabasNet.cs" Link="upstream/EdiabasNet.cs" />
+    <Compile Include="$(Up)/EdOperations.cs" Link="upstream/EdOperations.cs" />
+    <Compile Include="$(Up)/EdInterfaceBase.cs" Link="upstream/EdInterfaceBase.cs" />
+    <Compile Include="$(Up)/IniFile.cs" Link="upstream/IniFile.cs" />
+    <Compile Include="$(Up)/MemoryStreamReader.cs" Link="upstream/MemoryStreamReader.cs" />
+    <Compile Include="$(Up)/EdSimFile.cs" Link="upstream/EdSimFile.cs" />
+    <Compile Include="$(Up)/EdBase32.cs" Link="upstream/EdBase32.cs" />
+    <!-- The K+DCAN interface and the helpers it names (unmodified), BLUETOOTH undefined.
+         EdInterfaceObd.cs defines USE_SERIAL_PORT itself on every non-Android build, so
+         System.IO.Ports is referenced below; its SerialPort is constructed but never opened,
+         because KlineTransport binds all ten transport delegates (UseExtInterfaceFunc). -->
+    <Compile Include="$(Up)/EdInterfaceObd.cs" Link="upstream/EdInterfaceObd.cs" />
+    <Compile Include="$(Up)/EdBluetoothInterface.cs" Link="upstream/EdBluetoothInterface.cs" />
+    <Compile Include="$(Up)/EdElmInterface.cs" Link="upstream/EdElmInterface.cs" />
+    <Compile Include="$(Up)/EdElmWifiInterface.cs" Link="upstream/EdElmWifiInterface.cs" />
+    <Compile Include="$(Up)/EdCustomWiFiInterface.cs" Link="upstream/EdCustomWiFiInterface.cs" />
+    <Compile Include="$(Up)/EdCustomAdapterCommon.cs" Link="upstream/EdCustomAdapterCommon.cs" />
+    <Compile Include="$(Up)/TcpClientWithTimeout.cs" Link="upstream/TcpClientWithTimeout.cs" />
+    <Compile Include="$(Up)/EscapeStreamReader.cs" Link="upstream/EscapeStreamReader.cs" />
+    <Compile Include="$(Up)/EscapeStreamWriter.cs" Link="upstream/EscapeStreamWriter.cs" />
+    <Compile Include="$(Up)/StreamExtension.cs" Link="upstream/StreamExtension.cs" />
+    <Compile Include="$(Up)/MemoryQueueBufferStream.cs" Link="upstream/MemoryQueueBufferStream.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EdiabasLib.Native.Tests" />
+  </ItemGroup>
+
+  <!-- libkline, built from kline/ and copied beside the assembly. -->
+  <PropertyGroup>
+    <KlineDir>$(MSBuildThisFileDirectory)../../kline</KlineDir>
+    <ZigExe Condition="'$(ZigExe)' == '' And Exists('/opt/homebrew/bin/zig')">/opt/homebrew/bin/zig</ZigExe>
+    <ZigExe Condition="'$(ZigExe)' == ''">zig</ZigExe>
+    <KlineLibName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libkline.dylib</KlineLibName>
+    <KlineLibName Condition="'$(KlineLibName)' == ''">libkline.so</KlineLibName>
+  </PropertyGroup>
+  <Target Name="BuildKline" BeforeTargets="BeforeBuild">
+    <Exec Command="&quot;$(ZigExe)&quot; build -Doptimize=ReleaseSafe" WorkingDirectory="$(KlineDir)" />
+  </Target>
+  <ItemGroup>
+    <None Include="$(KlineDir)/zig-out/lib/$(KlineLibName)" Link="$(KlineLibName)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+</Project>

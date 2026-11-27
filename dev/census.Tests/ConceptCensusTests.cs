@@ -1,0 +1,68 @@
+namespace Census.Tests;
+
+public class ConceptCensusTests
+{
+    [Fact]
+    public void Census_RowsForEveryPrgOnce_NoGrp()
+    {
+        var rows = ConceptCensus.Run(TestFiles.TempCopy("cmd_test1.prg", "cmd_test2.prg", "base1.prg", "base2.prg", "cmd_ident.grp"));
+        Assert.Equal(4, rows.Count);
+        Assert.DoesNotContain(rows, r => r.File.EndsWith(".grp", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("no_xsetpar", rows.Single(r => r.File.Equals("cmd_test1.prg", StringComparison.OrdinalIgnoreCase)).Status);
+    }
+
+    [Fact] // Review Focus 1
+    public void Census_FindsUpperCaseExtension()
+    {
+        var dir = TestFiles.TempCopyAs("cmd_test1.prg", "CMD_TEST1.PRG");
+        Assert.Single(ConceptCensus.Run(dir));
+    }
+
+    [Fact] // Review Focus 2
+    public void Census_CorruptFile_IsErrorRow_AndOthersStillRun()
+    {
+        var dir = TestFiles.TempCopy("cmd_test1.prg");
+        File.WriteAllBytes(Path.Combine(dir, "junk.prg"), new byte[] { 1, 2, 3 });
+        var rows = ConceptCensus.Run(dir);
+        Assert.Equal("error", rows.Single(r => r.File == "junk.prg").Status);
+        Assert.Equal("no_xsetpar", rows.Single(r => r.File.Equals("cmd_test1.prg", StringComparison.OrdinalIgnoreCase)).Status);
+    }
+
+    [Fact] // Review Focus 2: truncated, not just junk
+    public async Task Census_TruncatedFile_IsErrorRow_NotHung()
+    {
+        var dir = TestFiles.TempCopy("cmd_test2.prg");
+        var path = Path.Combine(dir, "cmd_test2.prg");
+        var bytes = File.ReadAllBytes(path);
+        File.WriteAllBytes(path, bytes.Take(bytes.Length / 2).ToArray());
+        var run = Task.Run(() => ConceptCensus.Run(dir));
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(30)); // TimeoutException if it hangs
+        Assert.Equal("error", result.Single().Status);
+    }
+
+    [Fact] // review finding 2: an EDIABAS error must not look like "INIT set nothing"
+    public void Census_EdiabasErrorWithoutParameters_IsJobError_NotNoXsetpar()
+    {
+        var rows = ConceptCensus.Run(TestFiles.TempCopy("cmd_test1.prg"), jobName: "NO_SUCH_JOB");
+        var row = rows.Single();
+        Assert.Equal("job_error", row.Status);
+        Assert.Contains("SYS-0008", row.Error);
+    }
+
+    [Fact]
+    public void Census_CaptureStopWithParameters_IsOk()
+    {
+        var row = ConceptCensus.Run(TestFiles.TempCopy("cmd_test2.prg", "base1.prg", "base2.prg"), jobName: "TEST_IFACE_FLAGS")
+            .Single(r => r.File == "cmd_test2.prg");
+        Assert.Equal("ok", row.Status);
+        Assert.Equal(0x010Fu, row.Concept);
+        Assert.Equal(115200u, row.Baud);
+    }
+
+    [Fact]
+    public void Census_RowsAreInNameOrder()
+    {
+        var rows = ConceptCensus.Run(TestFiles.TempCopy("cmd_test2.prg", "base1.prg", "cmd_test1.prg"));
+        Assert.Equal(new[] { "base1.prg", "cmd_test1.prg", "cmd_test2.prg" }, rows.Select(r => r.File).ToArray());
+    }
+}

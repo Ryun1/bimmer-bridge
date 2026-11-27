@@ -620,6 +620,13 @@ public sealed class EdiabasService
         }
 
         var run = Execute(session, verdict.Ecu!, verdict.Job!, request.Args ?? "", request.Results ?? "", timeout, ct);
+        if (!run.Ok && run.Failure!.Error.Code == ApiErrors.FrameRefused)
+        {
+            // Native engine: the cable layer refused a telegram this job tried to send. The whole
+            // request fails and nothing more is started, whatever the SGBD made of the error.
+            return new ItemRun(new BatchItem(false, null, run.Failure.Error), ecu, job, null, run.Failure);
+        }
+
         if (!run.Ok)
         {
             return Fail(run.Failure!);

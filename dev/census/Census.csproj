@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>Census</RootNamespace>
+    <AssemblyName>census</AssemblyName>
+    <!-- BESTDIS's Program.cs is linked below and has its own Main. -->
+    <StartupObject>Census.Program</StartupObject>
+    <!-- CA2022 (inexact FileStream.Read) fires only in BESTDIS's unmodified Program.cs. -->
+    <NoWarn>$(NoWarn);CA2022</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../engine/EdiabasLib.Native/EdiabasLib.Native.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- BESTDIS (MIT, tacotruck), unmodified, called by reflection from OpcodeCensus. -->
+    <Compile Include="../../third_party/ediabaslib/Tools/BESTDIS/Program.cs" Link="upstream/BESTDIS/Program.cs" />
+  </ItemGroup>
+</Project>

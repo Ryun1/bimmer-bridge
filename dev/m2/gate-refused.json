@@ -1,0 +1,1250 @@
+{
+  "policyVersion": 5,
+  "refused": [
+    {
+      "ecu": "ACSM60",
+      "job": "STATUS_FREIGABE_ZUENDKREISE",
+      "service": "30"
+    },
+    {
+      "ecu": "ACSM60",
+      "job": "STATUS_ZUENDKREISWIDERSTAENDE",
+      "service": "30"
+    },
+    {
+      "ecu": "ACSM60",
+      "job": "STATUS_GURTKONTAKTE",
+      "service": "30"
+    },
+    {
+      "ecu": "ACSM60",
+      "job": "STATUS_BATTERIELEITUNGSDIAGNOSE",
+      "service": "30"
+    },
+    {
+      "ecu": "ACSM60",
+      "job": "STATUS_SPS_FAHRER",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_VERSORGUNGEN",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_AFS_OS",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_SICHERHEIT",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_PHASENSTROEME",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_TEMPERATUREN",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_SZL",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_LWG_WINKELWERTE_PHYSIKALISCH",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_LWG_WINKELWERTE_ABSOLUT",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_MOTORLAGEWINKEL",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_FAHRERLENKWINKEL",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_GESCHWINDIGKEITEN",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_QUERBESCHLEUNIGUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_GIERRATEN",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_DSC_INFO",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_WINKELWERTE",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_PHASENSPANNUNGEN",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_QUALIFIER",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_KLEMMEN_INFO",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_ALIVE_INFO",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_AFS",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_CAN_FEHLER_SIGNALE",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_PTCAN_SIGNALE",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_DYNAMIK",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_ECO_STROM_MA",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_SERVO_STROM_MA",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_GMK",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_SUMMENLENKWINKEL_SENSOR",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_MPC_ERROR_INFO",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_NEC_ERROR_INFO",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_EEPROM_SERIENNUMMER_SZL",
+      "service": "30"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_LWG_QUADRANT_ABFRAGEN",
+      "service": "33"
+    },
+    {
+      "ecu": "AFS_90",
+      "job": "STATUS_AFS_OS_UNTER_NUMMER",
+      "service": "30"
+    },
+    {
+      "ecu": "AHM_E65",
+      "job": "STATUS_DIGITAL",
+      "service": "30"
+    },
+    {
+      "ecu": "AHM_E65",
+      "job": "STATUS_CAN_DISKRET",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_TUNER",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_REG",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_TMC",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_RDS",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_TP",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_ANT_EIGEN_DIAG",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_ANT_FQFS",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_ANT_QFS",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_FREQUENZ",
+      "service": "30"
+    },
+    {
+      "ecu": "ANT_60",
+      "job": "STATUS_ANT_DC",
+      "service": "30"
+    },
+    {
+      "ecu": "ASK_60",
+      "job": "STATUS_GAL",
+      "service": "31"
+    },
+    {
+      "ecu": "ASK_60",
+      "job": "STATUS_LOUDNESS",
+      "service": "31"
+    },
+    {
+      "ecu": "ASK_60",
+      "job": "STATUS_SOFT_CLIPPING",
+      "service": "31"
+    },
+    {
+      "ecu": "ASK_60",
+      "job": "STATUS_DRIVE_MD",
+      "service": "31"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_AKTIVSITZ_AD_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_AKTIVSITZ_SCHALTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_FEH_SCHALTER",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HALL_AD_LBV_KHV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HALL_AD_SHV_SNV_STV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HALL_AD_SLV_LNV_LKV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HALL_AD",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HALL_COUNTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HEIZ_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_KLIMA_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_LORDOSE_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_LP_TEMP_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_LVK",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_SITZPOS_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_SPANNUNG_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_SVS",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_SVS_SBUS",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_NORMIERLAUF",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_HUNG_KEY_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "BFS_PLX",
+      "job": "STATUS_VERSTELLCOUNTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "CAS",
+      "job": "STATUS_CAS_DIAGNOSE",
+      "service": "30"
+    },
+    {
+      "ecu": "CAS",
+      "job": "STATUS_KL15_ABSCHALTUNG",
+      "service": "31"
+    },
+    {
+      "ecu": "CAS",
+      "job": "STATUS_WAKEUP_HISTORY",
+      "service": "31"
+    },
+    {
+      "ecu": "CCC_60",
+      "job": "STATUS_FREISCHALTUNG",
+      "service": "31"
+    },
+    {
+      "ecu": "CID_60",
+      "job": "STATUS_ADC",
+      "service": "30"
+    },
+    {
+      "ecu": "CID_60",
+      "job": "STATUS_PORTS",
+      "service": "30"
+    },
+    {
+      "ecu": "CID_60",
+      "job": "STATUS_PWM",
+      "service": "30"
+    },
+    {
+      "ecu": "CID_60",
+      "job": "STATUS_VSYNC",
+      "service": "30"
+    },
+    {
+      "ecu": "CID_60",
+      "job": "STATUS_TEMP",
+      "service": "30"
+    },
+    {
+      "ecu": "DWA_E65",
+      "job": "STATUS_KLEMME_30",
+      "service": "30"
+    },
+    {
+      "ecu": "DWA_E65",
+      "job": "STATUS_DWA_LED_EIN",
+      "service": "30"
+    },
+    {
+      "ecu": "DWA_E65",
+      "job": "STATUS_SENSOR_EMPFINDLICHKEIT",
+      "service": "30"
+    },
+    {
+      "ecu": "EHC_E65",
+      "job": "STATUS_LEVELUP_LESEN",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_AKTIVSITZ_AD_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_AKTIVSITZ_SCHALTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_FEH_SCHALTER",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HALL_AD_LBV_KHV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HALL_AD_SHV_SNV_STV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HALL_AD_SLV_LNV_LKV_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HALL_AD",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HALL_COUNTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HEIZ_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_KLIMA_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_LORDOSE_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_LP_TEMP_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_LVK",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_SITZPOS_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_SPANNUNG_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_SVS",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_SVS_SBUS",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_NORMIERLAUF",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_HUNG_KEY_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "FAS_PLX",
+      "job": "STATUS_VERSTELLCOUNTER_GET",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_DWG",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_TOEHKK",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_TOEHK",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_KL30",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_PUMPE",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_VENTIL",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_IPUMPE",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_TEL_HKK",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_TEL_TOEHKI",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_VFZG",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_TEMP",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_BATT",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_MILAGE",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_KL50",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_KOMFORT",
+      "service": "30"
+    },
+    {
+      "ecu": "HKL_65_2",
+      "job": "STATUS_COMPLETE",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_HELLIGKEIT",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_STROMWERTE",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_TASTER",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_BACKLIGHT_ENABLE",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_ARRAY_TEMPERATUR",
+      "service": "30"
+    },
+    {
+      "ecu": "HUD_60",
+      "job": "STATUS_BORDNETZSPANNUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_ANALOGEINGAENGE",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_DIGITALEINGAENGE",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_REGLERGROESSEN",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_BEDIENTEIL",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_IO",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_MOTOR_KLAPPENPOSITION",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_FZE",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_ENERGIESPARMODE",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_PTC_VERBAUT",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_ZUSATZLUEFTER_STUFE",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_BOOT_SW_VERSION",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_MOTOR_FEHLER",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_BS_DRUCKSENSOR",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_TINNEN_LUEFTER",
+      "service": "30"
+    },
+    {
+      "ecu": "IHKA60",
+      "job": "STATUS_DRUCKSENSOR_MAX",
+      "service": "30"
+    },
+    {
+      "ecu": "KBM_60",
+      "job": "STATUS_INPUT_DIGITAL_KBM",
+      "service": "30"
+    },
+    {
+      "ecu": "KBM_60",
+      "job": "STATUS_OUTPUT_DIGITAL_KBM",
+      "service": "30"
+    },
+    {
+      "ecu": "KBM_60",
+      "job": "STATUS_INPUT_ANALOG_KBM",
+      "service": "30"
+    },
+    {
+      "ecu": "KBM_60",
+      "job": "STATUS_CFL_150N",
+      "service": "31"
+    },
+    {
+      "ecu": "KBM_60",
+      "job": "STATUS_DENORM_REASON",
+      "service": "31"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_MICROPOWERMODULE",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_DIGITAL_INPUTS",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_ANALOG_INPUTS",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_LICHT",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_SCHALTERBLOCK_TUER",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_SERVOTRONIC",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_ZENTRALVERRIEGELUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_SCHLOSSNUESSE",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_BUSLAST",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_SPIEGEL",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_FENSTERHEBER",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_FH_LOGGER_DENORMIERER",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_FH_LOGGER_REVERSIERER",
+      "service": "30"
+    },
+    {
+      "ecu": "KGM_60",
+      "job": "STATUS_LADERAUMABDECKUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_BETR_H_LM",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_BETR_H_FUNKTIONEN",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_BETR_H_AMPERE",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_DIGITAL_INPUTS",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_ANALOG_INPUTS",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_SZL_VERBUNDEN",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_ZUSATZ_BLINKER",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_XENON_AL_EINSCHALTVERSUCHE",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_GANG_RUECKWAERTS",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_FLC_ALC",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_FAHRZEUGNEIGUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_FASTA_DATEN_LM",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_LAMPEN_KURZSCHLUSS",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_LAMPEN_KURZSCHLUSS_WIEDERHOL_COUNTER",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_LAMPEN_KURZSCHLUSS_COUNTER",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_LAMPEN_KURZSCHLUSS_COUNTER_MAX",
+      "service": "30"
+    },
+    {
+      "ecu": "LM_AHL",
+      "job": "STATUS_REFERENZLAUF_ALC_SYSTEM",
+      "service": "A6"
+    },
+    {
+      "ecu": "NVC_65",
+      "job": "STATUS_SHUTTER_CYCLE",
+      "service": "30"
+    },
+    {
+      "ecu": "NVE_65",
+      "job": "STATUS_TASTER",
+      "service": "30"
+    },
+    {
+      "ecu": "NVE_65",
+      "job": "STATUS_FSC_LESEN",
+      "service": "31"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_TASTER",
+      "service": "30"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_FUNKTIONSANZEIGE",
+      "service": "30"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_WANDLER",
+      "service": "30"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_SPANNUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_AUSSCHWINGZEITEN",
+      "service": "30"
+    },
+    {
+      "ecu": "PDC_65_2",
+      "job": "STATUS_VIA_CAN",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_ERROR",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_WUP_K_BUS",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_NERR_CAN",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL5",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_EN0",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_STB_CAN",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_P_1",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_P_2",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_P_3",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL_0",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL_1",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL_2",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL_3",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL_4",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_ON_FBD",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL6",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_ON_SNT",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_ANALOG_VBAT",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL0",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL1",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL2",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL3",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_RL4",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_NTC",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_I_SEC",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL0",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL1",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL2",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL3",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL4",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL5",
+      "service": "30"
+    },
+    {
+      "ecu": "PGS_65_2",
+      "job": "STATUS_DIGITAL_S_RL6",
+      "service": "30"
+    },
+    {
+      "ecu": "SD_KWP",
+      "job": "STATUS_BATTERIESPANNUNG",
+      "service": "31"
+    },
+    {
+      "ecu": "SD_KWP",
+      "job": "STATUS_MOTORTEMPERATUR",
+      "service": "31"
+    },
+    {
+      "ecu": "SD_KWP",
+      "job": "STATUS_FREISCHALTUNG",
+      "service": "31"
+    },
+    {
+      "ecu": "SZM_60",
+      "job": "STATUS_TASTEN_SZM",
+      "service": "30"
+    },
+    {
+      "ecu": "SZM_60",
+      "job": "STATUS_TASTEN_SVS_LINKS_E60",
+      "service": "30"
+    },
+    {
+      "ecu": "SZM_60",
+      "job": "STATUS_TASTEN_SVS_RECHTS_E60",
+      "service": "30"
+    },
+    {
+      "ecu": "SZM_60",
+      "job": "STATUS_AD_WERTE_SZM",
+      "service": "30"
+    },
+    {
+      "ecu": "SZM_60",
+      "job": "STATUS_LSM_HAL_INPUT",
+      "service": "30"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_SELBSTTEST_WERKSTATT_VM",
+      "service": "33"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_ANTENNENSPANNUNG",
+      "service": "30"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_TESTBILD",
+      "service": "33"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_ANTENNE_1_FELDSTAERKE",
+      "service": "30"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_ANTENNE_2_FELDSTAERKE",
+      "service": "30"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_ANTENNE_3_FELDSTAERKE",
+      "service": "30"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_ANTENNEN_SIGNAL_DIGITAL",
+      "service": "33"
+    },
+    {
+      "ecu": "VID_65_2",
+      "job": "STATUS_VIDEOSIGNALPRUEFUNG",
+      "service": "33"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_KL_30",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_SLIDE_SWITCH",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_BUTTON_SWITCH",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_MOTOR_CURRENT",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_MOTOR_PWM",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_ENCODER",
+      "service": "30"
+    },
+    {
+      "ecu": "ZBEH60",
+      "job": "STATUS_ENCODER_POSITION",
+      "service": "30"
+    }
+  ],
+  "unscreened": [
+    {
+      "ecu": "GS19B",
+      "reason": "INITIALISIERUNG sends first (gate: let_through, frame 8218F11A8025)"
+    },
+    {
+      "ecu": "N62_TUE",
+      "reason": "INITIALISIERUNG sends first (gate: let_through, frame 8212F11A801F)"
+    },
+    {
+      "ecu": "RLS_E65",
+      "reason": "INITIALISIERUNG sends first (gate: let_through, frame 8245F11A8052)"
+    },
+    {
+      "ecu": "SZL_60",
+      "reason": "INITIALISIERUNG sends first (gate: let_through, frame 8202F11A800F)"
+    },
+    {
+      "ecu": "D_MOTOR",
+      "reason": "group or unreadable: _JOBS failed (Error occurred: EDIABAS_IFH_0003); its identification telegram: let_through"
+    },
+    {
+      "ecu": "D_PGS",
+      "reason": "group or unreadable: _JOBS failed (Error occurred: EDIABAS_IFH_0003); its identification telegram: let_through"
+    },
+    {
+      "ecu": "D_KBM",
+      "reason": "group or unreadable: _JOBS failed (Error occurred: EDIABAS_IFH_0003); its identification telegram: let_through"
+    }
+  ]
+}

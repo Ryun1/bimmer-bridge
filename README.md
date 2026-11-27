@@ -17,7 +17,7 @@ Expert, WinKFP) and EDIABAS talk to the car over a K+DCAN cable. A small agent i
 > before you act on it. It is not a substitute for a qualified mechanic or for BMW's own tools.
 > The authors accept no liability for damage, loss or cost of any kind from using it. This
 > project is not affiliated with or endorsed by BMW AG; BMW, EDIABAS, INPA and the other names
-> are their owners' trademarks. See also the [MIT license](LICENSE).
+> are their owners' trademarks. See also the [licence](LICENSE) (GPL-3.0).
 
 ## What it does and does not do
 
@@ -110,4 +110,7 @@ Personal settings stay out of the repo: the VM's name or MAC go in the git-ignor
 
 ## License
 
-[MIT](LICENSE). It covers this repo's code and docs only, not BMW's software or SGBD files.
+[GPL-3.0](LICENSE) (GPL-3.0-only). It covers this repo's code and docs only, not BMW's software
+or SGBD files. Versions up to 0.6.2 were released under MIT, and those releases stay MIT. The
+repo moved to GPL-3.0 because the native engine (`engine/`) links
+[EdiabasLib](https://github.com/uholeschak/ediabaslib), which is GPL-3.0.

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The VM side of the M1 coverage comparison: runs dev/coverage/jobs.json through real
+       EDIABAS (api32.dll) in the Windows VM. Run by Ryan at the VM's desktop, never over SSH,
+       with the cable in the VM but not in the car. A dev tool only: it declares apiInitExt,
+       apiSetConfig, apiJobData and apiJobExt, which the VM agent deliberately never does. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>win-x86</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AssemblyName>CoverageVm</AssemblyName>
+    <RootNamespace>CoverageVm</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../coverage/CoverageModel.cs" Link="CoverageModel.cs" />
+    <Compile Include="../../vm-agent/EdiabasAgent.Core/Win1252.cs" Link="Win1252.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ediabasd-net/Ediabasd.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../EdiabasLib.Native.Tests/TestPaths.cs" Link="TestPaths.cs" />
+    <Compile Include="../EdiabasLib.Native.Tests/Recordings.cs" Link="Recordings.cs" />
+    <Compile Include="../EdiabasLib.Native.Tests/MixedCaseSgbd.cs" Link="MixedCaseSgbd.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

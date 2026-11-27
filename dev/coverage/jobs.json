@@ -1,0 +1,1133 @@
+{
+ "comment": "Upstream's coverage.bat (third_party/ediabaslib/EdiabasLib/Test/Scripts/coverage.bat, lines 89-160): the runs on its own test SGBDs only, for the M1 comparison of real EDIABAS (dev/coverage-vm) and ediabasd's engine (dev/coverage). Each run is a fresh process/instance; its jobs run in order on it. Job strings: job#args#results#stdargs#sgbd, an argument starting | is hex binary. Left out: the runs on BMW SGBDs (d_motor, d_ccc, tmode, ...), and TEST_TIME_FLAGS (line 101), whose argument is the current time. The two 'for' loops are expanded. --alltypes is not carried (it prints API conversions, not EdiabasNet's values).",
+ "runs": [
+  {
+   "run": "results10",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_SHMID#ARGS##STDARGS",
+    "_JOBS",
+    "TEST_SREG",
+    "TEST_MATH",
+    "TEST_PARY#|12131415A1A2A3A4A5",
+    "TEST_PARY#|",
+    "TEST_PARL# -5",
+    "TEST_PARL#0x10 ",
+    "TEST_PARL#0y011001 ",
+    "TEST_PARR# 123.45 ",
+    "TEST_FILES",
+    "TEST_PROGRESS_INFO"
+   ]
+  },
+  {
+   "run": "results11",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###STDARG1",
+    "_JOBS",
+    "TEST_SUBB_FLAGS",
+    "TEST_SHMID",
+    "TEST_SUBC_FLAGS",
+    "TEST_SHMID",
+    "TEST_ADDS_FLAGS",
+    "TEST_ADDC_FLAGS",
+    "TEST_COMP_FLAGS",
+    "TEST_MULT_FLAGS",
+    "TEST_DIVS_FLAGS",
+    "TEST_LSL_FLAGS",
+    "TEST_ASL_FLAGS",
+    "TEST_LSR_FLAGS",
+    "TEST_ASR_FLAGS",
+    "TEST_AND_FLAGS",
+    "TEST_OR_FLAGS",
+    "TEST_XOR_FLAGS",
+    "TEST_TEST_FLAGS",
+    "TEST_NOT_FLAGS",
+    "TEST_FSUB_FLAGS",
+    "TEST_FADD_FLAGS",
+    "TEST_FMUL_FLAGS",
+    "TEST_FDIV_FLAGS",
+    "TEST_FCOMP_FLAGS",
+    "TEST_PAR_FLAGS#hallo;10;3.5",
+    "TEST_PAR_FLAGS#;;",
+    "TEST_PAR_FLAGS",
+    "TEST_CLEAR_FLAGS",
+    "TEST_TABLE_FLAGS",
+    "TEST_CFG_FLAGS",
+    "TEST_ERROR_FLAGS",
+    "TEST_IFACE_FLAGS",
+    "TEST_SHMID",
+    "TEST_BASE1_TABLE1",
+    "TEST_SHMID",
+    "TEST_BASE1_TABLE2",
+    "TEST_SHMID",
+    "TEST_BASE2_TABLE1",
+    "TEST_SHMID",
+    "TEST_BASE2_TABLE2",
+    "TEST_SHMID",
+    "TEST_ERGSYI_FLAGS#!INITIALISIERUNG;1",
+    "TEST_SHMID",
+    "TEST_ERGSYI_FLAGS#!INITIALISIERUNG;0",
+    "TEST_SHMID",
+    "TEST_ERGSYI_FLAGS#!INITIALISIERUNG;1",
+    "TEST_SHMID###STDARG2",
+    "TEST_ERGSYI_FLAGS#!INITIALISIERUNG;2",
+    "TEST_SHMID",
+    "TEST_ERGSYI_FLAGS#!INITIALISIERUN;1",
+    "TEST_SHMID"
+   ],
+   "note": "TEST_IFACE_FLAGS reaches the interface: the VM has a real IFH, the Mac an empty replay"
+  },
+  {
+   "run": "results12",
+   "sgbd": "cmd_ident",
+   "jobs": [
+    "TEST_SHMID#ARGS##STDARGS",
+    "TEST_SHMID#ARGS##STDARGS"
+   ]
+  },
+  {
+   "run": "results13",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "_VERSIONINFO",
+    "_JOBS",
+    "_JOBCOMMENTS#INITIALISIERUNG"
+   ]
+  },
+  {
+   "run": "results14",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "_VERSIONINFO",
+    "_JOBS",
+    "_JOBCOMMENTS#INITIALISIERUNG",
+    "_JOBCOMMENTS#MISSING",
+    "_JOBCOMMENTS",
+    "TEST_SHMID###STDARG1"
+   ],
+   "config": {
+    "SystemResults": "0"
+   }
+  },
+  {
+   "run": "results15",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_DIVS_ZERO"
+   ]
+  },
+  {
+   "run": "results16",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_A2FIX_FLAGS#0xabcd",
+    "TEST_A2FIX_FLAGS#0y110011",
+    "TEST_A2FIX_FLAGS#1234",
+    "TEST_A2FIX_FLAGS#12.34",
+    "TEST_A2FIX_FLAGS#12.78",
+    "TEST_A2FIX_FLAGS#1234,567",
+    "TEST_A2FIX_FLAGS#0",
+    "TEST_A2FIX_FLAGS#-5",
+    "TEST_A2FIX_FLAGS#0xFFFFFFFFF",
+    "TEST_A2FIX_FLAGS#-123456789123456789",
+    "TEST_A2FIX_FLAGS#123456789123456789",
+    "TEST_A2FIX_FLAGS#invalid"
+   ]
+  },
+  {
+   "run": "results17_1",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###INIT_EXCEPTION1"
+   ]
+  },
+  {
+   "run": "results17_2",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "INITIALISIERUNG###INIT_EXCEPTION2"
+   ]
+  },
+  {
+   "run": "results17_3",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "INITIALISIERUNG#INIT_EXCEPTION1"
+   ]
+  },
+  {
+   "run": "results17_4",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "INITIALISIERUNG#INIT_EXCEPTION1##INIT_EXCEPTION2"
+   ]
+  },
+  {
+   "run": "results17_5",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###EXIT_EXCEPTION",
+    "TEST_SHMID###EXIT_EXCEPTION#cmd_test1.prg"
+   ]
+  },
+  {
+   "run": "results17_6",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###",
+    "TEST_SHMID###EXIT_EXCEPTION#cmd_test1.prg"
+   ]
+  },
+  {
+   "run": "results17_7",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###EXIT_EXCEPTION",
+    "TEST_SHMID####cmd_test1.prg"
+   ]
+  },
+  {
+   "run": "results17_8",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###BOTH_EXCEPTION",
+    "TEST_SHMID###BOTH_EXCEPTION#cmd_test1.prg"
+   ]
+  },
+  {
+   "run": "results17_9",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "INITIALISIERUNG###BOTH_EXCEPTION",
+    "INITIALISIERUNG####cmd_test1.prg"
+   ]
+  },
+  {
+   "run": "results17_10",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "TEST_SHMID###INIT_ERROR"
+   ]
+  },
+  {
+   "run": "results17_11",
+   "sgbd": "cmd_test2",
+   "jobs": [
+    "INITIALISIERUNG###INIT_ERROR"
+   ]
+  },
+  {
+   "run": "results18_1",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#2"
+   ]
+  },
+  {
+   "run": "results18_2",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#3"
+   ]
+  },
+  {
+   "run": "raise_error_0",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#0"
+   ]
+  },
+  {
+   "run": "raise_error_1",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#1"
+   ]
+  },
+  {
+   "run": "raise_error_2",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#2"
+   ]
+  },
+  {
+   "run": "raise_error_3",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#3"
+   ]
+  },
+  {
+   "run": "raise_error_4",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#4"
+   ]
+  },
+  {
+   "run": "raise_error_5",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#5"
+   ]
+  },
+  {
+   "run": "raise_error_6",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#6"
+   ]
+  },
+  {
+   "run": "raise_error_7",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#7"
+   ]
+  },
+  {
+   "run": "raise_error_8",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#8"
+   ]
+  },
+  {
+   "run": "raise_error_9",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#9"
+   ]
+  },
+  {
+   "run": "raise_error_10",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#10"
+   ]
+  },
+  {
+   "run": "raise_error_11",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#11"
+   ]
+  },
+  {
+   "run": "raise_error_12",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#12"
+   ]
+  },
+  {
+   "run": "raise_error_13",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#13"
+   ]
+  },
+  {
+   "run": "raise_error_14",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#14"
+   ]
+  },
+  {
+   "run": "raise_error_15",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#15"
+   ]
+  },
+  {
+   "run": "raise_error_16",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#16"
+   ]
+  },
+  {
+   "run": "raise_error_17",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#17"
+   ]
+  },
+  {
+   "run": "raise_error_18",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#18"
+   ]
+  },
+  {
+   "run": "raise_error_19",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#19"
+   ]
+  },
+  {
+   "run": "raise_error_20",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#20"
+   ]
+  },
+  {
+   "run": "raise_error_21",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#21"
+   ]
+  },
+  {
+   "run": "raise_error_22",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#22"
+   ]
+  },
+  {
+   "run": "raise_error_23",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#23"
+   ]
+  },
+  {
+   "run": "raise_error_24",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#24"
+   ]
+  },
+  {
+   "run": "raise_error_25",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#25"
+   ]
+  },
+  {
+   "run": "raise_error_26",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#26"
+   ]
+  },
+  {
+   "run": "raise_error_27",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#27"
+   ]
+  },
+  {
+   "run": "raise_error_28",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#28"
+   ]
+  },
+  {
+   "run": "raise_error_29",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#29"
+   ]
+  },
+  {
+   "run": "raise_error_30",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#30"
+   ]
+  },
+  {
+   "run": "raise_error_31",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#31"
+   ]
+  },
+  {
+   "run": "raise_error_32",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_ERROR#32"
+   ]
+  },
+  {
+   "run": "results20",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_MULTIARG#3;-4;10000;-10000;100000;-100000;0.001345;Ulrich;Erwin",
+    "TEST_MULTIARG#;-4;z;-10000;100000;-100000;0.001345; ;Erwin"
+   ],
+   "formats": [
+    "ERGB=W",
+    "ERGB=6.4W",
+    "ERGB=-6.4W",
+    "ERGB=-.4W",
+    "ERGB=8.W",
+    "ERGB=-.W",
+    "ERGC=I",
+    "ERGC=6.4I",
+    "ERGC=-6.4I",
+    "ERGW=D",
+    "ERGW=6.4D",
+    "ERGW=-6.4D",
+    "ERGI=6.4L",
+    "ERGI=-6.4L",
+    "ERGD=D",
+    "ERGD=6.4D",
+    "ERGD=-6.4D",
+    "ERGD=6.4B",
+    "ERGD=6.4C",
+    "ERGL=6.4L",
+    "ERGL=-6.4L",
+    "ERGL=-6.4B",
+    "ERGL=-6.4C",
+    "ERGR=R",
+    "ERGR=10.5R",
+    "ERGR=-10.5R",
+    "ERGR=10.5ER",
+    "ERGR=-10.5eR",
+    "ERGR=-.5R",
+    "ERGR=-8.R",
+    "ERGR=8.ER",
+    "ERGR=0.3R",
+    "ERGR=3.0R",
+    "ERGR= 3 . 0 R ",
+    "ERGS=10.4T",
+    "ERGS=-10.4T",
+    "ERGS=10.8T",
+    "ERGS=0.8T",
+    "ERGS= 0 . 8 T",
+    "ERGS=T",
+    "Ergs=T",
+    "ERGS= ",
+    "ERGS=  "
+   ]
+  },
+  {
+   "run": "results21",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_MULTIARG#-30;40;-12345;12345;-123456;123456;-13.45;Ulrich Test;Erwin"
+   ],
+   "formats": [
+    "ERGB=W",
+    "ERGB=6.4W",
+    "ERGB=-6.4W",
+    "ERGB=-.4W",
+    "ERGB=8.W",
+    "ERGB=-.W",
+    "ERGC=I",
+    "ERGC=6.4I",
+    "ERGC=-6.4I",
+    "ERGW=D",
+    "ERGW=6.4D",
+    "ERGW=-6.4D",
+    "ERGW=X",
+    "ERGW=-X",
+    "ERGW=0X",
+    "ERGW=06X",
+    "ERGW=-6X",
+    "ERGW=6X",
+    "ERGW=3.2X",
+    "ERGW=",
+    "ERGW=T",
+    "ERGI=6.4L",
+    "ERGI=-6.4L",
+    "ERGD=D",
+    "ERGD=6.4D",
+    "ERGD=-6.4D",
+    "ERGD=6.4B",
+    "ERGD=6.4C",
+    "ERGL=6.4L",
+    "ERGL=-6.4L",
+    "ERGL=-6.4B",
+    "ERGL=-6.4C",
+    "ERGL= - 6 . 4 C ",
+    "ERGR=R",
+    "ERGR=10.5R",
+    "ERGR=-10.5R",
+    "ERGR=10.5ER",
+    "ERGR=-10.5eR",
+    "ERGR=-.5R",
+    "ERGR=-8.R",
+    "ERGR=8.ER",
+    "ERGR=0.3R",
+    "ERGR=3.0R",
+    "ERGR=08X",
+    "ERGR=",
+    "ERGR=T",
+    "ERGS=10.4T",
+    "ERGS=-10.4T",
+    "ERGS=10.8T",
+    "ERGS=0.8T",
+    "ERGS= 0 . 8 T",
+    "ERGS=T",
+    "Ergs=T",
+    "ERGS= ",
+    "ERGS=  "
+   ]
+  },
+  {
+   "run": "results22",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_MULTIARG#3;-4;10000;-10000;100000;-100000;12.3456789123;Ulrich;Erwin"
+   ],
+   "formats": [
+    "ERGB=W",
+    "ERGB=6.4W",
+    "ERGB=-6.4W",
+    "ERGB=-.4W",
+    "ERGB=8.W",
+    "ERGB=-.W",
+    "ERGC=I",
+    "ERGC=6.4I",
+    "ERGC=-6.4I",
+    "ERGW=D",
+    "ERGW=6.4D",
+    "ERGW=-6.4D",
+    "ERGI=6.4L",
+    "ERGI=-6.4L",
+    "ERGD=D",
+    "ERGD=6.4D",
+    "ERGD=-6.4D",
+    "ERGD=6.4B",
+    "ERGD=6.4C",
+    "ERGL=6.4L",
+    "ERGL=-6.4L",
+    "ERGL=-6.4B",
+    "ERGL=-6.4C",
+    "ERGR=R",
+    "ERGR=10.5R",
+    "ERGR=-10.5R",
+    "ERGR=10.5ER",
+    "ERGR=-10.5eR",
+    "ERGR=-.5R",
+    "ERGR=-8.R",
+    "ERGR=8.ER",
+    "ERGR=0.3R",
+    "ERGR=3.0R",
+    "ERGS=10.4T",
+    "ERGS=-10.4T",
+    "ERGS=10.8T",
+    "ERGS=0.8T",
+    "ERGS= 0 . 8 T",
+    "ERGS=T",
+    "Ergs=T",
+    "ERGS= ",
+    "ERGS=  "
+   ]
+  },
+  {
+   "run": "results23",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_MULTIARG#-15;-15;-15;-15;-15;-15;-15;-15;-15",
+    "TEST_MULTIARG#14;14;14;14;14;14;14;14;14",
+    "TEST_MULTIARG#0xABCD;0xABCD;0xABCD;0xABCD;0xABCD;0xABCD;0xABCD;0xABCD;0xABCD",
+    "TEST_MULTIARG#14.7;14.7;14.7;14.7;14.7;14.7;14.7;14.7;14.7",
+    "TEST_MULTIARG#-13.6;-13.6;-13.6;-13.6;-13.6;-13.6;-13.6;-13.6;-13.6",
+    "TEST_MULTIARG#xyz;xyz;xyz;xyz;xyz;xyz;xyz;xyz;xyz"
+   ],
+   "formats": [
+    "ERGS=C",
+    "ERGS=B",
+    "ERGS=I",
+    "ERGS=W",
+    "ERGS=L",
+    "ERGS=D",
+    "ERGS=R",
+    "ERGS=T",
+    "ERGS=X"
+   ]
+  },
+  {
+   "run": "results30",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "MISSING"
+   ]
+  },
+  {
+   "run": "results31",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_BIP1"
+   ]
+  },
+  {
+   "run": "results32",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_BIP10"
+   ]
+  },
+  {
+   "run": "results33",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_BREAK"
+   ]
+  },
+  {
+   "run": "results34",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#249"
+   ]
+  },
+  {
+   "run": "results35",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#250"
+   ]
+  },
+  {
+   "run": "results36",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#349"
+   ]
+  },
+  {
+   "run": "results37",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#350"
+   ]
+  },
+  {
+   "run": "runtimeerr_351",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#351"
+   ]
+  },
+  {
+   "run": "runtimeerr_352",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#352"
+   ]
+  },
+  {
+   "run": "runtimeerr_353",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#353"
+   ]
+  },
+  {
+   "run": "runtimeerr_354",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#354"
+   ]
+  },
+  {
+   "run": "runtimeerr_355",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#355"
+   ]
+  },
+  {
+   "run": "runtimeerr_356",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#356"
+   ]
+  },
+  {
+   "run": "runtimeerr_357",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#357"
+   ]
+  },
+  {
+   "run": "runtimeerr_358",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#358"
+   ]
+  },
+  {
+   "run": "runtimeerr_359",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#359"
+   ]
+  },
+  {
+   "run": "runtimeerr_360",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#360"
+   ]
+  },
+  {
+   "run": "runtimeerr_361",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#361"
+   ]
+  },
+  {
+   "run": "runtimeerr_362",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#362"
+   ]
+  },
+  {
+   "run": "runtimeerr_363",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#363"
+   ]
+  },
+  {
+   "run": "runtimeerr_364",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#364"
+   ]
+  },
+  {
+   "run": "runtimeerr_365",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#365"
+   ]
+  },
+  {
+   "run": "runtimeerr_366",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#366"
+   ]
+  },
+  {
+   "run": "runtimeerr_367",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#367"
+   ]
+  },
+  {
+   "run": "runtimeerr_368",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#368"
+   ]
+  },
+  {
+   "run": "runtimeerr_369",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#369"
+   ]
+  },
+  {
+   "run": "runtimeerr_370",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#370"
+   ]
+  },
+  {
+   "run": "runtimeerr_371",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#371"
+   ]
+  },
+  {
+   "run": "runtimeerr_372",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#372"
+   ]
+  },
+  {
+   "run": "runtimeerr_373",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#373"
+   ]
+  },
+  {
+   "run": "runtimeerr_374",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#374"
+   ]
+  },
+  {
+   "run": "runtimeerr_375",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#375"
+   ]
+  },
+  {
+   "run": "runtimeerr_376",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#376"
+   ]
+  },
+  {
+   "run": "runtimeerr_377",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#377"
+   ]
+  },
+  {
+   "run": "runtimeerr_378",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#378"
+   ]
+  },
+  {
+   "run": "runtimeerr_379",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#379"
+   ]
+  },
+  {
+   "run": "runtimeerr_380",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#380"
+   ]
+  },
+  {
+   "run": "runtimeerr_381",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#381"
+   ]
+  },
+  {
+   "run": "runtimeerr_382",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#382"
+   ]
+  },
+  {
+   "run": "runtimeerr_383",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#383"
+   ]
+  },
+  {
+   "run": "runtimeerr_384",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#384"
+   ]
+  },
+  {
+   "run": "runtimeerr_385",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#385"
+   ]
+  },
+  {
+   "run": "runtimeerr_386",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#386"
+   ]
+  },
+  {
+   "run": "runtimeerr_387",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#387"
+   ]
+  },
+  {
+   "run": "runtimeerr_388",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#388"
+   ]
+  },
+  {
+   "run": "runtimeerr_389",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#389"
+   ]
+  },
+  {
+   "run": "runtimeerr_390",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#390"
+   ]
+  },
+  {
+   "run": "runtimeerr_391",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#391"
+   ]
+  },
+  {
+   "run": "runtimeerr_392",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#392"
+   ]
+  },
+  {
+   "run": "runtimeerr_393",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#393"
+   ]
+  },
+  {
+   "run": "runtimeerr_394",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#394"
+   ]
+  },
+  {
+   "run": "runtimeerr_395",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#395"
+   ]
+  },
+  {
+   "run": "runtimeerr_396",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#396"
+   ]
+  },
+  {
+   "run": "runtimeerr_397",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#397"
+   ]
+  },
+  {
+   "run": "runtimeerr_398",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#398"
+   ]
+  },
+  {
+   "run": "runtimeerr_399",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#399"
+   ]
+  },
+  {
+   "run": "runtimeerr_400",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#400"
+   ]
+  },
+  {
+   "run": "runtimeerr_401",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#401"
+   ]
+  },
+  {
+   "run": "runtimeerr_402",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#402"
+   ]
+  },
+  {
+   "run": "runtimeerr_403",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#403"
+   ]
+  },
+  {
+   "run": "runtimeerr_404",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#404"
+   ]
+  },
+  {
+   "run": "runtimeerr_405",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#405"
+   ]
+  },
+  {
+   "run": "runtimeerr_406",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#406"
+   ]
+  },
+  {
+   "run": "runtimeerr_407",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#407"
+   ]
+  },
+  {
+   "run": "runtimeerr_408",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#408"
+   ]
+  },
+  {
+   "run": "runtimeerr_409",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#409"
+   ]
+  },
+  {
+   "run": "runtimeerr_410",
+   "sgbd": "cmd_test1",
+   "jobs": [
+    "TEST_RAISE_RUNTIMEERR#410"
+   ]
+  }
+ ]
+}

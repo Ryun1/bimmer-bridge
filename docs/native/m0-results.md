@@ -1,0 +1,381 @@
+# Native engine M0: desk session results
+
+Plan: [M0 plan](../superpowers/plans/2026-11-22-native-engine-m0.md). Design:
+[native engine](../superpowers/specs/2026-11-22-native-engine-design.md), "Milestones and
+acceptance", M0.
+
+M0 answers, without the car, the questions that decide M1 and M3: which protocol concepts the
+SGBDs use, whether any unimplemented opcode occurs, whether real EDIABAS runs INIT for `_JOBS`,
+and whether the K+DCAN cable can be opened, locked and configured from macOS and Linux.
+
+**Nothing in this session touches the car.** The cable is unplugged from the car throughout.
+`kline loopback` needs a bench 12 V supply, never a car. `EDIABAS.INI` is edited by Ryan by
+hand only (safety rule 8).
+
+Who does what: Ryan does sections 1 and 4–8. Claude runs sections 2–3 once `~/ediabas-ecu`
+exists and fills in their tables (counts and names, never SGBD contents). Section 9 is decided
+together. The census JSON stays outside the repo; whether to commit a copy is Ryan's call.
+
+Status: **M0 closed (2026-11-22).** Sections 1–5 and 9 done; section 6 deferred to the start of M2 (no bench supply); section 7's tests pass on Linux in a container, and Linux hardware support is deferred (Ryan, 2026-11-22); section 8 skipped.
+
+---
+
+## 1. SGBD copy (Ryan)
+
+Copy `C:\EDIABAS\Ecu` from the VM to `~/ediabas-ecu` on the Mac, for example through a UTM
+shared folder. Then compare counts and hashes on both sides.
+
+Mac:
+```sh
+ls ~/ediabas-ecu | wc -l
+shasum -a 256 ~/ediabas-ecu/E60.prg ~/ediabas-ecu/NVE_65.prg ~/ediabas-ecu/TMODE.prg
+```
+(The Mac lookup is case-insensitive in the tools, but `shasum` needs the names as they are on
+disk; use `ls ~/ediabas-ecu | grep -i -E '^(e60|nve_65|tmode)\.prg$'` if they differ.)
+
+VM (PowerShell):
+```powershell
+(Get-ChildItem C:\EDIABAS\Ecu -File).Count
+Get-FileHash C:\EDIABAS\Ecu\E60.prg,C:\EDIABAS\Ecu\NVE_65.prg,C:\EDIABAS\Ecu\TMODE.prg
+```
+
+Done 2026-11-22. Explorer's copy over UTM's WebDAV share stalled part-way, so the folder was
+zipped in the VM, the single zip copied across, and unzipped to `~/ediabas-ecu/Ecu` (the
+census runs on that path). The stalled copy left two hidden WebDAV temp files (`.goutputstream-*`)
+beside the SGBDs; they are not counted below and the census ignores them.
+
+| | Mac | VM | Match |
+|---|---|---|---|
+| File count | 1,604 | 1,604 | yes |
+| `E60.prg` SHA-256 | `e5a6ac53ac56f825ef0efe579806aac508d73ff05e2d605b3bcfd5d51d4a44c4` | same | yes |
+| `NVE_65.prg` SHA-256 | `bdabfdde5df1d7e513de111e5205071bf967ba7b3477a2b706869370112a8b48` | same | yes |
+| `TMODE.prg` SHA-256 | `4aa6c73c780e1cf299720124dce9140eac3f210877cb262e428ebe3f6dc5b3a9` | same | yes |
+
+## 2. Concept census (Claude, after section 1)
+
+Runs each `.prg`'s `INITIALISIERUNG` against an in-memory capture interface that records the
+`xsetpar` parameters and stops at the first call that would send anything. Nothing opens a
+port.
+
+```sh
+dotnet run --project dev/census -- concepts ~/ediabas-ecu --json ~/ediabas-ecu-census.json
+```
+
+Run 2026-11-22 on Ryan's folder (`~/ediabas-ecu/Ecu`, 1,251 `.prg`), JSON at
+`~/ediabas-ecu-census.json` (outside the repo).
+
+Tally (concept → files, bauds):
+
+| Concept | Name | Files | Bauds |
+|---|---|---|---|
+| 0x010F | BMW-FAST | 501 | 115200 |
+| 0x0006 | DS2 | 367 | 9600 |
+| 0x0110 | D-CAN | 243 | 500000 |
+| 0x0001 | concept 1 (5-baud init; out of scope) | 47 | 9600 |
+| 0x0002 | concept 2, ISO 9141 / KWP1281 (5-baud init; out of scope) | 32 | 0, 4800 |
+| 0x010D | KWP2000\* | 28 | 9600 |
+| 0x0005 | DS1 | 10 | 0, 9600 |
+| 0x0003 | concept 3 (5-baud init; out of scope): `IHKA`, `IHKA31` | 2 | 0 |
+| 0x010C | KWP2000 BMW (fast init): `mrrbt` only | 1 | 10400 |
+| 0x000E | not implemented in EdiabasLib (IFH-0014): `ZUHEIZ_B` | 1 | 9600 |
+| 0x000F | not implemented in EdiabasLib (IFH-0014): `asc_l22` | 1 | 10400 |
+| `no_xsetpar` | INIT set no parameters: tool and utility SGBDs (`TMODE`, `UTILITY`, `ADS`, `EDIC`, `FA`, `GRPLISTE`, `IFR`, …) | 17 | |
+| `job_error` | an EDIABAS error ended INIT before it set any: concept unknown, look at each | 0 | |
+| `error` | could not be resolved or parsed: `00MDS410.prg`, a 2-byte file (also 2 bytes in the zip made from the VM's folder, dated 2014) | 1 | |
+| **total** | | **1,251** | |
+
+The folder is the whole EDIABAS SGBD set, not only this car's modules, so the tally covers every
+BMW of the era. The modules in [at-the-car.md](../at-the-car.md):
+
+| SGBD | Status | Concept | Baud | Parameters |
+|---|---|---|---|---|
+| `NVE_65` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 800, 20, 10, 2, 5000 |
+| `E60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `CAS` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `LM_60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1400, 20, 10, 2, 5000 |
+| `N62_TUE2` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `ME9N62_2` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `GS19D` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 1200, 20, 10, 2, 5000 |
+| `SZL_60` | ok | 0x010F BMW-FAST | 115200 | 271, 115200, 800, 20, 10, 2, 5000 |
+| `D_MOTOR` (group) | not run: a group resolves to its variant only at the car | | | |
+
+Concept numbers, for reading the tally: 0x0006 DS2, 0x010C KWP2000 BMW (fast init), 0x010D
+KWP2000\*, 0x010F BMW-FAST, 0x0110 D-CAN.
+
+**Decision: does any SGBD use 0x010C (KWP2000 BMW, fast init)?** One file only, `mrrbt.prg`,
+which is not one of this car's modules. Every module listed for the E61 is BMW-FAST at
+115200. Proposed: fast init drops out of M2, and section 8 (break width) is not needed.
+
+The first run counted 1,169 `no_xsetpar`, because the capture interface stopped at `xstopf`,
+which nearly every BMW INIT calls before `xsetpar`. On K+DCAN, `xstopf` only stops EdiabasLib's
+own comm thread and sends nothing (`EdInterfaceObd.cs:2179-2222`), so the capture interface
+now records it and carries on. The figures above are from the corrected run.
+
+### Dry run on upstream test SGBDs (2026-11-22)
+
+On a scratch copy of only `cmd_test1.prg`, `cmd_test2.prg`, `base1.prg`, `base2.prg` and
+`cmd_ident.grp` (upstream's BMW-derived test files were not used). None of these files' INIT
+jobs sets parameters, so every row is `no_xsetpar`, and the `.grp` is correctly skipped. Exit
+code 0.
+
+```
+FILE                     STATUS     CONCEPT  BAUD    PARAMS
+base1.prg                no_xsetpar -        -
+base2.prg                no_xsetpar -        -
+cmd_test1.prg            no_xsetpar -        -
+cmd_test2.prg            no_xsetpar -        -
+
+TALLY
+no_xsetpar       4
+total            4
+```
+
+## 3. Opcode census (Claude, after section 1)
+
+Disassembles every `.prg` and `.grp` with upstream's BESTDIS (from a temporary copy, so nothing
+is written into the Ecu folder) and flags EdiabasLib's 16 unimplemented opcodes: `jtsr`, `ret`,
+`tosp`, `xdownl`, `xstoptr`, `xsendr`, `xrecv`, `xinfo`, `xparraw`, `pcall`, `xopen`, `xclose`,
+`xcloseex`, `xswitch`, `xsendex`, `xrecvex`.
+
+```sh
+dotnet run --project dev/census -- opcodes ~/ediabas-ecu
+```
+
+Run 2026-11-22 on `~/ediabas-ecu/Ecu` (2 min 36 s); JSON at `~/ediabas-ecu-opcodes.json`.
+
+| | Result |
+|---|---|
+| Files disassembled | 1,603 of 1,604 (1,251 `.prg`, 353 `.grp`); 146 distinct mnemonics, 90,289,714 instructions |
+| Errors (file: reason) | `00MDS410.prg`: 2 bytes, shorter than the header |
+| Unimplemented opcodes found (file: mnemonic) | none |
+
+**Decision: none, or a list of opcodes for M3:** none. No SGBD in the folder uses any of
+EdiabasLib's 16 unimplemented opcodes.
+
+### Dry run on upstream test SGBDs (2026-11-22)
+
+Same five files. 143 distinct mnemonics, 45,930 instructions; no unimplemented opcode, no
+errors; exit code 0. The top of the table and the interface opcodes:
+
+```
+MNEMONIC     COUNT
+clear        11677
+move          8009
+pushf         7544
+popf          6232
+jae           1001
+ergs           750
+push           727
+pop            718
+jt             698
+jnz            665
+…
+xstate 4, xbatt 2, xignit 2, xkeyb 2, xreset 2, xsend 2, xtype 2, xvers 2,
+xconnect 1, xhangup 1, xraw 1, xrequf 1, xsetpar 1
+
+UNIMPLEMENTED IN EDIABASLIB: none
+ERRORS: none
+```
+
+## 4. Does real EDIABAS run INIT for `_JOBS`? (Ryan, in the VM, by hand)
+
+The cable stays **unplugged from the car**. This settles whether `NoInitForVJobs = true` (what
+the native describe path uses) matches real EDIABAS.
+
+1. Back up `C:\EDIABAS\Bin\EDIABAS.INI`, then set `IfhTrace = 3` in it, by hand.
+2. In Tool32, load `NVE_65` and run `_JOBS`.
+3. Read `C:\EDIABAS\TRACE\ifh.trc` (Claude can fetch it with `vm_logs_read`).
+4. Restore the INI from the backup.
+
+| | Result |
+|---|---|
+| `INITIALISIERUNG` appears in `ifh.trc` for `_JOBS` | **yes**: its interface calls do (the IFH trace names calls, not jobs) |
+| Trace excerpt (the lines around it) | below |
+| INI restored | yes, from `EDIABAS.INI.m0backup` (SHA-256 `27CB98B3…F7AC1` matches the backup) |
+
+Done 2026-11-22. Claude changed the INI over SSH with Ryan's OK, and Ryan loaded `NVE_65` in
+Tool32 with the cable unplugged from the car, running no job by hand. In Tool32, `_JOBS` is
+not in the job list: Tool32 calls it itself to build the list, so loading the SGBD is the
+test. It was run twice:
+
+1. `IfhTrace = 3`. Loading `NVE_65` (21:47:35) gave exactly INIT's interface calls, with
+   `NVE_65`'s census parameters (`0x010F`, 115200, 800, 20, 10, 2, 5000) and no telegram:
+   ```
+   OPEN
+   STOPECUTELFREQUENT   I -> D: 0E 03 00
+   SETECUCOMM           INPUT: 0F 01 00 00 00 C2 01 00 20 03 00 00 14 00 00 00 0A 00 00 00
+                               02 00 00 00 88 13 00 00
+   SETTELPARAMETER      INPUT: 00 00 00 00
+   ```
+2. `IfhTrace = 3` and `ApiTrace = 1`, to see which job caused it. The API trace shows Tool32
+   calling only `_JOBS` (once) and `_VERSIONINFO` (four times) on `NVE_65`, plus its `$$$$$$$$`
+   placeholder calls (`SYS-0005`). It never calls `INITIALISIERUNG` itself. The IFH trace of
+   the same load (21:51:31) shows the same `STOPECUTELFREQUENT` / `SETECUCOMM` /
+   `SETTELPARAMETER` block, once.
+
+So real EDIABAS 7.3.0 runs `INITIALISIERUNG` on the first job against a freshly loaded SGBD,
+even when that job is `_JOBS`. It does **not** behave like `NoInitForVJobs = true`. On this
+BMW-FAST SGBD the INIT only sets parameters and sends nothing, so the results are the same;
+on a concept whose INIT sends a telegram (DS2 wake-up, KWP fast init) they would not be.
+
+Side finding: turning `IfhTrace` on also wrote out EDIABAS's history from earlier today,
+before tracing was on (other processes: battery-voltage reads, and an identification request
+to address `0x12` with no reply, `IFH_0003`). None of it is from this test. Both runs' traces
+are kept in the VM as `C:\EDIABAS\TRACE\IFH.trc.m0run1`, `IFH.trc.m0run2` and
+`api.trc.m0run2`.
+
+## 5. Cable on the Mac (Ryan; not in the car)
+
+1. In UTM's USB menu, untick the cable for the VM so macOS sees it.
+2. Build and run:
+   ```sh
+   cd kline && zig build
+   ./zig-out/bin/kline list
+   ./zig-out/bin/kline probe /dev/cu.usbserial-…
+   ```
+3. Paste every line below. The ones that matter most are `line 10400` (does macOS 26's
+   FTDI driver accept and read back a non-standard rate?), `latency 1ms`, and the `lock` line's
+   `exclusive` (macOS ptys don't enforce `TIOCEXCL`, so only the real cable can show it).
+
+Run 2026-11-22 on macOS 26.6.2 (arm64), Zig 0.16.0, cable not in the car (the cable's serial
+number is replaced by `<serial>`):
+
+```
+$ kline list
+/dev/cu.usbserial-<serial>  0403:6001  ftdi
+
+$ kline probe /dev/cu.usbserial-<serial>
+ok   identity 0403:6001
+ok   lock (second open refused: lock file yes, exclusive yes)
+ok   line 9600 8E1 (read back 9600 8E1)
+ok   line 115200 8N1 (read back 115200 8N1)
+ok   line 10400 8N1 (read back 10400 8N1)
+ok   latency 1ms
+ok   dtr on/off
+ok   dsr off
+ok   break 25ms (held 26.214 ms by the host clock)
+
+exit code: 0
+```
+
+| Check | Result |
+|---|---|
+| Enumerates as `0403:6001` | yes (FTDI FT232R) |
+| Lock: lock file refuses a second open | yes |
+| Lock: `TIOCEXCL` refuses a second open | yes (the real FTDI device enforces it, unlike a pty) |
+| 9600 8E1 read back | yes |
+| 115200 8N1 read back | yes |
+| 10400 8N1 read back | yes (macOS 26's FTDI driver takes the non-standard rate via `IOSSIOSPEED`) |
+| Latency 1 ms accepted | yes (accepted; whether it takes effect is section 6) |
+| DTR on/off | yes |
+| DSR | off (nothing connected) |
+
+## 6. Echo timing (Ryan; bench 12 V supply only)
+
+Only with a bench supply: 12 V on OBD pin 16, ground on pins 4/5, nothing else connected. If
+there's no bench supply, write "no bench supply" here; this moves to the start of M2.
+
+```sh
+./zig-out/bin/kline loopback /dev/cu.usbserial-… --bench --latency 1 --count 200
+./zig-out/bin/kline loopback /dev/cu.usbserial-… --bench --latency 16 --count 200
+```
+
+**No bench supply (2026-11-22).** Not run; per the plan this moves to the start of M2. Until
+then it is unknown whether latency 1 ms takes effect on macOS (open risk 3); section 5 shows
+only that the driver accepts the setting.
+
+| Latency | Echoes | Timeouts | Wrong | Min ms | Median ms | Max ms |
+|---|---|---|---|---|---|---|
+| 1 ms | not run | | | | | |
+| 16 ms | not run | | | | | |
+
+Each run sets the latency explicitly (1 or 16 ms), because a setting lasts until the cable is
+replugged. If latency 1 shows no improvement over 16, `IOSSDATALAT` did not take effect on
+the dext (open risk 3 in the design); the fallback is longer receive timeouts
+(`ObdAddRecTimeout`).
+
+## 7. Linux repeat (Ryan)
+
+On a Linux machine (a UTM Linux VM with the cable passed through is fine), with Zig 0.16.0:
+
+1. Install the udev rule from [kline/README.md](../../kline/README.md#linux-permissions) and
+   replug the cable.
+2. Run:
+   ```sh
+   cd kline
+   zig build test --summary all     # the Linux constants tests run here (skipped on macOS)
+   zig build && ./zig-out/bin/kline list && ./zig-out/bin/kline probe /dev/ttyUSB0
+   ```
+3. With a bench supply, the two `loopback` runs from section 6 as well.
+
+| | Result |
+|---|---|
+| `zig build test` (pass/skip counts) | 27 pass, 3 skip (2 macOS-only header tests, the 7O1 pty test), plus 7 CLI tests pass |
+| Linux constants tests ran and passed | yes (both, against the container's kernel headers) |
+| `kline list` | runs, finds no cable (none reachable from the container) |
+| `kline probe` (paste below) | not run on hardware |
+| Loopback latency 1 / 16 (min/median/max) | not run (no bench supply) |
+
+**Linux support is deferred (Ryan, 2026-11-22);** the hardware half below waits until it is picked up again.
+
+**Partly done (2026-11-22), in a Docker container, not with the cable.** Debian bookworm,
+linux/arm64, kernel 6.6.12-linuxkit, the official Zig 0.16.0 (SHA-256 checked), the code
+mounted read-only. Docker Desktop on macOS cannot pass USB devices through, so the tests ran
+but `list` and `probe` could not see the cable. A Linux machine or VM with the cable is still
+needed for the hardware half: FTDI identity via sysfs, termios2 10400 on `ftdi_sio`,
+`ASYNC_LOW_LATENCY`, and the udev rule.
+
+The first run failed 3 tests, which led to one fix (commit "kline: clear exclusive mode on
+close…"):
+- `TIOCEXCL` outlives the fd on Linux while the tty stays alive (a pty's master keeps it), so
+  reopening gave EBUSY. `close()` now clears it with `TIOCNXCL`.
+- A Linux pty forces CS8 and no parity whatever is set, so data bits and parity cannot be
+  read back from a pty on Linux. Those checks are macOS-only in the tests; `kline probe`
+  checks framing on the cable.
+
+Both behaviours were confirmed with a small C program on the same kernel, outside kline.
+
+```
+(kline probe on Linux: not run, no cable in the container)
+```
+
+## 8. Break width (only if section 2 found 0x010C)
+
+**Skipped (2026-11-22).** Section 2 found 0x010C only in `mrrbt.prg`, not an E61 module, and
+section 9 drops fast init from M2. On the real cable, `kline probe` held the 25 ms break for
+26.2 ms by the host clock (section 5).
+
+With a scope or logic analyser on the cable's K-line (pin 7), run `kline probe` and measure the
+low pulse from its `break 25ms` step, on macOS and on Linux. `probe` prints how long the host
+held the break by its own clock; on a pty at the desk that was 29.4 ms for 25 asked (macOS
+`nanosleep` overshoot), so a fast-init implementation may need a spin-wait for the last
+milliseconds.
+
+| | Host-reported hold | Measured on the line |
+|---|---|---|
+| macOS | | |
+| Linux | | |
+
+## 9. Decisions for M1–M3 (together)
+
+| Question | Decision |
+|---|---|
+| Concepts M3 must port (always including DS2, for the E46 M3) | **BMW-FAST (0x010F) and DS2 (0x0006) only.** Every E61 module is BMW-FAST (section 2); DS2 is for the E46 M3. KWP2000\*, D-CAN, DS1 and 5-baud wait until a car needs them. |
+| Fast init (0x010C) in M2? | **No.** Only `mrrbt.prg` uses it, and it is not an E61 module. Section 8 is skipped. |
+| Opcode work for M3 | **None.** No SGBD in the folder uses an opcode EdiabasLib leaves unimplemented (section 3). |
+| Does `NoInitForVJobs = true` match real EDIABAS? | **No** (section 4). **Decision: split by path.** The offline describe path keeps `NoInitForVJobs = true`, as it never touches the cable; the live path runs `INITIALISIERUNG` before the first job, as EDIABAS does. The difference is deliberate and goes in the M1 design. |
+| Did latency 1 ms take effect (macOS / Linux)? | **Unknown.** macOS accepts it (section 5) but Apple's FTDI driver does not report it, so only the echo test can tell. **Decision: M2 starts with the echo test** on a cheap 12 V source (a 12 V adapter or 8×AA pack on an OBD pigtail: + to pin 16, − to 4/5, nothing else). If 1 ms does not take effect, M2 uses longer receive timeouts (`ObdAddRecTimeout`). On Linux, `/sys/bus/usb-serial/devices/ttyUSB0/latency_timer` shows it without 12 V. |
+
+### Found while building M0, for the M1 plan
+
+- **One EdiabasNet at a time per process.** EdiabasNet's constructor rebinds a static register
+  table to the newest instance (`EdiabasNet.cs:3224-3227`), and fills a static dictionary
+  without a lock (`:3178`). Two instances interpreting at once in one process corrupt each
+  other (seen as a spinning test host). The design's `ediabasd` holds an offline and a live
+  instance; M1 must never run them concurrently, and must construct (or reconstruct) each
+  before use, or run them in separate processes. M0's census runs one instance at a time,
+  and its tests run serially.
+- BESTDIS ignores short reads, so the opcode census checks each file's header and job table
+  bounds itself and reports a truncated file as an error. That check was validated only on
+  upstream's test files, so give any `error` row in section 3 a second look before believing
+  it.

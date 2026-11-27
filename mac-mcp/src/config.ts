@@ -9,7 +9,12 @@ import type { PolicyGuard } from "./policy.js";
 export const DEFAULT_LOCAL_CONFIG_PATH = fileURLToPath(new URL("../../config.local.json", import.meta.url));
 
 /** Keys config.local.json may set. Keys starting with "_" are comments and ignored. */
-const LOCAL_KEYS = ["vmName", "vmMac", "agentPort", "voltageSources"] as const;
+const LOCAL_KEYS = ["vmName", "vmMac", "agentPort", "voltageSources", "backend", "ediabasdPath", "ediabasdConfig", "dotnetRoot"] as const;
+
+/** ediabasd's Release build in this repo: two levels above both src/ and dist/. */
+export const DEFAULT_EDIABASD_PATH = fileURLToPath(new URL("../../engine/ediabasd-net/bin/Release/net10.0/ediabasd", import.meta.url));
+
+export type Backend = "vm" | "native";
 
 /** One extra voltage reading for ediabas_vehicle_status (config.local.json `voltageSources`). */
 export interface VoltageSource {
@@ -44,6 +49,16 @@ export interface Config {
   keychainAccount: string;
   /** Extra voltage readings ediabas_vehicle_status runs, in order (config.local.json only). */
   voltageSources: VoltageSource[];
+  /** Where the ediabas_* tools go: the VM agent (default) or the native engine (EDIABAS_BACKEND). */
+  backend: Backend;
+  /** Set when EDIABAS_BACKEND or config.local.json backend is neither vm nor native: every ediabas_* tool reports it. */
+  backendError: string | undefined;
+  /** The ediabasd executable (EDIABASD_PATH, else config.local.json, else this repo's Release build). */
+  ediabasdPath: string;
+  /** Passed to ediabasd as --config; undefined means ediabasd's own XDG default. */
+  ediabasdConfig: string | undefined;
+  /** Passed to ediabasd as DOTNET_ROOT when set. */
+  dotnetRoot: string | undefined;
 }
 
 export const DEFAULTS = {
@@ -76,6 +91,10 @@ interface LocalConfig {
   vmMac?: string;
   agentPort?: number;
   voltageSources?: VoltageSource[];
+  backend?: string;
+  ediabasdPath?: string;
+  ediabasdConfig?: string;
+  dotnetRoot?: string;
 }
 
 function readVoltageSources(path: string, value: unknown, warnings: string[]): VoltageSource[] {
@@ -163,7 +182,11 @@ export function readLocalConfig(path: string, warnings: string[]): LocalConfig {
       continue;
     }
     if (key === "vmName") out.vmName = text;
-    else out.vmMac = text;
+    else if (key === "vmMac") out.vmMac = text;
+    else if (key === "backend") out.backend = text;
+    else if (key === "ediabasdPath") out.ediabasdPath = text;
+    else if (key === "ediabasdConfig") out.ediabasdConfig = text;
+    else out.dotnetRoot = text;
   }
   return out;
 }
@@ -214,6 +237,18 @@ export function loadConfig(
 
   const vmName = nonEmpty(env.EDIABAS_VM_NAME) ?? local.vmName ?? DEFAULTS.vmName;
 
+  const envBackend = nonEmpty(env.EDIABAS_BACKEND);
+  const backendText = envBackend ?? local.backend ?? "vm";
+  let backend: Backend = "vm";
+  let backendError: string | undefined;
+  if (backendText === "vm" || backendText === "native") {
+    backend = backendText;
+  } else {
+    const where = envBackend !== undefined ? "EDIABAS_BACKEND" : "config.local.json backend";
+    backendError = `${where} is "${cleanText(backendText, 40)}"; it must be vm or native. Fix it and restart the MCP server (restart Claude).`;
+    warnings.push(`${backendError} Every ediabas_* tool will report this until it is fixed.`);
+  }
+
   return {
     config: {
       agentUrl,
@@ -226,6 +261,11 @@ export function loadConfig(
       keychainService: DEFAULTS.keychainService,
       keychainAccount: DEFAULTS.keychainAccount,
       voltageSources: local.voltageSources ?? [],
+      backend,
+      backendError,
+      ediabasdPath: expandHome(nonEmpty(env.EDIABASD_PATH) ?? local.ediabasdPath ?? DEFAULT_EDIABASD_PATH, home),
+      ediabasdConfig: local.ediabasdConfig === undefined ? undefined : expandHome(local.ediabasdConfig, home),
+      dotnetRoot: local.dotnetRoot === undefined ? undefined : expandHome(local.dotnetRoot, home),
     },
     warnings,
   };

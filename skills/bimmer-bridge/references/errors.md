@@ -27,6 +27,17 @@ never look for another tool, job or route (and never computer use on the VM wind
   an HTTP error that is not in the agent's format. Run `vm_health`, then ask again once if the
   result is still needed.
 
+## The native backend (`bridge_health` in place of `vm_health`)
+
+- **`[engine_unavailable]`**: the engine on the Mac (`ediabasd`) did not start or stopped
+  answering during a call that cannot reach the car. Nothing reached the car. Relay the message
+  (it names the path); the user checks the build and `dotnetRoot` in `config.local.json`.
+- **`[cable_not_found]`** on native: the cable is not on the Mac. Most often UTM still passes it
+  to the VM: ask the user to untick it in UTM's USB menu, then call `bridge_health` once.
+- **`[frame_refused]`**: the cable layer refused a telegram that could write. It is a refusal:
+  say so and stop. In `ediabas_vehicle_status` it shows against one voltage source only; the
+  other readings are good.
+
 ## Refusals
 
 - **`[policy_mismatch]`.** Nothing was sent. Tell the user the agent or the Mac server is out

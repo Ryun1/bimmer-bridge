@@ -1,0 +1,3 @@
+[submodule "third_party/ediabaslib"]
+	path = third_party/ediabaslib
+	url = https://github.com/uholeschak/ediabaslib

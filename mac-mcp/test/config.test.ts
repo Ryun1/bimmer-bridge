@@ -19,8 +19,34 @@ describe("loadConfig", () => {
       keychainService: "ediabas-bridge",
       keychainAccount: "agent",
       voltageSources: [],
+      backend: "vm",
+      backendError: undefined,
+      ediabasdPath: join(import.meta.dirname, "..", "..", "engine", "ediabasd-net", "bin", "Release", "net10.0", "ediabasd"),
+      ediabasdConfig: undefined,
+      dotnetRoot: undefined,
     });
     expect(warnings).toEqual([]);
+  });
+
+  it("backend defaults to vm", () => {
+    expect(loadConfig({}, "/h").config.backend).toBe("vm");
+  });
+
+  it("EDIABAS_BACKEND=native selects native", () => {
+    const { config, warnings } = loadConfig({ EDIABAS_BACKEND: "native" }, "/h");
+    expect(config.backend).toBe("native");
+    expect(config.backendError).toBeUndefined();
+    expect(warnings).toEqual([]);
+  });
+
+  it("an unknown backend is a config error", () => {
+    const { config, warnings } = loadConfig({ EDIABAS_BACKEND: "wine" }, "/h");
+    expect(config.backendError).toMatch(/EDIABAS_BACKEND.*"wine".*vm or native/);
+    expect(warnings).toHaveLength(1);
+  });
+
+  it("EDIABASD_PATH sets the engine's path", () => {
+    expect(loadConfig({ EDIABASD_PATH: "~/bin/ediabasd" }, "/h").config.ediabasdPath).toBe("/h/bin/ediabasd");
   });
 
   it("reads every variable", () => {
@@ -140,10 +166,26 @@ describe("config.local.json", () => {
     expect(config.vmMac).toBeUndefined();
     expect(config.agentPort).toBe(8765);
     expect(warnings).toEqual([
-      `${path}: unknown key "vmname" is ignored (known keys: vmName, vmMac, agentPort, voltageSources).`,
+      `${path}: unknown key "vmname" is ignored (known keys: vmName, vmMac, agentPort, voltageSources, backend, ediabasdPath, ediabasdConfig, dotnetRoot).`,
       `${path}: vmMac must be a non-empty string; it is ignored.`,
       `${path}: agentPort must be a whole number from 1 to 65535; it is ignored.`,
     ]);
+  });
+
+  it("config.local.json backend is read, and the env wins", () => {
+    write({ backend: "native", ediabasdPath: "/opt/ediabasd", ediabasdConfig: "~/m2/e.json", dotnetRoot: "/opt/dotnet" });
+    const { config, warnings } = loadConfig({}, "/h", path);
+    expect(warnings).toEqual([]);
+    expect(config.backend).toBe("native");
+    expect(config.ediabasdPath).toBe("/opt/ediabasd");
+    expect(config.ediabasdConfig).toBe("/h/m2/e.json");
+    expect(config.dotnetRoot).toBe("/opt/dotnet");
+    expect(loadConfig({ EDIABAS_BACKEND: "vm", EDIABASD_PATH: "/x/ediabasd" }, "/h", path).config).toMatchObject({ backend: "vm", ediabasdPath: "/x/ediabasd" });
+  });
+
+  it("an unknown backend in config.local.json is a config error", () => {
+    write({ backend: "both" });
+    expect(loadConfig({}, "/h", path).config.backendError).toMatch(/backend.*"both".*vm or native/);
   });
 
   it("reads voltageSources as {ecu, job} entries, default none", () => {

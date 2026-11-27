@@ -1,0 +1,13 @@
+.{
+    .name = .kline,
+    .version = "0.0.0",
+    .fingerprint = 0xd890daab9a845f8b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
